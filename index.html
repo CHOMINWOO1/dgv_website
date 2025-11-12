@@ -32,6 +32,10 @@ h2{color:var(--green-dark);margin:0 0 14px}
 .grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
 a.feature{display:block;border:1px solid #edf2ed;background:#fbfdfb;border-radius:14px;padding:20px;color:inherit;text-decoration:none;transition:.18s}
 a.feature:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.08);border-color:#dceedd;background:#f7fdf7}
+/* Contact 전용 */
+.contact-card{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.contact-left{flex:1;min-width:260px}
+.kakao-icon{width:22px;height:22px;vertical-align:-4px;margin-right:6px}
 /* 푸터 */
 footer{text-align:center;padding:20px;color:#666;background:#e7eee7}
 /* 반응형 */
@@ -40,6 +44,8 @@ footer{text-align:center;padding:20px;color:#666;background:#e7eee7}
   .brand-logo{width:48px;height:48px}
 }
 </style>
+<!-- (선택) 아이콘 폰트가 필요하면 유지해도 됩니다 -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
 
@@ -127,14 +133,24 @@ footer{text-align:center;padding:20px;color:#666;background:#e7eee7}
 </section>
 
 <section id="contact" class="section">
-  <div class="card">
-    <h2 id="title-contact">문의 연락처 (Contact)</h2>
-    <p id="contact-info">
-      📞 🇰🇷 <b>Phone (KR):</b> 098 5829 5242<br>
-      📞 🇻🇳 <b>Phone (VN):</b> 098 851 9223 / 094 923 8614 <br>
-      ✉️ <b>Email:</b> dalatgolfvoucher@gmail.com<br>
-      📍 <b>Address:</b> 135 - 145 Pham Dinh Phung, Xuan Huong Ward, Da Lat
-    </p>
+  <div class="card contact-card">
+    <!-- Left: text -->
+    <div class="contact-left">
+      <h2 id="title-contact">문의 연락처 (Contact)</h2>
+      <p id="contact-info" style="line-height:1.8;">
+        📞 🇰🇷 <b>Phone (KR):</b> 098 5829 5242<br>
+        📞 🇻🇳 <b>Phone (VN):</b> 098 851 9223 / 094 923 8614 <br>
+        ✉️ <b>Email:</b> dalatgolfvoucher@gmail.com<br>
+        <img src="kakao.png" alt="KakaoTalk" class="kakao-icon">
+        <b>KakaoTalk ID:</b> vnkysang<br>
+        📍 <b>Address:</b> 135 - 145 Pham Dinh Phung, Xuan Huong Ward, Da Lat
+      </p>
+    </div>
+    <!-- Right: QR -->
+    <div style="text-align:center;">
+      <img src="qr.png" alt="KakaoTalk QR" style="width:140px;height:140px;border:1px solid #ddd;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+      <div style="font-size:13px;color:#555;margin-top:6px;">KakaoTalk QR</div>
+    </div>
   </div>
 </section>
 
@@ -188,7 +204,7 @@ const langData = {
     "svc-restaurant-title":"식당 예약 (Korean Restaurant Booking)",
     "svc-restaurant-desc":"한식당 · 단체/코스/뷔페 맞춤",
     "title-contact":"문의 연락처 (Contact)",
-    "contact-info":"📞 🇰🇷 <b>Phone (KR):</b> 098 5829 5242<br>📞 🇻🇳 <b>Phone (VN):</b> 098 851 9223 / 094 923 8614 <br>✉️ <b>Email:</b> dalatgolfvoucher@gmail.com<br>📍 <b>Address:</b> 135 - 145 Pham Dinh Phung, Xuan Huong Ward, Da Lat"
+    "contact-info":"📞 🇰🇷 <b>Phone (KR):</b> 098 5829 5242<br>📞 🇻🇳 <b>Phone (VN):</b> 098 851 9223 / 094 923 8614 <br>✉️ <b>Email:</b> dalatgolfvoucher@gmail.com<br><img src='kakao.png' alt='KakaoTalk' class='kakao-icon'><b>KakaoTalk ID:</b> vnkysang<br>📍 <b>Address:</b> 135 - 145 Pham Dinh Phung, Xuan Huong Ward, Da Lat"
   },
   en:{
     "page-title":"DGV Company Limited",
@@ -228,7 +244,7 @@ const langData = {
     "svc-restaurant-title":"Korean Restaurant Booking",
     "svc-restaurant-desc":"Korean dining · Group/Course/Buffet options",
     "title-contact":"Contact",
-    "contact-info":"📞 🇰🇷 <b>KR:</b> +82 98 5829 5242<br>📞 🇻🇳 <b>VN:</b> +84 98 851 9223 / 094 923 8614<br>✉️ <b>Email:</b> dalatgolfvoucher@gmail.com<br>📍 <b>Address:</b> 135 - 145 Pham Dinh Phung, Xuan Huong Ward, Da Lat"
+    "contact-info":"📞 🇰🇷 <b>KR:</b> +82 98 5829 5242<br>📞 🇻🇳 <b>VN:</b> +84 98 851 9223 / 094 923 8614<br>✉️ <b>Email:</b> dalatgolfvoucher@gmail.com<br><img src='kakao.png' alt='KakaoTalk' class='kakao-icon'><b>KakaoTalk ID:</b> vnkysang<br>📍 <b>Address:</b> 135 - 145 Pham Dinh Phung, Xuan Huong Ward, Da Lat"
   },
   vi:{
     "page-title":"DGV Company Limited",
@@ -268,7 +284,7 @@ const langData = {
     "svc-restaurant-title":"Đặt nhà hàng Hàn Quốc",
     "svc-restaurant-desc":"Ẩm thực Hàn · Nhận đoàn/set/buffet",
     "title-contact":"Liên hệ",
-    "contact-info":"📞 🇻🇳 <b>VN:</b> 098 851 9223 / 094 923 8614<br>📞 🇰🇷 <b>KR:</b> 098 5829 5242<br>✉️ <b>Email:</b> dalatgolfvoucher@gmail.com<br>📍 <b>Địa chỉ:</b> 135 - 145 Pham Dinh Phung, P. Xuân Hương, Đà Lạt"
+    "contact-info":"📞 🇻🇳 <b>VN:</b> 098 851 9223 / 094 923 8614<br>📞 🇰🇷 <b>KR:</b> 098 5829 5242<br>✉️ <b>Email:</b> dalatgolfvoucher@gmail.com<br><img src='kakao.png' alt='KakaoTalk' class='kakao-icon'><b>KakaoTalk ID:</b> vnkysang<br>📍 <b>Địa chỉ:</b> 135 - 145 Pham Dinh Phung, P. Xuân Hương, Đà Lạt"
   }
 };
 
