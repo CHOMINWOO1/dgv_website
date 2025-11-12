@@ -1,0 +1,392 @@
+<!DOCTYPE html><html lang="ko"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>호텔 예약 | DGV</title>
+<style>
+:root{--green-dark:#0c5f2c;--green:#1a7f3c;--bg:#f5f7f5;--card:#fff;--ink:#333}
+*{box-sizing:border-box}
+body{margin:0;font-family:Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+
+/* ===== Brand Topbar ===== */
+.topbar{background:#0b4d26;color:#fff}
+.topbar-inner{max-width:1100px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 16px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand img{width:34px;height:34px;object-fit:contain}
+.brand .name{font-weight:900;letter-spacing:.5px;font-size:18px}
+.nav-links{display:flex;gap:10px;flex-wrap:wrap}
+.nav-links a{color:#e9ffef;text-decoration:none;font-weight:700;padding:8px 12px;border-radius:10px}
+.nav-links a:hover{background:rgba(255,255,255,.12)}
+@media (max-width:640px){.topbar-inner{flex-direction:column;align-items:flex-start}}
+
+/* ===== Hero ===== */
+.header{background:linear-gradient(135deg,#0c5f2c,#1a7f3c);color:#fff;padding:28px 16px 22px}
+.wrap-hero{max-width:1100px;margin:0 auto}
+.breadcrumb{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);color:#fff;padding:6px 10px;border-radius:999px;text-decoration:none;font-weight:700}
+.breadcrumb:hover{background:rgba(255,255,255,.24)}
+.header h1{margin:12px 0 4px;font-size:28px}
+.header .sub{opacity:.95}
+
+/* ===== Layout ===== */
+.wrap{max-width:1100px;margin:0 auto;padding:24px 16px}
+.card{background:var(--card);padding:22px;border-radius:14px;box-shadow:0 4px 22px rgba(0,0,0,.06);margin-bottom:18px}
+h2{color:var(--green-dark);margin:0 0 10px}
+
+/* Tabs */
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab-btn{border:1px solid #dfe8df;background:#f7fbf7;color:#0e542a;padding:10px 14px;border-radius:10px;font-weight:800;cursor:pointer}
+.tab-btn.active{background:#0c5f2c;color:#fff;border-color:#0c5f2c}
+.tab-panel{display:none;animation:fade .18s ease}
+.tab-panel.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* Gallery */
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+img.photo{width:100%;height:180px;object-fit:cover;border-radius:10px;background:#e9efe9;cursor:zoom-in}
+
+/* Tables */
+.table-wrap{overflow:auto;border-radius:12px;border:1px solid #eef3ee}
+table{width:100%;border-collapse:collapse;min-width:680px}
+th,td{padding:12px 10px;border-bottom:1px solid #eef3ee;text-align:center}
+thead th{position:sticky;top:0;background:#f6faf6;color:#0c5f2c;font-weight:900}
+tbody tr:nth-child(even){background:#fbfdfb}
+.tl{text-align:left}
+.note{font-size:13px;color:#666;margin:10px 2px}
+.price{font-weight:800}
+.list{padding-left:18px}
+.list li{margin:6px 0}
+
+/* CTA & Footer */
+.cta{display:inline-block;margin-top:14px;padding:12px 18px;background:var(--green-dark);color:#fff;border-radius:10px;text-decoration:none;font-weight:700}
+footer{text-align:center;padding:20px;color:#666;background:#e7eee7;margin-top:24px}
+
+/* Lightbox */
+.lightbox{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.85);z-index:1000;padding:20px}
+.lightbox[aria-hidden="false"]{display:flex}
+.lb-img{max-width:92vw;max-height:86vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.lb-btn{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);color:#fff;border:0;width:48px;height:48px;border-radius:50%;cursor:pointer;font-size:28px;font-weight:800}
+.lb-prev{left:20px}.lb-next{right:20px}
+.lb-close{position:absolute;top:16px;right:16px;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;border:0;cursor:pointer;font-size:24px;font-weight:900}
+.lb-btn:hover,.lb-close:hover{background:rgba(255,255,255,.28)}
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <img src="logo.png" alt="DGV Logo"><div class="name">DGV Company Limited</div>
+    </div>
+    <nav class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="golf.html">Golf</a>
+      <a href="hotel.html">Hotel</a>
+      <a href="package.html">Package</a>
+      <a href="car.html">Car</a>
+      <a href="index.html#contact">Contact</a>
+    </nav>
+  </div>
+</div>
+
+<!-- Hero -->
+<div class="header">
+  <div class="wrap-hero">
+    <a class="breadcrumb" href="index.html">← Home</a>
+    <h1>호텔 예약 (Hotel Booking)</h1>
+    <div class="sub">달랏 인기 호텔 2곳 · 갤러리 · 요금 · 포함내역</div>
+  </div>
+</div>
+
+<div class="wrap">
+  <!-- Tabs -->
+  <div class="card">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="swiss">SWISS-BEL HOTEL</button>
+      <button class="tab-btn" data-tab="western">Western Hill HOTEL</button>
+    </div>
+  </div>
+
+  <!-- ===== SWISS-BEL ===== -->
+  <div id="swiss" class="tab-panel active">
+    <!-- 소개 -->
+    <div class="card">
+      <h2>SWISS-BEL HOTEL</h2>
+      <p>
+        달랏 중심 접근성이 좋은 모던 프리미엄 호텔로,
+        깨끗한 객실 컨디션과 합리적인 가격, 알찬 조식으로 한국 고객에게 인기가 높습니다.
+        시내·관광지 이동이 편리하고, 골프 라운드 전후 휴식 거점으로 최적입니다.
+      </p>
+      <ul class="list">
+        <li><b>특징:</b> 깔끔한 객실 · 합리적 요금 · 편리한 위치</li>
+        <li><b>추천:</b> 커플/가족/골프팀 · 가성비 중시 / 시내 접근성 중시</li>
+      </ul>
+    </div>
+
+    <!-- ✅ 객실 타입 소개 -->
+<div class="card">
+  <h3>객실 타입 안내</h3>
+
+  <!-- 🏔️ Deluxe Mountain View -->
+  <div style="margin-bottom:30px">
+    <h4>Deluxe Mountain View</h4>
+    <p>
+      달랏의 구름 낀 산맥과 숲이 한눈에 내려다보이는 객실입니다.<br>
+      통유리 창으로 아침 햇살과 저녁 노을을 감상할 수 있으며,
+      고급 침구와 넓은 욕실, 조용한 분위기가 장점입니다.
+    </p>
+    <ul class="list">
+      <li>면적 : 약 32 ㎡ / 킹 또는 트윈 베드</li>
+      <li>조식 2인 포함 / Wi-Fi 무료</li>
+      <li>발코니 또는 파노라마 뷰 창 구성</li>
+      <li>권장 : 커플 · 휴양형 투숙객</li>
+    </ul>
+
+    <!-- 🏔️ Mountain Gallery -->
+    <div class="card" style="background:#f9faf9">
+      <h4>Deluxe Mountain View 갤러리</h4>
+      <div class="grid" id="gallery-swiss-mountain"></div>
+    </div>
+  </div>
+
+  <!-- ⛳ Deluxe Golf View -->
+  <div>
+    <h4>Deluxe Golf View</h4>
+    <p>
+      골프코스가 한눈에 펼쳐지는 프리미엄 뷰 객실로, 
+      여유로운 테라스에서 달랏의 청량한 공기와 그린 전망을 즐길 수 있습니다.<br>
+      라운드 전후 휴식이나 골프팀 투숙에 특히 인기 있습니다.
+    </p>
+    <ul class="list">
+      <li>면적 : 약 34 ㎡ / 킹 또는 트윈 베드</li>
+      <li>조식 2인 포함 / Wi-Fi 무료</li>
+      <li>개별 발코니 · 코스 뷰 · 소파 세트 비치</li>
+      <li>권장 : 골프 라운딩 팀 · 프리미엄 휴식 선호 고객</li>
+    </ul>
+
+    <!-- ⛳ Golf View Gallery -->
+    <div class="card" style="background:#f9faf9">
+      <h4>Deluxe Golf View 갤러리</h4>
+      <div class="grid" id="gallery-swiss-golf"></div>
+    </div>
+  </div>
+</div>
+
+
+    <!-- 임시 요금표 -->
+    <div class="card">
+      <h3>객실 요금 (임시 · VND)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="tl">Room Type</th>
+              <th>Weekday</th>
+              <th>Weekend</th>
+              <th>Peak/Holiday</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="tl">Superior (2 pax)</td><td class="price">1,200,000</td><td class="price">1,450,000</td><td class="price">1,700,000</td></tr>
+            <tr><td class="tl">Deluxe (2 pax)</td><td class="price">1,450,000</td><td class="price">1,700,000</td><td class="price">2,000,000</td></tr>
+            <tr><td class="tl">Family/Triple</td><td class="price">1,800,000</td><td class="price">2,100,000</td><td class="price">2,400,000</td></tr>
+            <tr><td class="tl">Suite</td><td class="price">2,400,000</td><td class="price">2,800,000</td><td class="price">3,200,000</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">※ 세부 요금/조식/인원정책은 시즌/객실 상황에 따라 변동됩니다. (임시 표기)</p>
+      <a class="cta" href="index.html#contact">예약/문의하기</a>
+    </div>
+
+    <!-- 포함내역/정책 -->
+    <div class="card">
+      <h3>포함내역 & 정책</h3>
+      <ul class="list">
+        <li>조식 포함(객실타입별 상이) · 무료 Wi-Fi · 하우스키핑</li>
+        <li>체크인 14:00 / 체크아웃 12:00 (호텔 사정에 따라 변동)</li>
+        <li>성수기/연휴 기간 서차지(추가요금) 발생 가능</li>
+        <li>취소/환불 규정은 시즌별·객실별 상이 (문의 시 안내)</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===== WESTERN HILL ===== -->
+  <div id="western" class="tab-panel">
+    <!-- 소개 -->
+    <div class="card">
+      <h2>Western Hill HOTEL</h2>
+      <p>
+        달랏의 자연 전망을 즐길 수 있는 힐사이드 타입의 호텔로,
+        조용한 휴식과 깔끔한 객실이 장점입니다. 일부 객실은 발코니/뷰가 좋아
+        골프/관광 일정 후 힐링 숙소로 선호도가 높습니다.
+      </p>
+      <ul class="list">
+        <li><b>특징:</b> 조용한 환경 · 전망 우수 · 쾌적한 객실</li>
+        <li><b>추천:</b> 커플/가족 · 휴양형 여행 · 조용한 숙박 선호</li>
+      </ul>
+    </div>
+
+    <!-- 갤러리 -->
+    <!-- ✅ 객실 타입 소개 -->
+<div class="card">
+  <h3>객실 타입 안내</h3>
+
+  <!-- 🛏️ Twin Room -->
+  <div style="margin-bottom:30px">
+    <h4>Twin Room</h4>
+    <p>
+      따로 분리된 트윈 베드로 구성되어 있으며, 가족 또는 친구와 함께 머물기에 적합한 객실입니다.<br>
+      넓은 창을 통해 달랏의 산뜻한 공기와 주변 풍경을 감상할 수 있습니다.
+    </p>
+    <ul class="list">
+      <li>면적 : 약 28 ㎡ / 싱글 2베드</li>
+      <li>조식 2인 포함 / Wi-Fi 무료</li>
+      <li>기본 어메니티 / 발코니 선택형</li>
+      <li>권장 : 친구 · 가족 동반 투숙객</li>
+    </ul>
+
+    <!-- 🛏️ Twin Gallery -->
+    <div class="card" style="background:#f9faf9">
+      <h4>Twin Room 갤러리</h4>
+      <div class="grid" id="gallery-western-twin"></div>
+    </div>
+  </div>
+
+  <!-- 💑 Double Room -->
+  <div>
+    <h4>Double Room</h4>
+    <p>
+      킹 사이즈 베드와 아늑한 인테리어로 구성된 더블룸입니다.<br>
+      커플 또는 단독 투숙객에게 추천되며, 일부 객실은 발코니에서 골프장 전망을 감상할 수 있습니다.
+    </p>
+    <ul class="list">
+      <li>면적 : 약 30 ㎡ / 킹 베드 1개</li>
+      <li>조식 2인 포함 / Wi-Fi 무료</li>
+      <li>전망 : 시티뷰 또는 골프뷰</li>
+      <li>권장 : 커플 · 휴식형 투숙객</li>
+    </ul>
+
+    <!-- 💑 Double Gallery -->
+    <div class="card" style="background:#f9faf9">
+      <h4>Double Room 갤러리</h4>
+      <div class="grid" id="gallery-western-double"></div>
+    </div>
+  </div>
+</div>
+
+
+    <!-- 임시 요금표 -->
+    <div class="card">
+      <h3>객실 요금 (임시 · VND)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="tl">Room Type</th>
+              <th>Weekday</th>
+              <th>Weekend</th>
+              <th>Peak/Holiday</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="tl">Standard (2 pax)</td><td class="price">900,000</td><td class="price">1,150,000</td><td class="price">1,400,000</td></tr>
+            <tr><td class="tl">Deluxe (2 pax)</td><td class="price">1,200,000</td><td class="price">1,450,000</td><td class="price">1,800,000</td></tr>
+            <tr><td class="tl">Family/Triple</td><td class="price">1,500,000</td><td class="price">1,800,000</td><td class="price">2,200,000</td></tr>
+            <tr><td class="tl">Suite</td><td class="price">2,000,000</td><td class="price">2,400,000</td><td class="price">2,900,000</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">※ 위 요금은 임시 표기이며, 실제 요금은 시즌/객실 상황에 따라 변경됩니다.</p>
+      <a class="cta" href="index.html#contact">예약/문의하기</a>
+    </div>
+
+    <!-- 포함내역/정책 -->
+    <div class="card">
+      <h3>포함내역 & 정책</h3>
+      <ul class="list">
+        <li>조식 포함(객실타입별 상이) · 무료 Wi-Fi · 하우스키핑</li>
+        <li>체크인 14:00 / 체크아웃 12:00 (호텔 사정에 따라 변동)</li>
+        <li>성수기/연휴 기간 서차지(추가요금) 발생 가능</li>
+        <li>취소/환불 규정은 시즌별·객실별 상이 (문의 시 안내)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<footer>© 2025 DGV Company Limited</footer>
+
+<!-- Lightbox -->
+<div id="lightbox" class="lightbox" aria-hidden="true" role="dialog" aria-modal="true">
+  <button class="lb-close" aria-label="닫기">×</button>
+  <button class="lb-btn lb-prev" aria-label="이전">‹</button>
+  <img class="lb-img" src="" alt="">
+  <button class="lb-btn lb-next" aria-label="다음">›</button>
+</div>
+
+<script>
+/* Tabs */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+    window.scrollTo({top:document.querySelector('.tabs').getBoundingClientRect().top + window.scrollY - 20, behavior:'smooth'});
+  });
+});
+
+/* Gallery Auto Loader (jpg/png 혼합 자동 감지) */
+const MAX_IMAGES = 20;
+const EXTS = ['.jpg','.JPG','.jpeg','.JPEG','.png','.PNG'];
+
+function loadGallery(containerId, folder){
+  const wrap = document.getElementById(containerId);
+  const list = [];
+  for(let i=1;i<=MAX_IMAGES;i++){
+    let loaded = false;
+    for(const ext of EXTS){
+      const src = `image/hotel/${folder}/${i}${ext}`;
+      const img = new Image();
+      img.className = 'photo';
+      img.src = src;
+      img.onload = ()=>{
+        if(!loaded){
+          wrap.appendChild(img);
+          list.push(img);
+          img.addEventListener('click', ()=> openLightbox(list, list.indexOf(img)));
+          loaded = true;
+        }
+      };
+      // 실패는 무시하고 다음 확장자 시도
+    }
+  }
+}
+//loadGallery('gallery-swiss','swissbel');
+//loadGallery('gallery-western','westernhill');
+loadGallery('gallery-swiss-mountain','swissbel/mountain');
+loadGallery('gallery-swiss-golf','swissbel/golf');
+loadGallery('gallery-western-twin','westernhill/twin');
+loadGallery('gallery-western-double','westernhill/double');
+
+/* Lightbox */
+const lb = document.getElementById('lightbox');
+const imgEl = lb.querySelector('.lb-img');
+const btnPrev = lb.querySelector('.lb-prev');
+const btnNext = lb.querySelector('.lb-next');
+const btnClose = lb.querySelector('.lb-close');
+let currentList = []; let idx = 0;
+
+function openLightbox(list, i){ currentList=list; idx=i; update(); lb.setAttribute('aria-hidden','false'); }
+function update(){ imgEl.src = currentList[idx].src; }
+function closeLightbox(){ lb.setAttribute('aria-hidden','true'); }
+btnPrev.addEventListener('click', ()=>{ idx=(idx-1+currentList.length)%currentList.length; update(); });
+btnNext.addEventListener('click', ()=>{ idx=(idx+1)%currentList.length; update(); });
+btnClose.addEventListener('click', closeLightbox);
+lb.addEventListener('click', e=>{ if(e.target===lb) closeLightbox(); });
+window.addEventListener('keydown', e=>{
+  if(lb.getAttribute('aria-hidden')==='false'){
+    if(e.key==='Escape') closeLightbox();
+    if(e.key==='ArrowLeft') btnPrev.click();
+    if(e.key==='ArrowRight') btnNext.click();
+  }
+});
+</script>
+</body></html>
