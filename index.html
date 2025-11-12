@@ -1,114 +1,126 @@
-<!DOCTYPE html><html lang="ko"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>DGV Company Limited</title>
+<meta id="meta-desc" name="description" content="달랏 골프·호텔·차량·한식당 원스톱 서비스 — DGV Company Limited">
 <style>
 :root{--green-dark:#0c5f2c;--green:#1a7f3c;--bg:#f5f7f5;--card:#fff;--ink:#333}
-html{scroll-behavior:smooth}body{margin:0;font-family:Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
-header.hero{background:linear-gradient(135deg,var(--green-dark),var(--green));padding:56px 20px 28px;text-align:center;color:#fff}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header.hero{position:relative;background:linear-gradient(135deg,var(--green-dark),var(--green));padding:56px 20px 28px;text-align:center;color:#fff}
+/* 언어 스위치 */
+.lang-switch{position:absolute;top:14px;right:16px;display:flex;gap:8px;flex-wrap:wrap}
+.lang-switch button{background:#fff;color:#0b4d26;border:1px solid #dceedd;padding:3px 7px;font-size:10px;border-radius:6px;font-weight:600;cursor:pointer}
+.lang-switch button:hover{background:#eef8f0}
+.lang-switch button.active{background:#0b4d26;color:#fff;border-color:#0b4d26}
+/* 브랜드 */
 .brand{display:flex;align-items:center;justify-content:center;gap:14px}
-.brand-logo{width:56px;height:56px;object-fit:contain}
+.brand-logo{width:80px;height:80px;object-fit:contain}
 .brand-title{font-weight:900;font-size:40px;margin:0}
+.brand-sub{font-weight:800;font-size:14px;padding:6px 10px;border-radius:8px}
+/* 네비 */
 nav.nav{position:sticky;top:0;z-index:10;background:#ffffffcc;backdrop-filter:saturate(140%) blur(6px);border-bottom:1px solid #e8efe8}
 .nav-inner{max-width:1000px;margin:0 auto;display:flex;gap:8px;padding:10px 14px;justify-content:center;flex-wrap:wrap}
 .nav a{color:var(--green-dark);text-decoration:none;padding:10px 14px;border-radius:10px;font-weight:700}
 .nav a:hover{background:#e8f3ea}
-.section{max-width:1000px;padding:40px 16px;margin:0 auto}h2{color:var(--green-dark);margin:0 0 14px}
+/* 섹션/카드 */
+.section{max-width:1000px;padding:40px 16px;margin:0 auto}
+h2{color:var(--green-dark);margin:0 0 14px}
 .card{background:var(--card);padding:36px;border-radius:14px;box-shadow:0 4px 22px rgba(0,0,0,.06);margin-bottom:28px}
 .grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
 a.feature{display:block;border:1px solid #edf2ed;background:#fbfdfb;border-radius:14px;padding:20px;color:inherit;text-decoration:none;transition:.18s}
 a.feature:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.08);border-color:#dceedd;background:#f7fdf7}
+/* 푸터 */
 footer{text-align:center;padding:20px;color:#666;background:#e7eee7}
-@media(max-width:480px){.brand-title{font-size:32px}.brand-logo{width:48px;height:48px}}
-</style></head><body>
+/* 반응형 */
+@media(max-width:480px){
+  .brand-title{font-size:32px}
+  .brand-logo{width:48px;height:48px}
+}
+</style>
+</head>
+<body>
 
 <header class="hero">
-  <div class="brand">
-    <img src="logo.png" class="brand-logo" alt="DGV Logo"><h1 class="brand-title">DGV</h1>
+  <!-- 언어 전환 버튼 -->
+  <div class="lang-switch" id="lang-switch">
+    <button data-lang="ko">🇰🇷 한국어</button>
+    <button data-lang="en">🇺🇸 English</button>
+    <button data-lang="vi">🇻🇳 Tiếng Việt</button>
   </div>
-  <p>Golf · Hotel · Car Booking Services</p>
+
+  <div class="brand">
+    <img src="image/logo.png" class="brand-logo" alt="DGV Logo">
+    <h1 class="brand-title">DGV</h1>
+    <span id="brand-sub" class="brand-sub">달랏 골프 바우처</span>
+  </div>
+  <p id="hero-sub">Golf · Hotel · Car · Restaurant Services</p>
 </header>
 
 <nav class="nav"><div class="nav-inner">
-  <a href="#about">회사 소개</a><a href="#services">상품 안내</a><a href="#contact">문의</a>
+  <a href="#about" id="nav-about">회사 소개</a>
+  <a href="#services" id="nav-services">상품 안내</a>
+  <a href="#contact" id="nav-contact">문의</a>
 </div></nav>
 
 <section id="about" class="section">
   <div class="card">
-    <h2>회사 소개 (About Us)</h2>
-    <p>
-        <strong>DGV Company Limited</strong>는 베트남 달랏(Da Lat)을 기반으로 
-        <strong>10년 이상 지역을 대표하며 성장해온 골프·호텔·차량 에이전시 전문 기업</strong>입니다.
-    </p>
-
-    <p>
-        설립 이후 지금까지, 고객 만족과 서비스 품질을 최우선 가치로 삼아
-        <strong>10년 연속 우수한 고객 평점과 파트너 평가</strong>를 유지하며
-        달랏에서 가장 신뢰받는 기업 중 하나로 자리매김했습니다.
-    </p>
-
-    <p>
-        DGV는 <strong>하나투어, 한진관광</strong> 등 한국의 주요 대형 여행사들과 
-        장기적이고 안정적인 파트너십을 구축하고 있습니다. 이러한 신뢰는 DGV가 제공하는 서비스의 
-        <strong>일관된 품질, 투명한 운영 방식, 책임감 있는 현지 관리 능력</strong>에서 비롯됩니다.
-    </p>
-
-    <p>
-        또한 달랏 주요 골프장, 프리미엄 리조트, 고급 차량 네트워크와 긴밀히 협력하여 
-        다음과 같은 서비스를 제공합니다:
-    </p>
-
-    <ul>
+    <h2 id="title-about">회사 소개 (About Us)</h2>
+    <div id="about-body">
+      <!-- (초기 한국어 내용은 그대로, i18n로 교체됨) -->
+      <p><strong>DGV Company Limited</strong>는 베트남 달랏(Da Lat)을 기반으로 
+      <strong>10년 이상 지역을 대표하며 성장해온 골프·호텔·차량·한식당 에이전시 전문 기업</strong>입니다.</p>
+      <p>설립 이후 지금까지, 고객 만족과 서비스 품질을 최우선 가치로 삼아
+      <strong>10년 연속 우수한 고객 평점과 파트너 평가</strong>를 유지하며
+      달랏에서 가장 신뢰받는 기업 중 하나로 자리매김했습니다.</p>
+      <p>DGV는 <strong>하나투어, 한진관광</strong> 등 한국의 주요 대형 여행사들과 
+      장기적이고 안정적인 파트너십을 구축하고 있습니다. 이러한 신뢰는 DGV가 제공하는 서비스의 
+      <strong>일관된 품질, 투명한 운영 방식, 책임감 있는 현지 관리 능력</strong>에서 비롯됩니다.</p>
+      <p>또한 달랏 주요 골프장, 프리미엄 리조트, 고급 차량 네트워크와 긴밀히 협력하여 
+      다음과 같은 서비스를 제공합니다:</p>
+      <ul>
         <li><strong>맞춤형 골프 패키지 운영</strong></li>
         <li><strong>호텔·리조트 예약 대행</strong></li>
         <li><strong>전용 차량 및 VIP 의전 서비스 제공</strong></li>
         <li><strong>직영 한식당 운영 및 단체 식사 서비스 제공</strong></li>
-    </ul>
-
-    <p>
-        특히 DGV는 달랏 현지에서 <strong>직영으로 한식당을 운영</strong>하고 있어, 
-        골프 및 단체 여행 고객들에게 <strong>안정적인 품질의 한국식 식사</strong>를 제공하고 있습니다.  
-        한국 고객의 입맛과 위생 기준에 맞춘 메뉴 구성을 통해 여행의 만족도를 한층 더 높이고 있으며, 
-        대형 단체 식사도 원활하게 운영할 수 있는 인프라를 갖추고 있습니다.
-    </p>
-
-    <p>
-        위 모든 서비스를 <strong>원스톱(One-stop)</strong>으로 제공하고 있으며, 
-        고객과 파트너가 필요로 하는 모든 단계를 DGV가 직접 관리하여 
-        <strong>최대의 만족도와 편의성</strong>을 보장합니다.
-    </p>
-
-    <p>
-        10년간 축적된 현지 운영 노하우, 꾸준히 유지해온 높은 고객 만족도, 
-        그리고 파트너 기업들로부터의 우수 평가를 바탕으로 
-        DGV Company Limited는 <strong>달랏 레저·관광 산업의 선도 기업</strong>으로서 
-        앞으로도 책임감 있는 서비스와 차별화된 경험을 제공해 나가겠습니다.
-    </p>
+      </ul>
+      <p>특히 DGV는 달랏 현지에서 <strong>직영으로 한식당을 운영</strong>하고 있어, 
+      골프 및 단체 여행 고객들에게 <strong>안정적인 품질의 한국식 식사</strong>를 제공합니다.  
+      한국 고객의 입맛과 위생 기준에 맞춘 메뉴 구성으로 만족도를 높이며, 대형 단체 식사도 원활하게 운영합니다.</p>
+      <p>위 모든 서비스를 <strong>원스톱(One-stop)</strong>으로 제공하고, DGV가 직접 전 과정을 관리하여 
+      <strong>최대의 만족도와 편의성</strong>을 보장합니다.</p>
+      <p>10년간 축적된 현지 운영 노하우와 높은 고객 만족도를 바탕으로 
+      DGV Company Limited는 <strong>달랏 레저·관광 산업의 선도 기업</strong>으로서 
+      책임감 있는 서비스와 차별화된 경험을 제공하겠습니다.</p>
+    </div>
   </div>
 </section>
 
 <section id="services" class="section">
   <div class="card">
-    <h2>상품 안내 (Our Services)</h2>
+    <h2 id="title-services">상품 안내 (Our Services)</h2>
     <div class="grid">
       <a class="feature" href="golf.html">
-        <h3>골프 예약 (Golf Booking)</h3>
-        <p>주요 골프장 Tee Time · 캐디/카트 · 단체 라운딩</p>
+        <h3 id="svc-golf-title">골프 예약 (Golf Booking)</h3>
+        <p id="svc-golf-desc">주요 골프장 Tee Time · 캐디/카트 · 단체 라운딩</p>
       </a>
       <a class="feature" href="hotel.html">
-        <h3>호텔 예약 (Hotel Booking)</h3>
-        <p>달랏·나트랑·호치민 호텔 특가 · 맞춤 추천</p>
+        <h3 id="svc-hotel-title">호텔 예약 (Hotel Booking)</h3>
+        <p id="svc-hotel-desc">달랏·나트랑·호치민 호텔 특가 · 맞춤 추천</p>
       </a>
       <a class="feature" href="package.html">
-        <h3>골프 + 호텔 패키지</h3>
-        <p>일정/예산 맞춤 구성 · 픽업 포함 원스톱</p>
+        <h3 id="svc-package-title">골프 + 호텔 패키지</h3>
+        <p id="svc-package-desc">일정/예산 맞춤 구성 · 픽업 포함 원스톱</p>
       </a>
       <a class="feature" href="car.html">
-        <h3>차량 예약 (Car Booking)</h3>
-        <p>공항 픽업/샌딩 · 시내/골프장 이동 · 24h 안전 운행</p>
+        <h3 id="svc-car-title">차량 예약 (Car Booking)</h3>
+        <p id="svc-car-desc">공항 픽업/샌딩 · 시내/골프장 이동 · 24h 안전 운행</p>
       </a>
-          <a class="feature" href="car.html">
-        <h3>식당 예약 (Korean Restaurant Booking)</h3>
-        <p>한식당</p>
+      <a class="feature" href="restaurant.html">
+        <h3 id="svc-restaurant-title">식당 예약 (Korean Restaurant Booking)</h3>
+        <p id="svc-restaurant-desc">한식당 · 단체/코스/뷔페 맞춤</p>
       </a>
     </div>
   </div>
@@ -116,12 +128,201 @@ footer{text-align:center;padding:20px;color:#666;background:#e7eee7}
 
 <section id="contact" class="section">
   <div class="card">
-    <h2>문의 연락처 (Contact)</h2>
-    <p>📞 <b>Phone (KR):</b> 038 5829 5242<br>
-       ✉️ <b>Email:</b> dalatgolfvietnam@gmail.com<br>
-       📍 <b>Address:</b> 135 - 145 Pham Dinh Phung, Xuan Huong Ward, Da Lat</p>
+    <h2 id="title-contact">문의 연락처 (Contact)</h2>
+    <p id="contact-info">
+      📞 🇰🇷 <b>Phone (KR):</b> 098 5829 5242<br>
+      📞 🇻🇳 <b>Phone (VN):</b> 098 851 9223 / 094 923 8614 <br>
+      ✉️ <b>Email:</b> dalatgolfvoucher@gmail.com<br>
+      📍 <b>Address:</b> 135 - 145 Pham Dinh Phung, Xuan Huong Ward, Da Lat
+    </p>
   </div>
 </section>
 
 <footer>© 2025 DGV Company Limited. All rights reserved.</footer>
-</body></html>
+
+<script>
+/* ===== i18n data ===== */
+const langData = {
+  ko:{
+    "page-title":"DGV Company Limited",
+    "page-desc":"달랏 골프·호텔·차량·한식당 원스톱 서비스 — DGV Company Limited",
+    "brand-sub":"달랏 골프 바우처",
+    "hero-sub":"골프 · 호텔 · 차량 · 한식당 전문 서비스",
+    "nav-about":"회사 소개","nav-services":"상품 안내","nav-contact":"문의",
+    "title-about":"회사 소개 (About Us)",
+    "about-body": `
+      <p><strong>DGV Company Limited</strong>는 베트남 달랏(Da Lat)을 기반으로 
+      <strong>10년 이상 지역을 대표하며 성장해온 골프·호텔·차량·한식당 에이전시 전문 기업</strong>입니다.</p>
+      <p>설립 이후 지금까지, 고객 만족과 서비스 품질을 최우선 가치로 삼아
+      <strong>10년 연속 우수한 고객 평점과 파트너 평가</strong>를 유지하며
+      달랏에서 가장 신뢰받는 기업 중 하나로 자리매김했습니다.</p>
+      <p>DGV는 <strong>하나투어, 한진관광</strong> 등 한국의 주요 대형 여행사들과 
+      장기적이고 안정적인 파트너십을 구축하고 있습니다. 이러한 신뢰는 DGV가 제공하는 서비스의 
+      <strong>일관된 품질, 투명한 운영 방식, 책임감 있는 현지 관리 능력</strong>에서 비롯됩니다.</p>
+      <p>또한 달랏 주요 골프장, 프리미엄 리조트, 고급 차량 네트워크와 긴밀히 협력하여 
+      다음과 같은 서비스를 제공합니다:</p>
+      <ul>
+        <li><strong>맞춤형 골프 패키지 운영</strong></li>
+        <li><strong>호텔·리조트 예약 대행</strong></li>
+        <li><strong>전용 차량 및 VIP 의전 서비스 제공</strong></li>
+        <li><strong>직영 한식당 운영 및 단체 식사 서비스 제공</strong></li>
+      </ul>
+      <p>특히 DGV는 달랏 현지에서 <strong>직영으로 한식당을 운영</strong>하고 있어, 
+      골프 및 단체 여행 고객들에게 <strong>안정적인 품질의 한국식 식사</strong>를 제공합니다.  
+      한국 고객의 입맛과 위생 기준에 맞춘 메뉴 구성으로 만족도를 높이며, 대형 단체 식사도 원활하게 운영합니다.</p>
+      <p>위 모든 서비스를 <strong>원스톱(One-stop)</strong>으로 제공하고, DGV가 직접 전 과정을 관리하여 
+      <strong>최대의 만족도와 편의성</strong>을 보장합니다.</p>
+      <p>10년간 축적된 현지 운영 노하우와 높은 고객 만족도를 바탕으로 
+      DGV Company Limited는 <strong>달랏 레저·관광 산업의 선도 기업</strong>으로서 
+      책임감 있는 서비스와 차별화된 경험을 제공하겠습니다.</p>
+    `,
+    "title-services":"상품 안내 (Our Services)",
+    "svc-golf-title":"골프 예약 (Golf Booking)",
+    "svc-golf-desc":"주요 골프장 Tee Time · 캐디/카트 · 단체 라운딩",
+    "svc-hotel-title":"호텔 예약 (Hotel Booking)",
+    "svc-hotel-desc":"달랏·나트랑·호치민 호텔 특가 · 맞춤 추천",
+    "svc-package-title":"골프 + 호텔 패키지",
+    "svc-package-desc":"일정/예산 맞춤 구성 · 픽업 포함 원스톱",
+    "svc-car-title":"차량 예약 (Car Booking)",
+    "svc-car-desc":"공항 픽업/샌딩 · 시내/골프장 이동 · 24h 안전 운행",
+    "svc-restaurant-title":"식당 예약 (Korean Restaurant Booking)",
+    "svc-restaurant-desc":"한식당 · 단체/코스/뷔페 맞춤",
+    "title-contact":"문의 연락처 (Contact)",
+    "contact-info":"📞 🇰🇷 <b>Phone (KR):</b> 098 5829 5242<br>📞 🇻🇳 <b>Phone (VN):</b> 098 851 9223 / 094 923 8614 <br>✉️ <b>Email:</b> dalatgolfvoucher@gmail.com<br>📍 <b>Address:</b> 135 - 145 Pham Dinh Phung, Xuan Huong Ward, Da Lat"
+  },
+  en:{
+    "page-title":"DGV Company Limited",
+    "page-desc":"One-stop Golf · Hotel · Car · Korean Restaurant services in Da Lat — DGV Company Limited",
+    "brand-sub":"Da Lat Golf Voucher",
+    "hero-sub":"Professional Golf · Hotel · Car · Korean Restaurant Services",
+    "nav-about":"About","nav-services":"Services","nav-contact":"Contact",
+    "title-about":"About Us",
+    "about-body": `
+      <p><strong>DGV Company Limited</strong> is a trusted agency in Da Lat, Vietnam,
+      specializing in <strong>golf, hotel, transportation, and Korean restaurant services</strong> for over a decade.</p>
+      <p>We prioritize customer satisfaction and quality, maintaining
+      <strong>excellent ratings from customers and partners for 10 consecutive years</strong>.</p>
+      <p>We work closely with major Korean travel partners such as <strong>HanaTour</strong> and <strong>Hanjin Travel</strong>,
+      built on <strong>consistent quality, transparent operations, and reliable local management</strong>.</p>
+      <p>In partnership with top golf courses, premium resorts, and vehicle networks in Da Lat, we provide:</p>
+      <ul>
+        <li><strong>Tailor-made golf packages</strong></li>
+        <li><strong>Hotel & resort bookings</strong></li>
+        <li><strong>Private car & VIP transfer services</strong></li>
+        <li><strong>In-house Korean restaurant & group dining</strong></li>
+      </ul>
+      <p>Our <strong>in-house Korean restaurant</strong> ensures stable food quality for golfers and groups,
+      including large-party operations.</p>
+      <p>We offer a <strong>one-stop</strong> service from end to end for <strong>maximum convenience and satisfaction</strong>.</p>
+      <p>With local know-how and high satisfaction, DGV continues to lead Da Lat’s leisure & tourism industry.</p>
+    `,
+    "title-services":"Our Services",
+    "svc-golf-title":"Golf Booking",
+    "svc-golf-desc":"Tee times · Caddie/Cart · Group rounds",
+    "svc-hotel-title":"Hotel Booking",
+    "svc-hotel-desc":"Best rates in Da Lat/Nha Trang/Ho Chi Minh · Tailored picks",
+    "svc-package-title":"Golf + Hotel Package",
+    "svc-package-desc":"Custom itinerary/budget · One-stop with pickup",
+    "svc-car-title":"Car Booking",
+    "svc-car-desc":"Airport pickup/dropoff · City/Golf transfers · 24h safe ride",
+    "svc-restaurant-title":"Korean Restaurant Booking",
+    "svc-restaurant-desc":"Korean dining · Group/Course/Buffet options",
+    "title-contact":"Contact",
+    "contact-info":"📞 🇰🇷 <b>KR:</b> +82 98 5829 5242<br>📞 🇻🇳 <b>VN:</b> +84 98 851 9223 / 094 923 8614<br>✉️ <b>Email:</b> dalatgolfvoucher@gmail.com<br>📍 <b>Address:</b> 135 - 145 Pham Dinh Phung, Xuan Huong Ward, Da Lat"
+  },
+  vi:{
+    "page-title":"DGV Company Limited",
+    "page-desc":"Dịch vụ One-stop: Golf · Khách sạn · Xe · Nhà hàng Hàn tại Đà Lạt — DGV Company Limited",
+    "brand-sub":"Phiếu Golf Đà Lạt",
+    "hero-sub":"Dịch vụ: Golf · Khách sạn · Xe đưa đón · Nhà hàng Hàn Quốc",
+    "nav-about":"Giới thiệu","nav-services":"Dịch vụ","nav-contact":"Liên hệ",
+    "title-about":"Giới thiệu",
+    "about-body": `
+      <p><strong>DGV Company Limited</strong> là công ty tại Đà Lạt,
+      chuyên <strong>golf, khách sạn, xe đưa đón và nhà hàng Hàn Quốc</strong> với hơn 10 năm uy tín.</p>
+      <p>Chúng tôi đặt <strong>chất lượng & sự hài lòng</strong> lên hàng đầu, 
+      duy trì <strong>đánh giá xuất sắc suốt 10 năm</strong> từ khách hàng và đối tác.</p>
+      <p>DGV hợp tác cùng các đối tác lớn của Hàn Quốc như <strong>HanaTour</strong>, <strong>Hanjin Travel</strong>, 
+      dựa trên <strong>chất lượng ổn định, vận hành minh bạch và quản lý địa phương đáng tin cậy</strong>.</p>
+      <p>Với mạng lưới sân golf, resort và đội xe tại Đà Lạt, chúng tôi cung cấp:</p>
+      <ul>
+        <li><strong>Gói golf theo yêu cầu</strong></li>
+        <li><strong>Đặt phòng khách sạn/resort</strong></li>
+        <li><strong>Xe riêng & đón tiễn VIP</strong></li>
+        <li><strong>Nhà hàng Hàn Quốc tự vận hành, nhận đoàn</strong></li>
+      </ul>
+      <p>Nhà hàng Hàn Quốc <strong>do DGV vận hành</strong> đảm bảo chất lượng ổn định, 
+      phục vụ cả đoàn lớn.</p>
+      <p>Chúng tôi cung cấp dịch vụ <strong>one-stop</strong> cho <strong>trải nghiệm thuận tiện và hài lòng tối đa</strong>.</p>
+      <p>DGV tiếp tục dẫn đầu lĩnh vực du lịch-giải trí tại Đà Lạt với kinh nghiệm địa phương và mức hài lòng cao.</p>
+    `,
+    "title-services":"Dịch vụ",
+    "svc-golf-title":"Đặt sân Golf",
+    "svc-golf-desc":"Đặt tee time · Caddie/xe điện · Nhóm đoàn",
+    "svc-hotel-title":"Đặt Khách sạn",
+    "svc-hotel-desc":"Giá tốt Đà Lạt/Nha Trang/TP.HCM · Gợi ý theo nhu cầu",
+    "svc-package-title":"Gói Golf + Khách sạn",
+    "svc-package-desc":"Lịch trình/ngân sách theo yêu cầu · One-stop kèm đón tiễn",
+    "svc-car-title":"Đặt xe",
+    "svc-car-desc":"Đón/tiễn sân bay · Trong TP/ra sân Golf · An toàn 24h",
+    "svc-restaurant-title":"Đặt nhà hàng Hàn Quốc",
+    "svc-restaurant-desc":"Ẩm thực Hàn · Nhận đoàn/set/buffet",
+    "title-contact":"Liên hệ",
+    "contact-info":"📞 🇻🇳 <b>VN:</b> 098 851 9223 / 094 923 8614<br>📞 🇰🇷 <b>KR:</b> 098 5829 5242<br>✉️ <b>Email:</b> dalatgolfvoucher@gmail.com<br>📍 <b>Địa chỉ:</b> 135 - 145 Pham Dinh Phung, P. Xuân Hương, Đà Lạt"
+  }
+};
+
+/* ===== i18n apply ===== */
+function setLang(lang){
+  const dict = langData[lang] || langData.ko;
+
+  // 텍스트 업데이트 (ID 기반)
+  const ids = [
+    "brand-sub","hero-sub",
+    "nav-about","nav-services","nav-contact",
+    "title-about","about-body",
+    "title-services",
+    "svc-golf-title","svc-golf-desc",
+    "svc-hotel-title","svc-hotel-desc",
+    "svc-package-title","svc-package-desc",
+    "svc-car-title","svc-car-desc",
+    "svc-restaurant-title","svc-restaurant-desc",
+    "title-contact","contact-info"
+  ];
+  ids.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el && dict[id]) el.innerHTML = dict[id];
+  });
+
+  // 문서 제목 & 메타 설명
+  if(dict["page-title"]) document.title = dict["page-title"];
+  const metaDesc = document.getElementById("meta-desc");
+  if(metaDesc && dict["page-desc"]) metaDesc.setAttribute("content", dict["page-desc"]);
+
+  // html lang
+  document.documentElement.setAttribute("lang", lang);
+
+  // 저장 & 버튼 상태
+  localStorage.setItem("site_lang", lang);
+  document.querySelectorAll('#lang-switch button').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.lang===lang);
+  });
+}
+
+/* 초기화 */
+(function initI18n(){
+  // 버튼 핸들러
+  document.querySelectorAll('#lang-switch button').forEach(btn=>{
+    btn.addEventListener('click', ()=> setLang(btn.dataset.lang));
+  });
+
+  // 저장값 > 브라우저 > ko
+  const saved = localStorage.getItem("site_lang");
+  const browser = (navigator.language||'ko').slice(0,2);
+  const initial = saved || (['ko','en','vi'].includes(browser) ? browser : 'ko');
+  setLang(initial);
+})();
+</script>
+
+</body>
+</html>

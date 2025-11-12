@@ -1,23 +1,32 @@
-<!DOCTYPE html><html lang="ko"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>호텔 예약 | DGV</title>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title id="i18n-title">호텔 예약 | DGV</title>
+<meta id="i18n-desc" name="description" content="달랏 인기 호텔 — Swiss-Bel · Western Hill · 갤러리 · 요금 · 포함내역 안내">
 <style>
 :root{--green-dark:#0c5f2c;--green:#1a7f3c;--bg:#f5f7f5;--card:#fff;--ink:#333}
 *{box-sizing:border-box}
 body{margin:0;font-family:Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
 
-/* ===== Brand Topbar ===== */
+/* Topbar */
 .topbar{background:#0b4d26;color:#fff}
 .topbar-inner{max-width:1100px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 16px}
 .brand{display:flex;align-items:center;gap:10px}
-.brand img{width:34px;height:34px;object-fit:contain}
+.brand img{width:40px;height:40px;object-fit:contain}
 .brand .name{font-weight:900;letter-spacing:.5px;font-size:18px}
-.nav-links{display:flex;gap:10px;flex-wrap:wrap}
+.nav-links{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .nav-links a{color:#e9ffef;text-decoration:none;font-weight:700;padding:8px 12px;border-radius:10px}
 .nav-links a:hover{background:rgba(255,255,255,.12)}
-@media (max-width:640px){.topbar-inner{flex-direction:column;align-items:flex-start}}
+.nav-links a.active{background:rgba(255,255,255,.12)}
+.lang-switch{margin-left:auto;display:flex;gap:6px}
+.lang-switch button{background:#fff;color:#0b4d26;border:1px solid #dceedd;padding:3px 7px;border-radius:6px;font-weight:700;cursor:pointer;font-size:10px}
+.lang-switch button:hover{background:#eef8f0}
+.lang-switch button.active{background:#0b4d26;color:#fff;border-color:#0b4d26}
+@media (max-width:640px){.topbar-inner{flex-direction:column;align-items:flex-start}.lang-switch{margin-left:0;width:100%;justify-content:flex-end}}
 
-/* ===== Hero ===== */
+/* Hero */
 .header{background:linear-gradient(135deg,#0c5f2c,#1a7f3c);color:#fff;padding:28px 16px 22px}
 .wrap-hero{max-width:1100px;margin:0 auto}
 .breadcrumb{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);color:#fff;padding:6px 10px;border-radius:999px;text-decoration:none;font-weight:700}
@@ -25,10 +34,11 @@ body{margin:0;font-family:Helvetica,Arial,sans-serif;background:var(--bg);color:
 .header h1{margin:12px 0 4px;font-size:28px}
 .header .sub{opacity:.95}
 
-/* ===== Layout ===== */
+/* Layout */
 .wrap{max-width:1100px;margin:0 auto;padding:24px 16px}
 .card{background:var(--card);padding:22px;border-radius:14px;box-shadow:0 4px 22px rgba(0,0,0,.06);margin-bottom:18px}
 h2{color:var(--green-dark);margin:0 0 10px}
+h3{margin:0 0 10px}
 
 /* Tabs */
 .tabs{display:flex;gap:8px;flex-wrap:wrap}
@@ -74,15 +84,21 @@ footer{text-align:center;padding:20px;color:#666;background:#e7eee7;margin-top:2
 <div class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <img src="logo.png" alt="DGV Logo"><div class="name">DGV Company Limited</div>
+      <img src="image/logo.png" alt="DGV Logo"><div class="name">DGV Company Limited</div>
     </div>
     <nav class="nav-links">
-      <a href="index.html">Home</a>
-      <a href="golf.html">Golf</a>
-      <a href="hotel.html">Hotel</a>
-      <a href="package.html">Package</a>
-      <a href="car.html">Car</a>
-      <a href="index.html#contact">Contact</a>
+      <a href="index.html" data-i18n="nav-home">Home</a>
+      <a href="restaurant.html" data-i18n="nav-restaurant">Restaurant</a>
+      <a href="golf.html" data-i18n="nav-golf">Golf</a>
+      <a href="hotel.html" class="active" data-i18n="nav-hotel"><b>Hotel</b></a>
+      <a href="package.html" data-i18n="nav-package">Package</a>
+      <a href="car.html" data-i18n="nav-car">Car</a>
+      <a href="index.html#contact" data-i18n="nav-contact">Contact</a>
+      <div class="lang-switch" id="lang-switch">
+        <button data-lang="ko">🇰🇷 한국어</button>
+        <button data-lang="en">🇺🇸 English</button>
+        <button data-lang="vi">🇻🇳 Tiếng Việt</button>
+      </div>
     </nav>
   </div>
 </div>
@@ -90,9 +106,9 @@ footer{text-align:center;padding:20px;color:#666;background:#e7eee7;margin-top:2
 <!-- Hero -->
 <div class="header">
   <div class="wrap-hero">
-    <a class="breadcrumb" href="index.html">← Home</a>
-    <h1>호텔 예약 (Hotel Booking)</h1>
-    <div class="sub">달랏 인기 호텔 2곳 · 갤러리 · 요금 · 포함내역</div>
+    <a class="breadcrumb" href="index.html" data-i18n="breadcrumb-home">← Home</a>
+    <h1 data-i18n="hero-title">호텔 예약 (Hotel Booking)</h1>
+    <div class="sub" data-i18n="hero-sub">달랏 인기 호텔 2곳 · 갤러리 · 요금 · 포함내역</div>
   </div>
 </div>
 
@@ -100,88 +116,76 @@ footer{text-align:center;padding:20px;color:#666;background:#e7eee7;margin-top:2
   <!-- Tabs -->
   <div class="card">
     <div class="tabs">
-      <button class="tab-btn active" data-tab="swiss">SWISS-BEL HOTEL</button>
-      <button class="tab-btn" data-tab="western">Western Hill HOTEL</button>
+      <button class="tab-btn active" data-tab="swiss" data-i18n="tab-swiss">SWISS-BEL HOTEL</button>
+      <button class="tab-btn" data-tab="western" data-i18n="tab-western">Western Hill HOTEL</button>
     </div>
   </div>
 
   <!-- ===== SWISS-BEL ===== -->
   <div id="swiss" class="tab-panel active">
-    <!-- 소개 -->
     <div class="card">
       <h2>SWISS-BEL HOTEL</h2>
-      <p>
-        달랏 중심 접근성이 좋은 모던 프리미엄 호텔로,
-        깨끗한 객실 컨디션과 합리적인 가격, 알찬 조식으로 한국 고객에게 인기가 높습니다.
+      <p data-i18n="swiss-desc-1">
+        달랏 중심 접근성이 좋은 모던 프리미엄 호텔로, 깨끗한 객실 컨디션과 합리적인 가격, 알찬 조식으로 한국 고객에게 인기가 높습니다.
+      </p>
+      <p data-i18n="swiss-desc-2">
         시내·관광지 이동이 편리하고, 골프 라운드 전후 휴식 거점으로 최적입니다.
       </p>
       <ul class="list">
-        <li><b>특징:</b> 깔끔한 객실 · 합리적 요금 · 편리한 위치</li>
-        <li><b>추천:</b> 커플/가족/골프팀 · 가성비 중시 / 시내 접근성 중시</li>
+        <li><b data-i18n="lbl-feature">특징:</b> <span data-i18n="swiss-feature">깔끔한 객실 · 합리적 요금 · 편리한 위치</span></li>
+        <li><b data-i18n="lbl-reco">추천:</b> <span data-i18n="swiss-reco">커플/가족/골프팀 · 가성비 중시 / 시내 접근성 중시</span></li>
       </ul>
     </div>
 
-    <!-- ✅ 객실 타입 소개 -->
-<div class="card">
-  <h3>객실 타입 안내</h3>
-
-  <!-- 🏔️ Deluxe Mountain View -->
-  <div style="margin-bottom:30px">
-    <h4>Deluxe Mountain View</h4>
-    <p>
-      달랏의 구름 낀 산맥과 숲이 한눈에 내려다보이는 객실입니다.<br>
-      통유리 창으로 아침 햇살과 저녁 노을을 감상할 수 있으며,
-      고급 침구와 넓은 욕실, 조용한 분위기가 장점입니다.
-    </p>
-    <ul class="list">
-      <li>면적 : 약 32 ㎡ / 킹 또는 트윈 베드</li>
-      <li>조식 2인 포함 / Wi-Fi 무료</li>
-      <li>발코니 또는 파노라마 뷰 창 구성</li>
-      <li>권장 : 커플 · 휴양형 투숙객</li>
-    </ul>
-
-    <!-- 🏔️ Mountain Gallery -->
-    <div class="card" style="background:#f9faf9">
-      <h4>Deluxe Mountain View 갤러리</h4>
-      <div class="grid" id="gallery-swiss-mountain"></div>
-    </div>
-  </div>
-
-  <!-- ⛳ Deluxe Golf View -->
-  <div>
-    <h4>Deluxe Golf View</h4>
-    <p>
-      골프코스가 한눈에 펼쳐지는 프리미엄 뷰 객실로, 
-      여유로운 테라스에서 달랏의 청량한 공기와 그린 전망을 즐길 수 있습니다.<br>
-      라운드 전후 휴식이나 골프팀 투숙에 특히 인기 있습니다.
-    </p>
-    <ul class="list">
-      <li>면적 : 약 34 ㎡ / 킹 또는 트윈 베드</li>
-      <li>조식 2인 포함 / Wi-Fi 무료</li>
-      <li>개별 발코니 · 코스 뷰 · 소파 세트 비치</li>
-      <li>권장 : 골프 라운딩 팀 · 프리미엄 휴식 선호 고객</li>
-    </ul>
-
-    <!-- ⛳ Golf View Gallery -->
-    <div class="card" style="background:#f9faf9">
-      <h4>Deluxe Golf View 갤러리</h4>
-      <div class="grid" id="gallery-swiss-golf"></div>
-    </div>
-  </div>
-</div>
-
-
-    <!-- 임시 요금표 -->
+    <!-- Room Types -->
     <div class="card">
-      <h3>객실 요금 (임시 · VND)</h3>
+      <h3 data-i18n="roomtypes-title">객실 타입 안내</h3>
+
+      <div style="margin-bottom:30px">
+        <h4>Deluxe Mountain View</h4>
+        <p data-i18n="swiss-mv-desc">
+          달랏의 산맥과 숲을 내려다보는 객실. 통유리 창으로 일출/노을 감상, 고급 침구와 넓은 욕실, 조용한 분위기가 장점.
+        </p>
+        <ul class="list">
+          <li data-i18n="swiss-mv-li1">면적 : 약 32 ㎡ / 킹 또는 트윈 베드</li>
+          <li data-i18n="swiss-mv-li2">조식 2인 포함 / Wi-Fi 무료</li>
+          <li data-i18n="swiss-mv-li3">발코니 또는 파노라마 뷰 창</li>
+          <li data-i18n="swiss-mv-li4">권장 : 커플 · 휴양형 투숙객</li>
+        </ul>
+        <div class="card" style="background:#f9faf9">
+          <h4 data-i18n="gallery-mv">Deluxe Mountain View 갤러리</h4>
+          <div class="grid" id="gallery-swiss-mountain"></div>
+        </div>
+      </div>
+
+      <div>
+        <h4>Deluxe Golf View</h4>
+        <p data-i18n="swiss-gv-desc">
+          골프코스 전망의 프리미엄 뷰 객실. 발코니에서 청량한 공기와 그린 전망을 즐길 수 있어 라운드 전후 휴식에 인기.
+        </p>
+        <ul class="list">
+          <li data-i18n="swiss-gv-li1">면적 : 약 34 ㎡ / 킹 또는 트윈 베드</li>
+          <li data-i18n="swiss-gv-li2">조식 2인 포함 / Wi-Fi 무료</li>
+          <li data-i18n="swiss-gv-li3">개별 발코니 · 코스 뷰 · 소파 세트</li>
+          <li data-i18n="swiss-gv-li4">권장 : 골프팀 · 프리미엄 휴식 선호</li>
+        </ul>
+        <div class="card" style="background:#f9faf9">
+          <h4 data-i18n="gallery-gv">Deluxe Golf View 갤러리</h4>
+          <div class="grid" id="gallery-swiss-golf"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 data-i18n="rate-title">객실 요금 (임시 · VND)</h3>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th class="tl">Room Type</th>
-              <th>Weekday</th>
-              <th>Weekend</th>
-              <th>Peak/Holiday</th>
+              <th class="tl" data-i18n="col-room">Room Type</th>
+              <th data-i18n="col-weekday">Weekday</th>
+              <th data-i18n="col-weekend">Weekend</th>
+              <th data-i18n="col-peak">Peak/Holiday</th>
             </tr>
           </thead>
           <tbody>
@@ -192,98 +196,85 @@ footer{text-align:center;padding:20px;color:#666;background:#e7eee7;margin-top:2
           </tbody>
         </table>
       </div>
-      <p class="note">※ 세부 요금/조식/인원정책은 시즌/객실 상황에 따라 변동됩니다. (임시 표기)</p>
-      <a class="cta" href="index.html#contact">예약/문의하기</a>
+      <p class="note" data-i18n="rate-note-swiss">※ 세부 요금/조식/인원정책은 시즌/객실 상황에 따라 변동됩니다. (임시 표기)</p>
+      <a class="cta" href="index.html#contact" data-i18n="cta-book">예약/문의하기</a>
     </div>
 
-    <!-- 포함내역/정책 -->
     <div class="card">
-      <h3>포함내역 & 정책</h3>
+      <h3 data-i18n="pol-title">포함내역 & 정책</h3>
       <ul class="list">
-        <li>조식 포함(객실타입별 상이) · 무료 Wi-Fi · 하우스키핑</li>
-        <li>체크인 14:00 / 체크아웃 12:00 (호텔 사정에 따라 변동)</li>
-        <li>성수기/연휴 기간 서차지(추가요금) 발생 가능</li>
-        <li>취소/환불 규정은 시즌별·객실별 상이 (문의 시 안내)</li>
+        <li data-i18n="pol-1">조식 포함(객실타입별 상이) · 무료 Wi-Fi · 하우스키핑</li>
+        <li data-i18n="pol-2">체크인 14:00 / 체크아웃 12:00 (호텔 사정에 따라 변동)</li>
+        <li data-i18n="pol-3">성수기/연휴 기간 서차지(추가요금) 발생 가능</li>
+        <li data-i18n="pol-4">취소/환불 규정은 시즌별·객실별 상이 (문의 시 안내)</li>
       </ul>
     </div>
   </div>
 
   <!-- ===== WESTERN HILL ===== -->
   <div id="western" class="tab-panel">
-    <!-- 소개 -->
     <div class="card">
       <h2>Western Hill HOTEL</h2>
-      <p>
-        달랏의 자연 전망을 즐길 수 있는 힐사이드 타입의 호텔로,
-        조용한 휴식과 깔끔한 객실이 장점입니다. 일부 객실은 발코니/뷰가 좋아
-        골프/관광 일정 후 힐링 숙소로 선호도가 높습니다.
+      <p data-i18n="western-desc-1">
+        달랏 자연 전망을 즐길 수 있는 힐사이드 호텔. 조용한 휴식과 깔끔한 객실이 장점입니다.
+      </p>
+      <p data-i18n="western-desc-2">
+        일부 객실은 발코니/뷰가 좋아 골프·관광 후 힐링 숙소로 선호도가 높습니다.
       </p>
       <ul class="list">
-        <li><b>특징:</b> 조용한 환경 · 전망 우수 · 쾌적한 객실</li>
-        <li><b>추천:</b> 커플/가족 · 휴양형 여행 · 조용한 숙박 선호</li>
+        <li><b data-i18n="lbl-feature">특징:</b> <span data-i18n="western-feature">조용한 환경 · 전망 우수 · 쾌적한 객실</span></li>
+        <li><b data-i18n="lbl-reco">추천:</b> <span data-i18n="western-reco">커플/가족 · 휴양형 여행 · 조용한 숙박 선호</span></li>
       </ul>
     </div>
 
-    <!-- 갤러리 -->
-    <!-- ✅ 객실 타입 소개 -->
-<div class="card">
-  <h3>객실 타입 안내</h3>
-
-  <!-- 🛏️ Twin Room -->
-  <div style="margin-bottom:30px">
-    <h4>Twin Room</h4>
-    <p>
-      따로 분리된 트윈 베드로 구성되어 있으며, 가족 또는 친구와 함께 머물기에 적합한 객실입니다.<br>
-      넓은 창을 통해 달랏의 산뜻한 공기와 주변 풍경을 감상할 수 있습니다.
-    </p>
-    <ul class="list">
-      <li>면적 : 약 28 ㎡ / 싱글 2베드</li>
-      <li>조식 2인 포함 / Wi-Fi 무료</li>
-      <li>기본 어메니티 / 발코니 선택형</li>
-      <li>권장 : 친구 · 가족 동반 투숙객</li>
-    </ul>
-
-    <!-- 🛏️ Twin Gallery -->
-    <div class="card" style="background:#f9faf9">
-      <h4>Twin Room 갤러리</h4>
-      <div class="grid" id="gallery-western-twin"></div>
-    </div>
-  </div>
-
-  <!-- 💑 Double Room -->
-  <div>
-    <h4>Double Room</h4>
-    <p>
-      킹 사이즈 베드와 아늑한 인테리어로 구성된 더블룸입니다.<br>
-      커플 또는 단독 투숙객에게 추천되며, 일부 객실은 발코니에서 골프장 전망을 감상할 수 있습니다.
-    </p>
-    <ul class="list">
-      <li>면적 : 약 30 ㎡ / 킹 베드 1개</li>
-      <li>조식 2인 포함 / Wi-Fi 무료</li>
-      <li>전망 : 시티뷰 또는 골프뷰</li>
-      <li>권장 : 커플 · 휴식형 투숙객</li>
-    </ul>
-
-    <!-- 💑 Double Gallery -->
-    <div class="card" style="background:#f9faf9">
-      <h4>Double Room 갤러리</h4>
-      <div class="grid" id="gallery-western-double"></div>
-    </div>
-  </div>
-</div>
-
-
-    <!-- 임시 요금표 -->
     <div class="card">
-      <h3>객실 요금 (임시 · VND)</h3>
+      <h3 data-i18n="roomtypes-title">객실 타입 안내</h3>
+
+      <div style="margin-bottom:30px">
+        <h4>Twin Room</h4>
+        <p data-i18n="western-tw-desc">
+          트윈 베드로 가족/지인과 머물기 적합. 큰 창으로 산뜻한 공기와 전망을 감상할 수 있습니다.
+        </p>
+        <ul class="list">
+          <li data-i18n="western-tw-li1">면적 : 약 28 ㎡ / 싱글 2베드</li>
+          <li data-i18n="western-tw-li2">조식 2인 포함 / Wi-Fi 무료</li>
+          <li data-i18n="western-tw-li3">기본 어메니티 / 발코니 선택형</li>
+          <li data-i18n="western-tw-li4">권장 : 친구 · 가족 동반</li>
+        </ul>
+        <div class="card" style="background:#f9faf9">
+          <h4 data-i18n="gallery-tw">Twin Room 갤러리</h4>
+          <div class="grid" id="gallery-western-twin"></div>
+        </div>
+      </div>
+
+      <div>
+        <h4>Double Room</h4>
+        <p data-i18n="western-db-desc">
+          킹 베드와 아늑한 인테리어. 일부 객실은 발코니에서 골프장 전망 감상이 가능합니다.
+        </p>
+        <ul class="list">
+          <li data-i18n="western-db-li1">면적 : 약 30 ㎡ / 킹 베드 1개</li>
+          <li data-i18n="western-db-li2">조식 2인 포함 / Wi-Fi 무료</li>
+          <li data-i18n="western-db-li3">전망 : 시티뷰 또는 골프뷰</li>
+          <li data-i18n="western-db-li4">권장 : 커플 · 휴식형</li>
+        </ul>
+        <div class="card" style="background:#f9faf9">
+          <h4 data-i18n="gallery-db">Double Room 갤러리</h4>
+          <div class="grid" id="gallery-western-double"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 data-i18n="rate-title">객실 요금 (임시 · VND)</h3>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th class="tl">Room Type</th>
-              <th>Weekday</th>
-              <th>Weekend</th>
-              <th>Peak/Holiday</th>
+              <th class="tl" data-i18n="col-room">Room Type</th>
+              <th data-i18n="col-weekday">Weekday</th>
+              <th data-i18n="col-weekend">Weekend</th>
+              <th data-i18n="col-peak">Peak/Holiday</th>
             </tr>
           </thead>
           <tbody>
@@ -294,18 +285,17 @@ footer{text-align:center;padding:20px;color:#666;background:#e7eee7;margin-top:2
           </tbody>
         </table>
       </div>
-      <p class="note">※ 위 요금은 임시 표기이며, 실제 요금은 시즌/객실 상황에 따라 변경됩니다.</p>
-      <a class="cta" href="index.html#contact">예약/문의하기</a>
+      <p class="note" data-i18n="rate-note-western">※ 위 요금은 임시 표기이며, 실제 요금은 시즌/객실 상황에 따라 변경됩니다.</p>
+      <a class="cta" href="index.html#contact" data-i18n="cta-book">예약/문의하기</a>
     </div>
 
-    <!-- 포함내역/정책 -->
     <div class="card">
-      <h3>포함내역 & 정책</h3>
+      <h3 data-i18n="pol-title">포함내역 & 정책</h3>
       <ul class="list">
-        <li>조식 포함(객실타입별 상이) · 무료 Wi-Fi · 하우스키핑</li>
-        <li>체크인 14:00 / 체크아웃 12:00 (호텔 사정에 따라 변동)</li>
-        <li>성수기/연휴 기간 서차지(추가요금) 발생 가능</li>
-        <li>취소/환불 규정은 시즌별·객실별 상이 (문의 시 안내)</li>
+        <li data-i18n="pol-1">조식 포함(객실타입별 상이) · 무료 Wi-Fi · 하우스키핑</li>
+        <li data-i18n="pol-2">체크인 14:00 / 체크아웃 12:00 (호텔 사정에 따라 변동)</li>
+        <li data-i18n="pol-3">성수기/연휴 기간 서차지(추가요금) 발생 가능</li>
+        <li data-i18n="pol-4">취소/환불 규정은 시즌별·객실별 상이 (문의 시 안내)</li>
       </ul>
     </div>
   </div>
@@ -322,7 +312,7 @@ footer{text-align:center;padding:20px;color:#666;background:#e7eee7;margin-top:2
 </div>
 
 <script>
-/* Tabs */
+/* ===== Tabs ===== */
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -333,60 +323,241 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   });
 });
 
-/* Gallery Auto Loader (jpg/png 혼합 자동 감지) */
-const MAX_IMAGES = 20;
-const EXTS = ['.jpg','.JPG','.jpeg','.JPEG','.png','.PNG'];
-
+/* ===== Gallery Loader (auto ext detect) ===== */
+const MAX_IMAGES=20, EXTS=['.jpg','.JPG','.jpeg','.JPEG','.png','.PNG'];
 function loadGallery(containerId, folder){
-  const wrap = document.getElementById(containerId);
-  const list = [];
+  const wrap=document.getElementById(containerId);
+  const list=[];
   for(let i=1;i<=MAX_IMAGES;i++){
-    let loaded = false;
+    let loaded=false;
     for(const ext of EXTS){
-      const src = `image/hotel/${folder}/${i}${ext}`;
-      const img = new Image();
-      img.className = 'photo';
-      img.src = src;
-      img.onload = ()=>{
+      const src=`image/hotel/${folder}/${i}${ext}`;
+      const img=new Image(); img.className='photo'; img.src=src;
+      img.onload=()=>{
         if(!loaded){
-          wrap.appendChild(img);
-          list.push(img);
-          img.addEventListener('click', ()=> openLightbox(list, list.indexOf(img)));
-          loaded = true;
+          wrap.appendChild(img); list.push(img);
+          img.addEventListener('click',()=>openLightbox(list, list.indexOf(img)));
+          loaded=true;
         }
       };
-      // 실패는 무시하고 다음 확장자 시도
     }
   }
 }
-//loadGallery('gallery-swiss','swissbel');
-//loadGallery('gallery-western','westernhill');
 loadGallery('gallery-swiss-mountain','swissbel/mountain');
 loadGallery('gallery-swiss-golf','swissbel/golf');
 loadGallery('gallery-western-twin','westernhill/twin');
 loadGallery('gallery-western-double','westernhill/double');
 
-/* Lightbox */
-const lb = document.getElementById('lightbox');
-const imgEl = lb.querySelector('.lb-img');
-const btnPrev = lb.querySelector('.lb-prev');
-const btnNext = lb.querySelector('.lb-next');
-const btnClose = lb.querySelector('.lb-close');
-let currentList = []; let idx = 0;
-
-function openLightbox(list, i){ currentList=list; idx=i; update(); lb.setAttribute('aria-hidden','false'); }
-function update(){ imgEl.src = currentList[idx].src; }
+/* ===== Lightbox ===== */
+const lb=document.getElementById('lightbox');
+const imgEl=lb.querySelector('.lb-img');
+const btnPrev=lb.querySelector('.lb-prev');
+const btnNext=lb.querySelector('.lb-next');
+const btnClose=lb.querySelector('.lb-close');
+let currentList=[], idx=0;
+function openLightbox(list,i){ currentList=list; idx=i; updateLB(); lb.setAttribute('aria-hidden','false'); }
+function updateLB(){ imgEl.src=currentList[idx].src; }
 function closeLightbox(){ lb.setAttribute('aria-hidden','true'); }
-btnPrev.addEventListener('click', ()=>{ idx=(idx-1+currentList.length)%currentList.length; update(); });
-btnNext.addEventListener('click', ()=>{ idx=(idx+1)%currentList.length; update(); });
-btnClose.addEventListener('click', closeLightbox);
-lb.addEventListener('click', e=>{ if(e.target===lb) closeLightbox(); });
-window.addEventListener('keydown', e=>{
+btnPrev.addEventListener('click',()=>{ idx=(idx-1+currentList.length)%currentList.length; updateLB(); });
+btnNext.addEventListener('click',()=>{ idx=(idx+1)%currentList.length; updateLB(); });
+btnClose.addEventListener('click',closeLightbox);
+lb.addEventListener('click',e=>{ if(e.target===lb) closeLightbox(); });
+window.addEventListener('keydown',e=>{
   if(lb.getAttribute('aria-hidden')==='false'){
     if(e.key==='Escape') closeLightbox();
     if(e.key==='ArrowLeft') btnPrev.click();
     if(e.key==='ArrowRight') btnNext.click();
   }
 });
+
+/* ===== i18n ===== */
+const I18N={
+  ko:{
+    "title-text":"호텔 예약 | DGV",
+    "desc-text":"달랏 인기 호텔 — Swiss-Bel · Western Hill · 갤러리 · 요금 · 포함내역 안내",
+    "nav-home":"Home","nav-restaurant":"Restaurant","nav-golf":"Golf","nav-hotel":"Hotel","nav-package":"Package","nav-car":"Car","nav-contact":"Contact",
+    "breadcrumb-home":"← Home",
+    "hero-title":"호텔 예약 (Hotel Booking)",
+    "hero-sub":"달랏 인기 호텔 2곳 · 갤러리 · 요금 · 포함내역",
+    "tab-swiss":"SWISS-BEL HOTEL","tab-western":"Western Hill HOTEL",
+    "swiss-desc-1":"달랏 중심 접근성이 좋은 모던 프리미엄 호텔로, 깨끗한 객실 컨디션과 합리적인 가격, 알찬 조식으로 한국 고객에게 인기가 높습니다.",
+    "swiss-desc-2":"시내·관광지 이동이 편리하고, 골프 라운드 전후 휴식 거점으로 최적입니다.",
+    "lbl-feature":"특징","lbl-reco":"추천",
+    "swiss-feature":"깔끔한 객실 · 합리적 요금 · 편리한 위치",
+    "swiss-reco":"커플/가족/골프팀 · 가성비 중시 / 시내 접근성 중시",
+    "roomtypes-title":"객실 타입 안내",
+    "swiss-mv-desc":"달랏의 산맥과 숲을 내려다보는 객실. 통유리 창으로 일출/노을 감상, 고급 침구와 넓은 욕실, 조용한 분위기가 장점.",
+    "swiss-mv-li1":"면적 : 약 32 ㎡ / 킹 또는 트윈 베드",
+    "swiss-mv-li2":"조식 2인 포함 / Wi-Fi 무료",
+    "swiss-mv-li3":"발코니 또는 파노라마 뷰 창",
+    "swiss-mv-li4":"권장 : 커플 · 휴양형 투숙객",
+    "gallery-mv":"Deluxe Mountain View 갤러리",
+    "swiss-gv-desc":"골프코스 전망의 프리미엄 뷰 객실. 발코니에서 청량한 공기와 그린 전망을 즐길 수 있어 라운드 전후 휴식에 인기.",
+    "swiss-gv-li1":"면적 : 약 34 ㎡ / 킹 또는 트윈 베드",
+    "swiss-gv-li2":"조식 2인 포함 / Wi-Fi 무료",
+    "swiss-gv-li3":"개별 발코니 · 코스 뷰 · 소파 세트",
+    "swiss-gv-li4":"권장 : 골프팀 · 프리미엄 휴식 선호",
+    "gallery-gv":"Deluxe Golf View 갤러리",
+    "rate-title":"객실 요금 (임시 · VND)",
+    "col-room":"Room Type","col-weekday":"Weekday","col-weekend":"Weekend","col-peak":"Peak/Holiday",
+    "rate-note-swiss":"※ 세부 요금/조식/인원정책은 시즌/객실 상황에 따라 변동됩니다. (임시 표기)",
+    "cta-book":"예약/문의하기",
+    "pol-title":"포함내역 & 정책",
+    "pol-1":"조식 포함(객실타입별 상이) · 무료 Wi-Fi · 하우스키핑",
+    "pol-2":"체크인 14:00 / 체크아웃 12:00 (호텔 사정에 따라 변동)",
+    "pol-3":"성수기/연휴 기간 서차지(추가요금) 발생 가능",
+    "pol-4":"취소/환불 규정은 시즌별·객실별 상이 (문의 시 안내)",
+    "western-desc-1":"달랏 자연 전망을 즐길 수 있는 힐사이드 호텔. 조용한 휴식과 깔끔한 객실이 장점입니다.",
+    "western-desc-2":"일부 객실은 발코니/뷰가 좋아 골프·관광 후 힐링 숙소로 선호도가 높습니다.",
+    "western-feature":"조용한 환경 · 전망 우수 · 쾌적한 객실",
+    "western-reco":"커플/가족 · 휴양형 여행 · 조용한 숙박 선호",
+    "western-tw-desc":"트윈 베드로 가족/지인과 머물기 적합. 큰 창으로 산뜻한 공기와 전망을 감상할 수 있습니다.",
+    "western-tw-li1":"면적 : 약 28 ㎡ / 싱글 2베드",
+    "western-tw-li2":"조식 2인 포함 / Wi-Fi 무료",
+    "western-tw-li3":"기본 어메니티 / 발코니 선택형",
+    "western-tw-li4":"권장 : 친구 · 가족 동반",
+    "gallery-tw":"Twin Room 갤러리",
+    "western-db-desc":"킹 베드와 아늑한 인테리어. 일부 객실은 발코니에서 골프장 전망 감상이 가능합니다.",
+    "western-db-li1":"면적 : 약 30 ㎡ / 킹 베드 1개",
+    "western-db-li2":"조식 2인 포함 / Wi-Fi 무료",
+    "western-db-li3":"전망 : 시티뷰 또는 골프뷰",
+    "western-db-li4":"권장 : 커플 · 휴식형",
+    "gallery-db":"Double Room 갤러리",
+    "rate-note-western":"※ 위 요금은 임시 표기이며, 실제 요금은 시즌/객실 상황에 따라 변경됩니다."
+  },
+  en:{
+    "title-text":"Hotel Booking | DGV",
+    "desc-text":"Da Lat popular hotels — Swiss-Bel & Western Hill — galleries, rates, inclusions",
+    "nav-home":"Home","nav-restaurant":"Restaurant","nav-golf":"Golf","nav-hotel":"Hotel","nav-package":"Package","nav-car":"Car","nav-contact":"Contact",
+    "breadcrumb-home":"← Home",
+    "hero-title":"Hotel Booking",
+    "hero-sub":"2 popular hotels in Da Lat · Galleries · Rates · Inclusions",
+    "tab-swiss":"SWISS-BEL HOTEL","tab-western":"Western Hill HOTEL",
+    "swiss-desc-1":"Modern premium hotel with great city access. Clean rooms, reasonable rates, and solid breakfast popular with Korean guests.",
+    "swiss-desc-2":"Convenient to downtown/sights, ideal as a base before/after golf rounds.",
+    "lbl-feature":"Features","lbl-reco":"Recommended",
+    "swiss-feature":"Clean rooms · Good value · Convenient location",
+    "swiss-reco":"Couples/Families/Golf teams · Value seekers · City access",
+    "roomtypes-title":"Room Types",
+    "swiss-mv-desc":"Overlooks mountains & forest. Floor-to-ceiling windows for sunrise/sunset; premium bedding, spacious bath, quiet ambience.",
+    "swiss-mv-li1":"Approx. 32 m² / King or Twin",
+    "swiss-mv-li2":"Breakfast for 2 included / Free Wi-Fi",
+    "swiss-mv-li3":"Balcony or panoramic window",
+    "swiss-mv-li4":"Best for couples / leisure",
+    "gallery-mv":"Deluxe Mountain View Gallery",
+    "swiss-gv-desc":"Premium golf-course view room with balcony; popular for relaxing before/after rounds.",
+    "swiss-gv-li1":"Approx. 34 m² / King or Twin",
+    "swiss-gv-li2":"Breakfast for 2 included / Free Wi-Fi",
+    "swiss-gv-li3":"Private balcony · Course view · Sofa set",
+    "swiss-gv-li4":"Great for golf teams / premium relaxation",
+    "gallery-gv":"Deluxe Golf View Gallery",
+    "rate-title":"Room Rates (temp · VND)",
+    "col-room":"Room Type","col-weekday":"Weekday","col-weekend":"Weekend","col-peak":"Peak/Holiday",
+    "rate-note-swiss":"* Details (meal/occupancy) vary by season/availability. Indicative only.",
+    "cta-book":"Book / Inquiry",
+    "pol-title":"Inclusions & Policies",
+    "pol-1":"Breakfast (varies by room) · Free Wi-Fi · Housekeeping",
+    "pol-2":"Check-in 14:00 / Check-out 12:00 (subject to hotel conditions)",
+    "pol-3":"Peak/holiday surcharges may apply",
+    "pol-4":"Cancellation/refund varies by season/room (details on request)",
+    "western-desc-1":"Hillside hotel with natural views; quiet stay and tidy rooms.",
+    "western-desc-2":"Some rooms have balconies/views, ideal for relaxing after golf & sightseeing.",
+    "western-feature":"Quiet environment · Great views · Comfortable rooms",
+    "western-reco":"Couples/families · Leisure-oriented · Quiet stays",
+    "western-tw-desc":"Twin beds; suitable for family/friends. Large windows bring fresh air and views.",
+    "western-tw-li1":"Approx. 28 m² / 2 single beds",
+    "western-tw-li2":"Breakfast for 2 included / Free Wi-Fi",
+    "western-tw-li3":"Basic amenities / Optional balcony",
+    "western-tw-li4":"Best for friends/families",
+    "gallery-tw":"Twin Room Gallery",
+    "western-db-desc":"King bed and cozy interior; some rooms offer golf-course views from the balcony.",
+    "western-db-li1":"Approx. 30 m² / 1 king bed",
+    "western-db-li2":"Breakfast for 2 included / Free Wi-Fi",
+    "western-db-li3":"Views: city or golf course",
+    "western-db-li4":"Best for couples / restful stays",
+    "gallery-db":"Double Room Gallery",
+    "rate-note-western":"* Indicative rates; actual prices vary by season/availability."
+  },
+  vi:{
+    "title-text":"Đặt phòng khách sạn | DGV",
+    "desc-text":"Khách sạn phổ biến Đà Lạt — Swiss-Bel & Western Hill — thư viện ảnh, giá, quyền lợi",
+    "nav-home":"Home","nav-restaurant":"Nhà hàng","nav-golf":"Golf","nav-hotel":"Khách sạn","nav-package":"Gói","nav-car":"Xe","nav-contact":"Liên hệ",
+    "breadcrumb-home":"← Home",
+    "hero-title":"Đặt phòng khách sạn",
+    "hero-sub":"2 khách sạn phổ biến ở Đà Lạt · Thư viện ảnh · Giá · Quyền lợi",
+    "tab-swiss":"SWISS-BEL HOTEL","tab-western":"Western Hill HOTEL",
+    "swiss-desc-1":"Khách sạn hiện đại, vị trí trung tâm thuận tiện. Phòng sạch, giá hợp lý, bữa sáng tốt — được khách Hàn ưa chuộng.",
+    "swiss-desc-2":"Thuận lợi đi lại trung tâm/điểm tham quan, lý tưởng làm điểm nghỉ trước/sau vòng golf.",
+    "lbl-feature":"Đặc điểm","lbl-reco":"Gợi ý",
+    "swiss-feature":"Phòng sạch · Giá tốt · Vị trí thuận tiện",
+    "swiss-reco":"Cặp đôi/Gia đình/Team golf · Ưu tiên chi phí · Gần trung tâm",
+    "roomtypes-title":"Loại phòng",
+    "swiss-mv-desc":"Nhìn ra núi rừng; cửa kính lớn ngắm bình minh/hoàng hôn; giường cao cấp, phòng tắm rộng, yên tĩnh.",
+    "swiss-mv-li1":"~32 m² / Giường King hoặc Twin",
+    "swiss-mv-li2":"Bao gồm sáng cho 2 khách / Wi-Fi miễn phí",
+    "swiss-mv-li3":"Ban công hoặc cửa sổ toàn cảnh",
+    "swiss-mv-li4":"Hợp cho cặp đôi / nghỉ dưỡng",
+    "gallery-mv":"Thư viện Deluxe Mountain View",
+    "swiss-gv-desc":"Phòng nhìn ra sân golf với ban công; lý tưởng thư giãn trước/sau vòng chơi.",
+    "swiss-gv-li1":"~34 m² / Giường King hoặc Twin",
+    "swiss-gv-li2":"Bao gồm sáng cho 2 khách / Wi-Fi miễn phí",
+    "swiss-gv-li3":"Ban công riêng · View sân · Sofa",
+    "swiss-gv-li4":"Hợp cho team golf / nghỉ dưỡng cao cấp",
+    "gallery-gv":"Thư viện Deluxe Golf View",
+    "rate-title":"Giá phòng (tạm · VND)",
+    "col-room":"Loại phòng","col-weekday":"Ngày thường","col-weekend":"Cuối tuần","col-peak":"Cao điểm/Lễ",
+    "rate-note-swiss":"* Chi tiết ăn sáng/sức chứa thay đổi theo mùa/tình trạng phòng. Chỉ mang tính tham khảo.",
+    "cta-book":"Đặt / Hỏi thêm",
+    "pol-title":"Quyền lợi & Chính sách",
+    "pol-1":"Bao gồm ăn sáng (tuỳ loại phòng) · Wi-Fi miễn phí · Dọn phòng",
+    "pol-2":"Nhận phòng 14:00 / Trả phòng 12:00 (tuỳ điều kiện KS)",
+    "pol-3":"Có thể phụ thu mùa cao điểm/ngày lễ",
+    "pol-4":"Huỷ/hoàn tuỳ mùa/loại phòng (liên hệ để biết chi tiết)",
+    "western-desc-1":"Khách sạn sườn đồi với tầm nhìn thiên nhiên; yên tĩnh, phòng sạch.",
+    "western-desc-2":"Một số phòng có ban công/view, phù hợp thư giãn sau golf/du lịch.",
+    "western-feature":"Môi trường yên tĩnh · Tầm nhìn đẹp · Phòng thoải mái",
+    "western-reco":"Cặp đôi/gia đình · Nghỉ dưỡng · Ưa yên tĩnh",
+    "western-tw-desc":"Phòng Twin phù hợp gia đình/bạn bè; cửa sổ lớn đón không khí trong lành và cảnh quan.",
+    "western-tw-li1":"~28 m² / 2 giường đơn",
+    "western-tw-li2":"Bao gồm sáng cho 2 khách / Wi-Fi miễn phí",
+    "western-tw-li3":"Tiện nghi cơ bản / Tuỳ chọn ban công",
+    "western-tw-li4":"Hợp cho bạn bè/gia đình",
+    "gallery-tw":"Thư viện phòng Twin",
+    "western-db-desc":"Giường King và không gian ấm cúng; một số phòng có ban công nhìn sân golf.",
+    "western-db-li1":"~30 m² / 1 giường King",
+    "western-db-li2":"Bao gồm sáng cho 2 khách / Wi-Fi miễn phí",
+    "western-db-li3":"View: thành phố hoặc sân golf",
+    "western-db-li4":"Hợp cho cặp đôi / nghỉ ngơi",
+    "gallery-db":"Thư viện phòng Double",
+    "rate-note-western":"* Giá tham khảo; giá thực tế thay đổi theo mùa/tình trạng phòng."
+  }
+};
+
+function applyLang(lang){
+  const dict=I18N[lang]||I18N.ko;
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key=el.getAttribute('data-i18n');
+    if(dict[key]!==undefined) el.innerHTML=dict[key];
+  });
+  const t=document.getElementById('i18n-title');
+  const d=document.getElementById('i18n-desc');
+  if(t && dict['title-text']) t.textContent=dict['title-text'];
+  if(d && dict['desc-text']) d.setAttribute('content',dict['desc-text']);
+  document.querySelectorAll('#lang-switch button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.lang===lang);
+  });
+  document.documentElement.setAttribute('lang',lang);
+  localStorage.setItem('site_lang',lang);
+}
+function initLang(){
+  const saved=localStorage.getItem('site_lang')||'ko';
+  applyLang(saved);
+  document.getElementById('lang-switch').addEventListener('click',e=>{
+    const btn=e.target.closest('button[data-lang]'); if(!btn) return;
+    applyLang(btn.dataset.lang);
+  });
+}
+initLang();
 </script>
-</body></html>
+</body>
+</html>

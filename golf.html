@@ -1,16 +1,38 @@
-<!DOCTYPE html><html lang="ko"><head>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>골프 예약 | DGV</title>
+<title id="i18n-title">골프 예약 | DGV</title>
+<meta id="i18n-desc" name="description" content="달랏 골프 예약 · Dalat Palace / SAM Tuyền Lâm / AT1200 요금 & 안내">
 <style>
 :root{--green-dark:#0c5f2c;--green:#1a7f3c;--bg:#f5f7f5;--card:#fff;--ink:#333}
 *{box-sizing:border-box}
 body{margin:0;font-family:Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
-.header{background:linear-gradient(135deg,var(--green-dark),var(--green));color:#fff;padding:20px}
-.header a{color:#fff;text-decoration:none;font-weight:700}
 .wrap{max-width:1100px;margin:0 auto;padding:24px 16px}
+.card{background:var(--card);padding:22px;border-radius:14px;box-shadow:0 4px 22px rgba(0,0,0,.06);margin-bottom:18px}
 h1{color:#fff;margin:10px 0 4px;font-size:28px}
 .sub{opacity:.95}
-.card{background:var(--card);padding:22px;border-radius:14px;box-shadow:0 4px 22px rgba(0,0,0,.06);margin-bottom:18px}
+
+/* Topbar */
+.topbar{background:#0b4d26;color:#fff}
+.topbar-inner{max-width:1100px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 16px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand img{width:40px;height:40px;object-fit:contain}
+.brand .name{font-weight:900;letter-spacing:.5px;font-size:18px}
+.nav-links{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.nav-links a{color:#e9ffef;text-decoration:none;font-weight:700;padding:8px 12px;border-radius:10px}
+.nav-links a:hover{background:rgba(255,255,255,.12)}
+.nav-links a.active{background:rgba(255,255,255,.12)}
+.lang-switch{margin-left:auto;display:flex;gap:6px}
+.lang-switch button{background:#fff;color:#0b4d26;border:1px solid #dceedd;padding:3px 7px;border-radius:6px;font-weight:700;cursor:pointer;font-size:10px}
+.lang-switch button:hover{background:#eef8f0}
+.lang-switch button.active{background:#0b4d26;color:#fff;border-color:#0b4d26}
+
+/* Hero */
+.header{background:linear-gradient(135deg,#0c5f2c,#1a7f3c);color:#fff;padding:28px 16px 22px}
+.wrap-hero{max-width:1100px;margin:0 auto}
+.breadcrumb{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);color:#fff;padding:6px 10px;border-radius:999px;text-decoration:none;font-weight:700}
+.breadcrumb:hover{background:rgba(255,255,255,.24)}
 
 /* Tabs */
 .tabs{display:flex;gap:8px;flex-wrap:wrap}
@@ -36,6 +58,11 @@ tbody tr:nth-child(even){background:#fbfdfb}
 .cta{display:inline-block;margin-top:14px;padding:12px 18px;background:var(--green-dark);color:#fff;border-radius:10px;text-decoration:none;font-weight:700}
 footer{text-align:center;padding:20px;color:#666;background:#e7eee7;margin-top:24px}
 
+@media (max-width:640px){
+  .topbar-inner{flex-direction:column;align-items:flex-start}
+  .lang-switch{margin-left:0;width:100%;justify-content:flex-end}
+}
+
 /* Lightbox */
 .lightbox{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.85);z-index:1000;padding:20px}
 .lightbox[aria-hidden="false"]{display:flex}
@@ -44,145 +71,104 @@ footer{text-align:center;padding:20px;color:#666;background:#e7eee7;margin-top:2
 .lb-prev{left:20px}.lb-next{right:20px}
 .lb-close{position:absolute;top:16px;right:16px;width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;border:0;cursor:pointer;font-size:24px;font-weight:900}
 .lb-btn:hover,.lb-close:hover{background:rgba(255,255,255,.28)}
-/* ===== Brand Topbar ===== */
-.topbar{
-  background:#0b4d26; /* 더 짙은 그린 */
-  color:#fff;
-}
-.topbar-inner{
-  max-width:1100px; margin:0 auto;
-  display:flex; gap:12px; align-items:center; justify-content:space-between;
-  padding:10px 16px;
-}
-.brand{
-  display:flex; align-items:center; gap:10px;
-}
-.brand img{ width:34px; height:34px; object-fit:contain; }
-.brand .name{
-  font-weight:900; letter-spacing:.5px; font-size:18px;
-}
-
-/* nav links */
-.nav-links{
-  display:flex; gap:10px; flex-wrap:wrap;
-}
-.nav-links a{
-  color:#e9ffef; text-decoration:none; font-weight:700;
-  padding:8px 12px; border-radius:10px;
-}
-.nav-links a:hover{ background:rgba(255,255,255,.12); }
-
-/* ===== Hero (title) ===== */
-.header{
-  background:linear-gradient(135deg,#0c5f2c,#1a7f3c);
-  color:#fff; padding:28px 16px 22px;
-}
-.wrap-hero{ max-width:1100px; margin:0 auto; }
-.breadcrumb{
-  display:inline-flex; align-items:center; gap:6px;
-  background:rgba(255,255,255,.16); color:#fff;
-  padding:6px 10px; border-radius:999px; text-decoration:none; font-weight:700;
-}
-.breadcrumb:hover{ background:rgba(255,255,255,.24); }
-.header h1{ margin:12px 0 4px; font-size:28px; }
-.header .sub{ opacity:.95; }
-
-@media (max-width:640px){
-  .topbar-inner{ flex-direction:column; align-items:flex-start; }
-}
-
 </style>
 </head>
 <body>
 
-<!-- HEADER -->
+<!-- Topbar -->
 <div class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <!-- 로고 파일이 있으면 교체 -->
-      <img src="logo.png" alt="DGV Logo">
+      <img src="image/logo.png" alt="DGV Logo">
       <div class="name">DGV Company Limited</div>
     </div>
     <nav class="nav-links">
-      <a href="index.html">Home</a>
-      <a href="golf.html">Golf</a>
-      <a href="hotel.html">Hotel</a>
-      <a href="package.html">Package</a>
-      <a href="car.html">Car</a>
-      <a href="index.html#contact">Contact</a>
+      <a href="index.html" data-i18n="nav-home">Home</a>
+      <a href="restaurant.html" data-i18n="nav-restaurant">Restaurant</a>
+      <a href="golf.html" class="active" data-i18n="nav-golf"><b>Golf</b></a>
+      <a href="hotel.html" data-i18n="nav-hotel">Hotel</a>
+      <a href="package.html" data-i18n="nav-package">Package</a>
+      <a href="car.html" data-i18n="nav-car">Car</a>
+      <a href="index.html#contact" data-i18n="nav-contact">Contact</a>
+      <div class="lang-switch" id="lang-switch">
+        <button data-lang="ko">🇰🇷 한국어</button>
+        <button data-lang="en">🇺🇸 English</button>
+        <button data-lang="vi">🇻🇳 Tiếng Việt</button>
+      </div>
     </nav>
   </div>
 </div>
 
-<!-- ===== Hero (title) ===== -->
+<!-- Hero -->
 <div class="header">
   <div class="wrap-hero">
-    <a class="breadcrumb" href="index.html">← Home</a>
-    <h1>골프 예약 (Golf Booking)</h1>
-    <div class="sub">3개 코스 요금 & 안내 (단위: VND)</div>
+    <a class="breadcrumb" href="index.html" data-i18n="breadcrumb-home">← Home</a>
+    <h1 data-i18n="hero-title">골프 예약 (Golf Booking)</h1>
+    <div class="sub" data-i18n="hero-sub">3개 코스 요금 & 안내 (단위: VND)</div>
   </div>
 </div>
+
 <div class="wrap">
 
-  <!-- TABS -->
+  <!-- Tabs -->
   <div class="card">
     <div class="tabs">
-      <button class="tab-btn active" data-tab="palace">Dalat Palace GC</button>
-      <button class="tab-btn" data-tab="sam">Sam Tuyền Lâm GC</button>
-      <button class="tab-btn" data-tab="at1200">AT1200 GC</button>
+      <button class="tab-btn active" data-tab="palace" data-i18n="tab-palace">Dalat Palace GC</button>
+      <button class="tab-btn" data-tab="sam" data-i18n="tab-sam">Sam Tuyền Lâm GC</button>
+      <button class="tab-btn" data-tab="at1200" data-i18n="tab-at1200">AT1200 GC</button>
     </div>
   </div>
 
-  <!-- ===== PALACE ===== -->
+  <!-- PALACE -->
   <div id="palace" class="tab-panel active">
     <div class="card">
-    <h2>Dalat Palace Golf Club</h2>
-    <p>
-      달랏에서 가장 역사가 깊고 명성이 높은 프리미엄 골프코스로,
-1930년대 프랑스 식민지 시절에 설계된 고품격 전통 코스입니다.
-    </p>
-    <p>
-      해발 1,500m 고지대에 위치해 연중 시원한 기후와 부드러운 바람,
-그리고 수려한 호수·소나무 숲 경관이 어우러져
-‘베트남 최고의 클래식 코스’라는 평을 받습니다.
-    </p>
-    <p>
-        페어웨이는 언듈레이션이 자연스럽게 살아있고,
-전략적인 벙커 배치와 빠른 그린이 특징이어서
-초중급자부터 상급자까지 모두 만족할 수 있는 챔피언십 코스입니다.
-    </p>
+      <h2 data-i18n="palace-title">Dalat Palace Golf Club</h2>
+      <p data-i18n="palace-p1">
+        달랏에서 가장 역사가 깊은 프리미엄 코스로, 1930년대 프랑스 식민지 시절 설계된 고품격 전통 코스입니다.
+      </p>
+      <p data-i18n="palace-p2">
+        해발 1,500m 고지대의 시원한 기후와 호수·소나무 숲 경관으로 ‘베트남 최고의 클래식 코스’라는 평가를 받습니다.
+      </p>
+      <p data-i18n="palace-p3">
+        자연스러운 언듈레이션, 전략적 벙커, 빠른 그린이 특징으로 모든 레벨의 골퍼에게 만족스러운 챔피언십 코스입니다.
+      </p>
+      <ul>
+        <li><b data-i18n="lbl-style">스타일:</b> <span data-i18n="palace-style">클래식 파크랜드</span></li>
+        <li><b data-i18n="lbl-strong">장점:</b> <span data-i18n="palace-strong">풍경 최고 · 관리 우수 · 고급 라운드 경험</span></li>
+        <li><b data-i18n="lbl-diff">난이도:</b> <span data-i18n="palace-diff">중상(빠른 그린)</span></li>
+        <li><b data-i18n="lbl-reco">추천:</b> <span data-i18n="palace-reco">경험자 · 프리미엄 라운드 · 사진/풍경 중시</span></li>
+      </ul>
+    </div>
 
-    <ul>
-      <li><b>스타일:</b> 클래식 파크랜드</li>
-      <li><b>장점:</b> 풍경 최고, 관리 우수, 고급스러운 라운드 경험</li>
-      <li><b>난이도:</b> 중상 (빠른 그린)</li>
-      <li><b>추천:</b> 경험자 / 고급 플레이 / 사진·풍경 중시 고객</li>
-    </ul>
-  </div>
     <div class="card">
-      <h2>Image</h2>
-      <p class="note">적용 기간: 09/01 ~ 10/31 · 단위: VND</p>
+      <h2 data-i18n="img-title">Image</h2>
+      <p class="note" data-i18n="palace-note">적용 기간: 09/01 ~ 10/31 · 단위: VND</p>
       <div class="grid" id="gallery-palace"></div>
     </div>
 
     <div class="card">
-      <h3>라운드 요금</h3>
+      <h3 data-i18n="round-fee">라운드 요금</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th class="tl">구분</th><th>9 Holes</th><th>18 Holes</th><th>27 Holes</th><th>36 Holes</th></tr></thead>
+          <thead>
+            <tr>
+              <th class="tl" data-i18n="col-type">구분</th>
+              <th>9 Holes</th><th>18 Holes</th><th>27 Holes</th><th>36 Holes</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td class="tl">Weekday (Mon–Thu)</td><td class="price">1,500,000</td><td class="price">2,000,000</td><td class="price">3,500,000</td><td class="price">4,000,000</td></tr>
-            <tr><td class="tl">Weekend (Fri–Sun)</td><td class="price">1,700,000</td><td class="price">2,300,000</td><td class="price">4,050,000</td><td class="price">4,600,000</td></tr>
-            <tr><td class="tl">Holiday</td><td class="price">2,100,000</td><td class="price">2,800,000</td><td class="price">4,500,000</td><td class="price">5,000,000</td></tr>
+            <tr><td class="tl" data-i18n="wd">Weekday (Mon–Thu)</td><td class="price">1,500,000</td><td class="price">2,000,000</td><td class="price">3,500,000</td><td class="price">4,000,000</td></tr>
+            <tr><td class="tl" data-i18n="we">Weekend (Fri–Sun)</td><td class="price">1,700,000</td><td class="price">2,300,000</td><td class="price">4,050,000</td><td class="price">4,600,000</td></tr>
+            <tr><td class="tl" data-i18n="hol">Holiday</td><td class="price">2,100,000</td><td class="price">2,800,000</td><td class="price">4,500,000</td><td class="price">5,000,000</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="note">Holiday 예: 12/24–25, 12/31–1/1, 설·국경일·노동절 등</p>
-      <a class="cta" href="index.html#contact">예약/문의하기</a>
+      <p class="note" data-i18n="holiday-ex">Holiday 예: 12/24–25, 12/31–1/1, 설·국경일·노동절 등</p>
+      <a class="cta" href="index.html#contact" data-i18n="cta">예약/문의하기</a>
     </div>
 
     <div class="card">
-      <h3>싱글 카트 요금</h3>
+      <h3 data-i18n="single-cart">싱글 카트 요금</h3>
       <div class="table-wrap">
         <table>
           <thead><tr><th></th><th>9H</th><th>18H</th><th>27H</th><th>36H</th></tr></thead>
@@ -192,56 +178,49 @@ footer{text-align:center;padding:20px;color:#666;background:#e7eee7;margin-top:2
     </div>
   </div>
 
-  <!-- ===== SAM ===== -->
+  <!-- SAM -->
   <div id="sam" class="tab-panel">
     <div class="card">
-    <h2>Sam Tuyền Lâm Golf Club</h2>
-    <p>
-      
-        달랏의 관광 명소인 뚜옌럼 호수를 품은 리조트형 골프장으로
-넓은 공간과 자연 친화적인 설계를 자랑합니다.
-    </p>
-    <p>
-      코스 전체가 삼나무 숲과 호수에 둘러싸여 있어
-라운딩 내내 산책하듯 편안한 분위기를 느낄 수 있으며
-특히 휴양·힐링 골프를 선호하는 한국인 고객에게 매우 인기 있습니다.
-    </p>
-    <p>
-       페어웨이가 넓고 시야가 탁 트여 있어 긴 호쾌한 샷을 구사하기 좋으며
-그린 주변의 난이도는 적당히 균형 잡혀 있어
-초보자~중급자에게 특히 추천되는 코스입니다.
-    </p>
+      <h2 data-i18n="sam-title">Sam Tuyền Lâm Golf Club</h2>
+      <p data-i18n="sam-p1">뚜옌럼 호수를 품은 리조트형 골프장으로 넓은 공간과 자연 친화적 설계가 돋보입니다.</p>
+      <p data-i18n="sam-p2">삼나무 숲과 호수 전망 속에서 산책하듯 라운딩할 수 있어 휴양·힐링 골프에 인기입니다.</p>
+      <p data-i18n="sam-p3">넓은 페어웨이와 균형잡힌 그린 난이도로 초보~중급자에게 특히 추천됩니다.</p>
+      <ul>
+        <li><b data-i18n="lbl-style">스타일:</b> <span data-i18n="sam-style">자연 경관형 리조트</span></li>
+        <li><b data-i18n="lbl-strong">장점:</b> <span data-i18n="sam-strong">넓은 페어웨이 · 호수 전망 · 초보자 친화</span></li>
+        <li><b data-i18n="lbl-diff">난이도:</b> <span data-i18n="sam-diff">중하</span></li>
+        <li><b data-i18n="lbl-reco">추천:</b> <span data-i18n="sam-reco">가족 · 휴양 라운드 · 부담 없는 난이도</span></li>
+      </ul>
+    </div>
 
-    <ul>
-      <li><b>스타일:</b> 자연 경관형 리조트 코스</li>
-      <li><b>장점:</b> 넓은 페어웨이 / 호수 전망 / 초보자 친화적</li>
-      <li><b>난이도:</b> 중하</li>
-      <li><b>추천:</b> 가족 단위, 휴양 골프, 난이도 부담 없는 라운드</li>
-    </ul>
-  </div>
     <div class="card">
-      <h2>Image</h2>
-      <p class="note">적용 기간: 06/01 ~ 12/31 · 단위: VND</p>
+      <h2 data-i18n="img-title">Image</h2>
+      <p class="note" data-i18n="sam-note">적용 기간: 06/01 ~ 12/31 · 단위: VND</p>
       <div class="grid" id="gallery-sam"></div>
     </div>
 
     <div class="card">
-      <h3>라운드 요금</h3>
+      <h3 data-i18n="round-fee">라운드 요금</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th class="tl">구분</th><th>9 Holes</th><th>18 Holes</th><th>27 Holes</th><th>36 Holes</th></tr></thead>
+          <thead>
+            <tr>
+              <th class="tl" data-i18n="col-type">구분</th>
+              <th>9 Holes</th><th>18 Holes</th><th>27 Holes</th><th>36 Holes</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td class="tl">Weekday (Mon–Thu)</td><td class="price">1,400,000</td><td class="price">2,050,000</td><td class="price">2,900,000</td><td class="price">3,400,000</td></tr>
-            <tr><td class="tl">Weekend (Fri–Sun)</td><td class="price">1,600,000</td><td class="price">2,450,000</td><td class="price">3,400,000</td><td class="price">4,000,000</td></tr>
-            <tr><td class="tl">Holiday</td><td class="price">1,800,000</td><td class="price">2,650,000</td><td class="price">3,600,000</td><td class="price">4,200,000</td></tr>
+            <tr><td class="tl" data-i18n="wd">Weekday (Mon–Thu)</td><td class="price">1,400,000</td><td class="price">2,050,000</td><td class="price">2,900,000</td><td class="price">3,400,000</td></tr>
+            <tr><td class="tl" data-i18n="we">Weekend (Fri–Sun)</td><td class="price">1,600,000</td><td class="price">2,450,000</td><td class="price">3,400,000</td><td class="price">4,000,000</td></tr>
+            <tr><td class="tl" data-i18n="hol">Holiday</td><td class="price">1,800,000</td><td class="price">2,650,000</td><td class="price">3,600,000</td><td class="price">4,200,000</td></tr>
           </tbody>
         </table>
       </div>
-      <a class="cta" href="index.html#contact">예약/문의하기</a>
+      <a class="cta" href="index.html#contact" data-i18n="cta">예약/문의하기</a>
     </div>
 
     <div class="card">
-      <h3>싱글 카트 요금</h3>
+      <h3 data-i18n="single-cart">싱글 카트 요금</h3>
       <div class="table-wrap">
         <table>
           <thead><tr><th></th><th>9H</th><th>18H</th><th>27H</th><th>36H</th></tr></thead>
@@ -251,62 +230,49 @@ footer{text-align:center;padding:20px;color:#666;background:#e7eee7;margin-top:2
     </div>
   </div>
 
-  <!-- ===== AT1200 ===== -->
+  <!-- AT1200 -->
   <div id="at1200" class="tab-panel">
-        <div class="card">
-    <h2>AT1200 Golf Club</h2>
-    <p>
-      달랏 중심지에서 가까운 고지대에 위치해
-기온이 가장 시원한 코스로 유명합니다.
-코스 이름 AT1200은 “해발 1,200m(Altitude 1200)”의 의미입니다.
-    </p>
-    <p>
-      휴양형 고급 레지던스 단지와 연계된 프라이빗 스타일의 코스로
-넓은 페어웨이, 고저차가 조화된 18홀, 탁월한 풍경이 특징입니다
-    </p>
-    <p>
-     특히 AT1200은
-
-언듈레이션이 크고 변칙적인 홀 구성,
-
-고지대 특유의 탄도·바람 영향,
-
-전략적 티샷 요구,
-
-이런 요소들이 결합되어 도전적인 라운드를 즐기는 골퍼들에게 인기 있습니다.
-또한 Unlimited 라운드 옵션이 있어 36홀 연속 라운딩을 선호하는 고객에게 유리합니다.
-    </p>
-
-    <ul>
-      <li><b>스타일:</b> 도전적 챔피언십 스타일 + 고지대 라우트</li>
-      <li><b>장점:</b> 고지대 풍경 / 다이내믹 코스 / 도전 요소 풍부</li>
-      <li><b>난이도:</b> 중상</li>
-      <li><b>추천:</b> 기량 있는 골퍼 / 다양한 샷 시도 / 고지대 특유의 플레이 경험자</li>
-    </ul>
-  </div>
     <div class="card">
-      <h2>Image</h2>
-      <p class="note">적용 기간: 06/01 ~ 12/31 · 단위: VND</p>
+      <h2 data-i18n="at-title">AT1200 Golf Club</h2>
+      <p data-i18n="at-p1">도심에서 가까운 고지대(Altitude 1200m). 달랏에서 가장 시원한 기후로 유명합니다.</p>
+      <p data-i18n="at-p2">프라이빗 레지던스와 연계된 코스로, 넓은 페어웨이와 고저차가 조화로운 18홀 경관이 특징입니다.</p>
+      <p data-i18n="at-p3">언듈레이션/바람/전략적 티샷 요소가 결합된 도전적인 코스로, Unlimited 옵션도 제공합니다.</p>
+      <ul>
+        <li><b data-i18n="lbl-style">스타일:</b> <span data-i18n="at-style">도전적 챔피언십 · 고지대</span></li>
+        <li><b data-i18n="lbl-strong">장점:</b> <span data-i18n="at-strong">고지대 풍경 · 다이내믹 코스 · 도전 요소</span></li>
+        <li><b data-i18n="lbl-diff">난이도:</b> <span data-i18n="at-diff">중상</span></li>
+        <li><b data-i18n="lbl-reco">추천:</b> <span data-i18n="at-reco">기량 있는 골퍼 · 36홀 선호</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="img-title">Image</h2>
+      <p class="note" data-i18n="at-note">적용 기간: 06/01 ~ 12/31 · 단위: VND</p>
       <div class="grid" id="gallery-at1200"></div>
     </div>
 
     <div class="card">
-      <h3>라운드 요금</h3>
+      <h3 data-i18n="round-fee">라운드 요금</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th class="tl">구분</th><th>9 Holes</th><th>18 Holes</th><th>Unlimited</th></tr></thead>
+          <thead>
+            <tr>
+              <th class="tl" data-i18n="col-type">구분</th>
+              <th>9 Holes</th><th>18 Holes</th><th>Unlimited</th>
+            </tr>
+          </thead>
           <tbody>
-            <tr><td class="tl">Weekday (Mon–Thu)</td><td class="price">1,300,000</td><td class="price">1,800,000</td><td class="price">3,300,000</td></tr>
-            <tr><td class="tl">Weekend (Fri–Sun)</td><td class="price">1,700,000</td><td class="price">2,100,000</td><td class="price">3,600,000</td></tr>
-            <tr><td class="tl">Holiday</td><td class="price">1,900,000</td><td class="price">2,400,000</td><td class="price">3,900,000</td></tr>
+            <tr><td class="tl" data-i18n="wd">Weekday (Mon–Thu)</td><td class="price">1,300,000</td><td class="price">1,800,000</td><td class="price">3,300,000</td></tr>
+            <tr><td class="tl" data-i18n="we">Weekend (Fri–Sun)</td><td class="price">1,700,000</td><td class="price">2,100,000</td><td class="price">3,600,000</td></tr>
+            <tr><td class="tl" data-i18n="hol">Holiday</td><td class="price">1,900,000</td><td class="price">2,400,000</td><td class="price">3,900,000</td></tr>
           </tbody>
         </table>
       </div>
-      <a class="cta" href="index.html#contact">예약/문의하기</a>
+      <a class="cta" href="index.html#contact" data-i18n="cta">예약/문의하기</a>
     </div>
 
     <div class="card">
-      <h3>싱글 카트 요금</h3>
+      <h3 data-i18n="single-cart">싱글 카트 요금</h3>
       <div class="table-wrap">
         <table>
           <thead><tr><th></th><th>9H</th><th>18H</th><th>27H</th><th>36H</th></tr></thead>
@@ -340,46 +306,30 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
   });
 });
 
-/* ---------- Gallery Auto Loader (모든 확장자 자동 탐지) ----------
-   폴더: image/palace, image/sam, image/AT1200
-   파일 이름: 1~20번
-   확장자 자동 탐지: png / PNG / jpg / JPG / jpeg / JPEG
-------------------------------------------------------------------- */
-
+/* ---------- Gallery Auto Loader (모든 확장자 자동 탐지) ---------- */
 const MAX_IMAGES = 20;
 const EXTS = ['.png','.PNG','.jpg','.JPG','.jpeg','.JPEG'];
-
 function loadGalleryImages(containerId, folderName) {
   const wrap = document.getElementById(containerId);
   const photoList = [];
-
   for (let i = 1; i <= MAX_IMAGES; i++) {
     let loaded = false;
-
-    // 각 번호에 대해 모든 확장자 시도
     for (const ext of EXTS) {
       const src = `image/${folderName}/${i}${ext}`;
       const img = new Image();
       img.className = "photo";
       img.src = src;
-
       img.onload = () => {
-        // 로드 성공한 첫 번째 파일만 추가
         if (!loaded) {
           wrap.appendChild(img);
           photoList.push(img);
-
           img.addEventListener("click", () => openLightbox(photoList, photoList.indexOf(img)));
           loaded = true;
         }
       };
-
-      // onerror는 무시 → 그냥 다음 확장자 시도
     }
   }
 }
-
-/* ----- 실제 갤러리 로드 ----- */
 loadGalleryImages("gallery-palace", "palace");
 loadGalleryImages("gallery-sam", "sam");
 loadGalleryImages("gallery-at1200", "AT1200");
@@ -390,38 +340,134 @@ const imgEl = lb.querySelector('.lb-img');
 const btnPrev = lb.querySelector('.lb-prev');
 const btnNext = lb.querySelector('.lb-next');
 const btnClose = lb.querySelector('.lb-close');
-
-let currentList = [];
-let idx = 0;
-
-function openLightbox(list, i){
-  currentList = list;
-  idx = i;
-  updateLightbox();
-  lb.setAttribute('aria-hidden','false');
-}
-
-function updateLightbox(){
-  imgEl.src = currentList[idx].src;
-}
-
-function closeLightbox(){
-  lb.setAttribute('aria-hidden','true');
-}
-
+let currentList = []; let idx = 0;
+function openLightbox(list, i){ currentList = list; idx = i; updateLightbox(); lb.setAttribute('aria-hidden','false'); }
+function updateLightbox(){ imgEl.src = currentList[idx].src; }
+function closeLightbox(){ lb.setAttribute('aria-hidden','true'); }
 btnPrev.addEventListener('click', ()=>{ idx=(idx-1+currentList.length)%currentList.length; updateLightbox(); });
 btnNext.addEventListener('click', ()=>{ idx=(idx+1)%currentList.length; updateLightbox(); });
 btnClose.addEventListener('click', closeLightbox);
-
 lb.addEventListener('click', (e)=>{ if(e.target===lb) closeLightbox(); });
+window.addEventListener('keydown', (e)=>{ if(lb.getAttribute('aria-hidden')==='false'){ if(e.key==='Escape') closeLightbox(); if(e.key==='ArrowLeft') btnPrev.click(); if(e.key==='ArrowRight') btnNext.click(); }});
 
-window.addEventListener('keydown', (e)=>{
-  if(lb.getAttribute('aria-hidden')==='false'){
-    if(e.key==='Escape') closeLightbox();
-    if(e.key==='ArrowLeft') btnPrev.click();
-    if(e.key==='ArrowRight') btnNext.click();
+/* ---------- i18n 데이터 ---------- */
+const I18N = {
+  ko:{
+    "title-text":"골프 예약 | DGV",
+    "desc-text":"달랏 골프 예약 · Dalat Palace / SAM Tuyền Lâm / AT1200 요금 & 안내",
+    "nav-home":"Home","nav-restaurant":"Restaurant","nav-golf":"Golf","nav-hotel":"Hotel","nav-package":"Package","nav-car":"Car","nav-contact":"Contact",
+    "breadcrumb-home":"← Home",
+    "hero-title":"골프 예약 (Golf Booking)","hero-sub":"3개 코스 요금 & 안내 (단위: VND)",
+    "tab-palace":"Dalat Palace GC","tab-sam":"Sam Tuyền Lâm GC","tab-at1200":"AT1200 GC",
+    "palace-title":"Dalat Palace Golf Club",
+    "palace-p1":"달랏에서 가장 역사가 깊은 프리미엄 코스로, 1930년대 프랑스 식민지 시절 설계된 고품격 전통 코스입니다.",
+    "palace-p2":"해발 1,500m 고지대의 시원한 기후와 호수·소나무 숲 경관으로 ‘베트남 최고의 클래식 코스’라는 평가를 받습니다.",
+    "palace-p3":"자연스러운 언듈레이션, 전략적 벙커, 빠른 그린이 특징으로 모든 레벨의 골퍼에게 만족스러운 챔피언십 코스입니다.",
+    "lbl-style":"스타일","lbl-strong":"장점","lbl-diff":"난이도","lbl-reco":"추천",
+    "palace-style":"클래식 파크랜드","palace-strong":"풍경 최고 · 관리 우수 · 고급 라운드 경험","palace-diff":"중상(빠른 그린)","palace-reco":"경험자 · 프리미엄 라운드 · 사진/풍경 중시",
+    "img-title":"Image","palace-note":"적용 기간: 09/01 ~ 10/31 · 단위: VND",
+    "round-fee":"라운드 요금","col-type":"구분","wd":"Weekday (Mon–Thu)","we":"Weekend (Fri–Sun)","hol":"Holiday","holiday-ex":"Holiday 예: 12/24–25, 12/31–1/1, 설·국경일·노동절 등","cta":"예약/문의하기",
+    "single-cart":"싱글 카트 요금",
+    "sam-title":"Sam Tuyền Lâm Golf Club",
+    "sam-p1":"뚜옌럼 호수를 품은 리조트형 골프장으로 넓은 공간과 자연 친화적 설계가 돋보입니다.",
+    "sam-p2":"삼나무 숲과 호수 전망 속에서 산책하듯 라운딩할 수 있어 휴양·힐링 골프에 인기입니다.",
+    "sam-p3":"넓은 페어웨이와 균형잡힌 그린 난이도로 초보~중급자에게 특히 추천됩니다.",
+    "sam-style":"자연 경관형 리조트","sam-strong":"넓은 페어웨이 · 호수 전망 · 초보자 친화","sam-diff":"중하","sam-reco":"가족 · 휴양 라운드 · 부담 없는 난이도",
+    "sam-note":"적용 기간: 06/01 ~ 12/31 · 단위: VND",
+    "at-title":"AT1200 Golf Club",
+    "at-p1":"도심에서 가까운 고지대(Altitude 1200m). 달랏에서 가장 시원한 기후로 유명합니다.",
+    "at-p2":"프라이빗 레지던스와 연계된 코스로, 넓은 페어웨이와 고저차가 조화로운 18홀 경관이 특징입니다.",
+    "at-p3":"언듈레이션/바람/전략적 티샷 요소가 결합된 도전적인 코스로, Unlimited 옵션도 제공합니다.",
+    "at-style":"도전적 챔피언십 · 고지대","at-strong":"고지대 풍경 · 다이내믹 코스 · 도전 요소","at-diff":"중상","at-reco":"기량 있는 골퍼 · 36홀 선호",
+    "at-note":"적용 기간: 06/01 ~ 12/31 · 단위: VND"
+  },
+  en:{
+    "title-text":"Golf Booking | DGV",
+    "desc-text":"Da Lat golf booking · Dalat Palace / SAM Tuyền Lâm / AT1200 rates & info",
+    "nav-home":"Home","nav-restaurant":"Restaurant","nav-golf":"Golf","nav-hotel":"Hotel","nav-package":"Package","nav-car":"Car","nav-contact":"Contact",
+    "breadcrumb-home":"← Home",
+    "hero-title":"Golf Booking","hero-sub":"Rates & info for 3 courses (VND)",
+    "tab-palace":"Dalat Palace GC","tab-sam":"Sam Tuyền Lâm GC","tab-at1200":"AT1200 GC",
+    "palace-title":"Dalat Palace Golf Club",
+    "palace-p1":"Da Lat’s most historic premium course, designed in the 1930s during the French colonial era.",
+    "palace-p2":"At 1,500m altitude, cool weather and lake–pine scenery make it Vietnam’s classic gem.",
+    "palace-p3":"Natural undulation, strategic bunkers, and fast greens satisfy golfers of all levels.",
+    "lbl-style":"Style","lbl-strong":"Strengths","lbl-diff":"Difficulty","lbl-reco":"Recommended for",
+    "palace-style":"Classic parkland","palace-strong":"Top scenery · Superb maintenance · Premium round","palace-diff":"Upper-mid (fast greens)","palace-reco":"Experienced players · Premium experience · Scenery lovers",
+    "img-title":"Image","palace-note":"Effective: 09/01–10/31 · Currency: VND",
+    "round-fee":"Round Rates","col-type":"Type","wd":"Weekday (Mon–Thu)","we":"Weekend (Fri–Sun)","hol":"Holiday","holiday-ex":"e.g., 12/24–25, 12/31–1/1, Lunar New Year, National/May Day","cta":"Book / Inquiry",
+    "single-cart":"Single Cart Rates",
+    "sam-title":"Sam Tuyền Lâm Golf Club",
+    "sam-p1":"Resort-style course embracing Tuyền Lâm Lake, spacious and nature-friendly design.",
+    "sam-p2":"Cedar forests and lake views create a relaxing, healing round—popular with families.",
+    "sam-p3":"Wide fairways and balanced greens suit beginners to intermediates.",
+    "sam-style":"Resort, scenic","sam-strong":"Wide fairways · Lake views · Beginner-friendly","sam-diff":"Lower-mid","sam-reco":"Families · Relaxed rounds",
+    "sam-note":"Effective: 06/01–12/31 · Currency: VND",
+    "at-title":"AT1200 Golf Club",
+    "at-p1":"Near downtown at altitude ~1200m—the coolest microclimate in Da Lat.",
+    "at-p2":"Private-residence linked; wide fairways, elevation play, and great vistas.",
+    "at-p3":"Undulation, wind, and strategic tee shots—challenging; Unlimited option available.",
+    "at-style":"Challenging championship · Highland","at-strong":"Highland views · Dynamic layout · Tests skills","at-diff":"Upper-mid","at-reco":"Skilled golfers · 36-hole lovers",
+    "at-note":"Effective: 06/01–12/31 · Currency: VND"
+  },
+  vi:{
+    "title-text":"Đặt sân Golf | DGV",
+    "desc-text":"Đặt sân Đà Lạt · Dalat Palace / SAM Tuyền Lâm / AT1200 bảng giá & thông tin",
+    "nav-home":"Home","nav-restaurant":"Nhà hàng","nav-golf":"Golf","nav-hotel":"Khách sạn","nav-package":"Gói","nav-car":"Xe","nav-contact":"Liên hệ",
+    "breadcrumb-home":"← Home",
+    "hero-title":"Đặt sân Golf","hero-sub":"Bảng giá & thông tin 3 sân (VND)",
+    "tab-palace":"Dalat Palace GC","tab-sam":"Sam Tuyền Lâm GC","tab-at1200":"AT1200 GC",
+    "palace-title":"Dalat Palace Golf Club",
+    "palace-p1":"Sân golf cao cấp lâu đời nhất Đà Lạt, thiết kế từ thập niên 1930 thời Pháp.",
+    "palace-p2":"Ở độ cao 1.500m, khí hậu mát mẻ, cảnh hồ & rừng thông—viên ngọc cổ điển của Việt Nam.",
+    "palace-p3":"Địa hình lượn sóng tự nhiên, bunker chiến lược, green nhanh—phù hợp mọi trình độ.",
+    "lbl-style":"Phong cách","lbl-strong":"Thế mạnh","lbl-diff":"Độ khó","lbl-reco":"Phù hợp",
+    "palace-style":"Parkland cổ điển","palace-strong":"Cảnh đẹp · Bảo dưỡng tốt · Trải nghiệm cao cấp","palace-diff":"Trung-cao (green nhanh)","palace-reco":"Người chơi kinh nghiệm · Ưa cảnh quan",
+    "img-title":"Hình ảnh","palace-note":"Hiệu lực: 09/01–10/31 · Tiền tệ: VND",
+    "round-fee":"Giá vòng chơi","col-type":"Loại","wd":"Ngày thường (T2–T5)","we":"Cuối tuần (T6–CN)","hol":"Ngày lễ","holiday-ex":"VD: 24–25/12, 31/12–1/1, Tết, Quốc khánh, 1/5","cta":"Đặt / Hỏi giá",
+    "single-cart":"Giá xe điện (1 người)",
+    "sam-title":"Sam Tuyền Lâm Golf Club",
+    "sam-p1":"Sân phong cách nghỉ dưỡng ôm trọn hồ Tuyền Lâm; rộng rãi, gần gũi thiên nhiên.",
+    "sam-p2":"Rừng thông & view hồ cho cảm giác thư thái, rất được gia đình ưa chuộng.",
+    "sam-p3":"Fairway rộng, green cân bằng—hợp người mới đến trung cấp.",
+    "sam-style":"Nghỉ dưỡng, phong cảnh","sam-strong":"Fairway rộng · View hồ · Thân thiện người mới","sam-diff":"Trung-thấp","sam-reco":"Gia đình · Vòng chơi thư giãn",
+    "sam-note":"Hiệu lực: 06/01–12/31 · Tiền tệ: VND",
+    "at-title":"AT1200 Golf Club",
+    "at-p1":"Gần trung tâm ở cao độ ~1200m—khí hậu mát nhất Đà Lạt.",
+    "at-p2":"Liên kết khu residence cao cấp; fairway rộng, cao độ đa dạng, cảnh quan đẹp.",
+    "at-p3":"Địa hình lượn sóng, gió, tee chiến lược—thử thách; có gói Unlimited.",
+    "at-style":"Championship thử thách · Cao nguyên","at-strong":"View cao nguyên · Layout năng động · Rèn kỹ năng","at-diff":"Trung-cao","at-reco":"Golfer có trình độ · Thích 36 hố",
+    "at-note":"Hiệu lực: 06/01–12/31 · Tiền tệ: VND"
   }
-});
-</script>
+};
 
-</body></html>
+/* ---------- i18n 적용 ---------- */
+function applyLang(lang){
+  const dict = I18N[lang] || I18N.ko;
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key = el.getAttribute('data-i18n');
+    if(dict[key]!==undefined) el.innerHTML = dict[key];
+  });
+  const t = document.getElementById('i18n-title');
+  const d = document.getElementById('i18n-desc');
+  if(t && dict['title-text']) t.textContent = dict['title-text'];
+  if(d && dict['desc-text']) d.setAttribute('content', dict['desc-text']);
+  document.querySelectorAll('#lang-switch button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.lang===lang);
+  });
+  document.documentElement.setAttribute('lang', lang);
+  localStorage.setItem('site_lang', lang);
+}
+function initLang(){
+  const saved = localStorage.getItem('site_lang') || 'ko';
+  applyLang(saved);
+  document.getElementById('lang-switch').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-lang]');
+    if(!btn) return;
+    applyLang(btn.dataset.lang);
+  });
+}
+initLang();
+</script>
+</body>
+</html>

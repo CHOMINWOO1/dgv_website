@@ -1,6 +1,10 @@
-<!DOCTYPE html><html lang="ko"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>패키지 예약 | DGV</title>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title id="i18n-title">패키지 예약 | DGV</title>
+<meta id="i18n-desc" name="description" content="달랏 골프 · 호텔 패키지 — 삼색골프 3일, 36홀 언리미티드, 포함/불포함 및 요금 안내">
 <style>
 :root{--green-dark:#0c5f2c;--green:#1a7f3c;--bg:#f5f7f5;--card:#fff;--ink:#333}
 *{box-sizing:border-box}
@@ -10,12 +14,18 @@ body{margin:0;font-family:Helvetica,Arial,sans-serif;background:var(--bg);color:
 .topbar{background:#0b4d26;color:#fff}
 .topbar-inner{max-width:1100px;margin:0 auto;display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 16px}
 .brand{display:flex;align-items:center;gap:10px}
-.brand img{width:34px;height:34px;object-fit:contain}
+.brand img{width:40px;height:40px;object-fit:contain}
 .brand .name{font-weight:900;letter-spacing:.5px;font-size:18px}
-.nav-links{display:flex;gap:10px;flex-wrap:wrap}
+.nav-links{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .nav-links a{color:#e9ffef;text-decoration:none;font-weight:700;padding:8px 12px;border-radius:10px}
 .nav-links a:hover{background:rgba(255,255,255,.12)}
-@media (max-width:640px){.topbar-inner{flex-direction:column;align-items:flex-start}}
+.nav-links a.active{background:rgba(255,255,255,.12)}
+.lang-switch{margin-left:auto;display:flex;gap:6px}
+.lang-switch button{background:#fff;color:#0b4d26;border:1px solid #dceedd;padding:3px 7px;border-radius:6px;font-weight:700;cursor:pointer;font-size:10px}
+.lang-switch button:hover{background:#eef8f0}
+.lang-switch button.active{background:#0b4d26;color:#fff;border-color:#0b4d26}
+
+@media (max-width:640px){.topbar-inner{flex-direction:column;align-items:flex-start}.lang-switch{margin-left:0;width:100%;justify-content:flex-end}}
 
 /* Hero */
 .header{background:linear-gradient(135deg,#0c5f2c,#1a7f3c);color:#fff;padding:28px 16px 22px}
@@ -43,12 +53,12 @@ tbody tr:nth-child(even){background:#fbfdfb}
 .tl{text-align:left}
 .price{font-weight:800}
 
-/* CTA */
+/* CTA & badges */
 .cta{display:inline-block;margin-top:14px;padding:12px 18px;background:var(--green-dark);color:#fff;border-radius:10px;text-decoration:none;font-weight:700}
 .badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#0c5f2c;color:#fff;font-size:12px;margin-left:8px}
 .kicker{font-size:13px;color:#0c5f2c;font-weight:900;letter-spacing:.4px}
 
-/* Sections */
+/* Section title */
 .section-title{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .section-title .dot{width:8px;height:8px;border-radius:50%;background:#0c5f2c}
 </style>
@@ -59,15 +69,21 @@ tbody tr:nth-child(even){background:#fbfdfb}
 <div class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <img src="logo.png" alt="DGV Logo"><div class="name">DGV Company Limited</div>
+      <img src="image/logo.png" alt="DGV Logo"><div class="name">DGV Company Limited</div>
     </div>
     <nav class="nav-links">
-      <a href="index.html">Home</a>
-      <a href="golf.html">Golf</a>
-      <a href="hotel.html">Hotel</a>
-      <a href="package.html">Package</a>
-      <a href="car.html">Car</a>
-      <a href="index.html#contact">Contact</a>
+      <a href="index.html" data-i18n="nav-home">Home</a>
+      <a href="restaurant.html" data-i18n="nav-restaurant">Restaurant</a>
+      <a href="golf.html" data-i18n="nav-golf">Golf</a>
+      <a href="hotel.html" data-i18n="nav-hotel">Hotel</a>
+      <a href="package.html" class="active" data-i18n="nav-package"><b>Package</b></a>
+      <a href="car.html" data-i18n="nav-car">Car</a>
+      <a href="index.html#contact" data-i18n="nav-contact">Contact</a>
+      <div class="lang-switch" id="lang-switch">
+        <button data-lang="ko">🇰🇷 한국어</button>
+        <button data-lang="en">🇺🇸 English</button>
+        <button data-lang="vi">🇻🇳 Tiếng Việt</button>
+      </div>
     </nav>
   </div>
 </div>
@@ -75,136 +91,142 @@ tbody tr:nth-child(even){background:#fbfdfb}
 <!-- Hero -->
 <div class="header">
   <div class="wrap-hero">
-    <a class="breadcrumb" href="index.html">← Home</a>
-    <h1>골프 · 호텔 패키지</h1>
-    <div class="sub">삼색골프 3일 패키지 / 골프+호텔 1일 36홀 (Unlimited)</div>
+    <a class="breadcrumb" href="index.html" data-i18n="breadcrumb-home">← Home</a>
+    <h1 data-i18n="hero-title">골프 · 호텔 패키지</h1>
+    <div class="sub" data-i18n="hero-sub">삼색골프 3일 패키지 / 골프+호텔 1일 36홀 (Unlimited)</div>
   </div>
 </div>
 
 <div class="wrap">
 
-  <!-- =================== 삼색골프 3일 패키지 =================== -->
+  <!-- 삼색골프 3일 패키지 -->
   <div class="card">
-    <div class="section-title"><span class="dot"></span><div class="kicker">GOLF PACKAGE</div></div>
-    <h2>삼색골프 3일 · 18홀 × 3회 <span class="badge">Sam · AT1200 · Palace</span></h2>
-    <p class="note">달랏 대표 3개 코스를 하루 한 코스씩 라운딩하는 베스트셀러 일정입니다. (총 3일 / 18홀 × 3회)  - 9H, 18H 추가 가능   </p>
+    <div class="section-title"><span class="dot"></span><div class="kicker" data-i18n="kicker-golf">GOLF PACKAGE</div></div>
+    <h2><span data-i18n="tri-title">삼색골프 3일 · 18홀 × 3회</span> <span class="badge" data-i18n="tri-badge">Sam · AT1200 · Palace</span></h2>
+    <p class="note" data-i18n="tri-note">달랏 대표 3개 코스를 하루 한 코스씩 라운딩하는 베스트셀러 일정입니다. (총 3일 / 18홀 × 3회) — 9H, 18H 추가 가능</p>
 
     <div class="card" style="background:#f9faf9">
-      <h3>일정 예시 (3일)</h3>
+      <h3 data-i18n="itinerary-title">일정 예시 (3일)</h3>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Day</th><th>코스</th><th class="tl">간단 일정</th></tr>
+            <tr>
+              <th data-i18n="col-day">Day</th>
+              <th data-i18n="col-course">코스</th>
+              <th class="tl" data-i18n="col-brief">간단 일정</th>
+            </tr>
           </thead>
           <tbody>
-            <tr><td>1일차</td><td>Sam Tuyền Lâm</td><td class="tl">호텔 픽업 → Sam 18H 라운딩 → 호텔 복귀 / 휴식</td></tr>
-            <tr><td>2일차</td><td>AT1200</td><td class="tl">호텔 픽업 → AT1200 18H 라운딩 → 호텔 복귀 / 자유시간</td></tr>
-            <tr><td>3일차</td><td>Dalat Palace</td><td class="tl">호텔 픽업 → Palace 18H 라운딩 → 공항 이동(옵션) 또는 호텔 연장</td></tr>
+            <tr><td data-i18n="d1">1일차</td><td>Sam Tuyền Lâm</td><td class="tl" data-i18n="d1-desc">호텔 픽업 → Sam 18H 라운딩 → 호텔 복귀 / 휴식</td></tr>
+            <tr><td data-i18n="d2">2일차</td><td>AT1200</td><td class="tl" data-i18n="d2-desc">호텔 픽업 → AT1200 18H 라운딩 → 호텔 복귀 / 자유시간</td></tr>
+            <tr><td data-i18n="d3">3일차</td><td>Dalat Palace</td><td class="tl" data-i18n="d3-desc">호텔 픽업 → Palace 18H 라운딩 → 공항 이동(옵션) 또는 호텔 연장</td></tr>
           </tbody>
         </table>
       </div>
     </div>
 
     <div class="card" style="background:#fff">
-      <h3>포함 / 불포함</h3>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>구분</th><th class="tl">내용</th></tr></thead>
-          <tbody>
-            <tr><td>포함</td><td class="tl">그린피(18H × 3), 카트(공유), 캐디피</td></tr>
-            <tr><td>불포함</td><td class="tl">캐디 팁, 호텔↔골프장 왕복 차량(공용), 개인 식사/음료, 개인 여행자보험, 개인 비용, 항공권</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="note">※ 요일/시즌/현지 사정에 따라 코스 순서가 바뀔 수 있습니다.</p>
-    </div>
-
-    <div class="card" style="background:#fff">
-      <h3>패키지 요금 (임시 · 1인 기준 / VND)</h3>
+      <h3 data-i18n="inc-title">포함 / 불포함</h3>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>인원</th><th>Weekday 기준</th><th>Weekend/Peak</th></tr>
+            <tr><th data-i18n="col-type">구분</th><th class="tl" data-i18n="col-content">내용</th></tr>
           </thead>
           <tbody>
-            <tr><td>2인</td><td class="price">9,900,000</td><td class="price">10,900,000</td></tr>
-            <tr><td>3인</td><td class="price">8,900,000</td><td class="price">9,900,000</td></tr>
-            <tr><td>4인</td><td class="price">7,900,000</td><td class="price">8,900,000</td></tr>
+            <tr><td data-i18n="included">포함</td><td class="tl" data-i18n="included-desc">그린피(18H × 3), 카트(공유), 캐디피</td></tr>
+            <tr><td data-i18n="excluded">불포함</td><td class="tl" data-i18n="excluded-desc">캐디 팁, 호텔↔골프장 차량(공용), 개인 식사/음료, 여행자보험, 개인 비용, 항공권</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="note">※ 위 금액은 임시 표기입니다. 실제 가격은 시즌/요일/티타임/인원/차량 형태에 따라 변동됩니다.</p>
-      <a class="cta" href="index.html#contact">견적 문의하기</a>
+      <p class="note" data-i18n="order-note">※ 요일/시즌/현지 사정에 따라 코스 순서는 바뀔 수 있습니다.</p>
+    </div>
+
+    <div class="card" style="background:#fff">
+      <h3 data-i18n="pkg-price-title">패키지 요금 (임시 · 1인 기준 / VND)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th data-i18n="col-pax">인원</th><th data-i18n="col-weekday">Weekday 기준</th><th data-i18n="col-weekend">Weekend/Peak</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>2</td><td class="price">9,900,000</td><td class="price">10,900,000</td></tr>
+            <tr><td>3</td><td class="price">8,900,000</td><td class="price">9,900,000</td></tr>
+            <tr><td>4</td><td class="price">7,900,000</td><td class="price">8,900,000</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note" data-i18n="price-note">※ 위 금액은 임시 표기입니다. 실제 가격은 시즌/요일/티타임/인원/차량 형태에 따라 변동됩니다.</p>
+      <a class="cta" href="index.html#contact" data-i18n="cta-quote">견적 문의하기</a>
     </div>
   </div>
 
-  <!-- =================== 골프 + 호텔 (Unlimited) =================== -->
+  <!-- 골프 + 호텔 (Unlimited) -->
   <div class="card">
-    <div class="section-title"><span class="dot"></span><div class="kicker">GOLF + HOTEL PACKAGE</div></div>
-    <h2>골프 + 호텔 · 1일 36홀 (Unlimited)</h2>
-    <p class="note">하루 동안 호텔과 제휴 골프장에서 <b>36홀 중심</b>으로 즐기는 초집중 골프 패키지입니다. (연장/연박 가능)</p>
+    <div class="section-title"><span class="dot"></span><div class="kicker" data-i18n="kicker-gh">GOLF + HOTEL PACKAGE</div></div>
+    <h2 data-i18n="gh-title">골프 + 호텔 · 1일 36홀 (Unlimited)</h2>
+    <p class="note" data-i18n="gh-note">하루 동안 호텔과 제휴 골프장에서 <b>36홀 중심</b>으로 즐기는 초집중 골프 패키지입니다. (연장/연박 가능)</p>
 
     <!-- 1) Swiss-Bel + Sam -->
     <div class="card" style="background:#f9faf9">
-      <h3>① Swiss-Bel + Sam Tuyền Lâm <span class="badge">1일 36H</span></h3>
+      <h3><span data-i18n="opt1-title">① Swiss-Bel + Sam Tuyền Lâm</span> <span class="badge" data-i18n="badge-36h">1일 36H</span></h3>
       <ul class="list">
-        <li><b>구성:</b> Swiss-Bel 1박 + Sam 36홀(또는 Unlimited 정책에 따라 27~36H)</li>
-        <li><b>이동:</b> 카트</li>
-        <li><b>권장:</b> 가성비 중심 / 넓은 페어웨이 선호 / 힐링 라운드</li>
+        <li><b data-i18n="lbl-comp">구성:</b> <span data-i18n="opt1-comp">Swiss-Bel 1박 + Sam 36홀(또는 Unlimited 정책에 따라 27~36H)</span></li>
+        <li><b data-i18n="lbl-move">이동:</b> <span data-i18n="opt1-move">카트</span></li>
+        <li><b data-i18n="lbl-reco">권장:</b> <span data-i18n="opt1-reco">가성비 중심 / 넓은 페어웨이 선호 / 힐링 라운드</span></li>
       </ul>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>구분</th><th>Weekday</th><th>Weekend/Peak</th></tr></thead>
+          <thead><tr><th data-i18n="col-type">구분</th><th>Weekday</th><th>Weekend/Peak</th></tr></thead>
           <tbody>
-            <tr><td>1인 기준</td><td class="price">3,200,000</td><td class="price">3,800,000</td></tr>
+            <tr><td data-i18n="perperson">1인 기준</td><td class="price">3,200,000</td><td class="price">3,800,000</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="note">※ 객실 타입(예: Deluxe), 조식 2인 포함 기준 / 실제 요금은 시즌·티타임에 따라 변동</p>
-      <a class="cta" href="index.html#contact">예약/문의하기</a>
+      <p class="note" data-i18n="room-note">※ 객실 타입(예: Deluxe), 조식 2인 포함 기준 / 실제 요금은 시즌·티타임에 따라 변동</p>
+      <a class="cta" href="index.html#contact" data-i18n="cta-book">예약/문의하기</a>
     </div>
 
     <!-- 2) Western Hill + Palace -->
     <div class="card" style="background:#f9faf9">
-      <h3>② Western Hill + Dalat Palace <span class="badge">1일 36H</span></h3>
+      <h3><span data-i18n="opt2-title">② Western Hill + Dalat Palace</span> <span class="badge" data-i18n="badge-36h">1일 36H</span></h3>
       <ul class="list">
-        <li><b>구성:</b> Western Hill 1박 + Dalat Palace 36홀(또는 Unlimited 정책에 따라 27~36H)</li>
-        <li><b>이동:</b> 호텔 ↔ 골프장 왕복 차량 포함(공용)</li>
-        <li><b>권장:</b> 프리미엄 코스/전통 챔피언십 경험 / 사진·풍경 중시</li>
+        <li><b data-i18n="lbl-comp">구성:</b> <span data-i18n="opt2-comp">Western Hill 1박 + Dalat Palace 36홀(또는 Unlimited 정책에 따라 27~36H)</span></li>
+        <li><b data-i18n="lbl-move">이동:</b> <span data-i18n="opt2-move">호텔 ↔ 골프장 왕복 차량 포함(공용)</span></li>
+        <li><b data-i18n="lbl-reco">권장:</b> <span data-i18n="opt2-reco">프리미엄 코스 / 전통 챔피언십 경험 / 사진·풍경 중시</span></li>
       </ul>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>구분</th><th>Weekday</th><th>Weekend/Peak</th></tr></thead>
+          <thead><tr><th data-i18n="col-type">구분</th><th>Weekday</th><th>Weekend/Peak</th></tr></thead>
           <tbody>
-            <tr><td>1인 기준</td><td class="price">3,600,000</td><td class="price">4,200,000</td></tr>
+            <tr><td data-i18n="perperson">1인 기준</td><td class="price">3,600,000</td><td class="price">4,200,000</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="note">※ 객실 타입(예: Deluxe), 조식 2인 포함 기준 / 실제 요금은 시즌·티타임에 따라 변동</p>
-      <a class="cta" href="index.html#contact">예약/문의하기</a>
+      <p class="note" data-i18n="room-note">※ 객실 타입(예: Deluxe), 조식 2인 포함 기준 / 실제 요금은 시즌·티타임에 따라 변동</p>
+      <a class="cta" href="index.html#contact" data-i18n="cta-book">예약/문의하기</a>
     </div>
 
     <div class="card" style="background:#fff">
-      <h3>포함 / 불포함</h3>
+      <h3 data-i18n="inc-title">포함 / 불포함</h3>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>구분</th><th class="tl">내용</th></tr></thead>
+          <thead><tr><th data-i18n="col-type">구분</th><th class="tl" data-i18n="col-content">내용</th></tr></thead>
           <tbody>
-            <tr><td>포함</td><td class="tl">호텔 1박(조식 포함), 그린피(36H 기준), 카트(공유), 캐디피, </td></tr>
-            <tr><td>불포함</td><td class="tl">캐디 팁, 호텔↔골프장 왕복 차량(공용), 개인 식사/음료, 개인 여행자보험, 개인 비용, 항공권</td></tr>
+            <tr><td data-i18n="included">포함</td><td class="tl" data-i18n="gh-included-desc">호텔 1박(조식 포함), 그린피(36H 기준), 카트(공유), 캐디피</td></tr>
+            <tr><td data-i18n="excluded">불포함</td><td class="tl" data-i18n="gh-excluded-desc">캐디 팁, 호텔↔골프장 왕복 차량(공용), 개인 식사/음료, 여행자보험, 개인 비용, 항공권</td></tr>
           </tbody>
         </table>
       </div>
-      <p class="note">※ Unlimited 정책은 골프장/티타임 사정에 따라 27~36H로 조정될 수 있습니다.</p>
+      <p class="note" data-i18n="unlimited-note">※ Unlimited 정책은 골프장/티타임 사정에 따라 27~36H로 조정될 수 있습니다.</p>
     </div>
 
     <div class="card" style="background:#fff">
-      <h3>추가 안내</h3>
+      <h3 data-i18n="more-title">추가 안내</h3>
       <ul class="list">
-        <li>연박/연장 가능 · 2~4인 기준 커스텀 견적 제공</li>
-        <li>픽업/샌딩(공항↔호텔) 별도 요청 가능</li>
-        <li>성수기/연휴 기간 서차지 발생 가능</li>
-        <li>취소/환불 규정은 시즌별 상이 (문의 시 자세히 안내)</li>
+        <li data-i18n="more-1">연박/연장 가능 · 2~4인 기준 커스텀 견적 제공</li>
+        <li data-i18n="more-2">픽업/샌딩(공항↔호텔) 별도 요청 가능</li>
+        <li data-i18n="more-3">성수기/연휴 기간 서차지 발생 가능</li>
+        <li data-i18n="more-4">취소/환불 규정은 시즌별 상이 (문의 시 자세히 안내)</li>
       </ul>
     </div>
   </div>
@@ -213,4 +235,195 @@ tbody tr:nth-child(even){background:#fbfdfb}
 
 <footer>© 2025 DGV Company Limited</footer>
 
-</body></html>
+<script>
+/* ===== i18n 사전 ===== */
+const I18N = {
+  ko:{
+    "title-text":"패키지 예약 | DGV",
+    "desc-text":"달랏 골프 · 호텔 패키지 — 삼색골프 3일, 36홀 언리미티드, 포함/불포함 및 요금 안내",
+    "nav-home":"Home","nav-restaurant":"Restaurant","nav-golf":"Golf","nav-hotel":"Hotel","nav-package":"Package","nav-car":"Car","nav-contact":"Contact",
+    "breadcrumb-home":"← Home",
+    "hero-title":"골프 · 호텔 패키지",
+    "hero-sub":"삼색골프 3일 패키지 / 골프+호텔 1일 36홀 (Unlimited)",
+    "kicker-golf":"GOLF PACKAGE",
+    "tri-title":"삼색골프 3일 · 18홀 × 3회",
+    "tri-badge":"Sam · AT1200 · Palace",
+    "tri-note":"달랏 대표 3개 코스를 하루 한 코스씩 라운딩하는 베스트셀러 일정입니다. (총 3일 / 18홀 × 3회) — 9H, 18H 추가 가능",
+    "itinerary-title":"일정 예시 (3일)",
+    "col-day":"Day","col-course":"코스","col-brief":"간단 일정",
+    "d1":"1일차","d2":"2일차","d3":"3일차",
+    "d1-desc":"호텔 픽업 → Sam 18H 라운딩 → 호텔 복귀 / 휴식",
+    "d2-desc":"호텔 픽업 → AT1200 18H 라운딩 → 호텔 복귀 / 자유시간",
+    "d3-desc":"호텔 픽업 → Palace 18H 라운딩 → 공항 이동(옵션) 또는 호텔 연장",
+    "inc-title":"포함 / 불포함",
+    "col-type":"구분","col-content":"내용",
+    "included":"포함","excluded":"불포함",
+    "included-desc":"그린피(18H × 3), 카트(공유), 캐디피",
+    "excluded-desc":"캐디 팁, 호텔↔골프장 차량(공용), 개인 식사/음료, 여행자보험, 개인 비용, 항공권",
+    "order-note":"※ 요일/시즌/현지 사정에 따라 코스 순서는 바뀔 수 있습니다.",
+    "pkg-price-title":"패키지 요금 (임시 · 1인 기준 / VND)",
+    "col-pax":"인원","col-weekday":"Weekday 기준","col-weekend":"Weekend/Peak",
+    "price-note":"※ 위 금액은 임시 표기입니다. 실제 가격은 시즌/요일/티타임/인원/차량 형태에 따라 변동됩니다.",
+    "cta-quote":"견적 문의하기",
+    "kicker-gh":"GOLF + HOTEL PACKAGE",
+    "gh-title":"골프 + 호텔 · 1일 36홀 (Unlimited)",
+    "gh-note":"하루 동안 호텔과 제휴 골프장에서 <b>36홀 중심</b>으로 즐기는 초집중 골프 패키지입니다. (연장/연박 가능)",
+    "opt1-title":"① Swiss-Bel + Sam Tuyền Lâm","badge-36h":"1일 36H",
+    "lbl-comp":"구성","lbl-move":"이동","lbl-reco":"권장",
+    "opt1-comp":"Swiss-Bel 1박 + Sam 36홀(또는 Unlimited 정책에 따라 27~36H)",
+    "opt1-move":"카트",
+    "opt1-reco":"가성비 중심 / 넓은 페어웨이 선호 / 힐링 라운드",
+    "perperson":"1인 기준",
+    "room-note":"※ 객실 타입(예: Deluxe), 조식 2인 포함 기준 / 실제 요금은 시즌·티타임에 따라 변동",
+    "cta-book":"예약/문의하기",
+    "opt2-title":"② Western Hill + Dalat Palace",
+    "opt2-comp":"Western Hill 1박 + Dalat Palace 36홀(또는 Unlimited 정책에 따라 27~36H)",
+    "opt2-move":"호텔 ↔ 골프장 왕복 차량 포함(공용)",
+    "opt2-reco":"프리미엄 코스 / 전통 챔피언십 경험 / 사진·풍경 중시",
+    "gh-included-desc":"호텔 1박(조식 포함), 그린피(36H 기준), 카트(공유), 캐디피",
+    "gh-excluded-desc":"캐디 팁, 호텔↔골프장 왕복 차량(공용), 개인 식사/음료, 여행자보험, 개인 비용, 항공권",
+    "unlimited-note":"※ Unlimited 정책은 골프장/티타임 사정에 따라 27~36H로 조정될 수 있습니다.",
+    "more-title":"추가 안내",
+    "more-1":"연박/연장 가능 · 2~4인 기준 커스텀 견적 제공",
+    "more-2":"픽업/샌딩(공항↔호텔) 별도 요청 가능",
+    "more-3":"성수기/연휴 기간 서차지 발생 가능",
+    "more-4":"취소/환불 규정은 시즌별 상이 (문의 시 자세히 안내)"
+  },
+  en:{
+    "title-text":"Packages | DGV",
+    "desc-text":"Da Lat golf & hotel packages — 3-Day Tri-Course, 36-hole Unlimited, inclusions/exclusions & pricing",
+    "nav-home":"Home","nav-restaurant":"Restaurant","nav-golf":"Golf","nav-hotel":"Hotel","nav-package":"Package","nav-car":"Car","nav-contact":"Contact",
+    "breadcrumb-home":"← Home",
+    "hero-title":"Golf · Hotel Packages",
+    "hero-sub":"3-Day Tri-Course / Golf + Hotel 36-hole (Unlimited)",
+    "kicker-golf":"GOLF PACKAGE",
+    "tri-title":"Tri-Course 3 Days · 18H × 3",
+    "tri-badge":"Sam · AT1200 · Palace",
+    "tri-note":"Best-seller plan: one signature course per day (total 3 days, 18H × 3). Extra 9H/18H available.",
+    "itinerary-title":"Sample Itinerary (3 Days)",
+    "col-day":"Day","col-course":"Course","col-brief":"Brief Schedule",
+    "d1":"Day 1","d2":"Day 2","d3":"Day 3",
+    "d1-desc":"Hotel pickup → Sam 18H round → Back to hotel / rest",
+    "d2-desc":"Hotel pickup → AT1200 18H round → Back to hotel / free time",
+    "d3-desc":"Hotel pickup → Palace 18H round → Airport transfer (opt.) or hotel extension",
+    "inc-title":"Inclusions / Exclusions",
+    "col-type":"Type","col-content":"Details",
+    "included":"Included","excluded":"Excluded",
+    "included-desc":"Green fees (18H × 3), shared cart, caddie fee",
+    "excluded-desc":"Caddie tips, hotel↔course shuttle (shared), meals/drinks, travel insurance, personal expenses, flights",
+    "order-note":"* Course order may change depending on day/season/local conditions.",
+    "pkg-price-title":"Package Price (temp · per person / VND)",
+    "col-pax":"Pax","col-weekday":"Weekday Base","col-weekend":"Weekend/Peak",
+    "price-note":"* Prices are indicative. Actual rates vary by season/day/tee time/group size/vehicle.",
+    "cta-quote":"Request a Quote",
+    "kicker-gh":"GOLF + HOTEL PACKAGE",
+    "gh-title":"Golf + Hotel · 36 Holes in 1 Day (Unlimited)",
+    "gh-note":"An intensive day focusing on <b>36 holes</b> with partner hotels & courses. (Extend/extra nights available)",
+    "opt1-title":"① Swiss-Bel + Sam Tuyền Lâm","badge-36h":"36H / day",
+    "lbl-comp":"Composition","lbl-move":"Transport","lbl-reco":"Recommended",
+    "opt1-comp":"1 night at Swiss-Bel + Sam 36H (or 27–36H per Unlimited policy)",
+    "opt1-move":"Cart",
+    "opt1-reco":"Best value / wide fairways / relaxing round",
+    "perperson":"Per person",
+    "room-note":"* Example room type (e.g., Deluxe) incl. breakfast for 2. Rates vary by season & tee time.",
+    "cta-book":"Book / Inquiry",
+    "opt2-title":"② Western Hill + Dalat Palace",
+    "opt2-comp":"1 night at Western Hill + Dalat Palace 36H (or 27–36H per Unlimited policy)",
+    "opt2-move":"Shared roundtrip shuttle hotel ↔ course included",
+    "opt2-reco":"Premium course / classic championship feel / scenery focused",
+    "gh-included-desc":"1 night hotel incl. breakfast, green fees (36H base), shared cart, caddie fee",
+    "gh-excluded-desc":"Caddie tips, shared hotel↔course shuttle, meals/drinks, travel insurance, personal expenses, flights",
+    "unlimited-note":"* Unlimited policy may adjust between 27–36H depending on course/tee time.",
+    "more-title":"Additional Notes",
+    "more-1":"Extendable nights; tailored quotes for 2–4 pax",
+    "more-2":"Airport↔hotel pickup/dropoff available on request",
+    "more-3":"Peak/holiday surcharges may apply",
+    "more-4":"Cancellation/refund policies vary by season (details on request)"
+  },
+  vi:{
+    "title-text":"Gói Golf & Khách sạn | DGV",
+    "desc-text":"Gói Đà Lạt — 3 ngày 3 sân, 36 hố Unlimited, thông tin bao gồm/không gồm & giá",
+    "nav-home":"Home","nav-restaurant":"Nhà hàng","nav-golf":"Golf","nav-hotel":"Khách sạn","nav-package":"Gói","nav-car":"Xe","nav-contact":"Liên hệ",
+    "breadcrumb-home":"← Home",
+    "hero-title":"Gói Golf · Khách sạn",
+    "hero-sub":"3 ngày 3 sân / Golf + Khách sạn 36 hố (Unlimited)",
+    "kicker-golf":"GOLF PACKAGE",
+    "tri-title":"3 ngày · 18 hố × 3",
+    "tri-badge":"Sam · AT1200 · Palace",
+    "tri-note":"Kế hoạch bán chạy: mỗi ngày 1 sân tiêu biểu (tổng 3 ngày, 18H × 3). Có thể thêm 9H/18H.",
+    "itinerary-title":"Lịch trình mẫu (3 ngày)",
+    "col-day":"Ngày","col-course":"Sân","col-brief":"Lịch vắn tắt",
+    "d1":"Ngày 1","d2":"Ngày 2","d3":"Ngày 3",
+    "d1-desc":"Đón tại khách sạn → Sam 18H → Về khách sạn / nghỉ",
+    "d2-desc":"Đón tại khách sạn → AT1200 18H → Về khách sạn / tự do",
+    "d3-desc":"Đón tại khách sạn → Palace 18H → Ra sân bay (tuỳ chọn) hoặc lưu trú thêm",
+    "inc-title":"Bao gồm / Không bao gồm",
+    "col-type":"Loại","col-content":"Nội dung",
+    "included":"Bao gồm","excluded":"Không bao gồm",
+    "included-desc":"Phí sân (18H × 3), xe điện dùng chung, phí caddie",
+    "excluded-desc":"Tip caddie, xe đưa đón KS↔sân (dùng chung), ăn uống, bảo hiểm du lịch, chi phí cá nhân, vé máy bay",
+    "order-note":"* Thứ tự sân có thể thay đổi theo ngày/mùa/điều kiện địa phương.",
+    "pkg-price-title":"Giá gói (tạm thời · mỗi người / VND)",
+    "col-pax":"Số người","col-weekday":"Ngày thường","col-weekend":"Cuối tuần/Peak",
+    "price-note":"* Giá tham khảo. Thực tế phụ thuộc mùa/ngày/giờ tee/số lượng/loại xe.",
+    "cta-quote":"Yêu cầu báo giá",
+    "kicker-gh":"GÓI GOLF + KHÁCH SẠN",
+    "gh-title":"Golf + Khách sạn · 36 hố trong 1 ngày (Unlimited)",
+    "gh-note":"Trải nghiệm tập trung <b>36 hố</b> trong ngày với khách sạn & sân đối tác. (Có thể gia hạn/ở thêm)",
+    "opt1-title":"① Swiss-Bel + Sam Tuyền Lâm","badge-36h":"36H / ngày",
+    "lbl-comp":"Thành phần","lbl-move":"Di chuyển","lbl-reco":"Gợi ý",
+    "opt1-comp":"1 đêm Swiss-Bel + Sam 36H (hoặc 27–36H tùy chính sách Unlimited)",
+    "opt1-move":"Xe điện",
+    "opt1-reco":"Ưu tiên chi phí / fairway rộng / thư giãn",
+    "perperson":"Mỗi người",
+    "room-note":"* Ví dụ hạng phòng (Deluxe) + sáng cho 2 người. Giá thay đổi theo mùa & giờ tee.",
+    "cta-book":"Đặt / Hỏi thêm",
+    "opt2-title":"② Western Hill + Dalat Palace",
+    "opt2-comp":"1 đêm Western Hill + Dalat Palace 36H (hoặc 27–36H tùy Unlimited)",
+    "opt2-move":"Xe đưa đón KS ↔ sân (dùng chung) đã gồm",
+    "opt2-reco":"Sân cao cấp / cảm giác championship cổ điển / chú trọng cảnh quan",
+    "gh-included-desc":"1 đêm KS gồm sáng, phí sân (36H), xe điện dùng chung, phí caddie",
+    "gh-excluded-desc":"Tip caddie, xe dùng chung KS↔sân, ăn uống, bảo hiểm du lịch, chi phí cá nhân, vé máy bay",
+    "unlimited-note":"* Chính sách Unlimited có thể điều chỉnh 27–36H tùy sân/giờ tee.",
+    "more-title":"Ghi chú thêm",
+    "more-1":"Có thể ở thêm; báo giá tuỳ chỉnh cho nhóm 2–4 người",
+    "more-2":"Đón/tiễn sân bay ↔ khách sạn theo yêu cầu",
+    "more-3":"Có thể phụ thu mùa cao điểm/ngày lễ",
+    "more-4":"Chính sách huỷ/hoàn khác nhau theo mùa (liên hệ để biết chi tiết)"
+  }
+};
+
+/* ===== i18n 적용 ===== */
+function applyLang(lang){
+  const dict = I18N[lang] || I18N.ko;
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key = el.getAttribute('data-i18n');
+    if(dict[key]!==undefined) el.innerHTML = dict[key];
+  });
+  // meta
+  const t = document.getElementById('i18n-title');
+  const d = document.getElementById('i18n-desc');
+  if(t && dict['title-text']) t.textContent = dict['title-text'];
+  if(d && dict['desc-text']) d.setAttribute('content', dict['desc-text']);
+  // lang button state
+  document.querySelectorAll('#lang-switch button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.lang===lang);
+  });
+  document.documentElement.setAttribute('lang', lang);
+  localStorage.setItem('site_lang', lang);
+}
+
+function initLang(){
+  const saved = localStorage.getItem('site_lang') || 'ko';
+  applyLang(saved);
+  document.getElementById('lang-switch').addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-lang]');
+    if(!btn) return;
+    applyLang(btn.dataset.lang);
+  });
+}
+initLang();
+</script>
+
+</body>
+</html>
