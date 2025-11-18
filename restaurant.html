@@ -184,6 +184,22 @@
     </div>
   </section>
 
+  <!-- 메뉴판 사진 (여기 추가됨) -->
+  <section class="card" id="menuboard" style="margin-top:18px">
+    <h3 data-i18n="menuboard-title">메뉴판</h3>
+    <div class="gallery-grid" id="menuboard-grid" aria-label="메뉴판 사진 갤러리">
+      <div class="gallery-item">
+        <img class="photo" src="image/restaurant/menuboard_1.png" alt="하나식당 메뉴판 1">
+      </div>
+      <div class="gallery-item">
+        <img class="photo" src="image/restaurant/menuboard_2.png" alt="하나식당 메뉴판 2">
+      </div>
+      <div class="gallery-item">
+        <img class="photo" src="image/restaurant/menuboard_3.png" alt="하나식당 메뉴판 3">
+      </div>
+    </div>
+  </section>
+
   <!-- 매장 사진 -->
   <section class="card" id="interior" style="margin-top:18px">
     <h3 data-i18n="interior-title">매장 사진</h3>
@@ -251,6 +267,7 @@ const I18N = {
     "lbl-map":"Google map","link-map":"지도 열기",
     "lbl-hours":"영업 시간","hours-note":"단체/이벤트 사전 예약 환영","hours-time":"연중 무휴 09:00~21:00",
     "interior-title":"매장 사진","menu-title":"대표 메뉴","menu-photo-title":"메뉴 사진",
+    "menuboard-title":"메뉴판",
     "m-1":"김치찌개","m-2":"제육볶음","m-3":"삼겹살","m-4":"무한삼겹","m-5":"아티소백숙","m-6":"제육+김치찌개","m-7":"우렁쌈밥","m-8":"장어구이",
     "faq-title":"이용 안내",
     "faq-1":"단체 예약 시 좌석 배치, 코스 구성, 뷔페 형태 등 <b>맞춤 진행</b>이 가능합니다.",
@@ -272,6 +289,7 @@ const I18N = {
     "lbl-map":"Google map","link-map":"Open map",
     "lbl-hours":"Opening Hours","hours-note":"Group/Event reservations welcome","hours-time":"Daily 09:00–21:00",
     "interior-title":"Interior Photos","menu-title":"Signature Dishes","menu-photo-title":"Food Photos",
+    "menuboard-title":"Menu Boards",
     "m-1":"Kimchi Stew","m-2":"Spicy Pork Stir-fry","m-3":"Pork Belly BBQ","m-4":"Unlimited Pork Belly","m-5":"Artichoke Chicken Soup","m-6":"Spicy Pork + Kimchi Stew","m-7":"Ureong Ssam-bap","m-8":"Grilled Eel",
     "faq-title":"Guest Information",
     "faq-1":"For group bookings we can <b>customize</b> seating, course menus, and buffet style.",
@@ -293,6 +311,7 @@ const I18N = {
     "lbl-map":"Google map","link-map":"Mở bản đồ",
     "lbl-hours":"Giờ mở cửa","hours-note":"Nhận đặt đoàn/sự kiện trước","hours-time":"Hàng ngày 09:00–21:00",
     "interior-title":"Ảnh không gian","menu-title":"Món tiêu biểu","menu-photo-title":"Ảnh món ăn",
+    "menuboard-title":"Ảnh bảng menu",
     "m-1":"Canh kimchi","m-2":"Thịt heo xào cay","m-3":"Ba chỉ nướng","m-4":"Ba chỉ nướng không giới hạn","m-5":"Gà hầm atisô","m-6":"Heo cay + canh kimchi","m-7":"Cơm cuốn rau Ureong","m-8":"Lươn nướng",
     "faq-title":"Hướng dẫn sử dụng",
     "faq-1":"Đặt đoàn có thể <b>tuỳ chỉnh</b> sơ đồ chỗ ngồi, set menu, hoặc buffet.",
@@ -363,6 +382,16 @@ function loadGallery(containerId, folder){
   }
 }
 
+/* 정적인 갤러리(메뉴판 사진)용 바인딩 */
+function bindStaticGallery(containerId){
+  const wrap = document.getElementById(containerId);
+  if(!wrap) return;
+  const list = Array.from(wrap.querySelectorAll("img.photo"));
+  list.forEach((img,i)=>{
+    img.addEventListener("click", ()=>openLightbox(list,i));
+  });
+}
+
 /* ------------ LIGHTBOX ------------ */
 const lb = document.getElementById("lightbox");
 const lbImg = lb.querySelector(".lb-img");
@@ -402,6 +431,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   loadGallery("interior-grid","interior");
   loadGallery("menu-grid","menu");
+  bindStaticGallery("menuboard-grid");
 });
 </script>
 
