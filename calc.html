@@ -129,14 +129,25 @@
       background: linear-gradient(135deg, rgba(202,162,76,.10), rgba(255,255,255,0) 60%);
       pointer-events:none;
     }
+
+    /* ✅ 메뉴명 + 베트남어 */
     .name{
       font-weight: 1000;
       text-align:center;
       font-size: 18px;
       letter-spacing:.03em;
-      margin: 2px 0 10px;
+      margin: 2px 0 4px;
       position:relative;
     }
+    .name small{
+      display:block;
+      margin-top:6px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing:.02em;
+      color: var(--sub);
+    }
+
     .priceBox{
       border:1px solid var(--line);
       border-radius: 14px;
@@ -318,7 +329,7 @@
         </div>
         <div class="list" id="pickedList"></div>
 
-        <!-- ✅ 빨간 표시 위치: 인쇄 때만 날짜/시간 -->
+        <!-- ✅ 인쇄 때만 날짜/시간 -->
         <div class="print-only" id="printTime"></div>
       </div>
 
@@ -327,41 +338,42 @@
       </div>
     </div>
 
-    <div class="section">
-      <h2>SIDE MENU</h2>
-      <div class="grid" id="sideGrid"></div>
-    </div>
-
+    <!-- ✅ 순서 변경: DRINK → SIDE -->
     <div class="section">
       <h2>DRINK MENU</h2>
       <div class="grid" id="drinkGrid"></div>
     </div>
+
+    <div class="section">
+      <h2>SIDE MENU</h2>
+      <div class="grid" id="sideGrid"></div>
+    </div>
   </div>
 
 <script>
-  // ====== 메뉴 데이터 ======
+  // ====== 메뉴 데이터 (ko + vi 추가) ======
   const sideMenu = [
-    { id:"shin",   name:"신라면",            usd:4,  vnd:100000 },
-    { id:"jjp",    name:"짜파게티",          usd:5,  vnd:120000 },
-    { id:"buldak", name:"불닭볶음면",        usd:5,  vnd:120000 },
-    { id:"naeng",  name:"냉면",              usd:8,  vnd:200000 },
-    { id:"bibim",  name:"비빔국수",          usd:8,  vnd:200000 },
-    { id:"jjigae", name:"찌개(김치/된장)",    usd:8,  vnd:200000 },
-    { id:"dagum",  name:"다금바리 초무침",    usd:20, vnd:500000 },
-    { id:"yukhoe", name:"육회",              usd:12, vnd:300000 },
-    { id:"chicken",name:"치킨",              usd:14, vnd:340000 }
+    { id:"shin",   ko:"신라면",           vi:"Mì Shin cay",           usd:4,  vnd:100000 },
+    { id:"jjp",    ko:"짜파게티",         vi:"Mì tương đen (Jjapagetti)", usd:5,  vnd:120000 },
+    { id:"buldak", ko:"불닭볶음면",       vi:"Mì xào cay Buldak",     usd:5,  vnd:120000 },
+    { id:"naeng",  ko:"냉면",             vi:"Mì lạnh",              usd:8,  vnd:200000 },
+    { id:"bibim",  ko:"비빔국수",         vi:"Mì trộn cay",           usd:8,  vnd:200000 },
+    { id:"jjigae", ko:"찌개(김치/된장)",  vi:"Canh hầm (kimchi / tương đậu)", usd:8,  vnd:200000 },
+    { id:"dagum",  ko:"다금바리 초무침",  vi:"Cá Dageumbari trộn cay", usd:20, vnd:500000 },
+    { id:"yukhoe", ko:"육회",             vi:"Thịt bò sống trộn (Yukhoe)", usd:12, vnd:300000 },
+    { id:"chicken",ko:"치킨",             vi:"Gà rán",               usd:14, vnd:340000 }
   ];
 
   const drinkMenu = [
-    { id:"soju",   name:"소주",        usd:7, vnd:180000 },
-    { id:"beer",   name:"맥주",        usd:2, vnd:50000  },
-    { id:"soft",   name:"음료",        usd:1, vnd:30000  },
-    { id:"mak",    name:"막걸리",      usd:9, vnd:250000 },
-    { id:"vodka",  name:"보드카 MEN",  usd:7, vnd:180000 },
-    { id:"nep",    name:"넵 모이",     usd:9, vnd:250000 },
-    { id:"red",    name:"레드 와인",   usd:2, vnd:50000  },
-    { id:"white",  name:"화이트 와인", usd:2, vnd:50000  },
-    { id:"high",   name:"하이볼",      usd:4, vnd:100000 }
+    { id:"soju",   ko:"소주",         vi:"Soju",         usd:7, vnd:180000 },
+    { id:"beer",   ko:"맥주",         vi:"Bia",          usd:2, vnd:50000  },
+    { id:"soft",   ko:"음료",         vi:"Nước ngọt",    usd:1, vnd:30000  },
+    { id:"mak",    ko:"막걸리",       vi:"Makgeolli",    usd:9, vnd:250000 },
+    { id:"vodka",  ko:"보드카 MEN",   vi:"Vodka men",    usd:7, vnd:180000 },
+    { id:"nep",    ko:"넵 모이",      vi:"Nếp mới",      usd:9, vnd:250000 },
+    { id:"red",    ko:"레드 와인",    vi:"Rượu vang đỏ", usd:2, vnd:50000  },
+    { id:"white",  ko:"화이트 와인",  vi:"Rượu vang trắng", usd:2, vnd:50000 },
+    { id:"high",   ko:"하이볼",       vi:"Highball",     usd:4, vnd:100000 }
   ];
 
   // ====== 상태 ======
@@ -383,7 +395,10 @@
     card.dataset.id = menu.id;
 
     card.innerHTML = `
-      <div class="name">${menu.name}</div>
+      <div class="name">
+        ${menu.ko}
+        <small>${menu.vi}</small>
+      </div>
       <div class="priceBox">
         <div class="priceLine">
           <div class="usd">${menu.usd}$</div>
@@ -415,10 +430,13 @@
   }
 
   function mount(){
-    const sideGrid = document.getElementById("sideGrid");
+    // ✅ 순서 변경: drinkGrid 먼저, sideGrid 나중
     const drinkGrid = document.getElementById("drinkGrid");
-    sideMenu.forEach(m => sideGrid.appendChild(makeCard(m)));
+    const sideGrid  = document.getElementById("sideGrid");
+
     drinkMenu.forEach(m => drinkGrid.appendChild(makeCard(m)));
+    sideMenu.forEach(m => sideGrid.appendChild(makeCard(m)));
+
     updateAll();
   }
 
@@ -438,7 +456,7 @@
     let totalVnd = 0;
     const picked = [];
 
-    const all = [...sideMenu, ...drinkMenu];
+    const all = [...drinkMenu, ...sideMenu]; // 표시 순서와 동일
     for (const m of all){
       const q = qty[m.id] || 0;
       const lineUsd = m.usd * q;
@@ -455,7 +473,7 @@
         tag.style.display = q > 0 ? "inline-block" : "none";
       }
 
-      if (q > 0) picked.push({ name:m.name, q, lineUsd, lineVnd });
+      if (q > 0) picked.push({ ko:m.ko, vi:m.vi, q, lineUsd, lineVnd });
     }
 
     document.getElementById("totalUsd").textContent = fmtInt(totalUsd);
@@ -470,7 +488,7 @@
         const row = document.createElement("div");
         row.className = "row";
         row.innerHTML = `
-          <div><b>${p.name}</b> × ${p.q}</div>
+          <div><b>${p.ko}</b><span style="color:#6b5444;font-weight:800;"> / ${p.vi}</span> × ${p.q}</div>
           <div>${fmtInt(p.lineUsd)}$ · ${fmtInt(p.lineVnd)} VND</div>
         `;
         list.appendChild(row);
@@ -493,7 +511,7 @@
     window.print();
   });
 
-  // 혹시 Ctrl+P로 인쇄해도 시간 찍히게
+  // Ctrl+P 등으로 인쇄해도 시간 찍히게
   window.addEventListener("beforeprint", setPrintTime);
 
   // 시작
