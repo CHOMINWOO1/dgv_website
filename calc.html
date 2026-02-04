@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HANA Menu Calculator (USD + VND)</title>
+  <title>HANA Menu Calculator</title>
   <style>
     :root{
       --bg:#faf6ee;
@@ -23,87 +23,80 @@
       color:var(--ink);
     }
     .wrap{
-      max-width: 1100px;
-      margin: 22px auto 60px;
+      max-width: 1200px;
+      margin: 18px auto 60px;
       padding: 0 14px;
     }
-    header{
-      display:flex; gap:12px; flex-wrap:wrap;
-      align-items:flex-end; justify-content:space-between;
-      margin-bottom:14px;
+
+    /* ===== (추가) HANA 헤더 ===== */
+    .hanaHeader{
+      width:100%;
+      text-align:center;
+      padding: 10px 10px 8px;
+      margin: 0 0 14px;
+      border-bottom: 1px solid #e4d1bf;
     }
-    .title{
-      font-weight: 900;
-      letter-spacing:.08em;
-      text-transform: uppercase;
-      font-size: 22px;
+    .hanaHeader .h1{
+      margin:0;
+      font-size:34px;
+      font-weight:900;
+      letter-spacing:.28em;
+      color:#3f2a1d;
     }
-    .controls{
-      display:flex; gap:10px; flex-wrap:wrap;
-      align-items:center; justify-content:flex-end;
+    .hanaHeader .h2{
+      margin:6px 0 10px;
+      font-size:14px;
+      font-weight:700;
+      letter-spacing:.26em;
+      color:#6a4c3a;
     }
-    .control{
-      background: var(--card);
-      border:1px solid var(--line);
-      border-radius: 12px;
-      padding:10px 12px;
-      box-shadow: 0 6px 16px rgba(0,0,0,.06);
-      display:flex; gap:10px; align-items:center;
+    .hanaHeader .welcome{
+      margin:0;
+      padding:8px 0 10px;
+      border-top:1px solid #e4d1bf;
+      color:#3f2a1d;
+      font-size:13px;
+      line-height:1.4;
     }
-    .control label{font-size:13px; color:var(--sub); font-weight:700}
-    .control input{
-      width: 140px;
-      padding: 8px 10px;
-      border:1px solid var(--line);
-      border-radius: 10px;
-      font-weight:800;
-      color:var(--ink);
-      background:#fff;
-      outline:none;
+    .hanaHeader .welcome span{
+      display:block;
+      color:#6e5a4a;
+      font-size:12px;
     }
-    .btn{
+
+    /* ===== 상단 TOTAL + 인쇄 버튼 ===== */
+    .summaryBar{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 14px;
+    }
+    @media (max-width: 560px){
+      .summaryBar{ grid-template-columns: 1fr; }
+      .printWrap{ justify-content:flex-end; }
+    }
+    .printWrap{
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+    }
+    .printBtnOnly{
       border:1px solid var(--line);
       background: var(--card);
       color: var(--ink);
       font-weight:900;
       border-radius: 12px;
-      padding: 10px 12px;
+      padding: 12px 16px;
       box-shadow: 0 6px 16px rgba(0,0,0,.06);
       cursor:pointer;
+      height: fit-content;
+      white-space: nowrap;
     }
-    .btn:hover{border-color: var(--gold)}
-    .grid{
-      display:grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-    }
-    @media (max-width: 920px){ .grid{grid-template-columns: repeat(2, minmax(0,1fr));} }
-    @media (max-width: 560px){ .grid{grid-template-columns: 1fr;} }
-@media print {
-  /* 전체 숨김 */
-  body * { visibility: hidden !important; }
+    .printBtnOnly:hover{border-color: var(--gold)}
 
-  /* 요약 카드(#sumLeft)만 표시 */
-  #sumLeft, #sumLeft * { visibility: visible !important; }
-
-  /* 요약 카드만 페이지 맨 위로 */
-  #sumLeft {
-    position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    margin: 0 !important;
-    box-shadow: none !important;
-    border: 1px solid #e7d7b8 !important;
-    border-radius: 0 !important;
-  }
-
-  /* 인쇄 여백 최소화 */
-  @page { margin: 8mm; }
-}
-    .section{
-      margin-top: 18px;
-    }
+    /* ===== 섹션/카드 ===== */
+    .section{ margin-top: 12px; }
     .section h2{
       margin: 12px 4px 10px;
       font-size: 16px;
@@ -112,6 +105,15 @@
       color: var(--sub);
       font-weight: 900;
     }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    @media (max-width: 920px){ .grid{grid-template-columns: repeat(2, minmax(0,1fr));} }
+    @media (max-width: 560px){ .grid{grid-template-columns: 1fr;} }
+
     .card{
       background: var(--card);
       border: 2px solid var(--line);
@@ -188,15 +190,19 @@
       font-size: 13px;
       position:relative;
     }
-
-    .summary{
-      margin-top: 18px;
-      display:grid;
-      grid-template-columns: 2fr 1fr;
-      gap: 12px;
+    .tag{
+      display:inline-block;
+      border:1px solid var(--line);
+      background: #fffdf7;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-weight: 900;
+      font-size: 12px;
+      color: var(--sub);
+      margin-left: 6px;
     }
-    @media (max-width: 920px){ .summary{grid-template-columns: 1fr;} }
 
+    /* ===== TOTAL 카드 ===== */
     .sumCard{
       background: #fff;
       border:2px solid var(--line);
@@ -229,46 +235,81 @@
       display:flex; justify-content:space-between; gap:10px;
     }
     .row b{font-weight: 1000}
-    .foot{
-      margin-top: 10px;
-      font-size: 12px;
-      color: var(--sub);
-      line-height: 1.45;
-    }
-    .tag{
-      display:inline-block;
-      border:1px solid var(--line);
-      background: #fffdf7;
-      padding: 4px 8px;
-      border-radius: 999px;
-      font-weight: 900;
-      font-size: 12px;
-      color: var(--sub);
-      margin-left: 6px;
+
+    /* ===== 날짜/시간: 인쇄 때만 보이게 ===== */
+    .print-only{ display:none; }
+
+    /* =========================
+       인쇄: "헤더 + TOTAL 한 장만"
+       ========================= */
+    @media print {
+      html, body{
+        background:#fff !important;
+        height:auto !important;
+      }
+
+      /* 메뉴 영역 숨김 */
+      .section,
+      .grid,
+      .card,
+      .wrap > *:not(.summaryBar):not(.hanaHeader){
+        display:none !important;
+      }
+
+      /* 버튼 숨김 */
+      .printWrap{ display:none !important; }
+
+      /* 헤더 출력 */
+      .hanaHeader{
+        display:block !important;
+        margin:0 0 10px !important;
+      }
+
+      /* TOTAL만 출력 */
+      .summaryBar{
+        display:block !important;
+        margin:0 !important;
+      }
+      #sumLeft{
+        display:block !important;
+        box-shadow:none !important;
+        border:1px solid #e7d7b8 !important;
+        border-radius: 0 !important;
+        width:100% !important;
+        margin:0 !important;
+        padding: 12px !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      /* 인쇄 시 날짜/시간 표시 */
+      .print-only{
+        display:block !important;
+        text-align:right !important;
+        font-size:12px !important;
+        color:#000 !important;
+        margin-top: 10px !important;
+      }
+
+      @page { margin: 8mm; }
     }
   </style>
 </head>
+
 <body>
   <div class="wrap">
-    <header>
-      <div>
-        <div class="title">HANA 주문 계산기 (USD + VND)</div>
-        <div class="muted" style="margin-top:6px;font-size:13px;">
-          메뉴 수량을 입력하면 합계가 자동 계산됩니다.
-        </div>
-      </div>
+    <!-- 헤더 -->
+    <div class="hanaHeader">
+      <div class="h1">H A N A</div>
+      <div class="h2">K O R E A N &nbsp; R E S T A U R A N T</div>
+      <p class="welcome">
+        Welcome to HANA Korean Restaurant!
+        <span>Chào mừng bạn đến với Nhà hàng Hàn Quốc HANA!</span>
+      </p>
+    </div>
 
-      <div class="controls">
-        <div class="control">
-          <label for="rate">환율 (1 USD → VND)</label>
-          <input id="rate" type="number" inputmode="numeric" min="1" step="1" value="25000" />
-        </div>
-        <button class="btn" id="resetBtn">전체 초기화</button>
-        <button class="btn" id="printBtn">인쇄</button>
-      </div>
-    </header>
-
-    <div class="summary">
+    <!-- TOTAL + 인쇄 버튼 -->
+    <div class="summaryBar">
       <div class="sumCard" id="sumLeft">
         <div class="sumTitle">Total</div>
         <div class="big"><span id="totalUsd">0</span>$</div>
@@ -276,22 +317,13 @@
           <span id="totalVnd">0</span> VND
         </div>
         <div class="list" id="pickedList"></div>
-        <div class="foot">
-          * VND 표시는 환율 입력값 기준 자동 변환<br/>
-          * 메뉴에 표기된 “만동”은 계산용으로만 사용 (표기 그대로 반영)
-        </div>
+
+        <!-- ✅ 빨간 표시 위치: 인쇄 때만 날짜/시간 -->
+        <div class="print-only" id="printTime"></div>
       </div>
 
-      <div class="sumCard">
-        <div class="sumTitle">Quick Tips</div>
-        <div class="muted" style="font-size:14px;line-height:1.6;">
-          • 환율만 바꾸면 전체 자동 재계산<br/>
-          • + / - 로 빠르게 수량 조절<br/>
-          • 인쇄 버튼: 계산서처럼 출력 가능
-        </div>
-        <div class="foot">
-          필요하면 “서비스/할인(%)”, “테이블 번호”, “메모”도 추가해줄게요.
-        </div>
+      <div class="printWrap">
+        <button class="printBtnOnly" id="printBtn">인쇄</button>
       </div>
     </div>
 
@@ -307,35 +339,33 @@
   </div>
 
 <script>
-  // ====== 메뉴 데이터 (이미지에 있는 구성 그대로) ======
-  // usd: 달러 가격
-  // vnd: 동 가격 (정수 VND)
+  // ====== 메뉴 데이터 ======
   const sideMenu = [
-    { id:"shin",   name:"신라면",         usd:4,  vnd:100000 },
-    { id:"jjp",    name:"짜파게티",       usd:5,  vnd:120000 },
-    { id:"buldak", name:"불닭볶음면",     usd:5,  vnd:120000 },
-    { id:"naeng",  name:"냉면",           usd:8,  vnd:200000 },
-    { id:"bibim",  name:"비빔국수",       usd:8,  vnd:200000 },
-    { id:"jjigae", name:"찌개(김치/된장)", usd:8, vnd:200000 },
-    { id:"dagum",  name:"다금바리 초무침", usd:20, vnd:500000 },
-    { id:"yukhoe", name:"육회",           usd:12, vnd:300000 },
-    { id:"chicken",name:"치킨",           usd:14, vnd:340000 },
+    { id:"shin",   name:"신라면",            usd:4,  vnd:100000 },
+    { id:"jjp",    name:"짜파게티",          usd:5,  vnd:120000 },
+    { id:"buldak", name:"불닭볶음면",        usd:5,  vnd:120000 },
+    { id:"naeng",  name:"냉면",              usd:8,  vnd:200000 },
+    { id:"bibim",  name:"비빔국수",          usd:8,  vnd:200000 },
+    { id:"jjigae", name:"찌개(김치/된장)",    usd:8,  vnd:200000 },
+    { id:"dagum",  name:"다금바리 초무침",    usd:20, vnd:500000 },
+    { id:"yukhoe", name:"육회",              usd:12, vnd:300000 },
+    { id:"chicken",name:"치킨",              usd:14, vnd:340000 }
   ];
 
   const drinkMenu = [
-    { id:"soju",   name:"소주",       usd:7, vnd:180000 },
-    { id:"beer",   name:"맥주",       usd:2, vnd:50000  },
-    { id:"soft",   name:"음료",       usd:1, vnd:30000  },
-    { id:"mak",    name:"막걸리",     usd:9, vnd:250000 },
-    { id:"vodka",  name:"보드카 MEN", usd:7, vnd:180000 },
-    { id:"nep",    name:"넵 모이",    usd:9, vnd:250000 },
-    { id:"red",    name:"레드 와인",  usd:2, vnd:50000  },
-    { id:"white",  name:"화이트 와인",usd:2, vnd:50000  },
-    { id:"high",   name:"하이볼",     usd:4, vnd:100000 },
+    { id:"soju",   name:"소주",        usd:7, vnd:180000 },
+    { id:"beer",   name:"맥주",        usd:2, vnd:50000  },
+    { id:"soft",   name:"음료",        usd:1, vnd:30000  },
+    { id:"mak",    name:"막걸리",      usd:9, vnd:250000 },
+    { id:"vodka",  name:"보드카 MEN",  usd:7, vnd:180000 },
+    { id:"nep",    name:"넵 모이",     usd:9, vnd:250000 },
+    { id:"red",    name:"레드 와인",   usd:2, vnd:50000  },
+    { id:"white",  name:"화이트 와인", usd:2, vnd:50000  },
+    { id:"high",   name:"하이볼",      usd:4, vnd:100000 }
   ];
 
   // ====== 상태 ======
-  const qty = Object.create(null); // id -> number
+  const qty = Object.create(null);
   [...sideMenu, ...drinkMenu].forEach(m => qty[m.id] = 0);
 
   // ====== 유틸 ======
@@ -371,7 +401,6 @@
       </div>
     `;
 
-    // 이벤트
     card.addEventListener("click", (e) => {
       const act = e.target?.dataset?.act;
       if (!act) return;
@@ -404,47 +433,34 @@
     updateAll();
   }
 
-  function getRate(){
-    const r = clampNonNegInt(document.getElementById("rate").value);
-    return r > 0 ? r : 25000;
-  }
-
   function updateAll(){
-    const rate = getRate();
-
     let totalUsd = 0;
-    let totalVndFixed = 0; // 메뉴에 적힌 VND 합계(환율 무관)
+    let totalVnd = 0;
     const picked = [];
 
     const all = [...sideMenu, ...drinkMenu];
     for (const m of all){
       const q = qty[m.id] || 0;
       const lineUsd = m.usd * q;
-      const lineVndFixed = m.vnd * q;
+      const lineVnd = m.vnd * q;
 
       totalUsd += lineUsd;
-      totalVndFixed += lineVndFixed;
+      totalVnd += lineVnd;
 
-      // 카드 업데이트
       const card = document.querySelector(`.card[data-id="${m.id}"]`);
       if (card){
         card.querySelector('[data-act="lineUsd"]').textContent = fmtInt(lineUsd);
-        card.querySelector('[data-act="lineVnd"]').textContent = fmtInt(lineVndFixed);
+        card.querySelector('[data-act="lineVnd"]').textContent = fmtInt(lineVnd);
         const tag = card.querySelector('[data-act="tag"]');
         tag.style.display = q > 0 ? "inline-block" : "none";
       }
 
-      if (q > 0) picked.push({ name:m.name, q, usd:m.usd, vnd:m.vnd, lineUsd, lineVndFixed });
+      if (q > 0) picked.push({ name:m.name, q, lineUsd, lineVnd });
     }
 
-    // 합계 표시:
-    // - totalUsd: 달러 합계(메뉴 USD 기반)
-    // - totalVnd: (1) 메뉴에 적힌 VND 합계 + (2) 달러 합계를 환율로 변환한 값 중 선택 가능
-    //   여기서는 "메뉴에 적힌 VND 합계"를 기본으로 사용 (메뉴판과 1:1 일치)
     document.getElementById("totalUsd").textContent = fmtInt(totalUsd);
-    document.getElementById("totalVnd").textContent = fmtInt(totalVndFixed);
+    document.getElementById("totalVnd").textContent = fmtInt(totalVnd);
 
-    // 선택 목록
     const list = document.getElementById("pickedList");
     list.innerHTML = "";
     if (picked.length === 0){
@@ -455,32 +471,30 @@
         row.className = "row";
         row.innerHTML = `
           <div><b>${p.name}</b> × ${p.q}</div>
-          <div>${fmtInt(p.lineUsd)}$ · ${fmtInt(p.lineVndFixed)} VND</div>
+          <div>${fmtInt(p.lineUsd)}$ · ${fmtInt(p.lineVnd)} VND</div>
         `;
         list.appendChild(row);
       });
-
-      // 참고: 환율 변환 총액도 보여주고 싶으면 아래 줄을 “추가 표시”로 넣으면 됨
-      const conv = document.createElement("div");
-      conv.className = "foot";
-      conv.style.marginTop = "10px";
-      conv.innerHTML = `
-        환율 기준 달러합계→VND: <b>${fmtInt(totalUsd * rate)}</b> VND (rate=${fmtInt(rate)})
-      `;
-      list.appendChild(conv);
     }
   }
 
-  // ====== 컨트롤 ======
-  document.getElementById("rate").addEventListener("input", updateAll);
+  // ====== 인쇄 시각 찍기 (인쇄할 때만 보임) ======
+  function setPrintTime(){
+    const now = new Date();
+    const date = now.toLocaleDateString("ko-KR", { year:"numeric", month:"2-digit", day:"2-digit" });
+    const time = now.toLocaleTimeString("ko-KR", { hour:"2-digit", minute:"2-digit" });
+    const el = document.getElementById("printTime");
+    if (el) el.textContent = `Printed: ${date} ${time}`;
+  }
 
-  document.getElementById("resetBtn").addEventListener("click", () => {
-    Object.keys(qty).forEach(k => qty[k] = 0);
-    document.querySelectorAll('input[data-act="qty"]').forEach(inp => inp.value = 0);
-    updateAll();
+  // 버튼 클릭 인쇄
+  document.getElementById("printBtn").addEventListener("click", () => {
+    setPrintTime();
+    window.print();
   });
 
-  document.getElementById("printBtn").addEventListener("click", () => window.print());
+  // 혹시 Ctrl+P로 인쇄해도 시간 찍히게
+  window.addEventListener("beforeprint", setPrintTime);
 
   // 시작
   mount();
