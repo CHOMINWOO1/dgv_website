@@ -755,28 +755,34 @@
   }
 
   function applyCardFeeIfNeeded(baseUsd, baseVnd){
-    const pm = getPaymentMethod();
-    const mode = getCardFeeMode();
+  const pm = getPaymentMethod();
+  const mode = getCardFeeMode();
 
-    if (pm === "card" && mode === "fee7"){
-      const usd = Math.round((Number(baseUsd) || 0) * 1.07);
-      const vnd = Math.round((Number(baseVnd) || 0) * 1.07);
-      return {
-        usd,
-        vnd,
-        fee_usd: usd - (Number(baseUsd) || 0),
-        fee_vnd: vnd - (Number(baseVnd) || 0),
-        applied: true
-      };
-    }
+  if (pm === "card" && mode === "fee7"){
+    const usd = Math.round((Number(baseUsd) || 0) * 1.07);
+
+    // ✅ VND는 7% 적용 후 1,000 단위 반올림
+    const rawVnd = (Number(baseVnd) || 0) * 1.07;
+    const vnd = roundTo1000(rawVnd);
+
     return {
-      usd: Math.round(Number(baseUsd) || 0),
-      vnd: Math.round(Number(baseVnd) || 0),
-      fee_usd: 0,
-      fee_vnd: 0,
-      applied: false
+      usd,
+      vnd,
+      fee_usd: usd - (Number(baseUsd) || 0),
+      fee_vnd: vnd - (Number(baseVnd) || 0),
+      applied: true
     };
   }
+
+  return {
+    usd: Math.round(Number(baseUsd) || 0),
+    vnd: Math.round(Number(baseVnd) || 0),
+    fee_usd: 0,
+    fee_vnd: 0,
+    applied: false
+  };
+}
+
 
   function computePickedAndTotals(){
     let totalUsd = 0;
@@ -905,6 +911,10 @@
 
     renderSpecialList();
   }
+  function roundTo1000(n){
+  const x = Number(n) || 0;
+  return Math.round(x / 1000) * 1000;   // ✅ 1,000 단위 반올림
+}
 
   function resetAll(){
     // 1) 수량 초기화
