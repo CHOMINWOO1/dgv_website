@@ -17,6 +17,8 @@
       --bad:#b42318;
     }
     *{box-sizing:border-box}
+    html{ -webkit-text-size-adjust:100%; } /* ✅ iOS Safari text autosize fix */
+
     body{
       margin:0;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif;
@@ -123,11 +125,13 @@
     }
     .metaGrid{
       display:grid;
-      grid-template-columns: 0.5fr 0.8fr auto;
+      /* ✅ iOS에서 auto column 수축/깨짐 방지: minmax로 고정 */
+      grid-template-columns: 1fr 1fr minmax(210px, 280px);
       gap:10px;
       align-items:end;
     }
     @media (max-width: 560px){ .metaGrid{ grid-template-columns: 1fr; } }
+    .metaField{ min-width:0; } /* ✅ iOS grid overflow fix */
     .metaField label{
       display:block;
       font-size:12px;
@@ -144,20 +148,23 @@
       background:#fff;
       color:var(--ink);
       outline:none;
+      font-size:16px; /* ✅ iOS 입력 확대/레이아웃 깨짐 방지 */
     }
     .metaField input:focus{
       border-color: var(--gold);
       box-shadow: 0 0 0 3px rgba(202,162,76,.18);
     }
+
+    /* ===== 결제 라디오 iOS Safari FIX ===== */
     .payOptions{
       display:flex;
-      gap:10px;
+      gap: 10px 14px;
       align-items:center;
-      flex-wrap:nowrap;
-      white-space:nowrap;
+      flex-wrap: wrap;           /* ✅ 줄바꿈 허용(글자 잘림 방지) */
+      white-space: normal;       /* ✅ nowrap 제거 */
     }
     .payOptions label{
-      display:flex;
+      display: inline-flex;      /* ✅ iOS flex bug 회피 */
       align-items:center;
       gap:8px;
       font-weight:900;
@@ -165,8 +172,41 @@
       margin:0;
       user-select:none;
       cursor:pointer;
+      min-width: 86px;           /* ✅ cash/card/bank 텍스트 공간 확보 */
+      line-height: 1.2;
+      font-size:16px;            /* ✅ iOS 텍스트/레이아웃 안정화 */
+      padding: 6px 8px;          /* ✅ 터치 영역 */
+      border-radius: 12px;
     }
-    .payOptions input{ transform: translateY(1px); }
+    .payOptions input[type="radio"]{
+      width:20px;
+      height:20px;
+      margin:0;
+      flex: 0 0 20px;
+      transform:none;            /* ✅ 기존 translateY 제거 */
+    }
+
+    /* (선택) 라디오 커스텀(모든 기기 통일) - 원하면 켜도 됨
+    .payOptions input[type="radio"]{
+      -webkit-appearance:none;
+      appearance:none;
+      border-radius:999px;
+      border:2px solid var(--line);
+      background:#fff;
+      display:inline-grid;
+      place-content:center;
+    }
+    .payOptions input[type="radio"]::before{
+      content:"";
+      width:10px;height:10px;
+      border-radius:999px;
+      transform: scale(0);
+      transition: transform .12s ease;
+      background: var(--gold);
+    }
+    .payOptions input[type="radio"]:checked{ border-color: var(--gold); }
+    .payOptions input[type="radio"]:checked::before{ transform: scale(1); }
+    */
 
     .section{ margin-top: 12px; }
     .section h2{
@@ -245,6 +285,7 @@
       font-size: 18px;
       font-weight: 1000;
       cursor:pointer;
+      -webkit-tap-highlight-color: transparent;
     }
     .qty{
       width: 78px;
@@ -345,6 +386,7 @@
       background:#fff;
       color:var(--ink);
       outline:none;
+      font-size:16px; /* ✅ iOS 안정화 */
     }
     .specialForm input:focus{
       border-color: var(--gold);
@@ -358,6 +400,7 @@
       font-weight:1000;
       cursor:pointer;
       white-space:nowrap;
+      -webkit-tap-highlight-color: transparent;
     }
     .btnSmall:hover{ filter:brightness(.98); }
     .btnSmallDanger{
@@ -369,6 +412,7 @@
       font-weight:1000;
       cursor:pointer;
       white-space:nowrap;
+      -webkit-tap-highlight-color: transparent;
     }
     .specialList{
       margin-top:10px;
@@ -401,6 +445,7 @@
       padding:8px 8px;
       font-weight:1000;
       background:#fff;
+      font-size:16px; /* ✅ iOS 안정화 */
     }
 
     @media print {
@@ -545,7 +590,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
+  <script>
   /*************************************************
    * ✅ Supabase 설정
    *************************************************/
@@ -668,7 +713,7 @@
     qty[id] = clampNonNegInt(v);
     if (qty[id] < 0) qty[id] = 0;
 
-    const card = document.querySelector(`.card[data-id="${id}"]`);
+    const card = document.querySelector(`.card[data-id="\${id}"]`);
     if (card){
       const input = card.querySelector('input[data-act="qty"]');
       if (document.activeElement !== input) input.value = qty[id];
@@ -744,7 +789,7 @@
       const q = qty[m.id] || 0;
       const lineUsd = (Number(m.price_usd) || 0) * q;
       const lineVnd = (Number(m.price_vnd) || 0) * q;
-      const card = document.querySelector(`.card[data-id="${m.id}"]`);
+      const card = document.querySelector(`.card[data-id="\${m.id}"]`);
       if (card){
         card.querySelector('[data-act="lineUsd"]').textContent = fmtInt(lineUsd);
         card.querySelector('[data-act="lineVnd"]').textContent = fmtInt(lineVnd);
@@ -880,10 +925,6 @@
     return document.querySelector('input[name="payMethod"]:checked')?.value || "cash";
   }
 
-  function toLine(unit, qty){
-    return Math.max(0, (Number(unit)||0) * (Number(qty)||0));
-  }
-
   async function saveNewOrder(){
     const btn = document.getElementById("saveBtn");
     btn.disabled = true;
@@ -933,14 +974,14 @@
         if (itemsErr) throw itemsErr;
       }
 
-      // 3) SPECIAL -> order_custom_items  (✅ v_order_detail과 일치)
+      // 3) SPECIAL -> order_custom_items
       const specialItems = picked.filter(p => p.kind === "special");
       if (specialItems.length){
         const customPayload = specialItems.map(p => ({
           order_id: orderId,
           kind: "special",
           ko_name: p.ko || "SPECIAL",
-          vi_name: p.vi || null, // 번역 없음(빈 값 허용)
+          vi_name: p.vi || null,
           qty: p.qty,
           unit_usd: p.unit_usd,
           unit_vnd: p.unit_vnd,
@@ -952,11 +993,7 @@
       }
 
       alert("저장 완료!");
-      resetAll();
-      document.getElementById("guideName").value = "";
-      document.getElementById("teamNo").value = "";
-      const cashRadio = document.querySelector('input[name="payMethod"][value="cash"]');
-      if (cashRadio) cashRadio.checked = true;
+     
 
     } catch(e){
       console.error(e);
@@ -966,11 +1003,6 @@
     }
   }
 
-  /*************************************************
-   * ✅ Edit 모드 저장 (admin_update_order RPC 사용)
-   * - 여기서는 "일반 메뉴"만 RPC로 업데이트하고
-   * - SPECIAL은 order_custom_items를 직접 지우고 다시 넣는 방식(간단/안전)
-   *************************************************/
   function getAdminPassword(){
     const key = "hana_admin_pass";
     const saved = sessionStorage.getItem(key);
@@ -1001,7 +1033,6 @@
       const normalItems = picked.filter(p => p.kind === "menu");
       const specialItems = picked.filter(p => p.kind === "special");
 
-      // ✅ RPC에 넣을 items는 "일반 메뉴만"
       const rpcItems = normalItems.map(p => ({
         menu_item_id: p.id,
         qty: p.qty,
@@ -1014,7 +1045,6 @@
         custom_vi_name: ""
       }));
 
-      // 1) RPC로 orders + order_items 업데이트
       const { data, error } = await sb.rpc("admin_update_order", {
         p_order_id: editOrderId,
         p_password: pass,
@@ -1031,8 +1061,6 @@
         return;
       }
 
-      // 2) SPECIAL은 order_custom_items에서 "special"만 재작성
-      //    (단순하게: 삭제 후 insert)
       const { error: delErr } = await sb
         .from("order_custom_items")
         .delete()
@@ -1056,7 +1084,6 @@
         if (insErr) throw insErr;
       }
 
-      // 3) totals 업데이트(선택: orders에 total 반영)
       const { error: updErr } = await sb
         .from("orders")
         .update({ total_usd: totalUsd, total_vnd: totalVnd })
@@ -1073,7 +1100,6 @@
   }
 
   async function loadOrderForEdit(orderId){
-    // 1) orders 메타
     const { data: meta, error: metaErr } = await sb
       .from("orders")
       .select("id,guide_name,team_no,payment_method")
@@ -1087,12 +1113,10 @@
     const radio = document.querySelector(`input[name="payMethod"][value="${pm}"]`);
     if (radio) radio.checked = true;
 
-    // qty 초기화
     for (const k in qty) qty[k] = 0;
     document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
     specialLines.length = 0;
 
-    // 2) order_items(일반 메뉴) 로드
     const { data: items, error: itemsErr } = await sb
       .from("order_items")
       .select("menu_item_id,qty,unit_usd,unit_vnd")
@@ -1109,7 +1133,6 @@
       }
     });
 
-    // 3) order_custom_items(SPECIAL) 로드
     const { data: cItems, error: cErr } = await sb
       .from("order_custom_items")
       .select("kind,ko_name,vi_name,qty,unit_usd,unit_vnd")
@@ -1128,7 +1151,6 @@
       });
     });
 
-    // UI 표시
     document.getElementById("modeTitle").textContent = "Edit Mode (수정)";
     document.getElementById("saveBtn").textContent = "수정 저장 / Save";
     updateAll();
@@ -1162,6 +1184,6 @@
       updateAll();
     }
   })();
-</script>
+  </script>
 </body>
 </html>
