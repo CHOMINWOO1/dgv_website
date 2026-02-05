@@ -56,6 +56,11 @@
       background: #fff7e6;
     }
     .btn:disabled{opacity:.55;cursor:not-allowed}
+    .btnDanger{
+      border-color:#f4c7c3;
+      background:#fff1f0;
+      color:var(--bad);
+    }
     .gridCards{
       display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px;
     }
@@ -164,6 +169,7 @@
     .lineHead{
       display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
       font-weight:1000;color:var(--sub);margin-bottom:8px;
+      align-items:flex-end;
     }
     .lineList{display:flex;flex-direction:column;gap:6px;}
     .lineItem{display:flex;justify-content:space-between;gap:12px;font-size:13px;}
@@ -172,6 +178,17 @@
     .lineMeta{font-weight:900;color:var(--sub)}
     .hint{font-size:12px;color:var(--sub);font-weight:900}
     .stickyBottom{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+
+    /* ✅ 펼침 영역 우측 하단 버튼들 */
+    .lineFooter{
+      margin-top:10px;
+      padding-top:10px;
+      border-top:1px dashed var(--line);
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
+      flex-wrap:wrap;
+    }
 
     /* ===== 오른쪽: 판매 요약 ===== */
     .summaryGrid{
@@ -190,6 +207,33 @@
     .topRow{display:flex;justify-content:space-between;gap:12px;font-size:13px;}
     .topRow .name{font-weight:1000}
     .topRow .meta{font-weight:900;color:var(--sub)}
+
+    /* ===== Modal ===== */
+    .modalBack{
+      position:fixed; inset:0; background:rgba(0,0,0,.35);
+      display:none; align-items:center; justify-content:center;
+      padding:14px; z-index:9999;
+    }
+    .modal{
+      width:min(420px, 100%);
+      background:var(--card);
+      border:2px solid var(--line);
+      border-radius:16px;
+      box-shadow:0 18px 40px rgba(0,0,0,.20);
+      padding:14px;
+    }
+    .modalTitle{font-weight:1000; letter-spacing:.06em; color:var(--ink); margin:2px 0 10px;}
+    .modalDesc{font-size:13px; color:var(--sub); font-weight:900; margin:0 0 10px;}
+    .modalRow{display:flex; gap:8px; align-items:center;}
+    .modalRow input{
+      flex:1;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 10px;
+      font-weight:900;
+      background:#fff;
+    }
+    .modalBtns{margin-top:10px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;}
   </style>
 </head>
 <body>
@@ -259,7 +303,7 @@
               <th style="width:140px;">Time</th>
               <th>Total</th>
               <th style="width:170px;">Guide / Team</th>
-              <th style="width:90px;">Print</th>
+              <th style="width:120px;">Pay</th>
             </tr>
           </thead>
           <tbody id="ordersBody">
@@ -288,6 +332,21 @@
             <div class="muted">Orders</div>
             <div><b><span id="sumOrders">0</span></b></div>
           </div>
+
+          <!-- ✅ 결제수단별 합계 -->
+          <div class="kv">
+            <div class="muted">Cash Total</div>
+            <div><b><span id="sumCashUsd">0</span>$</b> · <b><span id="sumCashVnd">0</span> VND</b></div>
+          </div>
+          <div class="kv">
+            <div class="muted">Card Total</div>
+            <div><b><span id="sumCardUsd">0</span>$</b> · <b><span id="sumCardVnd">0</span> VND</b></div>
+          </div>
+          <div class="kv">
+            <div class="muted">Bank Total</div>
+            <div><b><span id="sumBankUsd">0</span>$</b> · <b><span id="sumBankVnd">0</span> VND</b></div>
+          </div>
+
           <div class="kv">
             <div class="muted">Total</div>
             <div><b><span id="sumUsd">0</span>$</b> · <b><span id="sumVnd">0</span> VND</b></div>
@@ -299,6 +358,22 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ✅ Delete Password Modal -->
+  <div class="modalBack" id="deleteModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalTitle">관리자 삭제</div>
+      <p class="modalDesc">비밀번호를 입력하면 해당 주문이 DB에서 완전 삭제됩니다.</p>
+      <div class="modalRow">
+        <input id="deletePassInput" type="password" placeholder="관리자 비밀번호" autocomplete="off"/>
+      </div>
+      <div class="modalBtns">
+        <button class="btn" id="deleteCancelBtn">취소</button>
+        <button class="btn btnDanger" id="deleteConfirmBtn">삭제</button>
+      </div>
+      <p class="hint" style="margin-top:10px;">※ 삭제하면 복구가 어렵습니다.</p>
     </div>
   </div>
 
@@ -331,12 +406,19 @@
       const d = new Date(iso);
       return d.toLocaleString("ko-KR", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" });
     };
+    const payLabel = (pm) => {
+      const v = (pm || "cash").toLowerCase();
+      if (v === "card") return "CARD";
+      if (v === "bank") return "BANK";
+      return "CASH";
+    };
 
     /*************************************************
      * 상태
      *************************************************/
     let currentRange = { from: startOfDay(new Date()), to: endOfDay(new Date()) };
     let expandedOrderId = null;
+    let pendingDeleteOrderId = null;
 
     const orderLinesCache = new Map();
 
@@ -356,7 +438,7 @@
     async function fetchOrderMeta(orderId){
       const { data, error } = await sb
         .from("orders")
-        .select("id,created_at,status,total_usd,total_vnd")
+        .select("id,created_at,status,total_usd,total_vnd,guide_name,team_no,payment_method")
         .eq("id", orderId)
         .single();
 
@@ -396,6 +478,11 @@
 
         const paidTime = formatTimeLocal(meta.created_at);
 
+        const guide = (meta.guide_name || "").trim();
+        const team  = (meta.team_no || "").trim();
+        const guideText = (guide || team) ? `${guide || "—"} / ${team || "—"}` : "—";
+        const pmText = payLabel(meta.payment_method);
+
         const rowsHtml = lines.map(r=>`
           <div class="r">
             <div class="l">
@@ -418,7 +505,7 @@
     body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:14px;color:#111;}
     .h1{font-weight:900;letter-spacing:.18em;text-align:center;font-size:18px;margin:0;}
     .h2{text-align:center;margin:6px 0 12px;font-size:12px;color:#333;font-weight:700;}
-    .meta{display:flex;justify-content:space-between;font-size:12px;color:#333;font-weight:700;margin:8px 0;}
+    .meta{display:flex;justify-content:space-between;font-size:12px;color:#333;font-weight:800;margin:8px 0;gap:10px;flex-wrap:wrap;}
     .box{border-top:1px dashed #999;padding-top:10px;margin-top:10px;}
     .r{display:grid;grid-template-columns: 1fr 70px 90px;gap:10px;align-items:start;padding:8px 0;border-top:1px dashed #ddd;}
     .r:first-child{border-top:none;}
@@ -437,6 +524,10 @@
 
   <div class="meta">
     <div>${paidTime}</div>
+    <div>${pmText}</div>
+  </div>
+  <div class="meta">
+    <div>Guide/Team: ${guideText}</div>
     <div>${(meta.status||"").toUpperCase()}</div>
   </div>
 
@@ -490,6 +581,13 @@
         const totalUsd = document.getElementById("sumUsd").textContent || "0";
         const orderCount = document.getElementById("sumOrders").textContent || "0";
 
+        const cashVnd = document.getElementById("sumCashVnd").textContent || "0";
+        const cashUsd = document.getElementById("sumCashUsd").textContent || "0";
+        const cardVnd = document.getElementById("sumCardVnd").textContent || "0";
+        const cardUsd = document.getElementById("sumCardUsd").textContent || "0";
+        const bankVnd = document.getElementById("sumBankVnd").textContent || "0";
+        const bankUsd = document.getElementById("sumBankUsd").textContent || "0";
+
         const rowsHtml = agg.map(r=>`
           <div class="r">
             <div class="l"><b>${r.ko}</b><br/><span>${r.vi}</span></div>
@@ -525,6 +623,10 @@
   <div class="meta">Range: ${rangeText}</div>
   <div class="meta">Orders: ${orderCount}</div>
 
+  <div class="meta">Cash: ${cashVnd}₫ · ${cashUsd}$</div>
+  <div class="meta">Card: ${cardVnd}₫ · ${cardUsd}$</div>
+  <div class="meta">Bank: ${bankVnd}₫ · ${bankUsd}$</div>
+
   <div class="tot">
     <div>Total Sales</div>
     <div>${totalVnd}₫  ·  ${totalUsd}$</div>
@@ -538,6 +640,52 @@
       } catch(e){
         console.error(e);
         alert("전체 출력 실패");
+      }
+    }
+
+    /*************************************************
+     * ✅ 관리자 삭제 모달 + RPC 삭제
+     * (DB에 admin_delete_order 함수 필요)
+     *************************************************/
+    function openDeleteModal(orderId){
+      pendingDeleteOrderId = orderId;
+      const back = document.getElementById("deleteModal");
+      const inp = document.getElementById("deletePassInput");
+      inp.value = "";
+      back.style.display = "flex";
+      setTimeout(()=> inp.focus(), 50);
+    }
+    function closeDeleteModal(){
+      pendingDeleteOrderId = null;
+      document.getElementById("deleteModal").style.display = "none";
+    }
+
+    async function adminDeleteOrder(){
+      if (!pendingDeleteOrderId) return;
+
+      const pass = (document.getElementById("deletePassInput").value || "").trim();
+      if (!pass){ alert("비밀번호를 입력하세요."); return; }
+
+      const okConfirm = confirm("정말 삭제할까요? (되돌릴 수 없음)");
+      if (!okConfirm) return;
+
+      try{
+        const { data, error } = await sb.rpc("admin_delete_order", {
+          p_order_id: pendingDeleteOrderId,
+          p_password: pass
+        });
+        if (error) throw error;
+
+        if (data === true){
+          alert("삭제 완료");
+          closeDeleteModal();
+          await refreshRange();
+        } else {
+          alert("비밀번호가 틀렸거나 삭제 권한이 없습니다.");
+        }
+      } catch(e){
+        console.error(e);
+        alert("삭제 실패");
       }
     }
 
@@ -653,8 +801,14 @@
 
       const head = document.createElement("div");
       head.className = "lineHead";
+
+      const guide = (orderMeta.guide_name || "").trim();
+      const team  = (orderMeta.team_no || "").trim();
+      const guideText = (guide || team) ? `${guide || "—"} / ${team || "—"}` : "—";
+      const pmText = payLabel(orderMeta.payment_method);
+
       head.innerHTML = `
-        <div>Order Lines</div>
+        <div>Order Lines <span class="badge" style="margin-left:8px;">${pmText}</span> <span class="badge" style="margin-left:6px;">${guideText}</span></div>
         <div class="lineMeta">
           Total: <b>${fmtInt(orderMeta.total_vnd)}</b> VND · <b>${fmtInt(orderMeta.total_usd)}</b>$
         </div>
@@ -685,6 +839,35 @@
       }
 
       list.appendChild(body);
+
+      // ✅ 펼침 영역 우측 하단 버튼들: 출력 + 수정 + 삭제
+      const footer = document.createElement("div");
+      footer.className = "lineFooter";
+      footer.innerHTML = `
+        <button class="btn" data-act="printExpanded" style="padding:8px 12px;">출력</button>
+        <button class="btn" data-act="editExpanded" style="padding:8px 12px;">수정</button>
+        <button class="btn btnDanger" data-act="deleteExpanded" style="padding:8px 12px;">삭제</button>
+      `;
+
+      footer.querySelector('button[data-act="printExpanded"]').addEventListener("click", (e)=>{
+        e.stopPropagation();
+        printOneOrder(orderMeta.id);
+      });
+
+      // ✅ 수정: calc.html 편집모드로 열기(원하는 파일명/경로면 바꿔도 됨)
+      footer.querySelector('button[data-act="editExpanded"]').addEventListener("click", (e)=>{
+        e.stopPropagation();
+        window.open(`calc.html?edit=${orderMeta.id}`, "_blank");
+      });
+
+      // ✅ 삭제: 비번 모달
+      footer.querySelector('button[data-act="deleteExpanded"]').addEventListener("click", (e)=>{
+        e.stopPropagation();
+        openDeleteModal(orderMeta.id);
+      });
+
+      list.appendChild(footer);
+
       return list;
     }
 
@@ -704,7 +887,7 @@
       const expandTr = document.createElement("tr");
       expandTr.className = "expandRow";
       const td = document.createElement("td");
-      td.colSpan = 4; // Time / Total / GuideTeam / Print
+      td.colSpan = 4; // Time / Total / GuideTeam / Pay
       td.innerHTML = `<div class="muted">상세 불러오는 중…</div>`;
       expandTr.appendChild(td);
       targetTr.insertAdjacentElement("afterend", expandTr);
@@ -747,7 +930,7 @@
 
       const { data, error } = await sb
         .from("orders")
-        .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status")
+        .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method")
         .gte("created_at", fromIso)
         .lte("created_at", toIso)
         .order("created_at", { ascending: false })
@@ -759,18 +942,44 @@
         return;
       }
 
-      // Range KPI (paid만 집계하고 싶으면 여기서 status 필터를 추가하면 됨)
+      // ✅ Range KPI + 결제수단별 합계
       let sumUsd = 0, sumVnd = 0;
-      (data || []).forEach(o => { sumUsd += Number(o.total_usd||0); sumVnd += Number(o.total_vnd||0); });
+
+      let cashUsd = 0, cashVnd = 0;
+      let cardUsd = 0, cardVnd = 0;
+      let bankUsd = 0, bankVnd = 0;
+
+      (data || []).forEach(o => {
+        const u = Number(o.total_usd || 0);
+        const v = Number(o.total_vnd || 0);
+        sumUsd += u; sumVnd += v;
+
+        const pm = (o.payment_method || "cash").toLowerCase();
+        if (pm === "card"){
+          cardUsd += u; cardVnd += v;
+        } else if (pm === "bank"){
+          bankUsd += u; bankVnd += v;
+        } else {
+          cashUsd += u; cashVnd += v;
+        }
+      });
+
       document.getElementById("kpiRangeCount").textContent = fmtInt((data||[]).length);
       document.getElementById("kpiRangeUsd").textContent = fmtInt(sumUsd);
       document.getElementById("kpiRangeVnd").textContent = fmtInt(sumVnd);
 
-      // 오른쪽 요약에도 반영
+      // 오른쪽 요약
       document.getElementById("sumOrders").textContent = fmtInt((data||[]).length);
       document.getElementById("sumUsd").textContent = fmtInt(sumUsd);
       document.getElementById("sumVnd").textContent = fmtInt(sumVnd);
       document.getElementById("sumRangeText").textContent = `${toISODate(currentRange.from)} ~ ${toISODate(currentRange.to)}`;
+
+      document.getElementById("sumCashUsd").textContent = fmtInt(cashUsd);
+      document.getElementById("sumCashVnd").textContent = fmtInt(cashVnd);
+      document.getElementById("sumCardUsd").textContent = fmtInt(cardUsd);
+      document.getElementById("sumCardVnd").textContent = fmtInt(cardVnd);
+      document.getElementById("sumBankUsd").textContent = fmtInt(bankUsd);
+      document.getElementById("sumBankVnd").textContent = fmtInt(bankVnd);
 
       // 기간 바뀌면 펼침/캐시 초기화
       expandedOrderId = null;
@@ -792,6 +1001,8 @@
         const team  = (o.team_no || "").trim();
         const guideText = (guide || team) ? `${guide || "—"} / ${team || "—"}` : "—";
 
+        const pmText = payLabel(o.payment_method);
+
         tr.innerHTML = `
           <td>
             <button class="rowBtn" data-act="toggle">
@@ -810,7 +1021,9 @@
             </button>
           </td>
           <td>
-            <button class="btn" data-act="printOne" style="padding:8px 10px;">출력</button>
+            <button class="rowBtn" data-act="toggle" title="${pmText}">
+              <span class="badge">${pmText}</span>
+            </button>
           </td>
         `;
 
@@ -818,11 +1031,6 @@
           btn.addEventListener("click", ()=>{
             toggleExpandOrder(o.id, o);
           });
-        });
-
-        tr.querySelector('button[data-act="printOne"]').addEventListener("click", async (e)=>{
-          e.stopPropagation();
-          await printOneOrder(o.id);
         });
 
         tbody.appendChild(tr);
@@ -885,6 +1093,17 @@
     document.getElementById("applyRange").addEventListener("click", applyRange);
 
     document.getElementById("printRangeBtn").addEventListener("click", printRangeSummary);
+
+    // 모달 이벤트
+    document.getElementById("deleteCancelBtn").addEventListener("click", closeDeleteModal);
+    document.getElementById("deleteConfirmBtn").addEventListener("click", adminDeleteOrder);
+    document.getElementById("deleteModal").addEventListener("click", (e)=>{
+      if (e.target && e.target.id === "deleteModal") closeDeleteModal();
+    });
+    document.getElementById("deletePassInput").addEventListener("keydown", (e)=>{
+      if (e.key === "Enter") adminDeleteOrder();
+      if (e.key === "Escape") closeDeleteModal();
+    });
 
     /*************************************************
      * 시작
