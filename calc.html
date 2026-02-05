@@ -186,28 +186,6 @@
       transform:none;            /* ✅ 기존 translateY 제거 */
     }
 
-    /* (선택) 라디오 커스텀(모든 기기 통일) - 원하면 켜도 됨
-    .payOptions input[type="radio"]{
-      -webkit-appearance:none;
-      appearance:none;
-      border-radius:999px;
-      border:2px solid var(--line);
-      background:#fff;
-      display:inline-grid;
-      place-content:center;
-    }
-    .payOptions input[type="radio"]::before{
-      content:"";
-      width:10px;height:10px;
-      border-radius:999px;
-      transform: scale(0);
-      transition: transform .12s ease;
-      background: var(--gold);
-    }
-    .payOptions input[type="radio"]:checked{ border-color: var(--gold); }
-    .payOptions input[type="radio"]:checked::before{ transform: scale(1); }
-    */
-
     .section{ margin-top: 12px; }
     .section h2{
       margin: 12px 4px 10px;
@@ -792,6 +770,7 @@
       const lineVnd = (Number(m.price_vnd) || 0) * q;
       const card = document.querySelector(`.card[data-id="${m.id}"]`);
 
+
       if (card){
         card.querySelector('[data-act="lineUsd"]').textContent = fmtInt(lineUsd);
         card.querySelector('[data-act="lineVnd"]').textContent = fmtInt(lineVnd);
@@ -804,44 +783,57 @@
     document.getElementById("totalVnd").textContent = fmtInt(totalVnd);
 
     // picked list
-    const list = document.getElementById("pickedList");
-    list.innerHTML = "";
-    if (picked.length === 0){
-      list.innerHTML = `<div class="muted">선택된 메뉴가 없습니다.</div>`;
-    } else {
-      picked.forEach(p => {
-        const row = document.createElement("div");
-        row.className = "row";
-        const tag = p.kind === "special" ? `<span class="tag">SPECIAL</span>` : "";
-        row.innerHTML = `
-          <div><b>${p.ko || "-"}</b><span style="color:#6b5444;font-weight:800;"> / ${p.vi || ""}</span> × ${p.qty} ${tag}</div>
-          <div>${fmtInt(p.line_usd)}$ · ${fmtInt(p.line_vnd)} VND</div>
-        `;
-        list.appendChild(row);
-      });
-    }
+// picked list
+const list = document.getElementById("pickedList");
+list.innerHTML = "";
 
-    renderSpecialList();
+if (picked.length === 0) {
+  list.innerHTML = `<div class="muted">선택된 메뉴가 없습니다.</div>`;
+} else {
+  picked.forEach(p => {
+    const row = document.createElement("div");
+    row.className = "row";
+
+    const tag = (p.kind === "special")
+      ? `<span class="tag">SPECIAL</span>`
+      : "";
+
+    row.innerHTML = `
+      <div>
+        <b>${p.ko || "-"}</b>
+        <span style="color:#6b5444;font-weight:800;"> / ${p.vi || ""}</span>
+        × ${p.qty}
+        ${tag}
+      </div>
+      <div>${fmtInt(p.line_usd)}$ · ${fmtInt(p.line_vnd)} VND</div>
+    `;
+
+    list.appendChild(row);
+  });
+}
+
+renderSpecialList();
+
+
   }
 
   function resetAll(){
-  // 1) 수량 초기화
-  for (const k in qty) qty[k] = 0;
-  document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
+    // 1) 수량 초기화
+    for (const k in qty) qty[k] = 0;
+    document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
 
-  // 2) SPECIAL 초기화
-  specialLines.length = 0;
-  clearSpecialDraft();
+    // 2) SPECIAL 초기화
+    specialLines.length = 0;
+    clearSpecialDraft();
 
-  // ✅ 3) Optional Info 초기화 (추가)
-  document.getElementById("guideName").value = "";
-  document.getElementById("teamNo").value = "";
-  const cashRadio = document.querySelector('input[name="payMethod"][value="cash"]');
-  if (cashRadio) cashRadio.checked = true;
+    // ✅ 3) Optional Info 초기화
+    document.getElementById("guideName").value = "";
+    document.getElementById("teamNo").value = "";
+    const cashRadio = document.querySelector('input[name="payMethod"][value="cash"]');
+    if (cashRadio) cashRadio.checked = true;
 
-  updateAll();
-}
-
+    updateAll();
+  }
 
   // SPECIAL UI
   function clearSpecialDraft(){
@@ -936,6 +928,45 @@
     return document.querySelector('input[name="payMethod"]:checked')?.value || "cash";
   }
 
+  /*************************************************
+   * ✅ 저장 보호(저장만 비번, 프린트는 제외)
+   * - admin.html에서 만든 RPC: admin_check_password 재사용
+   * - sessionStorage에 비번 캐시
+   *************************************************/
+  async function verifyAdminPassword(pass){
+    try{
+      const { data, error } = await sb.rpc("admin_check_password", { p_password: pass });
+      if (error) throw error;
+      return data === true;
+    }catch(e){
+      console.error(e);
+      return false;
+    }
+  }
+
+  async function requireAdminPassword(){
+    const key = "hana_admin_pass";
+    let pass = (sessionStorage.getItem(key) || "").trim();
+
+    if (pass){
+      const ok = await verifyAdminPassword(pass);
+      if (ok) return pass;
+      sessionStorage.removeItem(key);
+    }
+
+    pass = prompt("관리자 비밀번호를 입력하세요.");
+    if (!pass) return null;
+
+    const ok = await verifyAdminPassword(pass.trim());
+    if (!ok){
+      alert("비밀번호가 틀렸거나 권한이 없습니다.");
+      return null;
+    }
+
+    sessionStorage.setItem(key, pass.trim());
+    return pass.trim();
+  }
+
   async function saveNewOrder(){
     const btn = document.getElementById("saveBtn");
     btn.disabled = true;
@@ -946,6 +977,10 @@
         alert("저장할 메뉴가 없습니다.");
         return;
       }
+
+      // ✅ 신규 저장도 비번 확인
+      const pass = await requireAdminPassword();
+      if (!pass) return;
 
       const guideName = (document.getElementById("guideName").value || "").trim();
       const teamNo = (document.getElementById("teamNo").value || "").trim();
@@ -1004,7 +1039,6 @@
       }
 
       alert("저장 완료!");
-     
 
     } catch(e){
       console.error(e);
@@ -1012,16 +1046,6 @@
     } finally{
       btn.disabled = false;
     }
-  }
-
-  function getAdminPassword(){
-    const key = "hana_admin_pass";
-    const saved = sessionStorage.getItem(key);
-    if (saved && saved.length) return saved;
-    const p = prompt("관리자 비밀번호를 입력하세요(수정 저장용)");
-    if (!p) return null;
-    sessionStorage.setItem(key, p);
-    return p;
   }
 
   async function saveEditOrder(){
@@ -1035,7 +1059,8 @@
         return;
       }
 
-      const pass = getAdminPassword();
+      // ✅ 수정 저장도 비번 확인 (RPC로 검증)
+      const pass = await requireAdminPassword();
       if (!pass) return;
 
       const guideName = (document.getElementById("guideName").value || "").trim();
@@ -1102,8 +1127,8 @@
       if (updErr) throw updErr;
 
       alert("수정 저장 완료!");
-    location.href = "/admin.html";
-      
+      location.href = "/admin.html";
+
     } catch(e){
       console.error(e);
       alert("수정 저장 실패");
@@ -1124,6 +1149,7 @@
     document.getElementById("teamNo").value = meta.team_no || "";
     const pm = (meta.payment_method || "cash").toLowerCase();
     const radio = document.querySelector(`input[name="payMethod"][value="${pm}"]`);
+
     if (radio) radio.checked = true;
 
     for (const k in qty) qty[k] = 0;
@@ -1140,6 +1166,7 @@
       if (!it.menu_item_id) return;
       qty[it.menu_item_id] = Number(it.qty||0);
       const card = document.querySelector(`.card[data-id="${it.menu_item_id}"]`);
+
       if (card){
         const input = card.querySelector('input[data-act="qty"]');
         input.value = qty[it.menu_item_id];
@@ -1177,12 +1204,16 @@
     if (el) el.textContent = `Printed: ${date} ${time}`;
   }
 
+  // ✅ 프린트는 비번 안 물음
   document.getElementById("printBtn").addEventListener("click", () => { setPrintTime(); window.print(); });
   document.getElementById("resetBtn").addEventListener("click", resetAll);
-  document.getElementById("saveBtn").addEventListener("click", () => {
-    if (isEditMode) saveEditOrder();
-    else saveNewOrder();
+
+  // ✅ 저장만 보호(신규/수정 모두)
+  document.getElementById("saveBtn").addEventListener("click", async () => {
+    if (isEditMode) await saveEditOrder();
+    else await saveNewOrder();
   });
+
   window.addEventListener("beforeprint", setPrintTime);
 
   document.getElementById("spAddBtn").addEventListener("click", addSpecialLine);
