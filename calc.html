@@ -14,6 +14,7 @@
       --gold:#caa24c;
       --shadow: 0 10px 24px rgba(0,0,0,.10);
       --radius:16px;
+      --bad:#b42318;
     }
     *{box-sizing:border-box}
     body{
@@ -28,7 +29,6 @@
       padding: 0 14px;
     }
 
-    /* ===== (추가) HANA 헤더 ===== */
     .hanaHeader{
       width:100%;
       text-align:center;
@@ -64,7 +64,6 @@
       font-size:12px;
     }
 
-    /* ===== 상단 TOTAL + 버튼 ===== */
     .summaryBar{
       display:grid;
       grid-template-columns: 1fr auto;
@@ -82,7 +81,7 @@
       align-items: flex-end;
       gap:10px;
     }
-    .printBtnOnly{
+    .printBtnOnly, .resetBtn, .saveBtn{
       border:1px solid var(--line);
       background: var(--card);
       color: var(--ink);
@@ -94,38 +93,18 @@
       height: fit-content;
       white-space: nowrap;
     }
-    .printBtnOnly:hover{border-color: var(--gold)}
-
-    .resetBtn{
-      border:1px solid var(--line);
-      background:#fff;
-      color: var(--sub);
-      font-weight:900;
-      border-radius: 12px;
-      padding: 12px 16px;
-      box-shadow: 0 6px 16px rgba(0,0,0,.06);
-      cursor:pointer;
-      height: fit-content;
-      white-space: nowrap;
-    }
-    .resetBtn:hover{border-color: var(--gold); color: var(--ink);}
-
+    .printBtnOnly:hover,.resetBtn:hover{border-color: var(--gold)}
+    .resetBtn{background:#fff;color:var(--sub)}
+    .resetBtn:hover{color:var(--ink)}
     .saveBtn{
-      border:1px solid var(--gold);
+      border-color: var(--gold);
       background: #fff7e6;
       color: #3a2a1f;
       font-weight:1000;
-      border-radius: 12px;
-      padding: 12px 16px;
-      box-shadow: 0 6px 16px rgba(0,0,0,.06);
-      cursor:pointer;
-      height: fit-content;
-      white-space: nowrap;
     }
     .saveBtn:hover{ filter: brightness(0.98); }
     .saveBtn:disabled{ opacity:.55; cursor:not-allowed; }
 
-    /* ✅ (추가) 가이드/팀 입력 박스 */
     .metaBox{
       margin-bottom:10px;
       padding:10px 10px 12px;
@@ -144,12 +123,11 @@
     }
     .metaGrid{
       display:grid;
-      grid-template-columns: 1fr 160px;
+      grid-template-columns: 0.5fr 0.8fr auto;
       gap:10px;
+      align-items:end;
     }
-    @media (max-width: 560px){
-      .metaGrid{ grid-template-columns: 1fr; }
-    }
+    @media (max-width: 560px){ .metaGrid{ grid-template-columns: 1fr; } }
     .metaField label{
       display:block;
       font-size:12px;
@@ -171,14 +149,25 @@
       border-color: var(--gold);
       box-shadow: 0 0 0 3px rgba(202,162,76,.18);
     }
-    .metaHint{
-      margin-top:8px;
-      font-size:12px;
-      color:var(--sub);
-      font-weight:900;
+    .payOptions{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:nowrap;
+      white-space:nowrap;
     }
+    .payOptions label{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-weight:900;
+      color:var(--ink);
+      margin:0;
+      user-select:none;
+      cursor:pointer;
+    }
+    .payOptions input{ transform: translateY(1px); }
 
-    /* ===== 섹션/카드 ===== */
     .section{ margin-top: 12px; }
     .section h2{
       margin: 12px 4px 10px;
@@ -241,16 +230,8 @@
       display:flex; justify-content:center; align-items:baseline;
       gap:10px; flex-wrap:wrap;
     }
-    .usd{
-      font-size: 30px;
-      font-weight: 1000;
-      letter-spacing:.02em;
-    }
-    .vnd{
-      font-size: 16px;
-      font-weight: 900;
-      color: var(--sub);
-    }
+    .usd{ font-size: 30px; font-weight: 1000; letter-spacing:.02em; }
+    .vnd{ font-size: 16px; font-weight: 900; color: var(--sub); }
     .qtyRow{
       display:flex; gap:10px; align-items:center; justify-content:center;
       margin-top: 10px;
@@ -295,7 +276,6 @@
       margin-left: 6px;
     }
 
-    /* ===== TOTAL 카드 ===== */
     .sumCard{
       background: #fff;
       border:2px solid var(--line);
@@ -324,25 +304,113 @@
       display:flex; flex-direction:column; gap:6px;
       font-size: 14px;
     }
-    .row{
-      display:flex; justify-content:space-between; gap:10px;
-    }
+    .row{ display:flex; justify-content:space-between; gap:10px; }
     .row b{font-weight: 1000}
-
     .print-only{ display:none; }
+
+    /* ===== SPECIAL MENU ===== */
+    .specialBox{
+      border:2px solid var(--line);
+      border-radius: var(--radius);
+      background: #fffdf7;
+      box-shadow: var(--shadow);
+      padding: 14px;
+    }
+    .specialHead{
+      display:flex; justify-content:space-between; align-items:flex-end; gap:10px; flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .specialHead .title{
+      font-weight:1000; letter-spacing:.08em; text-transform:uppercase; color:var(--sub);
+      font-size:14px;
+    }
+    .specialForm{
+      display:grid;
+      grid-template-columns: 1fr 140px 120px 120px auto;
+      gap:8px;
+      align-items:end;
+    }
+    @media (max-width: 920px){
+      .specialForm{ grid-template-columns: 1fr 1fr; }
+    }
+    .specialForm label{
+      display:block; font-size:12px; font-weight:1000; color:var(--sub); margin:0 0 6px;
+    }
+    .specialForm input{
+      width:100%;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 10px;
+      font-weight:900;
+      background:#fff;
+      color:var(--ink);
+      outline:none;
+    }
+    .specialForm input:focus{
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(202,162,76,.18);
+    }
+    .btnSmall{
+      border:1px solid var(--gold);
+      background:#fff7e6;
+      border-radius:12px;
+      padding:10px 12px;
+      font-weight:1000;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .btnSmall:hover{ filter:brightness(.98); }
+    .btnSmallDanger{
+      border:1px solid #f4c7c3;
+      background:#fff1f0;
+      color:var(--bad);
+      border-radius:12px;
+      padding:8px 10px;
+      font-weight:1000;
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    .specialList{
+      margin-top:10px;
+      border-top:1px dashed var(--line);
+      padding-top:10px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .specialItem{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:10px;
+      align-items:center;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:#fff;
+      padding:10px;
+    }
+    .specialItem .left b{font-weight:1000}
+    .specialItem .left .sub{color:var(--sub); font-weight:900; font-size:12px; margin-top:4px;}
+    .specialItem .right{
+      display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end;
+    }
+    .specialItem .qtyMini{
+      width:70px;
+      text-align:center;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:8px 8px;
+      font-weight:1000;
+      background:#fff;
+    }
 
     @media print {
       html, body{ background:#fff !important; height:auto !important; }
-
-      .section, .grid, .card,
+      .section, .grid, .card, .specialBox,
       .wrap > *:not(.summaryBar):not(.hanaHeader){
         display:none !important;
       }
-
       .printWrap{ display:none !important; }
-
       .hanaHeader{ display:block !important; margin:0 0 10px !important; }
-
       .summaryBar{ display:block !important; margin:0 !important; }
       #sumLeft{
         display:block !important;
@@ -355,7 +423,6 @@
         page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
-
       .print-only{
         display:block !important;
         text-align:right !important;
@@ -363,7 +430,6 @@
         color:#000 !important;
         margin-top: 10px !important;
       }
-
       @page { margin: 8mm; }
     }
   </style>
@@ -371,7 +437,6 @@
 
 <body>
   <div class="wrap">
-    <!-- 헤더 -->
     <div class="hanaHeader">
       <div class="h1">H A N A</div>
       <div class="h2">K O R E A N &nbsp; R E S T A U R A N T</div>
@@ -381,33 +446,40 @@
       </p>
     </div>
 
-    <!-- TOTAL + 버튼 -->
     <div class="summaryBar">
       <div class="sumCard" id="sumLeft">
-
-        <!-- ✅ (추가) 가이드/팀 입력 -->
         <div class="metaBox">
           <div class="metaTitle">Optional Info</div>
+
           <div class="metaGrid">
             <div class="metaField">
               <label for="guideName">가이드 이름 (선택)</label>
               <input id="guideName" type="text" placeholder="예: 홍길동" autocomplete="off" />
             </div>
+
             <div class="metaField">
-              <label for="teamNo">팀 번호 (선택)</label>
-              <input id="teamNo" type="text" placeholder="예: 3" inputmode="numeric" autocomplete="off" />
+              <label for="teamNo">팀 정보 (선택)</label>
+              <input id="teamNo" type="text" placeholder="예: 1팀 남자 4" autocomplete="off" />
+            </div>
+
+            <div class="metaField">
+              <label>결제</label>
+              <div class="payOptions">
+                <label><input type="radio" name="payMethod" value="cash" checked> cash</label>
+                <label><input type="radio" name="payMethod" value="card"> card</label>
+                <label><input type="radio" name="payMethod" value="bank"> bank</label>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="sumTitle">Total</div>
+        <div class="sumTitle" id="modeTitle">Total</div>
         <div class="big"><span id="totalUsd">0</span>$</div>
         <div class="muted" style="font-size:16px;margin-top:4px;">
           <span id="totalVnd">0</span> VND
         </div>
         <div class="list" id="pickedList"></div>
 
-        <!-- 인쇄 때만 날짜/시간 -->
         <div class="print-only" id="printTime"></div>
       </div>
 
@@ -418,7 +490,6 @@
       </div>
     </div>
 
-    <!-- DRINK → SIDE -->
     <div class="section">
       <h2>DRINK MENU</h2>
       <div class="grid" id="drinkGrid"></div>
@@ -428,43 +499,88 @@
       <h2>SIDE MENU</h2>
       <div class="grid" id="sideGrid"></div>
     </div>
+
+    <div class="section">
+      <h2>OTHER MENU</h2>
+      <div class="grid" id="otherGrid"></div>
+    </div>
+
+    <div class="section">
+      <h2>SPECIAL MENU (직접입력)</h2>
+      <div class="specialBox">
+        <div class="specialHead">
+          <div class="title">Special Lines (Add many)</div>
+          <div class="muted" style="font-size:12px;">손님 요청으로 임시 메뉴를 여러 개 추가 가능</div>
+        </div>
+
+        <div class="specialForm">
+          <div>
+            <label>메뉴명 (KO)</label>
+            <input id="spKo" type="text" placeholder="예: 특별 볶음밥" autocomplete="off">
+          </div>
+          <div>
+            <label>메뉴명 (VI, 선택)</label>
+            <input id="spVi" type="text" placeholder="Tuỳ chọn" autocomplete="off">
+          </div>
+          <div>
+            <label>가격 (VND)</label>
+            <input id="spVnd" type="number" min="0" step="1000" inputmode="numeric" placeholder="예: 120000">
+          </div>
+          <div>
+            <label>가격 (USD, 선택)</label>
+            <input id="spUsd" type="number" min="0" step="1" inputmode="numeric" placeholder="예: 5">
+          </div>
+          <div>
+            <label>수량</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input id="spQty" type="number" min="1" step="1" value="1" class="qtyMini" style="width:90px;">
+              <button class="btnSmall" id="spAddBtn" type="button">추가</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="specialList" id="specialList"></div>
+      </div>
+    </div>
   </div>
 
-  <!-- Supabase JS (UMD) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <script>
   /*************************************************
-   * ✅ Supabase 설정 (너가 준 값)
+   * ✅ Supabase 설정
    *************************************************/
   const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
-
   const { createClient } = supabase;
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  /*************************************************
-   * 상태: DB에서 불러온 메뉴 (A안)
-   *************************************************/
   let drinkMenu = [];
   let sideMenu = [];
+  let otherMenu = [];
   let allMenu = [];
 
   const qty = Object.create(null);
 
-  /*************************************************
-   * 유틸
-   *************************************************/
-  const fmtInt = (n) => (Math.round(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  // SPECIAL lines (custom)
+  const specialLines = [];
+  // { id, ko, vi, qty, unit_vnd, unit_usd }
+
+  // edit mode
+  const params = new URLSearchParams(location.search);
+  const editOrderId = params.get("edit");
+  const isEditMode = !!editOrderId;
+
+  const fmtInt = (n) => (Math.round(Number(n) || 0)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const clampNonNegInt = (v) => {
     const x = Number(v);
     if (!Number.isFinite(x)) return 0;
     return Math.max(0, Math.floor(x));
   };
 
-  /*************************************************
-   * 카드 렌더
-   *************************************************/
+  function uid(){
+    return Math.random().toString(16).slice(2) + Date.now().toString(16);
+  }
+
   function makeCard(m){
     const card = document.createElement("div");
     card.className = "card";
@@ -472,13 +588,13 @@
 
     card.innerHTML = `
       <div class="name">
-        ${m.ko_name}
-        <small>${m.vi_name}</small>
+        ${m.ko_name || "-"}
+        <small>${m.vi_name || ""}</small>
       </div>
       <div class="priceBox">
         <div class="priceLine">
-          <div class="usd">${m.price_usd}$</div>
-          <div class="vnd">${fmtInt(m.price_vnd)} VND</div>
+          <div class="usd">${Number(m.price_usd || 0)}$</div>
+          <div class="vnd">${fmtInt(m.price_vnd || 0)} VND</div>
         </div>
         <div class="qtyRow">
           <button class="step" data-act="dec">-</button>
@@ -505,9 +621,6 @@
     return card;
   }
 
-  /*************************************************
-   * DB에서 메뉴 로드 (A안)
-   *************************************************/
   async function loadMenuFromDB(){
     const { data, error } = await sb
       .from("menu_items")
@@ -525,6 +638,7 @@
   function clearGrids(){
     document.getElementById("drinkGrid").innerHTML = "";
     document.getElementById("sideGrid").innerHTML = "";
+    document.getElementById("otherGrid").innerHTML = "";
   }
 
   function mountMenus(rows){
@@ -532,25 +646,28 @@
 
     drinkMenu = rows.filter(r => r.type === "drink");
     sideMenu  = rows.filter(r => r.type === "side");
-    allMenu   = [...drinkMenu, ...sideMenu];
+    otherMenu = rows.filter(r => r.type === "other");
+    allMenu   = [...drinkMenu, ...sideMenu, ...otherMenu];
 
+    // qty 초기화
     for (const k in qty) delete qty[k];
     allMenu.forEach(m => qty[m.id] = 0);
 
     const drinkGrid = document.getElementById("drinkGrid");
     const sideGrid  = document.getElementById("sideGrid");
+    const otherGrid = document.getElementById("otherGrid");
 
     drinkMenu.forEach(m => drinkGrid.appendChild(makeCard(m)));
     sideMenu.forEach(m => sideGrid.appendChild(makeCard(m)));
+    otherMenu.forEach(m => otherGrid.appendChild(makeCard(m)));
 
     updateAll();
   }
 
-  /*************************************************
-   * 로직
-   *************************************************/
   function setQty(id, v){
     qty[id] = clampNonNegInt(v);
+    if (qty[id] < 0) qty[id] = 0;
+
     const card = document.querySelector(`.card[data-id="${id}"]`);
     if (card){
       const input = card.querySelector('input[data-act="qty"]');
@@ -564,22 +681,52 @@
     let totalVnd = 0;
     const picked = [];
 
+    // normal menu items
     for (const m of allMenu){
       const q = qty[m.id] || 0;
-      const lineUsd = (m.price_usd || 0) * q;
-      const lineVnd = (m.price_vnd || 0) * q;
+      const unitUsd = Number(m.price_usd) || 0;
+      const unitVnd = Number(m.price_vnd) || 0;
+      const lineUsd = unitUsd * q;
+      const lineVnd = unitVnd * q;
 
       totalUsd += lineUsd;
       totalVnd += lineVnd;
 
       if (q > 0){
         picked.push({
+          kind: "menu",
           id: m.id,
           ko: m.ko_name,
           vi: m.vi_name,
           qty: q,
-          unit_usd: m.price_usd || 0,
-          unit_vnd: m.price_vnd || 0,
+          unit_usd: unitUsd,
+          unit_vnd: unitVnd,
+          line_usd: lineUsd,
+          line_vnd: lineVnd
+        });
+      }
+    }
+
+    // special custom lines
+    for (const s of specialLines){
+      const q = Number(s.qty || 0);
+      const unitUsd = Number(s.unit_usd || 0);
+      const unitVnd = Number(s.unit_vnd || 0);
+      const lineUsd = unitUsd * q;
+      const lineVnd = unitVnd * q;
+
+      totalUsd += lineUsd;
+      totalVnd += lineVnd;
+
+      if (q > 0){
+        picked.push({
+          kind: "special",
+          id: s.id,
+          ko: s.ko,
+          vi: s.vi,
+          qty: q,
+          unit_usd: unitUsd,
+          unit_vnd: unitVnd,
           line_usd: lineUsd,
           line_vnd: lineVnd
         });
@@ -592,11 +739,11 @@
   function updateAll(){
     const { picked, totalUsd, totalVnd } = computePickedAndTotals();
 
+    // update menu cards line totals
     for (const m of allMenu){
       const q = qty[m.id] || 0;
-      const lineUsd = (m.price_usd || 0) * q;
-      const lineVnd = (m.price_vnd || 0) * q;
-
+      const lineUsd = (Number(m.price_usd) || 0) * q;
+      const lineVnd = (Number(m.price_vnd) || 0) * q;
       const card = document.querySelector(`.card[data-id="${m.id}"]`);
       if (card){
         card.querySelector('[data-act="lineUsd"]').textContent = fmtInt(lineUsd);
@@ -609,6 +756,7 @@
     document.getElementById("totalUsd").textContent = fmtInt(totalUsd);
     document.getElementById("totalVnd").textContent = fmtInt(totalVnd);
 
+    // picked list
     const list = document.getElementById("pickedList");
     list.innerHTML = "";
     if (picked.length === 0){
@@ -617,42 +765,141 @@
       picked.forEach(p => {
         const row = document.createElement("div");
         row.className = "row";
+        const tag = p.kind === "special" ? `<span class="tag">SPECIAL</span>` : "";
         row.innerHTML = `
-          <div><b>${p.ko}</b><span style="color:#6b5444;font-weight:800;"> / ${p.vi}</span> × ${p.qty}</div>
+          <div><b>${p.ko || "-"}</b><span style="color:#6b5444;font-weight:800;"> / ${p.vi || ""}</span> × ${p.qty} ${tag}</div>
           <div>${fmtInt(p.line_usd)}$ · ${fmtInt(p.line_vnd)} VND</div>
         `;
         list.appendChild(row);
       });
     }
+
+    renderSpecialList();
   }
 
   function resetAll(){
     for (const k in qty) qty[k] = 0;
     document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
+
+    specialLines.length = 0;
+    clearSpecialDraft();
+
     updateAll();
   }
 
-  /*************************************************
-   * 저장하기: orders + order_items
-   * ✅ 가이드/팀 번호(선택) 함께 저장
-   *************************************************/
-  async function saveOrder(){
+  // SPECIAL UI
+  function clearSpecialDraft(){
+    document.getElementById("spKo").value = "";
+    document.getElementById("spVi").value = "";
+    document.getElementById("spVnd").value = "";
+    document.getElementById("spUsd").value = "";
+    document.getElementById("spQty").value = "1";
+  }
+
+  function addSpecialLine(){
+    const ko = (document.getElementById("spKo").value || "").trim();
+    const vi = (document.getElementById("spVi").value || "").trim();
+    const vnd = clampNonNegInt(document.getElementById("spVnd").value);
+    const usd = clampNonNegInt(document.getElementById("spUsd").value);
+    const q = Math.max(1, clampNonNegInt(document.getElementById("spQty").value));
+
+    if (!ko){
+      alert("SPECIAL 메뉴명(KO)을 입력하세요.");
+      return;
+    }
+    if (vnd <= 0 && usd <= 0){
+      alert("가격(VND 또는 USD)을 입력하세요.");
+      return;
+    }
+
+    specialLines.push({
+      id: uid(),
+      ko,
+      vi: vi || "",
+      qty: q,
+      unit_vnd: vnd,
+      unit_usd: usd
+    });
+    clearSpecialDraft();
+    updateAll();
+  }
+
+  function renderSpecialList(){
+    const box = document.getElementById("specialList");
+    box.innerHTML = "";
+
+    if (specialLines.length === 0){
+      box.innerHTML = `<div class="muted">추가된 SPECIAL 메뉴가 없습니다.</div>`;
+      return;
+    }
+
+    specialLines.forEach((s, idx) => {
+      const lineVnd = (Number(s.unit_vnd||0) * Number(s.qty||0));
+      const lineUsd = (Number(s.unit_usd||0) * Number(s.qty||0));
+
+      const div = document.createElement("div");
+      div.className = "specialItem";
+      div.innerHTML = `
+        <div class="left">
+          <b>${s.ko}</b> <span class="tag">SPECIAL</span>
+          <div class="sub">${s.vi || ""}</div>
+          <div class="sub">Unit: ${fmtInt(s.unit_vnd)} VND · ${fmtInt(s.unit_usd)}$</div>
+          <div class="sub">Line: ${fmtInt(lineVnd)} VND · ${fmtInt(lineUsd)}$</div>
+        </div>
+        <div class="right">
+          <button class="step" data-act="dec">-</button>
+          <input class="qtyMini" data-act="qty" type="number" min="0" step="1" value="${Number(s.qty||0)}" />
+          <button class="step" data-act="inc">+</button>
+          <button class="btnSmallDanger" data-act="del">삭제</button>
+        </div>
+      `;
+
+      div.querySelector('[data-act="inc"]').addEventListener("click", () => {
+        s.qty = clampNonNegInt(Number(s.qty||0) + 1);
+        updateAll();
+      });
+      div.querySelector('[data-act="dec"]').addEventListener("click", () => {
+        s.qty = clampNonNegInt(Number(s.qty||0) - 1);
+        updateAll();
+      });
+      div.querySelector('input[data-act="qty"]').addEventListener("input", (e) => {
+        s.qty = clampNonNegInt(e.target.value);
+        updateAll();
+      });
+      div.querySelector('[data-act="del"]').addEventListener("click", () => {
+        specialLines.splice(idx, 1);
+        updateAll();
+      });
+
+      box.appendChild(div);
+    });
+  }
+
+  // helpers
+  function getPaymentMethod(){
+    return document.querySelector('input[name="payMethod"]:checked')?.value || "cash";
+  }
+
+  function toLine(unit, qty){
+    return Math.max(0, (Number(unit)||0) * (Number(qty)||0));
+  }
+
+  async function saveNewOrder(){
     const btn = document.getElementById("saveBtn");
     btn.disabled = true;
 
     try{
       const { picked, totalUsd, totalVnd } = computePickedAndTotals();
-
       if (picked.length === 0){
         alert("저장할 메뉴가 없습니다.");
         return;
       }
 
-      // ✅ (추가) 입력값 읽기 (미입력 가능)
       const guideName = (document.getElementById("guideName").value || "").trim();
       const teamNo = (document.getElementById("teamNo").value || "").trim();
+      const paymentMethod = getPaymentMethod();
 
-      // 1) orders 저장 (guide_name / team_no 컬럼이 있어야 저장됨)
+      // 1) orders 생성
       const { data: order, error: orderErr } = await sb
         .from("orders")
         .insert([{
@@ -661,37 +908,55 @@
           status: "paid",
           source: "calc_web",
           guide_name: guideName || null,
-          team_no: teamNo || null
+          team_no: teamNo || null,
+          payment_method: paymentMethod
         }])
         .select("id")
         .single();
 
       if (orderErr) throw orderErr;
-
-      // 2) order_items 저장
       const orderId = order.id;
-      const itemsPayload = picked.map(p => ({
-        order_id: orderId,
-        menu_item_id: p.id,
-        qty: p.qty,
-        unit_usd: p.unit_usd,
-        unit_vnd: p.unit_vnd,
-        line_usd: p.line_usd,
-        line_vnd: p.line_vnd
-      }));
 
-      const { error: itemsErr } = await sb
-        .from("order_items")
-        .insert(itemsPayload);
+      // 2) 일반 메뉴 -> order_items
+      const normalItems = picked.filter(p => p.kind === "menu");
+      if (normalItems.length){
+        const itemsPayload = normalItems.map(p => ({
+          order_id: orderId,
+          menu_item_id: p.id,
+          qty: p.qty,
+          unit_usd: p.unit_usd,
+          unit_vnd: p.unit_vnd,
+          line_usd: p.line_usd,
+          line_vnd: p.line_vnd,
+        }));
+        const { error: itemsErr } = await sb.from("order_items").insert(itemsPayload);
+        if (itemsErr) throw itemsErr;
+      }
 
-      if (itemsErr) throw itemsErr;
+      // 3) SPECIAL -> order_custom_items  (✅ v_order_detail과 일치)
+      const specialItems = picked.filter(p => p.kind === "special");
+      if (specialItems.length){
+        const customPayload = specialItems.map(p => ({
+          order_id: orderId,
+          kind: "special",
+          ko_name: p.ko || "SPECIAL",
+          vi_name: p.vi || null, // 번역 없음(빈 값 허용)
+          qty: p.qty,
+          unit_usd: p.unit_usd,
+          unit_vnd: p.unit_vnd,
+          line_usd: p.line_usd,
+          line_vnd: p.line_vnd,
+        }));
+        const { error: cErr } = await sb.from("order_custom_items").insert(customPayload);
+        if (cErr) throw cErr;
+      }
 
       alert("저장 완료!");
       resetAll();
-
-      // ✅ (추가) 저장 성공 시 가이드/팀도 같이 비우기 (원하면 이 줄 2개 삭제하면 유지됨)
       document.getElementById("guideName").value = "";
       document.getElementById("teamNo").value = "";
+      const cashRadio = document.querySelector('input[name="payMethod"][value="cash"]');
+      if (cashRadio) cashRadio.checked = true;
 
     } catch(e){
       console.error(e);
@@ -702,8 +967,173 @@
   }
 
   /*************************************************
-   * 인쇄 시간
+   * ✅ Edit 모드 저장 (admin_update_order RPC 사용)
+   * - 여기서는 "일반 메뉴"만 RPC로 업데이트하고
+   * - SPECIAL은 order_custom_items를 직접 지우고 다시 넣는 방식(간단/안전)
    *************************************************/
+  function getAdminPassword(){
+    const key = "hana_admin_pass";
+    const saved = sessionStorage.getItem(key);
+    if (saved && saved.length) return saved;
+    const p = prompt("관리자 비밀번호를 입력하세요(수정 저장용)");
+    if (!p) return null;
+    sessionStorage.setItem(key, p);
+    return p;
+  }
+
+  async function saveEditOrder(){
+    const btn = document.getElementById("saveBtn");
+    btn.disabled = true;
+
+    try{
+      const { picked, totalUsd, totalVnd } = computePickedAndTotals();
+      if (picked.length === 0){
+        alert("저장할 메뉴가 없습니다.");
+        return;
+      }
+
+      const pass = getAdminPassword();
+      if (!pass) return;
+
+      const guideName = (document.getElementById("guideName").value || "").trim();
+      const teamNo = (document.getElementById("teamNo").value || "").trim();
+      const paymentMethod = getPaymentMethod();
+      const normalItems = picked.filter(p => p.kind === "menu");
+      const specialItems = picked.filter(p => p.kind === "special");
+
+      // ✅ RPC에 넣을 items는 "일반 메뉴만"
+      const rpcItems = normalItems.map(p => ({
+        menu_item_id: p.id,
+        qty: p.qty,
+        unit_usd: p.unit_usd,
+        unit_vnd: p.unit_vnd,
+        line_usd: p.line_usd,
+        line_vnd: p.line_vnd,
+        is_custom: false,
+        custom_ko_name: "",
+        custom_vi_name: ""
+      }));
+
+      // 1) RPC로 orders + order_items 업데이트
+      const { data, error } = await sb.rpc("admin_update_order", {
+        p_order_id: editOrderId,
+        p_password: pass,
+        p_guide_name: guideName || "",
+        p_team_no: teamNo || "",
+        p_payment_method: paymentMethod,
+        p_items: rpcItems
+      });
+
+      if (error) throw error;
+      if (data !== true){
+        alert("비밀번호가 틀렸거나 권한이 없습니다.");
+        sessionStorage.removeItem("hana_admin_pass");
+        return;
+      }
+
+      // 2) SPECIAL은 order_custom_items에서 "special"만 재작성
+      //    (단순하게: 삭제 후 insert)
+      const { error: delErr } = await sb
+        .from("order_custom_items")
+        .delete()
+        .eq("order_id", editOrderId)
+        .eq("kind", "special");
+      if (delErr) throw delErr;
+
+      if (specialItems.length){
+        const payload = specialItems.map(p => ({
+          order_id: editOrderId,
+          kind: "special",
+          ko_name: p.ko || "SPECIAL",
+          vi_name: p.vi || null,
+          qty: p.qty,
+          unit_usd: p.unit_usd,
+          unit_vnd: p.unit_vnd,
+          line_usd: p.line_usd,
+          line_vnd: p.line_vnd
+        }));
+        const { error: insErr } = await sb.from("order_custom_items").insert(payload);
+        if (insErr) throw insErr;
+      }
+
+      // 3) totals 업데이트(선택: orders에 total 반영)
+      const { error: updErr } = await sb
+        .from("orders")
+        .update({ total_usd: totalUsd, total_vnd: totalVnd })
+        .eq("id", editOrderId);
+      if (updErr) throw updErr;
+
+      alert("수정 저장 완료!");
+    } catch(e){
+      console.error(e);
+      alert("수정 저장 실패");
+    } finally{
+      btn.disabled = false;
+    }
+  }
+
+  async function loadOrderForEdit(orderId){
+    // 1) orders 메타
+    const { data: meta, error: metaErr } = await sb
+      .from("orders")
+      .select("id,guide_name,team_no,payment_method")
+      .eq("id", orderId)
+      .single();
+    if (metaErr){ console.error(metaErr); alert("주문 메타 로드 실패"); return; }
+
+    document.getElementById("guideName").value = meta.guide_name || "";
+    document.getElementById("teamNo").value = meta.team_no || "";
+    const pm = (meta.payment_method || "cash").toLowerCase();
+    const radio = document.querySelector(`input[name="payMethod"][value="${pm}"]`);
+    if (radio) radio.checked = true;
+
+    // qty 초기화
+    for (const k in qty) qty[k] = 0;
+    document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
+    specialLines.length = 0;
+
+    // 2) order_items(일반 메뉴) 로드
+    const { data: items, error: itemsErr } = await sb
+      .from("order_items")
+      .select("menu_item_id,qty,unit_usd,unit_vnd")
+      .eq("order_id", orderId);
+    if (itemsErr){ console.error(itemsErr); alert("주문 라인 로드 실패"); return; }
+
+    (items||[]).forEach(it => {
+      if (!it.menu_item_id) return;
+      qty[it.menu_item_id] = Number(it.qty||0);
+      const card = document.querySelector(`.card[data-id="${it.menu_item_id}"]`);
+      if (card){
+        const input = card.querySelector('input[data-act="qty"]');
+        input.value = qty[it.menu_item_id];
+      }
+    });
+
+    // 3) order_custom_items(SPECIAL) 로드
+    const { data: cItems, error: cErr } = await sb
+      .from("order_custom_items")
+      .select("kind,ko_name,vi_name,qty,unit_usd,unit_vnd")
+      .eq("order_id", orderId);
+    if (cErr){ console.error(cErr); alert("SPECIAL 로드 실패"); return; }
+
+    (cItems||[]).forEach(it=>{
+      if ((it.kind||"").toLowerCase() !== "special") return;
+      specialLines.push({
+        id: uid(),
+        ko: it.ko_name || "SPECIAL",
+        vi: it.vi_name || "",
+        qty: Number(it.qty||0),
+        unit_usd: Number(it.unit_usd||0),
+        unit_vnd: Number(it.unit_vnd||0)
+      });
+    });
+
+    // UI 표시
+    document.getElementById("modeTitle").textContent = "Edit Mode (수정)";
+    document.getElementById("saveBtn").textContent = "수정 저장 / Save";
+    updateAll();
+  }
+
   function setPrintTime(){
     const now = new Date();
     const date = now.toLocaleDateString("ko-KR", { year:"numeric", month:"2-digit", day:"2-digit" });
@@ -712,28 +1142,23 @@
     if (el) el.textContent = `Printed: ${date} ${time}`;
   }
 
-  /*************************************************
-   * 이벤트
-   *************************************************/
-  document.getElementById("printBtn").addEventListener("click", () => {
-    setPrintTime();
-    window.print();
-  });
+  document.getElementById("printBtn").addEventListener("click", () => { setPrintTime(); window.print(); });
   document.getElementById("resetBtn").addEventListener("click", resetAll);
-  document.getElementById("saveBtn").addEventListener("click", saveOrder);
+  document.getElementById("saveBtn").addEventListener("click", () => {
+    if (isEditMode) saveEditOrder();
+    else saveNewOrder();
+  });
   window.addEventListener("beforeprint", setPrintTime);
 
-  /*************************************************
-   * 시작
-   *************************************************/
+  document.getElementById("spAddBtn").addEventListener("click", addSpecialLine);
+
   (async function init(){
     const rows = await loadMenuFromDB();
-    if (rows.length > 0){
-      mountMenus(rows);
+    mountMenus(rows);
+
+    if (isEditMode){
+      await loadOrderForEdit(editOrderId);
     } else {
-      drinkMenu = [];
-      sideMenu = [];
-      allMenu = [];
       updateAll();
     }
   })();
