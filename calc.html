@@ -713,7 +713,8 @@
     qty[id] = clampNonNegInt(v);
     if (qty[id] < 0) qty[id] = 0;
 
-    const card = document.querySelector(`.card[data-id="\${id}"]`);
+    const card = document.querySelector(`.card[data-id="${id}"]`);
+
     if (card){
       const input = card.querySelector('input[data-act="qty"]');
       if (document.activeElement !== input) input.value = qty[id];
@@ -789,7 +790,8 @@
       const q = qty[m.id] || 0;
       const lineUsd = (Number(m.price_usd) || 0) * q;
       const lineVnd = (Number(m.price_vnd) || 0) * q;
-      const card = document.querySelector(`.card[data-id="\${m.id}"]`);
+      const card = document.querySelector(`.card[data-id="${m.id}"]`);
+
       if (card){
         card.querySelector('[data-act="lineUsd"]').textContent = fmtInt(lineUsd);
         card.querySelector('[data-act="lineVnd"]').textContent = fmtInt(lineVnd);
@@ -823,14 +825,23 @@
   }
 
   function resetAll(){
-    for (const k in qty) qty[k] = 0;
-    document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
+  // 1) 수량 초기화
+  for (const k in qty) qty[k] = 0;
+  document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
 
-    specialLines.length = 0;
-    clearSpecialDraft();
+  // 2) SPECIAL 초기화
+  specialLines.length = 0;
+  clearSpecialDraft();
 
-    updateAll();
-  }
+  // ✅ 3) Optional Info 초기화 (추가)
+  document.getElementById("guideName").value = "";
+  document.getElementById("teamNo").value = "";
+  const cashRadio = document.querySelector('input[name="payMethod"][value="cash"]');
+  if (cashRadio) cashRadio.checked = true;
+
+  updateAll();
+}
+
 
   // SPECIAL UI
   function clearSpecialDraft(){
@@ -1091,6 +1102,8 @@
       if (updErr) throw updErr;
 
       alert("수정 저장 완료!");
+    location.href = "/admin.html";
+      
     } catch(e){
       console.error(e);
       alert("수정 저장 실패");
