@@ -78,7 +78,7 @@
     }
     .printWrap{
       display:flex;
-      flex-direction: column;   /* ← 핵심 */
+      flex-direction: column;
       align-items: flex-end;
       gap:10px;
     }
@@ -96,7 +96,6 @@
     }
     .printBtnOnly:hover{border-color: var(--gold)}
 
-    /* ✅ (추가) 초기화 버튼 스타일 */
     .resetBtn{
       border:1px solid var(--line);
       background:#fff;
@@ -111,7 +110,6 @@
     }
     .resetBtn:hover{border-color: var(--gold); color: var(--ink);}
 
-    /* ✅ (추가) 저장 버튼 스타일 */
     .saveBtn{
       border:1px solid var(--gold);
       background: #fff7e6;
@@ -125,9 +123,59 @@
       white-space: nowrap;
     }
     .saveBtn:hover{ filter: brightness(0.98); }
-    .saveBtn:disabled{
-      opacity:.55;
-      cursor:not-allowed;
+    .saveBtn:disabled{ opacity:.55; cursor:not-allowed; }
+
+    /* ✅ (추가) 가이드/팀 입력 박스 */
+    .metaBox{
+      margin-bottom:10px;
+      padding:10px 10px 12px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:#fffdf7;
+      box-shadow: 0 6px 16px rgba(0,0,0,.04);
+    }
+    .metaTitle{
+      font-weight:1000;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+      color:var(--sub);
+      font-size:12px;
+      margin-bottom:8px;
+    }
+    .metaGrid{
+      display:grid;
+      grid-template-columns: 1fr 160px;
+      gap:10px;
+    }
+    @media (max-width: 560px){
+      .metaGrid{ grid-template-columns: 1fr; }
+    }
+    .metaField label{
+      display:block;
+      font-size:12px;
+      font-weight:1000;
+      color:var(--sub);
+      margin:0 0 6px;
+    }
+    .metaField input{
+      width:100%;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 10px;
+      font-weight:900;
+      background:#fff;
+      color:var(--ink);
+      outline:none;
+    }
+    .metaField input:focus{
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(202,162,76,.18);
+    }
+    .metaHint{
+      margin-top:8px;
+      font-size:12px;
+      color:var(--sub);
+      font-weight:900;
     }
 
     /* ===== 섹션/카드 ===== */
@@ -165,7 +213,6 @@
       pointer-events:none;
     }
 
-    /* ✅ 메뉴명 + 베트남어 */
     .name{
       font-weight: 1000;
       text-align:center;
@@ -282,40 +329,21 @@
     }
     .row b{font-weight: 1000}
 
-    /* ===== 날짜/시간: 인쇄 때만 보이게 ===== */
     .print-only{ display:none; }
 
-    /* =========================
-       인쇄: "헤더 + TOTAL 한 장만"
-       ========================= */
     @media print {
-      html, body{
-        background:#fff !important;
-        height:auto !important;
-      }
+      html, body{ background:#fff !important; height:auto !important; }
 
-      /* 메뉴 영역 숨김 */
-      .section,
-      .grid,
-      .card,
+      .section, .grid, .card,
       .wrap > *:not(.summaryBar):not(.hanaHeader){
         display:none !important;
       }
 
-      /* 버튼 숨김 */
       .printWrap{ display:none !important; }
 
-      /* 헤더 출력 */
-      .hanaHeader{
-        display:block !important;
-        margin:0 0 10px !important;
-      }
+      .hanaHeader{ display:block !important; margin:0 0 10px !important; }
 
-      /* TOTAL만 출력 */
-      .summaryBar{
-        display:block !important;
-        margin:0 !important;
-      }
+      .summaryBar{ display:block !important; margin:0 !important; }
       #sumLeft{
         display:block !important;
         box-shadow:none !important;
@@ -328,7 +356,6 @@
         break-inside: avoid !important;
       }
 
-      /* 인쇄 시 날짜/시간 표시 */
       .print-only{
         display:block !important;
         text-align:right !important;
@@ -357,6 +384,22 @@
     <!-- TOTAL + 버튼 -->
     <div class="summaryBar">
       <div class="sumCard" id="sumLeft">
+
+        <!-- ✅ (추가) 가이드/팀 입력 -->
+        <div class="metaBox">
+          <div class="metaTitle">Optional Info</div>
+          <div class="metaGrid">
+            <div class="metaField">
+              <label for="guideName">가이드 이름 (선택)</label>
+              <input id="guideName" type="text" placeholder="예: 홍길동" autocomplete="off" />
+            </div>
+            <div class="metaField">
+              <label for="teamNo">팀 번호 (선택)</label>
+              <input id="teamNo" type="text" placeholder="예: 3" inputmode="numeric" autocomplete="off" />
+            </div>
+          </div>
+        </div>
+
         <div class="sumTitle">Total</div>
         <div class="big"><span id="totalUsd">0</span>$</div>
         <div class="muted" style="font-size:16px;margin-top:4px;">
@@ -364,17 +407,13 @@
         </div>
         <div class="list" id="pickedList"></div>
 
-        <!-- ✅ 인쇄 때만 날짜/시간 -->
+        <!-- 인쇄 때만 날짜/시간 -->
         <div class="print-only" id="printTime"></div>
       </div>
 
       <div class="printWrap">
         <button class="printBtnOnly" id="printBtn">&nbsp;&nbsp;인&nbsp;쇄   /   máy in&nbsp;&nbsp;</button>
-
-        <!-- ✅ 저장 버튼 -->
         <button class="saveBtn" id="saveBtn" type="button">저장하기 / Lưu</button>
-
-        <!-- ✅ 초기화 버튼 -->
         <button class="resetBtn" id="resetBtn" type="button">초기화 / Quay lại</button>
       </div>
     </div>
@@ -399,7 +438,7 @@
    * ✅ Supabase 설정 (너가 준 값)
    *************************************************/
   const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_"; // 네 키 그대로
+  const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
 
   const { createClient } = supabase;
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -409,9 +448,8 @@
    *************************************************/
   let drinkMenu = [];
   let sideMenu = [];
-  let allMenu = []; // 표시 순서: drink → side
+  let allMenu = [];
 
-  // 수량 상태: key = menu uuid
   const qty = Object.create(null);
 
   /*************************************************
@@ -426,12 +464,11 @@
 
   /*************************************************
    * 카드 렌더
-   * DB 컬럼: id, ko_name, vi_name, price_usd, price_vnd
    *************************************************/
   function makeCard(m){
     const card = document.createElement("div");
     card.className = "card";
-    card.dataset.id = m.id; // uuid
+    card.dataset.id = m.id;
 
     card.innerHTML = `
       <div class="name">
@@ -495,9 +532,8 @@
 
     drinkMenu = rows.filter(r => r.type === "drink");
     sideMenu  = rows.filter(r => r.type === "side");
-    allMenu   = [...drinkMenu, ...sideMenu]; // 표시 순서
+    allMenu   = [...drinkMenu, ...sideMenu];
 
-    // qty 초기화 (새 메뉴 기준)
     for (const k in qty) delete qty[k];
     allMenu.forEach(m => qty[m.id] = 0);
 
@@ -556,7 +592,6 @@
   function updateAll(){
     const { picked, totalUsd, totalVnd } = computePickedAndTotals();
 
-    // 카드별 소계 표시
     for (const m of allMenu){
       const q = qty[m.id] || 0;
       const lineUsd = (m.price_usd || 0) * q;
@@ -574,7 +609,6 @@
     document.getElementById("totalUsd").textContent = fmtInt(totalUsd);
     document.getElementById("totalVnd").textContent = fmtInt(totalVnd);
 
-    // 선택 리스트
     const list = document.getElementById("pickedList");
     list.innerHTML = "";
     if (picked.length === 0){
@@ -592,7 +626,6 @@
     }
   }
 
-  /* ✅ 전체 초기화 */
   function resetAll(){
     for (const k in qty) qty[k] = 0;
     document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
@@ -601,8 +634,7 @@
 
   /*************************************************
    * 저장하기: orders + order_items
-   * 성공 → resetAll()
-   * 실패 → alert("저장 실패")
+   * ✅ 가이드/팀 번호(선택) 함께 저장
    *************************************************/
   async function saveOrder(){
     const btn = document.getElementById("saveBtn");
@@ -616,14 +648,20 @@
         return;
       }
 
-      // 1) orders 저장
+      // ✅ (추가) 입력값 읽기 (미입력 가능)
+      const guideName = (document.getElementById("guideName").value || "").trim();
+      const teamNo = (document.getElementById("teamNo").value || "").trim();
+
+      // 1) orders 저장 (guide_name / team_no 컬럼이 있어야 저장됨)
       const { data: order, error: orderErr } = await sb
         .from("orders")
         .insert([{
           total_usd: totalUsd,
           total_vnd: totalVnd,
           status: "paid",
-          source: "calc_web"
+          source: "calc_web",
+          guide_name: guideName || null,
+          team_no: teamNo || null
         }])
         .select("id")
         .single();
@@ -650,6 +688,11 @@
 
       alert("저장 완료!");
       resetAll();
+
+      // ✅ (추가) 저장 성공 시 가이드/팀도 같이 비우기 (원하면 이 줄 2개 삭제하면 유지됨)
+      document.getElementById("guideName").value = "";
+      document.getElementById("teamNo").value = "";
+
     } catch(e){
       console.error(e);
       alert("저장 실패");
@@ -676,11 +719,8 @@
     setPrintTime();
     window.print();
   });
-
   document.getElementById("resetBtn").addEventListener("click", resetAll);
-
   document.getElementById("saveBtn").addEventListener("click", saveOrder);
-
   window.addEventListener("beforeprint", setPrintTime);
 
   /*************************************************
@@ -691,7 +731,6 @@
     if (rows.length > 0){
       mountMenus(rows);
     } else {
-      // 메뉴가 없으면 빈 화면이라도 TOTAL은 동작하게
       drinkMenu = [];
       sideMenu = [];
       allMenu = [];
