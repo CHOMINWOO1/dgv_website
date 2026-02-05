@@ -64,7 +64,7 @@
       font-size:12px;
     }
 
-    /* ===== 상단 TOTAL + 인쇄 버튼 ===== */
+    /* ===== 상단 TOTAL + 버튼 ===== */
     .summaryBar{
       display:grid;
       grid-template-columns: 1fr auto;
@@ -77,11 +77,11 @@
       .printWrap{ justify-content:flex-end; }
     }
     .printWrap{
-  display:flex;
-  flex-direction: column;   /* ← 핵심 */
-  align-items: flex-end;
-  gap:10px;
-}
+      display:flex;
+      flex-direction: column;   /* ← 핵심 */
+      align-items: flex-end;
+      gap:10px;
+    }
     .printBtnOnly{
       border:1px solid var(--line);
       background: var(--card);
@@ -110,6 +110,25 @@
       white-space: nowrap;
     }
     .resetBtn:hover{border-color: var(--gold); color: var(--ink);}
+
+    /* ✅ (추가) 저장 버튼 스타일 */
+    .saveBtn{
+      border:1px solid var(--gold);
+      background: #fff7e6;
+      color: #3a2a1f;
+      font-weight:1000;
+      border-radius: 12px;
+      padding: 12px 16px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.06);
+      cursor:pointer;
+      height: fit-content;
+      white-space: nowrap;
+    }
+    .saveBtn:hover{ filter: brightness(0.98); }
+    .saveBtn:disabled{
+      opacity:.55;
+      cursor:not-allowed;
+    }
 
     /* ===== 섹션/카드 ===== */
     .section{ margin-top: 12px; }
@@ -335,7 +354,7 @@
       </p>
     </div>
 
-    <!-- TOTAL + 인쇄 버튼 -->
+    <!-- TOTAL + 버튼 -->
     <div class="summaryBar">
       <div class="sumCard" id="sumLeft">
         <div class="sumTitle">Total</div>
@@ -350,13 +369,17 @@
       </div>
 
       <div class="printWrap">
-        <button class="printBtnOnly" id="printBtn">&nbsp&nbsp인&nbsp쇄   /   máy in&nbsp&nbsp</button>
-        <!-- ✅ (추가) 초기화 버튼 -->
+        <button class="printBtnOnly" id="printBtn">&nbsp;&nbsp;인&nbsp;쇄   /   máy in&nbsp;&nbsp;</button>
+
+        <!-- ✅ 저장 버튼 -->
+        <button class="saveBtn" id="saveBtn" type="button">저장하기 / Lưu</button>
+
+        <!-- ✅ 초기화 버튼 -->
         <button class="resetBtn" id="resetBtn" type="button">초기화 / Quay lại</button>
       </div>
     </div>
 
-    <!-- ✅ 순서 변경: DRINK → SIDE -->
+    <!-- DRINK → SIDE -->
     <div class="section">
       <h2>DRINK MENU</h2>
       <div class="grid" id="drinkGrid"></div>
@@ -368,37 +391,32 @@
     </div>
   </div>
 
+  <!-- Supabase JS (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script>
-  // ====== 메뉴 데이터 (ko + vi 추가) ======
-  const sideMenu = [
-    { id:"shin",   ko:"신라면",           vi:"Mì Shin cay",           usd:4,  vnd:100000 },
-    { id:"jjp",    ko:"짜파게티",         vi:"Mì tương đen (Jjapagetti)", usd:5,  vnd:120000 },
-    { id:"buldak", ko:"불닭볶음면",       vi:"Mì xào cay Buldak",     usd:5,  vnd:120000 },
-    { id:"naeng",  ko:"냉면",             vi:"Mì lạnh",              usd:8,  vnd:200000 },
-    { id:"bibim",  ko:"비빔국수",         vi:"Mì trộn cay",           usd:8,  vnd:200000 },
-    { id:"jjigae", ko:"찌개(김치/된장)",  vi:"Canh hầm (kimchi / tương đậu)", usd:8,  vnd:200000 },
-    { id:"dagum",  ko:"다금바리 초무침",  vi:"Cá Dageumbari trộn cay", usd:20, vnd:500000 },
-    { id:"yukhoe", ko:"육회",             vi:"Thịt bò sống trộn (Yukhoe)", usd:12, vnd:300000 },
-    { id:"chicken",ko:"치킨",             vi:"Gà rán",               usd:14, vnd:340000 }
-  ];
+  /*************************************************
+   * ✅ Supabase 설정 (너가 준 값)
+   *************************************************/
+  const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_"; // 네 키 그대로
 
-  const drinkMenu = [
-    { id:"soju",   ko:"소주",         vi:"Soju",         usd:7, vnd:180000 },
-    { id:"beer",   ko:"맥주",         vi:"Bia",          usd:2, vnd:50000  },
-    { id:"soft",   ko:"음료",         vi:"Nước ngọt",    usd:1, vnd:30000  },
-    { id:"mak",    ko:"막걸리",       vi:"Makgeolli",    usd:9, vnd:250000 },
-    { id:"vodka",  ko:"보드카 MEN",   vi:"Vodka men",    usd:7, vnd:180000 },
-    { id:"nep",    ko:"넵 모이",      vi:"Nếp mới",      usd:9, vnd:250000 },
-    { id:"red",    ko:"레드 와인",    vi:"Rượu vang đỏ", usd:2, vnd:50000  },
-    { id:"white",  ko:"화이트 와인",  vi:"Rượu vang trắng", usd:2, vnd:50000 },
-    { id:"high",   ko:"하이볼",       vi:"Highball",     usd:4, vnd:100000 }
-  ];
+  const { createClient } = supabase;
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // ====== 상태 ======
+  /*************************************************
+   * 상태: DB에서 불러온 메뉴 (A안)
+   *************************************************/
+  let drinkMenu = [];
+  let sideMenu = [];
+  let allMenu = []; // 표시 순서: drink → side
+
+  // 수량 상태: key = menu uuid
   const qty = Object.create(null);
-  [...sideMenu, ...drinkMenu].forEach(m => qty[m.id] = 0);
 
-  // ====== 유틸 ======
+  /*************************************************
+   * 유틸
+   *************************************************/
   const fmtInt = (n) => (Math.round(n)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const clampNonNegInt = (v) => {
     const x = Number(v);
@@ -406,21 +424,24 @@
     return Math.max(0, Math.floor(x));
   };
 
-  // ====== 렌더 ======
-  function makeCard(menu){
+  /*************************************************
+   * 카드 렌더
+   * DB 컬럼: id, ko_name, vi_name, price_usd, price_vnd
+   *************************************************/
+  function makeCard(m){
     const card = document.createElement("div");
     card.className = "card";
-    card.dataset.id = menu.id;
+    card.dataset.id = m.id; // uuid
 
     card.innerHTML = `
       <div class="name">
-        ${menu.ko}
-        <small>${menu.vi}</small>
+        ${m.ko_name}
+        <small>${m.vi_name}</small>
       </div>
       <div class="priceBox">
         <div class="priceLine">
-          <div class="usd">${menu.usd}$</div>
-          <div class="vnd">${fmtInt(menu.vnd)} VND</div>
+          <div class="usd">${m.price_usd}$</div>
+          <div class="vnd">${fmtInt(m.price_vnd)} VND</div>
         </div>
         <div class="qtyRow">
           <button class="step" data-act="dec">-</button>
@@ -437,18 +458,49 @@
     card.addEventListener("click", (e) => {
       const act = e.target?.dataset?.act;
       if (!act) return;
-      if (act === "inc") setQty(menu.id, qty[menu.id] + 1);
-      if (act === "dec") setQty(menu.id, qty[menu.id] - 1);
+      if (act === "inc") setQty(m.id, (qty[m.id] || 0) + 1);
+      if (act === "dec") setQty(m.id, (qty[m.id] || 0) - 1);
     });
 
     const input = card.querySelector('input[data-act="qty"]');
-    input.addEventListener("input", () => setQty(menu.id, input.value));
+    input.addEventListener("input", () => setQty(m.id, input.value));
 
     return card;
   }
 
-  function mount(){
-    // ✅ 순서 변경: drinkGrid 먼저, sideGrid 나중
+  /*************************************************
+   * DB에서 메뉴 로드 (A안)
+   *************************************************/
+  async function loadMenuFromDB(){
+    const { data, error } = await sb
+      .from("menu_items")
+      .select("id,type,ko_name,vi_name,price_usd,price_vnd,is_active,sort_order")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
+
+    if (error){
+      alert("메뉴 로드 실패: " + (error.message || "unknown"));
+      return [];
+    }
+    return data || [];
+  }
+
+  function clearGrids(){
+    document.getElementById("drinkGrid").innerHTML = "";
+    document.getElementById("sideGrid").innerHTML = "";
+  }
+
+  function mountMenus(rows){
+    clearGrids();
+
+    drinkMenu = rows.filter(r => r.type === "drink");
+    sideMenu  = rows.filter(r => r.type === "side");
+    allMenu   = [...drinkMenu, ...sideMenu]; // 표시 순서
+
+    // qty 초기화 (새 메뉴 기준)
+    for (const k in qty) delete qty[k];
+    allMenu.forEach(m => qty[m.id] = 0);
+
     const drinkGrid = document.getElementById("drinkGrid");
     const sideGrid  = document.getElementById("sideGrid");
 
@@ -458,7 +510,9 @@
     updateAll();
   }
 
-  // ====== 로직 ======
+  /*************************************************
+   * 로직
+   *************************************************/
   function setQty(id, v){
     qty[id] = clampNonNegInt(v);
     const card = document.querySelector(`.card[data-id="${id}"]`);
@@ -469,19 +523,44 @@
     updateAll();
   }
 
-  function updateAll(){
+  function computePickedAndTotals(){
     let totalUsd = 0;
     let totalVnd = 0;
     const picked = [];
 
-    const all = [...drinkMenu, ...sideMenu]; // 표시 순서와 동일
-    for (const m of all){
+    for (const m of allMenu){
       const q = qty[m.id] || 0;
-      const lineUsd = m.usd * q;
-      const lineVnd = m.vnd * q;
+      const lineUsd = (m.price_usd || 0) * q;
+      const lineVnd = (m.price_vnd || 0) * q;
 
       totalUsd += lineUsd;
       totalVnd += lineVnd;
+
+      if (q > 0){
+        picked.push({
+          id: m.id,
+          ko: m.ko_name,
+          vi: m.vi_name,
+          qty: q,
+          unit_usd: m.price_usd || 0,
+          unit_vnd: m.price_vnd || 0,
+          line_usd: lineUsd,
+          line_vnd: lineVnd
+        });
+      }
+    }
+
+    return { picked, totalUsd, totalVnd };
+  }
+
+  function updateAll(){
+    const { picked, totalUsd, totalVnd } = computePickedAndTotals();
+
+    // 카드별 소계 표시
+    for (const m of allMenu){
+      const q = qty[m.id] || 0;
+      const lineUsd = (m.price_usd || 0) * q;
+      const lineVnd = (m.price_vnd || 0) * q;
 
       const card = document.querySelector(`.card[data-id="${m.id}"]`);
       if (card){
@@ -490,13 +569,12 @@
         const tag = card.querySelector('[data-act="tag"]');
         tag.style.display = q > 0 ? "inline-block" : "none";
       }
-
-      if (q > 0) picked.push({ ko:m.ko, vi:m.vi, q, lineUsd, lineVnd });
     }
 
     document.getElementById("totalUsd").textContent = fmtInt(totalUsd);
     document.getElementById("totalVnd").textContent = fmtInt(totalVnd);
 
+    // 선택 리스트
     const list = document.getElementById("pickedList");
     list.innerHTML = "";
     if (picked.length === 0){
@@ -506,27 +584,83 @@
         const row = document.createElement("div");
         row.className = "row";
         row.innerHTML = `
-          <div><b>${p.ko}</b><span style="color:#6b5444;font-weight:800;"> / ${p.vi}</span> × ${p.q}</div>
-          <div>${fmtInt(p.lineUsd)}$ · ${fmtInt(p.lineVnd)} VND</div>
+          <div><b>${p.ko}</b><span style="color:#6b5444;font-weight:800;"> / ${p.vi}</span> × ${p.qty}</div>
+          <div>${fmtInt(p.line_usd)}$ · ${fmtInt(p.line_vnd)} VND</div>
         `;
         list.appendChild(row);
       });
     }
   }
 
-  /* ✅ (추가) 전체 초기화: 바로 0으로 */
+  /* ✅ 전체 초기화 */
   function resetAll(){
     for (const k in qty) qty[k] = 0;
-
-    // 입력값도 전부 0으로 맞춰주기
-    document.querySelectorAll('input[data-act="qty"]').forEach(inp => {
-      inp.value = 0;
-    });
-
+    document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
     updateAll();
   }
 
-  // ====== 인쇄 시각 찍기 (인쇄할 때만 보임) ======
+  /*************************************************
+   * 저장하기: orders + order_items
+   * 성공 → resetAll()
+   * 실패 → alert("저장 실패")
+   *************************************************/
+  async function saveOrder(){
+    const btn = document.getElementById("saveBtn");
+    btn.disabled = true;
+
+    try{
+      const { picked, totalUsd, totalVnd } = computePickedAndTotals();
+
+      if (picked.length === 0){
+        alert("저장할 메뉴가 없습니다.");
+        return;
+      }
+
+      // 1) orders 저장
+      const { data: order, error: orderErr } = await sb
+        .from("orders")
+        .insert([{
+          total_usd: totalUsd,
+          total_vnd: totalVnd,
+          status: "paid",
+          source: "calc_web"
+        }])
+        .select("id")
+        .single();
+
+      if (orderErr) throw orderErr;
+
+      // 2) order_items 저장
+      const orderId = order.id;
+      const itemsPayload = picked.map(p => ({
+        order_id: orderId,
+        menu_item_id: p.id,
+        qty: p.qty,
+        unit_usd: p.unit_usd,
+        unit_vnd: p.unit_vnd,
+        line_usd: p.line_usd,
+        line_vnd: p.line_vnd
+      }));
+
+      const { error: itemsErr } = await sb
+        .from("order_items")
+        .insert(itemsPayload);
+
+      if (itemsErr) throw itemsErr;
+
+      alert("저장 완료!");
+      resetAll();
+    } catch(e){
+      console.error(e);
+      alert("저장 실패");
+    } finally{
+      btn.disabled = false;
+    }
+  }
+
+  /*************************************************
+   * 인쇄 시간
+   *************************************************/
   function setPrintTime(){
     const now = new Date();
     const date = now.toLocaleDateString("ko-KR", { year:"numeric", month:"2-digit", day:"2-digit" });
@@ -535,20 +669,35 @@
     if (el) el.textContent = `Printed: ${date} ${time}`;
   }
 
-  // 버튼 클릭 인쇄
+  /*************************************************
+   * 이벤트
+   *************************************************/
   document.getElementById("printBtn").addEventListener("click", () => {
     setPrintTime();
     window.print();
   });
 
-  // ✅ (추가) 초기화 버튼 클릭 → 즉시 초기화
   document.getElementById("resetBtn").addEventListener("click", resetAll);
 
-  // Ctrl+P 등으로 인쇄해도 시간 찍히게
+  document.getElementById("saveBtn").addEventListener("click", saveOrder);
+
   window.addEventListener("beforeprint", setPrintTime);
 
-  // 시작
-  mount();
+  /*************************************************
+   * 시작
+   *************************************************/
+  (async function init(){
+    const rows = await loadMenuFromDB();
+    if (rows.length > 0){
+      mountMenus(rows);
+    } else {
+      // 메뉴가 없으면 빈 화면이라도 TOTAL은 동작하게
+      drinkMenu = [];
+      sideMenu = [];
+      allMenu = [];
+      updateAll();
+    }
+  })();
 </script>
 </body>
 </html>
