@@ -140,6 +140,10 @@
       padding:4px 8px;border-radius:999px;font-weight:1000;font-size:12px;
       border:1px solid var(--line);background:#fff;
       color:var(--sub);
+      max-width:100%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
     }
     .badge.ok{border-color:#bfe5c9;color:var(--ok);background:#f0fbf3}
     .badge.bad{border-color:#f4c7c3;color:var(--bad);background:#fff1f0}
@@ -254,7 +258,7 @@
             <tr>
               <th style="width:140px;">Time</th>
               <th>Total</th>
-              <th style="width:110px;">Status</th>
+              <th style="width:170px;">Guide / Team</th>
               <th style="width:90px;">Print</th>
             </tr>
           </thead>
@@ -332,10 +336,9 @@
      * 상태
      *************************************************/
     let currentRange = { from: startOfDay(new Date()), to: endOfDay(new Date()) };
-    let expandedOrderId = null; // 현재 펼쳐진 주문 (1개만)
+    let expandedOrderId = null;
 
-    // 캐시: 펼친 주문의 라인들
-    const orderLinesCache = new Map(); // orderId -> lines[]
+    const orderLinesCache = new Map();
 
     /*************************************************
      * Print helpers
@@ -348,66 +351,63 @@
       w.document.close();
       w.focus();
       w.print();
-      // w.close(); // 자동 닫기 원하면 주석 해제
     }
+
     async function fetchOrderMeta(orderId){
-    const { data, error } = await sb
+      const { data, error } = await sb
         .from("orders")
         .select("id,created_at,status,total_usd,total_vnd")
         .eq("id", orderId)
         .single();
 
-    if (error) throw error;
-    return data;
+      if (error) throw error;
+      return data;
     }
 
     async function fetchOrderLines(orderId){
-    if (orderLinesCache.has(orderId)) return orderLinesCache.get(orderId);
+      if (orderLinesCache.has(orderId)) return orderLinesCache.get(orderId);
 
-    const { data, error } = await sb
+      const { data, error } = await sb
         .from("v_order_detail")
         .select("order_id,ko_name,vi_name,qty,line_usd,line_vnd")
         .eq("order_id", orderId);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    const lines = data || [];
-    orderLinesCache.set(orderId, lines);
-    return lines;
-    }   
-
+      const lines = data || [];
+      orderLinesCache.set(orderId, lines);
+      return lines;
+    }
 
     async function printOneOrder(orderId){
-  try{
-    const [meta, lines] = await Promise.all([
-      fetchOrderMeta(orderId),
-      fetchOrderLines(orderId)
-    ]);
+      try{
+        const [meta, lines] = await Promise.all([
+          fetchOrderMeta(orderId),
+          fetchOrderLines(orderId)
+        ]);
 
-    if (!lines.length){ alert("상세가 없습니다."); return; }
+        if (!lines.length){ alert("상세가 없습니다."); return; }
 
-    // ✅ totals: orders 값을 우선 사용, 없으면 라인합으로 계산
-    const calcVnd = lines.reduce((s,r)=> s + Number(r.line_vnd||0), 0);
-    const calcUsd = lines.reduce((s,r)=> s + Number(r.line_usd||0), 0);
+        const calcVnd = lines.reduce((s,r)=> s + Number(r.line_vnd||0), 0);
+        const calcUsd = lines.reduce((s,r)=> s + Number(r.line_usd||0), 0);
 
-    const totalVnd = Number(meta.total_vnd ?? calcVnd);
-    const totalUsd = Number(meta.total_usd ?? calcUsd);
+        const totalVnd = Number(meta.total_vnd ?? calcVnd);
+        const totalUsd = Number(meta.total_usd ?? calcUsd);
 
-    // ✅ 결제시간(= created_at). paid_at 컬럼이 있으면 그걸로 바꿔도 됨.
-    const paidTime = formatTimeLocal(meta.created_at);
+        const paidTime = formatTimeLocal(meta.created_at);
 
-    const rowsHtml = lines.map(r=>`
-      <div class="r">
-        <div class="l">
-          <b>${r.ko_name}</b><br/>
-          <span>${r.vi_name}</span>
-        </div>
-        <div class="m">x ${fmtInt(r.qty)}</div>
-        <div class="p">${fmtInt(r.line_vnd)}₫</div>
-      </div>
-    `).join("");
+        const rowsHtml = lines.map(r=>`
+          <div class="r">
+            <div class="l">
+              <b>${r.ko_name}</b><br/>
+              <span>${r.vi_name}</span>
+            </div>
+            <div class="m">x ${fmtInt(r.qty)}</div>
+            <div class="p">${fmtInt(r.line_vnd)}₫</div>
+          </div>
+        `).join("");
 
-    const html = `
+        const html = `
 <!doctype html>
 <html>
 <head>
@@ -452,14 +452,13 @@
   <div class="foot">결제시간: ${paidTime}</div>
 </body>
 </html>`;
-    openPrintWindow(html);
+        openPrintWindow(html);
 
-  } catch(e){
-    console.error(e);
-    alert("출력 실패");
-  }
-}
-
+      } catch(e){
+        console.error(e);
+        alert("출력 실패");
+      }
+    }
 
     async function printRangeSummary(){
       try{
@@ -705,7 +704,7 @@
       const expandTr = document.createElement("tr");
       expandTr.className = "expandRow";
       const td = document.createElement("td");
-      td.colSpan = 4; // ✅ Print 컬럼 추가로 4
+      td.colSpan = 4; // Time / Total / GuideTeam / Print
       td.innerHTML = `<div class="muted">상세 불러오는 중…</div>`;
       expandTr.appendChild(td);
       targetTr.insertAdjacentElement("afterend", expandTr);
@@ -748,7 +747,7 @@
 
       const { data, error } = await sb
         .from("orders")
-        .select("id,created_at,status,total_usd,total_vnd")
+        .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status")
         .gte("created_at", fromIso)
         .lte("created_at", toIso)
         .order("created_at", { ascending: false })
@@ -760,7 +759,7 @@
         return;
       }
 
-      // Range KPI
+      // Range KPI (paid만 집계하고 싶으면 여기서 status 필터를 추가하면 됨)
       let sumUsd = 0, sumVnd = 0;
       (data || []).forEach(o => { sumUsd += Number(o.total_usd||0); sumVnd += Number(o.total_vnd||0); });
       document.getElementById("kpiRangeCount").textContent = fmtInt((data||[]).length);
@@ -789,8 +788,9 @@
         tr.dataset.orderId = o.id;
         tr.setAttribute("data-order-id", o.id);
 
-        const statusClass = (o.status === "paid") ? "ok" : (o.status === "void" ? "bad" : "");
-        const statusText = (o.status || "").toUpperCase();
+        const guide = (o.guide_name || "").trim();
+        const team  = (o.team_no || "").trim();
+        const guideText = (guide || team) ? `${guide || "—"} / ${team || "—"}` : "—";
 
         tr.innerHTML = `
           <td>
@@ -805,21 +805,21 @@
             </button>
           </td>
           <td>
-            <span class="badge ${statusClass}">${statusText || "—"}</span>
+            <button class="rowBtn" data-act="toggle">
+              <span class="badge">${guideText}</span>
+            </button>
           </td>
           <td>
             <button class="btn" data-act="printOne" style="padding:8px 10px;">출력</button>
           </td>
         `;
 
-        // 클릭 → 아래로 라인 펼치기
         tr.querySelectorAll('button[data-act="toggle"]').forEach(btn=>{
           btn.addEventListener("click", ()=>{
             toggleExpandOrder(o.id, o);
           });
         });
 
-        // ✅ 주문 1건 출력
         tr.querySelector('button[data-act="printOne"]').addEventListener("click", async (e)=>{
           e.stopPropagation();
           await printOneOrder(o.id);
@@ -884,7 +884,6 @@
     document.getElementById("range30").addEventListener("click", ()=>setRangeDays(30));
     document.getElementById("applyRange").addEventListener("click", applyRange);
 
-    // ✅ 전체 출력(기간 요약 + 품목 판매량)
     document.getElementById("printRangeBtn").addEventListener("click", printRangeSummary);
 
     /*************************************************
