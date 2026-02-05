@@ -125,13 +125,12 @@
     }
     .metaGrid{
       display:grid;
-      /* ✅ iOS에서 auto column 수축/깨짐 방지: minmax로 고정 */
       grid-template-columns: 1fr 1fr minmax(210px, 280px);
       gap:10px;
       align-items:end;
     }
     @media (max-width: 560px){ .metaGrid{ grid-template-columns: 1fr; } }
-    .metaField{ min-width:0; } /* ✅ iOS grid overflow fix */
+    .metaField{ min-width:0; }
     .metaField label{
       display:block;
       font-size:12px;
@@ -148,7 +147,7 @@
       background:#fff;
       color:var(--ink);
       outline:none;
-      font-size:16px; /* ✅ iOS 입력 확대/레이아웃 깨짐 방지 */
+      font-size:16px;
     }
     .metaField input:focus{
       border-color: var(--gold);
@@ -156,15 +155,15 @@
     }
 
     /* ===== 결제 라디오 iOS Safari FIX ===== */
-    .payOptions{
+    .payOptions, .feeOptions{
       display:flex;
       gap: 10px 14px;
       align-items:center;
-      flex-wrap: wrap;           /* ✅ 줄바꿈 허용(글자 잘림 방지) */
-      white-space: normal;       /* ✅ nowrap 제거 */
+      flex-wrap: wrap;
+      white-space: normal;
     }
-    .payOptions label{
-      display: inline-flex;      /* ✅ iOS flex bug 회피 */
+    .payOptions label, .feeOptions label{
+      display: inline-flex;
       align-items:center;
       gap:8px;
       font-weight:900;
@@ -172,18 +171,31 @@
       margin:0;
       user-select:none;
       cursor:pointer;
-      min-width: 86px;           /* ✅ cash/card/bank 텍스트 공간 확보 */
+      min-width: 86px;
       line-height: 1.2;
-      font-size:16px;            /* ✅ iOS 텍스트/레이아웃 안정화 */
-      padding: 6px 8px;          /* ✅ 터치 영역 */
+      font-size:16px;
+      padding: 6px 8px;
       border-radius: 12px;
     }
-    .payOptions input[type="radio"]{
+    .payOptions input[type="radio"], .feeOptions input[type="radio"]{
       width:20px;
       height:20px;
       margin:0;
       flex: 0 0 20px;
-      transform:none;            /* ✅ 기존 translateY 제거 */
+      transform:none;
+    }
+    .feeBox{
+      margin-top:8px;
+      padding-top:8px;
+      border-top:1px dashed var(--line);
+      display:none;
+    }
+    .feeHint{
+      font-size:12px;
+      font-weight:900;
+      color:var(--sub);
+      margin:0 0 6px;
+      letter-spacing:.03em;
     }
 
     .section{ margin-top: 12px; }
@@ -364,7 +376,7 @@
       background:#fff;
       color:var(--ink);
       outline:none;
-      font-size:16px; /* ✅ iOS 안정화 */
+      font-size:16px;
     }
     .specialForm input:focus{
       border-color: var(--gold);
@@ -423,7 +435,7 @@
       padding:8px 8px;
       font-weight:1000;
       background:#fff;
-      font-size:16px; /* ✅ iOS 안정화 */
+      font-size:16px;
     }
 
     @media print {
@@ -435,6 +447,10 @@
       .printWrap{ display:none !important; }
       .hanaHeader{ display:block !important; margin:0 0 10px !important; }
       .summaryBar{ display:block !important; margin:0 !important; }
+
+      /* ✅ 인쇄 시 Optional Info 숨김 */
+      .metaBox{ display:none !important; }
+
       #sumLeft{
         display:block !important;
         box-shadow:none !important;
@@ -487,11 +503,27 @@
 
             <div class="metaField">
               <label>결제</label>
-              <div class="payOptions">
+              <div class="payOptions" id="payOptions">
                 <label><input type="radio" name="payMethod" value="cash" checked> cash</label>
                 <label><input type="radio" name="payMethod" value="card"> card</label>
                 <label><input type="radio" name="payMethod" value="bank"> bank</label>
               </div>
+
+              <!-- ✅ 카드일 때만 보이는 추가 옵션 -->
+              <div class="feeBox" id="cardFeeBox">
+                <div class="feeHint">Card amount option</div>
+                <div class="feeOptions">
+                  <label title="기본 카드 결제 (추가 없음)">
+                    <input type="radio" name="cardFeeMode" value="none" checked>
+                    Standard
+                  </label>
+                  <label title="카드 수수료(7%) 포함">
+                    <input type="radio" name="cardFeeMode" value="fee7">
+                    Card total (incl. 7% service fee)
+                  </label>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -501,8 +533,9 @@
         <div class="muted" style="font-size:16px;margin-top:4px;">
           <span id="totalVnd">0</span> VND
         </div>
-        <div class="list" id="pickedList"></div>
+        <div class="muted" id="feeInfo" style="font-size:12px;margin-top:6px;display:none;"></div>
 
+        <div class="list" id="pickedList"></div>
         <div class="print-only" id="printTime"></div>
       </div>
 
@@ -692,12 +725,57 @@
     if (qty[id] < 0) qty[id] = 0;
 
     const card = document.querySelector(`.card[data-id="${id}"]`);
-
     if (card){
       const input = card.querySelector('input[data-act="qty"]');
       if (document.activeElement !== input) input.value = qty[id];
     }
     updateAll();
+  }
+
+  // helpers
+  function getPaymentMethod(){
+    return document.querySelector('input[name="payMethod"]:checked')?.value || "cash";
+  }
+  function getCardFeeMode(){
+    return document.querySelector('input[name="cardFeeMode"]:checked')?.value || "none";
+  }
+  function toggleCardFeeUI(){
+    const pm = getPaymentMethod();
+    const box = document.getElementById("cardFeeBox");
+    if (!box) return;
+
+    if (pm === "card"){
+      box.style.display = "block";
+    } else {
+      box.style.display = "none";
+      // 카드가 아니면 fee 옵션은 기본값으로 복귀
+      const noneRadio = document.querySelector('input[name="cardFeeMode"][value="none"]');
+      if (noneRadio) noneRadio.checked = true;
+    }
+  }
+
+  function applyCardFeeIfNeeded(baseUsd, baseVnd){
+    const pm = getPaymentMethod();
+    const mode = getCardFeeMode();
+
+    if (pm === "card" && mode === "fee7"){
+      const usd = Math.round((Number(baseUsd) || 0) * 1.07);
+      const vnd = Math.round((Number(baseVnd) || 0) * 1.07);
+      return {
+        usd,
+        vnd,
+        fee_usd: usd - (Number(baseUsd) || 0),
+        fee_vnd: vnd - (Number(baseVnd) || 0),
+        applied: true
+      };
+    }
+    return {
+      usd: Math.round(Number(baseUsd) || 0),
+      vnd: Math.round(Number(baseVnd) || 0),
+      fee_usd: 0,
+      fee_vnd: 0,
+      applied: false
+    };
   }
 
   function computePickedAndTotals(){
@@ -761,7 +839,10 @@
   }
 
   function updateAll(){
-    const { picked, totalUsd, totalVnd } = computePickedAndTotals();
+    toggleCardFeeUI();
+
+    const { picked, totalUsd: baseUsd, totalVnd: baseVnd } = computePickedAndTotals();
+    const adj = applyCardFeeIfNeeded(baseUsd, baseVnd);
 
     // update menu cards line totals
     for (const m of allMenu){
@@ -769,7 +850,6 @@
       const lineUsd = (Number(m.price_usd) || 0) * q;
       const lineVnd = (Number(m.price_vnd) || 0) * q;
       const card = document.querySelector(`.card[data-id="${m.id}"]`);
-
 
       if (card){
         card.querySelector('[data-act="lineUsd"]').textContent = fmtInt(lineUsd);
@@ -779,42 +859,51 @@
       }
     }
 
-    document.getElementById("totalUsd").textContent = fmtInt(totalUsd);
-    document.getElementById("totalVnd").textContent = fmtInt(totalVnd);
+    // ✅ 화면 총액은 (카드+7% 선택 시) 적용된 값
+    document.getElementById("totalUsd").textContent = fmtInt(adj.usd);
+    document.getElementById("totalVnd").textContent = fmtInt(adj.vnd);
+
+    const feeInfo = document.getElementById("feeInfo");
+    if (feeInfo){
+      if (adj.applied){
+        feeInfo.style.display = "block";
+        feeInfo.textContent = `Tax service 7%`;
+      } else {
+        feeInfo.style.display = "none";
+        feeInfo.textContent = "";
+      }
+    }
 
     // picked list
-// picked list
-const list = document.getElementById("pickedList");
-list.innerHTML = "";
+    const list = document.getElementById("pickedList");
+    list.innerHTML = "";
 
-if (picked.length === 0) {
-  list.innerHTML = `<div class="muted">선택된 메뉴가 없습니다.</div>`;
-} else {
-  picked.forEach(p => {
-    const row = document.createElement("div");
-    row.className = "row";
+    if (picked.length === 0) {
+      list.innerHTML = `<div class="muted">선택된 메뉴가 없습니다.</div>`;
+    } else {
+      picked.forEach(p => {
+        const row = document.createElement("div");
+        row.className = "row";
 
-    const tag = (p.kind === "special")
-      ? `<span class="tag">SPECIAL</span>`
-      : "";
+        const tag = (p.kind === "special")
+          ? `<span class="tag">SPECIAL</span>`
+          : "";
 
-    row.innerHTML = `
-      <div>
-        <b>${p.ko || "-"}</b>
-        <span style="color:#6b5444;font-weight:800;"> / ${p.vi || ""}</span>
-        × ${p.qty}
-        ${tag}
-      </div>
-      <div>${fmtInt(p.line_usd)}$ · ${fmtInt(p.line_vnd)} VND</div>
-    `;
+        row.innerHTML = `
+          <div>
+            <b>${p.ko || "-"}</b>
+            <span style="color:#6b5444;font-weight:800;"> / ${p.vi || ""}</span>
+            × ${p.qty}
+            ${tag}
+          </div>
+          <div>${fmtInt(p.line_usd)}$ · ${fmtInt(p.line_vnd)} VND</div>
+        `;
 
-    list.appendChild(row);
-  });
-}
+        list.appendChild(row);
+      });
+    }
 
-renderSpecialList();
-
-
+    renderSpecialList();
   }
 
   function resetAll(){
@@ -826,11 +915,15 @@ renderSpecialList();
     specialLines.length = 0;
     clearSpecialDraft();
 
-    // ✅ 3) Optional Info 초기화
+    // 3) Optional Info 초기화
     document.getElementById("guideName").value = "";
     document.getElementById("teamNo").value = "";
     const cashRadio = document.querySelector('input[name="payMethod"][value="cash"]');
     if (cashRadio) cashRadio.checked = true;
+
+    // 카드 fee 기본으로
+    const noneRadio = document.querySelector('input[name="cardFeeMode"][value="none"]');
+    if (noneRadio) noneRadio.checked = true;
 
     updateAll();
   }
@@ -923,11 +1016,6 @@ renderSpecialList();
     });
   }
 
-  // helpers
-  function getPaymentMethod(){
-    return document.querySelector('input[name="payMethod"]:checked')?.value || "cash";
-  }
-
   /*************************************************
    * ✅ 저장 보호(저장만 비번, 프린트는 제외)
    * - admin.html에서 만든 RPC: admin_check_password 재사용
@@ -972,7 +1060,7 @@ renderSpecialList();
     btn.disabled = true;
 
     try{
-      const { picked, totalUsd, totalVnd } = computePickedAndTotals();
+      const { picked, totalUsd: baseUsd, totalVnd: baseVnd } = computePickedAndTotals();
       if (picked.length === 0){
         alert("저장할 메뉴가 없습니다.");
         return;
@@ -986,12 +1074,15 @@ renderSpecialList();
       const teamNo = (document.getElementById("teamNo").value || "").trim();
       const paymentMethod = getPaymentMethod();
 
+      // ✅ 저장 total은 카드 옵션 반영(7% 포함 선택 시 반영)
+      const adj = applyCardFeeIfNeeded(baseUsd, baseVnd);
+
       // 1) orders 생성
       const { data: order, error: orderErr } = await sb
         .from("orders")
         .insert([{
-          total_usd: totalUsd,
-          total_vnd: totalVnd,
+          total_usd: adj.usd,
+          total_vnd: adj.vnd,
           status: "paid",
           source: "calc_web",
           guide_name: guideName || null,
@@ -1004,7 +1095,7 @@ renderSpecialList();
       if (orderErr) throw orderErr;
       const orderId = order.id;
 
-      // 2) 일반 메뉴 -> order_items
+      // 2) 일반 메뉴 -> order_items (라인은 기본 가격 그대로)
       const normalItems = picked.filter(p => p.kind === "menu");
       if (normalItems.length){
         const itemsPayload = normalItems.map(p => ({
@@ -1053,13 +1144,13 @@ renderSpecialList();
     btn.disabled = true;
 
     try{
-      const { picked, totalUsd, totalVnd } = computePickedAndTotals();
+      const { picked, totalUsd: baseUsd, totalVnd: baseVnd } = computePickedAndTotals();
       if (picked.length === 0){
         alert("저장할 메뉴가 없습니다.");
         return;
       }
 
-      // ✅ 수정 저장도 비번 확인 (RPC로 검증)
+      // ✅ 수정 저장도 비번 확인
       const pass = await requireAdminPassword();
       if (!pass) return;
 
@@ -1068,6 +1159,9 @@ renderSpecialList();
       const paymentMethod = getPaymentMethod();
       const normalItems = picked.filter(p => p.kind === "menu");
       const specialItems = picked.filter(p => p.kind === "special");
+
+      // ✅ 저장 total은 카드 옵션 반영(7% 포함 선택 시 반영)
+      const adj = applyCardFeeIfNeeded(baseUsd, baseVnd);
 
       const rpcItems = normalItems.map(p => ({
         menu_item_id: p.id,
@@ -1097,6 +1191,7 @@ renderSpecialList();
         return;
       }
 
+      // SPECIAL 재구성
       const { error: delErr } = await sb
         .from("order_custom_items")
         .delete()
@@ -1120,9 +1215,10 @@ renderSpecialList();
         if (insErr) throw insErr;
       }
 
+      // ✅ orders total 업데이트 (적용된 값으로)
       const { error: updErr } = await sb
         .from("orders")
-        .update({ total_usd: totalUsd, total_vnd: totalVnd })
+        .update({ total_usd: adj.usd, total_vnd: adj.vnd })
         .eq("id", editOrderId);
       if (updErr) throw updErr;
 
@@ -1138,20 +1234,22 @@ renderSpecialList();
   }
 
   async function loadOrderForEdit(orderId){
+    // ✅ total도 함께 가져와서 (카드+7% 여부) 자동 추정
     const { data: meta, error: metaErr } = await sb
       .from("orders")
-      .select("id,guide_name,team_no,payment_method")
+      .select("id,guide_name,team_no,payment_method,total_usd,total_vnd")
       .eq("id", orderId)
       .single();
     if (metaErr){ console.error(metaErr); alert("주문 메타 로드 실패"); return; }
 
     document.getElementById("guideName").value = meta.guide_name || "";
     document.getElementById("teamNo").value = meta.team_no || "";
+
     const pm = (meta.payment_method || "cash").toLowerCase();
     const radio = document.querySelector(`input[name="payMethod"][value="${pm}"]`);
-
     if (radio) radio.checked = true;
 
+    // 초기화
     for (const k in qty) qty[k] = 0;
     document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
     specialLines.length = 0;
@@ -1166,7 +1264,6 @@ renderSpecialList();
       if (!it.menu_item_id) return;
       qty[it.menu_item_id] = Number(it.qty||0);
       const card = document.querySelector(`.card[data-id="${it.menu_item_id}"]`);
-
       if (card){
         const input = card.querySelector('input[data-act="qty"]');
         input.value = qty[it.menu_item_id];
@@ -1190,6 +1287,24 @@ renderSpecialList();
         unit_vnd: Number(it.unit_vnd||0)
       });
     });
+
+    // ✅ 카드+7% 자동 추정:
+    // base합 대비 meta.total이 약 1.07이면 fee7로 맞춤
+    toggleCardFeeUI();
+    const { totalUsd: baseUsd, totalVnd: baseVnd } = computePickedAndTotals();
+    if (pm === "card"){
+      const savedVnd = Number(meta.total_vnd || 0);
+      const expected = Math.round(baseVnd * 1.07);
+
+      const tol = Math.max(3000, Math.round(baseVnd * 0.01)); // 최소 3,000 VND 또는 1%
+      const feeRadio = document.querySelector('input[name="cardFeeMode"][value="fee7"]');
+      const noneRadio = document.querySelector('input[name="cardFeeMode"][value="none"]');
+
+      if (feeRadio && noneRadio){
+        if (Math.abs(savedVnd - expected) <= tol) feeRadio.checked = true;
+        else noneRadio.checked = true;
+      }
+    }
 
     document.getElementById("modeTitle").textContent = "Edit Mode (수정)";
     document.getElementById("saveBtn").textContent = "수정 저장 / Save";
@@ -1217,6 +1332,10 @@ renderSpecialList();
   window.addEventListener("beforeprint", setPrintTime);
 
   document.getElementById("spAddBtn").addEventListener("click", addSpecialLine);
+
+  // ✅ 결제/카드옵션 바뀌면 즉시 총액 재계산
+  document.getElementById("payOptions").addEventListener("change", () => updateAll());
+  document.getElementById("cardFeeBox").addEventListener("change", () => updateAll());
 
   (async function init(){
     const rows = await loadMenuFromDB();
