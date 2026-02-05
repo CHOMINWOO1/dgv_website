@@ -234,6 +234,13 @@
       background:#fff;
     }
     .modalBtns{margin-top:10px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;}
+
+    /* ✅ 로그인 전 페이지 잠금 */
+    .locked .wrap{
+      filter: blur(2px);
+      pointer-events: none;
+      user-select: none;
+    }
   </style>
 </head>
 <body>
@@ -361,6 +368,21 @@
     </div>
   </div>
 
+  <!-- ✅ Admin Gate Modal -->
+  <div class="modalBack" id="gateModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalTitle">관리자 로그인</div>
+      <p class="modalDesc">비밀번호를 입력하면 관리자 페이지에 입장합니다.</p>
+      <div class="modalRow">
+        <input id="gatePassInput" type="password" placeholder="관리자 비밀번호" autocomplete="off"/>
+      </div>
+      <div class="modalBtns">
+        <button class="btn btnPrimary" id="gateConfirmBtn">입장</button>
+      </div>
+      <p class="hint" style="margin-top:10px;">※ 브라우저 탭(session)에서만 유지됩니다.</p>
+    </div>
+  </div>
+
   <!-- ✅ Delete Password Modal -->
   <div class="modalBack" id="deleteModal">
     <div class="modal" role="dialog" aria-modal="true">
@@ -412,6 +434,53 @@
       if (v === "bank") return "BANK";
       return "CASH";
     };
+
+    /*************************************************
+     * ✅ Admin Gate (입장 비번)
+     * - 서버에서 비번 검증 RPC 필요: admin_check_password(p_password)
+     *************************************************/
+    const ADMIN_GATE_KEY = "hana_admin_ok_v1";
+
+    function isGateOk(){
+      return sessionStorage.getItem(ADMIN_GATE_KEY) === "1";
+    }
+    function lockPage(){
+      document.body.classList.add("locked");
+      const back = document.getElementById("gateModal");
+      back.style.display = "flex";
+      const inp = document.getElementById("gatePassInput");
+      inp.value = "";
+      setTimeout(()=> inp.focus(), 50);
+    }
+    function unlockPage(){
+      document.body.classList.remove("locked");
+      document.getElementById("gateModal").style.display = "none";
+    }
+
+    async function checkGatePassword(pass){
+      // ✅ 여기 RPC가 DB에 있어야 함 (없으면 DB에 함수 추가 필요)
+      const { data, error } = await sb.rpc("admin_check_password", { p_password: pass });
+      if (error) throw error;
+      return data === true;
+    }
+
+    async function enterAdmin(){
+      const pass = (document.getElementById("gatePassInput").value || "").trim();
+      if (!pass){ alert("비밀번호를 입력하세요."); return; }
+      try{
+        const ok = await checkGatePassword(pass);
+        if (!ok){
+          alert("비밀번호가 틀렸습니다.");
+          return;
+        }
+        sessionStorage.setItem(ADMIN_GATE_KEY, "1");
+        unlockPage();
+        await bootAfterGate(); // 통과 후 로드
+      }catch(e){
+        console.error(e);
+        alert("로그인 실패");
+      }
+    }
 
     /*************************************************
      * 상태
@@ -840,7 +909,6 @@
 
       list.appendChild(body);
 
-      // ✅ 펼침 영역 우측 하단 버튼들: 출력 + 수정 + 삭제
       const footer = document.createElement("div");
       footer.className = "lineFooter";
       footer.innerHTML = `
@@ -854,13 +922,11 @@
         printOneOrder(orderMeta.id);
       });
 
-      // ✅ 수정: calc.html 편집모드로 열기(원하는 파일명/경로면 바꿔도 됨)
       footer.querySelector('button[data-act="editExpanded"]').addEventListener("click", (e)=>{
         e.stopPropagation();
         window.open(`calc.html?edit=${orderMeta.id}`, "_blank");
       });
 
-      // ✅ 삭제: 비번 모달
       footer.querySelector('button[data-act="deleteExpanded"]').addEventListener("click", (e)=>{
         e.stopPropagation();
         openDeleteModal(orderMeta.id);
@@ -887,7 +953,7 @@
       const expandTr = document.createElement("tr");
       expandTr.className = "expandRow";
       const td = document.createElement("td");
-      td.colSpan = 4; // Time / Total / GuideTeam / Pay
+      td.colSpan = 4;
       td.innerHTML = `<div class="muted">상세 불러오는 중…</div>`;
       expandTr.appendChild(td);
       targetTr.insertAdjacentElement("afterend", expandTr);
@@ -942,9 +1008,7 @@
         return;
       }
 
-      // ✅ Range KPI + 결제수단별 합계
       let sumUsd = 0, sumVnd = 0;
-
       let cashUsd = 0, cashVnd = 0;
       let cardUsd = 0, cardVnd = 0;
       let bankUsd = 0, bankVnd = 0;
@@ -968,7 +1032,6 @@
       document.getElementById("kpiRangeUsd").textContent = fmtInt(sumUsd);
       document.getElementById("kpiRangeVnd").textContent = fmtInt(sumVnd);
 
-      // 오른쪽 요약
       document.getElementById("sumOrders").textContent = fmtInt((data||[]).length);
       document.getElementById("sumUsd").textContent = fmtInt(sumUsd);
       document.getElementById("sumVnd").textContent = fmtInt(sumVnd);
@@ -981,7 +1044,6 @@
       document.getElementById("sumBankUsd").textContent = fmtInt(bankUsd);
       document.getElementById("sumBankVnd").textContent = fmtInt(bankVnd);
 
-      // 기간 바뀌면 펼침/캐시 초기화
       expandedOrderId = null;
       removeExpandedRow();
       orderLinesCache.clear();
@@ -1000,7 +1062,6 @@
         const guide = (o.guide_name || "").trim();
         const team  = (o.team_no || "").trim();
         const guideText = (guide || team) ? `${guide || "—"} / ${team || "—"}` : "—";
-
         const pmText = payLabel(o.payment_method);
 
         tr.innerHTML = `
@@ -1094,7 +1155,14 @@
 
     document.getElementById("printRangeBtn").addEventListener("click", printRangeSummary);
 
-    // 모달 이벤트
+    // Gate 이벤트
+    document.getElementById("gateConfirmBtn").addEventListener("click", enterAdmin);
+    document.getElementById("gatePassInput").addEventListener("keydown", (e)=>{
+      if (e.key === "Enter") enterAdmin();
+      if (e.key === "Escape") { /* 그냥 무시 */ }
+    });
+
+    // 모달 이벤트(삭제)
     document.getElementById("deleteCancelBtn").addEventListener("click", closeDeleteModal);
     document.getElementById("deleteConfirmBtn").addEventListener("click", adminDeleteOrder);
     document.getElementById("deleteModal").addEventListener("click", (e)=>{
@@ -1106,9 +1174,9 @@
     });
 
     /*************************************************
-     * 시작
+     * 게이트 통과 후 실제 부팅
      *************************************************/
-    (async function init(){
+    async function bootAfterGate(){
       const statusEl = document.getElementById("statusText");
       try{
         const { error } = await sb.from("menu_items").select("id").limit(1);
@@ -1124,6 +1192,20 @@
       document.getElementById("toDate").value = toISODate(currentRange.to);
 
       await refreshRange();
+    }
+
+    /*************************************************
+     * 시작
+     *************************************************/
+    (async function init(){
+      // ✅ gate 먼저
+      if (!isGateOk()){
+        lockPage();
+        document.getElementById("statusText").textContent = "locked";
+        return;
+      }
+      unlockPage();
+      await bootAfterGate();
     })();
   </script>
 </body>
