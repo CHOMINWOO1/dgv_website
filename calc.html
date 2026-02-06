@@ -96,18 +96,18 @@
       white-space: nowrap;
     }
     .goBtn{
-  border:1px solid var(--line);
-  background:#fff;
-  color: var(--ink);
-  font-weight:1000;
-  border-radius: 12px;
-  padding: 12px 16px;
-  box-shadow: 0 6px 16px rgba(0,0,0,.06);
-  cursor:pointer;
-  height: fit-content;
-  white-space: nowrap;
-}
-.goBtn:hover{ border-color: var(--gold); }
+      border:1px solid var(--line);
+      background:#fff;
+      color: var(--ink);
+      font-weight:1000;
+      border-radius: 12px;
+      padding: 12px 16px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.06);
+      cursor:pointer;
+      height: fit-content;
+      white-space: nowrap;
+    }
+    .goBtn:hover{ border-color: var(--gold); }
     .printBtnOnly:hover,.resetBtn:hover{border-color: var(--gold)}
     .resetBtn{background:#fff;color:var(--sub)}
     .resetBtn:hover{color:var(--ink)}
@@ -484,6 +484,55 @@
       }
       @page { margin: 8mm; }
     }
+
+    /* =================================================
+       ✅ 관리자 비밀번호 모달 (admin.html 스타일)
+       - 저장(신규/수정)할 때만 뜸
+       ================================================= */
+    .modalBack{
+      position:fixed; inset:0; background:rgba(0,0,0,.35);
+      display:none; align-items:center; justify-content:center;
+      padding:14px; z-index:9999;
+    }
+    .modal{
+      width:min(420px, 100%);
+      background:var(--card);
+      border:2px solid var(--line);
+      border-radius:16px;
+      box-shadow:0 18px 40px rgba(0,0,0,.20);
+      padding:14px;
+    }
+    .modalTitle{font-weight:1000; letter-spacing:.06em; color:var(--ink); margin:2px 0 10px;}
+    .modalDesc{font-size:13px; color:var(--sub); font-weight:900; margin:0 0 10px;}
+    .modalRow{display:flex; gap:8px; align-items:center;}
+    .modalRow input{
+      flex:1;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 10px;
+      font-weight:900;
+      background:#fff;
+    }
+    .modalBtns{margin-top:10px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;}
+
+    .btn{
+      border:1px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      font-weight:1000;
+      border-radius: 12px;
+      padding: 10px 12px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.06);
+      cursor:pointer;
+      white-space: nowrap;
+    }
+    .btn:hover{border-color:var(--gold)}
+    .btnPrimary{
+      border-color: var(--gold);
+      background: #fff7e6;
+    }
+    .btn:disabled{opacity:.55;cursor:not-allowed}
+
   </style>
 </head>
 
@@ -625,6 +674,24 @@
 
         <div class="specialList" id="specialList"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ✅ 저장용 관리자 비밀번호 모달(디자인=admin.html) -->
+  <div class="modalBack" id="adminPassModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalTitle" id="adminPassTitle">관리자 확인</div>
+      <p class="modalDesc" id="adminPassDesc">저장하려면 관리자 비밀번호를 입력하세요.</p>
+      <div class="modalRow">
+        <input id="adminPassInput" type="password" placeholder="관리자 비밀번호" autocomplete="off"/>
+      </div>
+      <div class="modalBtns">
+        <button class="btn" id="adminPassCancelBtn">취소</button>
+        <button class="btn btnPrimary" id="adminPassConfirmBtn">확인</button>
+      </div>
+      <p class="muted" style="font-size:12px;margin:10px 2px 0;">
+        ※ 비밀번호는 브라우저 탭(session)에서만 유지됩니다.
+      </p>
     </div>
   </div>
 
@@ -978,7 +1045,8 @@
 
   function resetAll(){
     const todayRadio = document.querySelector('input[name="orderDateMode"][value="today"]');
-    if (todayRadio) todayRadio.checked = true;
+    warningSilentSet(todayRadio, true);
+
     const di = document.getElementById("orderDateInput");
     if (di) di.value = "";
     toggleDatePickUI();
@@ -994,14 +1062,19 @@
     // 3) Optional Info 초기화
     document.getElementById("guideName").value = "";
     document.getElementById("teamNo").value = "";
+
     const cashRadio = document.querySelector('input[name="payMethod"][value="cash"]');
-    if (cashRadio) cashRadio.checked = true;
+    warningSilentSet(cashRadio, true);
 
     // 카드 fee 기본으로
     const noneRadio = document.querySelector('input[name="cardFeeMode"][value="none"]');
-    if (noneRadio) noneRadio.checked = true;
+    warningSilentSet(noneRadio, true);
 
     updateAll();
+  }
+  function warningSilentSet(el, checked){
+    if (!el) return;
+    el.checked = !!checked;
   }
 
   // SPECIAL UI
@@ -1093,8 +1166,60 @@
   }
 
   /*************************************************
-   * ✅ 저장 보호(저장만 비번, 프린트는 제외)
+   * ✅ 저장 보호(모달 버전 / 디자인=admin.html)
+   * - 신규 저장, 수정 저장 모두 적용
    *************************************************/
+  const ADMIN_PASS_CACHE_KEY = "hana_admin_pass"; // (기존과 동일) sessionStorage에 저장
+
+  // 모달 helpers
+  const passModal = document.getElementById("adminPassModal");
+  const passInput = document.getElementById("adminPassInput");
+  const passTitle = document.getElementById("adminPassTitle");
+  const passDesc  = document.getElementById("adminPassDesc");
+  const passOkBtn = document.getElementById("adminPassConfirmBtn");
+  const passCancelBtn = document.getElementById("adminPassCancelBtn");
+
+  let passModalResolve = null;
+  let passModalBusy = false;
+
+  function openPassModal({ title="관리자 확인", desc="저장하려면 관리자 비밀번호를 입력하세요." } = {}){
+    passTitle.textContent = title;
+    passDesc.textContent = desc;
+    passInput.value = "";
+    passModal.style.display = "flex";
+    setTimeout(()=> passInput.focus(), 50);
+
+    return new Promise((resolve) => {
+      passModalResolve = resolve;
+    });
+  }
+  function closePassModal(result){
+    passModal.style.display = "none";
+    const r = passModalResolve;
+    passModalResolve = null;
+    if (typeof r === "function") r(result);
+  }
+
+  // 바깥 클릭 닫기(취소)
+  passModal.addEventListener("click", (e)=>{
+    if (e.target && e.target.id === "adminPassModal"){
+      if (passModalBusy) return;
+      closePassModal(null);
+    }
+  });
+  passCancelBtn.addEventListener("click", ()=>{
+    if (passModalBusy) return;
+    closePassModal(null);
+  });
+
+  passInput.addEventListener("keydown", (e)=>{
+    if (e.key === "Enter") passOkBtn.click();
+    if (e.key === "Escape"){
+      if (passModalBusy) return;
+      closePassModal(null);
+    }
+  });
+
   async function verifyAdminPassword(pass){
     try{
       const { data, error } = await sb.rpc("admin_check_password", { p_password: pass });
@@ -1106,28 +1231,56 @@
     }
   }
 
-  async function requireAdminPassword(){
-    const key = "hana_admin_pass";
-    let pass = (sessionStorage.getItem(key) || "").trim();
-
+  async function requireAdminPasswordModal({ actionLabel="저장" } = {}){
+    // 1) 캐시된 비번이 있으면 먼저 검증
+    let pass = (sessionStorage.getItem(ADMIN_PASS_CACHE_KEY) || "").trim();
     if (pass){
       const ok = await verifyAdminPassword(pass);
       if (ok) return pass;
-      sessionStorage.removeItem(key);
+      sessionStorage.removeItem(ADMIN_PASS_CACHE_KEY);
     }
 
-    pass = prompt("관리자 비밀번호를 입력하세요.");
-    if (!pass) return null;
+    // 2) 모달로 입력 받기 + 검증(틀리면 모달 유지)
+    while (true){
+      const entered = await openPassModal({
+        title: "관리자 확인",
+        desc: `${actionLabel}하려면 관리자 비밀번호를 입력하세요.`
+      });
 
-    const ok = await verifyAdminPassword(pass.trim());
-    if (!ok){
-      alert("비밀번호가 틀렸거나 권한이 없습니다.");
-      return null;
+      if (!entered) return null;
+
+      const candidate = String(entered).trim();
+      if (!candidate) continue;
+
+      passModalBusy = true;
+      passOkBtn.disabled = true;
+      passCancelBtn.disabled = true;
+
+      const ok = await verifyAdminPassword(candidate);
+
+      passModalBusy = false;
+      passOkBtn.disabled = false;
+      passCancelBtn.disabled = false;
+
+      if (!ok){
+        alert("비밀번호가 틀렸거나 권한이 없습니다.");
+        // 모달 다시 열기(지금 열린 상태라서 닫지 말고, 입력만 비우고 포커스)
+        passInput.value = "";
+        setTimeout(()=> passInput.focus(), 50);
+        continue;
+      }
+
+      sessionStorage.setItem(ADMIN_PASS_CACHE_KEY, candidate);
+      closePassModal(candidate);
+      return candidate;
     }
-
-    sessionStorage.setItem(key, pass.trim());
-    return pass.trim();
   }
+
+  // 확인 버튼: 값 리턴만(검증은 requireAdminPasswordModal에서)
+  passOkBtn.addEventListener("click", ()=>{
+    if (passModalBusy) return;
+    closePassModal((passInput.value || "").trim());
+  });
 
   /*************************************************
    * ✅ (추가) 카드 7%를 DB에 “라인 아이템”으로도 저장해서
@@ -1136,15 +1289,6 @@
   const FEE_KIND = "fee7";
   const FEE_KO = "Service fee 7%";
   const FEE_VI = "Phí dịch vụ 7%";
-
-  async function deleteFeeLine(orderId){
-    const { error } = await sb
-      .from("order_custom_items")
-      .delete()
-      .eq("order_id", orderId)
-      .eq("kind", FEE_KIND);
-    if (error) throw error;
-  }
 
   async function insertFeeLineIfNeeded(orderId, adj){
     // adj.fee_* 는 “추가된 금액”
@@ -1167,6 +1311,9 @@
     if (error) throw error;
   }
 
+  /*************************************************
+   * ✅ 저장(신규/수정)
+   *************************************************/
   async function saveNewOrder(){
     const btn = document.getElementById("saveBtn");
     btn.disabled = true;
@@ -1178,8 +1325,8 @@
         return;
       }
 
-      // ✅ 신규 저장도 비번 확인
-      const pass = await requireAdminPassword();
+      // ✅ 신규 저장도 비번 확인(모달)
+      const pass = await requireAdminPasswordModal({ actionLabel: "저장" });
       if (!pass) return;
 
       const guideName = (document.getElementById("guideName").value || "").trim();
@@ -1253,11 +1400,10 @@
         if (cErr) throw cErr;
       }
 
-      // ✅ (추가) 카드 7%면 “fee7” 라인도 저장
+      // ✅ 카드 7%면 “fee7” 라인도 저장
       await insertFeeLineIfNeeded(orderId, adj);
 
       alert("저장 완료!");
-
     } catch(e){
       console.error(e);
       alert("저장 실패");
@@ -1277,8 +1423,8 @@
         return;
       }
 
-      // ✅ 수정 저장도 비번 확인
-      const pass = await requireAdminPassword();
+      // ✅ 수정 저장도 비번 확인(모달)
+      const pass = await requireAdminPasswordModal({ actionLabel: "수정 저장" });
       if (!pass) return;
 
       const guideName = (document.getElementById("guideName").value || "").trim();
@@ -1314,7 +1460,7 @@
       if (error) throw error;
       if (data !== true){
         alert("비밀번호가 틀렸거나 권한이 없습니다.");
-        sessionStorage.removeItem("hana_admin_pass");
+        sessionStorage.removeItem(ADMIN_PASS_CACHE_KEY);
         return;
       }
 
@@ -1348,7 +1494,7 @@
       // ✅ orders total 업데이트 (적용된 값으로)
       const { error: updErr } = await sb
         .from("orders")
-        .update({ total_usd: adj.usd, total_vnd: adj.vnd })
+        .update({ total_usd: adj.usd, total_vnd: adj.vnd, payment_method: paymentMethod, guide_name: guideName || "", team_no: teamNo || "" })
         .eq("id", editOrderId);
       if (updErr) throw updErr;
 
@@ -1363,6 +1509,9 @@
     }
   }
 
+  /*************************************************
+   * ✅ 수정모드 로드
+   *************************************************/
   async function loadOrderForEdit(orderId){
     // ✅ total도 함께 가져와서 (카드+7% 여부) 자동 추정
     const { data: meta, error: metaErr } = await sb
@@ -1444,7 +1593,7 @@
 
     document.getElementById("modeTitle").textContent = "Edit Mode (수정)";
     document.getElementById("saveBtn").textContent = "수정 저장 / Save";
-    
+
     updateAll();
   }
 
@@ -1473,9 +1622,10 @@
   // ✅ 결제/카드옵션 바뀌면 즉시 총액 재계산
   document.getElementById("payOptions").addEventListener("change", () => updateAll());
   document.getElementById("cardFeeBox").addEventListener("change", () => updateAll());
+
   document.getElementById("goReservBtn").addEventListener("click", () => {
-  location.href = "reserv_check.html"; // 같은 폴더
-});
+    location.href = "reserv_check.html"; // 같은 폴더
+  });
 
   // ✅ 날짜 옵션 UI 토글
   document.getElementById("dateOptions")?.addEventListener("change", () => toggleDatePickUI());
