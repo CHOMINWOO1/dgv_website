@@ -58,6 +58,12 @@
     .btn-primary{background:var(--gold);color:#2b1e14}
     .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
     .btn-mini{border-radius:999px;padding:8px 10px}
+    .btn-danger{
+        background:#ffd9d7;
+        border:1px solid #f4c7c3;
+        color:var(--bad);
+        }
+.btn-danger:hover{ filter:brightness(.98); }
 
     .grid{
       display:grid;
@@ -154,7 +160,7 @@
     <div class="card">
       <div class="top">
         <div>
-          <h1>관리자 - 단체 예약 관리</h1>
+          <h1>관리자 - 단체 예약 관리 </h1>
         </div>
       </div>
 
@@ -263,6 +269,7 @@
           <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">
             <button class="btn-ghost" id="btnClear" type="button">선택 해제</button>
             <button class="btn-primary" id="btnSave" type="button">저장(수정)</button>
+            <button class="btn-danger" id="btnDelete" type="button">삭제</button>
           </div>
 
           <div class="msg" id="msg"></div>
@@ -668,6 +675,50 @@
         }
       }
     }
+    async function deleteSelected(){
+  try{
+    setMsg("", "");
+    if(!SELECTED_ID){
+      setMsg("bad","삭제할 예약을 왼쪽 목록에서 선택해줘.");
+      return;
+    }
+
+    const ok = confirm("정말 삭제할까요? (되돌릴 수 없습니다)");
+    if(!ok) return;
+
+    // ✅ 테이블 직접 삭제 (RLS 허용되어야 함)
+    const url = `${SUPABASE_URL}/rest/v1/resv_groups?id=eq.${encodeURIComponent(SELECTED_ID)}`;
+
+    const res = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+        "Content-Type": "application/json",
+        // Supabase REST에서 delete 결과를 받고 싶으면 아래 추가(선택)
+        "Prefer": "return=representation"
+      }
+    });
+
+    const text = await res.text();
+    if(!res.ok){
+      let json=null; try{ json = text ? JSON.parse(text) : null; }catch{}
+      const err = (json && (json.message || json.error)) || text || ("HTTP " + res.status);
+      throw new Error(err);
+    }
+
+    setMsg("ok","삭제 완료!");
+    await loadList();
+    clearSelection();
+  }catch(e){
+    if((e.message || "").toLowerCase().includes("forbidden")){
+      setMsg("bad","권한이 없습니다(삭제 불가). RLS/정책 또는 비밀번호 RPC가 필요해.");
+    }else{
+      setMsg("bad","삭제 실패: " + e.message);
+    }
+  }
+}
+
 
     function buildBranch(){
       const sel = $("q_branch");
@@ -687,7 +738,7 @@
         updateTimePreview("e_time_raw","e_time_preview");
       }
     });
-
+$("btnDelete").addEventListener("click", deleteSelected);
     // KO 입력 시 VI 자동
     $("e_menu_ko").addEventListener("input", () => {
       const key = normalizeKey($("e_menu_ko").value);
