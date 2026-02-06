@@ -237,10 +237,19 @@
 
     /* ✅ 로그인 전 페이지 잠금 */
     .locked .wrap{
-      filter: blur(2px);
-      pointer-events: none;
-      user-select: none;
-    }
+  pointer-events:none;
+  user-select:none;
+  filter:none !important;
+}
+.locked:before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background: rgba(250,246,238,.65);
+  z-index: 9998;
+}
+#gateModal{ z-index: 9999; }
+
   </style>
 </head>
 <body>
