@@ -45,6 +45,7 @@
     }
     .btn-primary{background:var(--gold);color:#2b1e14}
     .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+    .btn-primary:disabled,.btn-ghost:disabled{opacity:.55;cursor:not-allowed}
     .msg{margin-top:12px;font-size:14px}
     .ok{color:var(--ok);font-weight:900}
     .bad{color:var(--bad);font-weight:900}
@@ -66,19 +67,6 @@
       font-weight:900;
       background:#fff;
     }
-    .hint{
-      display:flex; gap:8px; flex-wrap:wrap;
-      margin-top:6px;
-      color:var(--sub);
-      font-size:12px;
-    }
-    .chip{
-      padding:4px 8px;
-      border:1px solid var(--line);
-      border-radius:999px;
-      background:#fff;
-      font-weight:800;
-    }
 
     @media (max-width:900px){
       .grid{grid-template-columns:1fr 1fr}
@@ -88,6 +76,49 @@
       .grid{grid-template-columns:1fr}
       .two{grid-template-columns:1fr}
       .time-preview{min-width:78px}
+    }
+
+    /* ===== Modal (admin.html 스타일) ===== */
+    .modalBack{
+      position:fixed; inset:0; background:rgba(0,0,0,.35);
+      display:none; align-items:center; justify-content:center;
+      padding:14px; z-index:9999;
+    }
+    .modal{
+      width:min(420px, 100%);
+      background:var(--card);
+      border:2px solid var(--line);
+      border-radius:16px;
+      box-shadow:0 18px 40px rgba(0,0,0,.20);
+      padding:14px;
+    }
+    .modalTitle{font-weight:1000; letter-spacing:.06em; color:var(--ink); margin:2px 0 10px;}
+    .modalDesc{font-size:13px; color:var(--sub); font-weight:900; margin:0 0 10px;}
+    .modalRow{display:flex; gap:8px; align-items:center;}
+    .modalRow input{
+      flex:1;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 10px;
+      font-weight:900;
+      background:#fff;
+    }
+    .modalBtns{margin-top:10px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;}
+    .btn{
+      border:1px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      font-weight:1000;
+      border-radius: 12px;
+      padding: 10px 12px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.06);
+      cursor:pointer;
+      white-space: nowrap;
+    }
+    .btn:hover{border-color:var(--gold)}
+    .btnPrimary{
+      border-color: var(--gold);
+      background: #fff7e6;
     }
   </style>
 </head>
@@ -112,7 +143,6 @@
             <input id="res_time_raw" type="text" inputmode="numeric" placeholder="예: 6 / 630 / 18:07" autocomplete="off" />
             <div class="time-preview" id="time_preview">--:--</div>
           </div>
-
         </div>
 
         <!-- ✅ BRANCH: 직접입력 + 선택 -->
@@ -168,6 +198,22 @@
       </div>
 
       <div class="msg" id="msg"></div>
+    </div>
+  </div>
+
+  <!-- ✅ Password Modal -->
+  <div class="modalBack" id="passModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalTitle">관리자 비밀번호</div>
+      <p class="modalDesc">저장하려면 비밀번호를 입력하세요.</p>
+      <div class="modalRow">
+        <input id="passInput" type="password" placeholder="관리자 비밀번호" autocomplete="off"/>
+      </div>
+      <div class="modalBtns">
+        <button class="btn" id="passCancelBtn" type="button">취소</button>
+        <button class="btn btnPrimary" id="passOkBtn" type="button">확인</button>
+      </div>
+      <p class="mini" style="margin:10px 0 0;">※ 브라우저 탭(session)에서만 유지됩니다.</p>
     </div>
   </div>
 
@@ -376,8 +422,7 @@
     /***********************
      * ✅ BRANCH: 직접입력 + 선택
      ***********************/
-    const BRANCH_PRESETS = ["KT","ANT","AST","엠투어","기쁨","JM","TOT","투어패밀리","빅트래블","실크로드"
-];
+    const BRANCH_PRESETS = ["KT","ANT","AST","엠투어","기쁨","JM","TOT","투어패밀리","빅트래블","실크로드"];
 
     function buildBranchSelect(){
       const sel = $("branch_select");
@@ -440,18 +485,76 @@
       setMsg("", "");
     };
 
+    /*************************************************
+     * ✅ 저장 보호(모달 비번, sessionStorage 캐시)
+     *************************************************/
+    const ADMIN_PASS_KEY = "hana_admin_pass_group_v1";
+
+    function openPassModal(){
+      $("passInput").value = "";
+      $("passModal").style.display = "flex";
+      setTimeout(()=> $("passInput").focus(), 50);
+    }
+    function closePassModal(){
+      $("passModal").style.display = "none";
+    }
+
+    // ※ 여기선 verify RPC가 없으니 "저장 RPC로 검증" 방식:
+    // - 캐시된 비번이 있으면 그걸로 저장 시도
+    // - 실패(권한/비번 오류)면 캐시 삭제하고 모달 다시 띄움
+    async function getAdminPasswordForSave(){
+      const cached = (sessionStorage.getItem(ADMIN_PASS_KEY) || "").trim();
+      if (cached) return cached;
+      return new Promise((resolve) => {
+        openPassModal();
+
+        const ok = () => {
+          const pass = ($("passInput").value || "").trim();
+          if(!pass){ setMsg("bad","비밀번호를 입력하세요"); return; }
+          closePassModal();
+          cleanup();
+          sessionStorage.setItem(ADMIN_PASS_KEY, pass);
+          resolve(pass);
+        };
+
+        const cancel = () => {
+          closePassModal();
+          cleanup();
+          resolve(null);
+        };
+
+        const onKey = (e) => {
+          if(e.key === "Enter") ok();
+          if(e.key === "Escape") cancel();
+        };
+
+        const onBackClick = (e) => {
+          if (e.target && e.target.id === "passModal") cancel();
+        };
+
+        function cleanup(){
+          $("passOkBtn").removeEventListener("click", ok);
+          $("passCancelBtn").removeEventListener("click", cancel);
+          $("passInput").removeEventListener("keydown", onKey);
+          $("passModal").removeEventListener("click", onBackClick);
+        }
+
+        $("passOkBtn").addEventListener("click", ok);
+        $("passCancelBtn").addEventListener("click", cancel);
+        $("passInput").addEventListener("keydown", onKey);
+        $("passModal").addEventListener("click", onBackClick);
+      });
+    }
+
     /***********************
-     * 저장 (클릭 시 비밀번호 입력 prompt)
+     * 저장 (모달 비밀번호)
      ***********************/
     $("btnSubmit").onclick = async () => {
+      const btn = $("btnSubmit");
+      btn.disabled = true;
+
       try{
         setMsg("", "");
-
-        const pw = (prompt("관리자 비밀번호를 입력하세요") || "").trim();
-        if(!pw){
-          setMsg("bad","비밀번호 입력이 취소되었습니다");
-          return;
-        }
 
         const res_date = $("res_date").value;
         const res_time = getNormalizedTimeHHMM(); // ✅ 정규화된 HH:MM
@@ -483,6 +586,13 @@
           return;
         }
 
+        // 1) 비번 확보 (캐시 있으면 재사용, 없으면 모달)
+        let pw = await getAdminPasswordForSave();
+        if(!pw){
+          setMsg("bad","비밀번호 입력이 취소되었습니다");
+          return;
+        }
+
         const body = {
           pw,
           p_res_date: res_date,
@@ -496,19 +606,41 @@
           p_guide_name: guide_name
         };
 
-        const newId = await rpc("admin_insert_resv_group", body);
-setMsg("ok", `저장 완료! (id: ${newId})`);
+        // 2) 저장 시도
+        let newId;
+        try{
+          newId = await rpc("admin_insert_resv_group", body);
+        }catch(e){
+          // 비번/권한 오류면 캐시 삭제 후 다시 모달 띄워 재시도 1회
+          const msg = (e.message || "").toLowerCase();
+          if (msg.includes("forbidden") || msg.includes("permission") || msg.includes("not allowed")){
+            sessionStorage.removeItem(ADMIN_PASS_KEY);
 
-// ✅ 저장 성공 후 자동 초기화
-$("btnClear").click();                 // 폼 값 초기화 + UI 상태도 같이 정리됨
-setMsg("ok", `저장 완료! (id: ${newId})`); // 초기화가 메시지 지우니까 다시 표시
+            pw = await getAdminPasswordForSave();
+            if(!pw){
+              setMsg("bad","비밀번호 입력이 취소되었습니다");
+              return;
+            }
+            body.pw = pw;
+            newId = await rpc("admin_insert_resv_group", body);
+          } else {
+            throw e;
+          }
+        }
+
+        setMsg("ok", `저장 완료! (id: ${newId})`);
+        $("btnClear").click();
+        setMsg("ok", `저장 완료! (id: ${newId})`);
 
       }catch(e){
-        if((e.message || "").toLowerCase().includes("forbidden")){
+        const msg = (e.message || "");
+        if(msg.toLowerCase().includes("forbidden")){
           setMsg("bad","비밀번호가 틀렸거나 권한이 없습니다");
         }else{
-          setMsg("bad","저장 실패: " + e.message);
+          setMsg("bad","저장 실패: " + msg);
         }
+      } finally {
+        btn.disabled = false;
       }
     };
 
