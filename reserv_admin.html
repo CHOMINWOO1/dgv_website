@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Admin - Edit Group Reservations</title>
+  <style>
+    :root{
+      --bg:#faf6ee; --card:#fffdf7; --ink:#3a2a1f; --sub:#6b5444;
+      --line:#e7d7b8; --gold:#caa24c; --shadow:0 10px 24px rgba(0,0,0,.10);
+      --radius:16px; --ok:#1b7f3a; --bad:#b42318;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans KR",sans-serif;
+      background: radial-gradient(1400px 700px at 50% -200px, #fff 0%, var(--bg) 60%);
+      color:var(--ink);
+    }
+    .wrap{max-width:1280px;margin:18px auto;padding:0 12px}
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:14px;
+    }
+    .top{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap}
+    h1{margin:0;font-size:18px}
+    .sub{margin:4px 0 0;color:var(--sub);font-size:12px}
+
+    .controls{
+      margin:12px 0 10px;
+      padding:12px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:#fff;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:flex-end;
+    }
+    label{display:block;font-size:12px;color:var(--sub);margin:0 0 6px}
+    select,input,textarea{
+      width:100%;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      background:#fff;
+      color:var(--ink);
+      outline:none;
+    }
+    textarea{min-height:92px;resize:vertical}
+    button{
+      border:0; cursor:pointer; border-radius:12px; padding:10px 12px;
+      font-weight:900; letter-spacing:.02em;
+    }
+    .btn-primary{background:var(--gold);color:#2b1e14}
+    .btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+    .btn-mini{border-radius:999px;padding:8px 10px}
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap:12px;
+      margin-top:10px;
+    }
+
+    /* list */
+    .list{
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:14px;
+      overflow:hidden;
+    }
+    .list-head{
+      padding:10px 12px;
+      border-bottom:1px solid var(--line);
+      background:#fff7e8;
+      font-size:12px;
+      color:var(--sub);
+      font-weight:900;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .rows{max-height:70vh; overflow:auto}
+    .row{
+      padding:10px 12px;
+      border-bottom:1px solid #f1e6cf;
+      cursor:pointer;
+      display:flex;
+      gap:10px;
+      justify-content:space-between;
+      align-items:flex-start;
+    }
+    .row:hover{background:#fffdf5}
+    .row.active{background:#fff3d6}
+    .pill{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:4px 8px;border:1px solid var(--line);border-radius:999px;
+      background:#fff;font-size:12px;font-weight:900;color:var(--sub);
+      white-space:nowrap;
+    }
+    .title{font-weight:1000}
+    .muted{color:var(--sub);font-size:12px}
+    .note-mini{
+      margin-top:6px;
+      color:var(--sub);
+      font-size:12px;
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+      white-space:pre-wrap;
+    }
+
+    /* editor */
+    .editor{
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:12px;
+    }
+    .editor h2{margin:0 0 10px;font-size:14px}
+    .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .span2{grid-column:1/-1}
+
+    .time-row{display:flex;gap:10px;align-items:center}
+    .time-row input{flex:1}
+    .time-preview{
+      min-width:86px;
+      text-align:center;
+      padding:10px 10px;
+      border:1px dashed var(--line);
+      border-radius:12px;
+      color:var(--sub);
+      font-weight:900;
+      background:#fff;
+    }
+
+    .msg{margin-top:10px;font-size:14px}
+    .ok{color:var(--ok);font-weight:900}
+    .bad{color:var(--bad);font-weight:900}
+
+    @media (max-width:980px){
+      .grid{grid-template-columns:1fr}
+      .rows{max-height:42vh}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="top">
+        <div>
+          <h1>관리자 - 단체 예약 관리</h1>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div style="min-width:220px">
+          <label>BRANCH</label>
+          <select id="q_branch">
+            <option value="">전체</option>
+          </select>
+        </div>
+
+        <!-- ✅ 보기 모드 -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div style="display:flex;gap:8px;">
+            <button class="btn-ghost btn-mini" id="btnToday" type="button">오늘</button>
+            <button class="btn-primary btn-mini" id="btnFromToday" type="button">오늘 이후 전체</button>
+            <button class="btn-ghost btn-mini" id="btnRange" type="button">기간</button>
+          </div>
+
+          <!-- ✅ 기간 입력 (기간 모드일 때만 사용) -->
+          <div id="rangeBox" style="display:none;gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <div style="min-width:160px">
+              <label>FROM</label>
+              <input id="q_from" type="date" />
+            </div>
+            <div style="min-width:160px">
+              <label>TO</label>
+              <input id="q_to" type="date" />
+            </div>
+            <button class="btn-primary btn-mini" id="btnApplyRange" type="button">적용</button>
+          </div>
+        </div>
+
+        <button class="btn-ghost" id="btnRefresh" type="button">새로고침</button>
+      </div>
+
+      <div class="grid">
+        <!-- LIST -->
+        <div class="list">
+          <div class="list-head">
+            <span id="listTitle">목록</span>
+            <span class="muted" id="listCount">0건</span>
+          </div>
+          <div class="rows" id="rows"></div>
+        </div>
+
+        <!-- EDITOR -->
+        <div class="editor">
+          <h2>선택된 예약 수정</h2>
+
+          <div class="fgrid">
+            <div>
+              <label>ID</label>
+              <input id="e_id" type="text" disabled />
+            </div>
+            <div>
+              <label>BRANCH</label>
+              <input id="e_branch" type="text" placeholder="예: ANT / KT / 실크로드" />
+            </div>
+
+            <div>
+              <label>DATE</label>
+              <input id="e_date" type="date" />
+            </div>
+
+            <div>
+              <label>TIME (타이핑 → 10분 자동보정)</label>
+              <div class="time-row">
+                <input id="e_time_raw" type="text" inputmode="numeric" placeholder="예: 6 / 630 / 18:07" autocomplete="off" />
+                <div class="time-preview" id="e_time_preview">--:--</div>
+              </div>
+            </div>
+
+            <div>
+              <label>GUESTS</label>
+              <input id="e_guests" type="number" min="1" step="1" />
+            </div>
+
+            <div>
+              <label>PRICE (VND)</label>
+              <input id="e_price" type="number" min="0" step="1000" placeholder="예: 2500000" />
+            </div>
+
+            <div class="span2">
+              <label>MENU KO</label>
+              <input id="e_menu_ko" type="text" placeholder="예: 무한삼겹" />
+            </div>
+
+            <div class="span2">
+              <label>MENU VI</label>
+              <input id="e_menu_vi" type="text" placeholder="예: Thịt nướng buffet" />
+              <div class="muted" style="margin-top:6px">* KO 입력 시 매핑표에 있으면 VI 자동 입력</div>
+            </div>
+
+            <div class="span2">
+              <label>NOTE</label>
+              <textarea id="e_note"></textarea>
+            </div>
+
+            <div class="span2">
+              <label>GUIDE NAME</label>
+              <input id="e_guide" type="text" />
+            </div>
+          </div>
+
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">
+            <button class="btn-ghost" id="btnClear" type="button">선택 해제</button>
+            <button class="btn-primary" id="btnSave" type="button">저장(수정)</button>
+          </div>
+
+          <div class="msg" id="msg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /***********************
+     * ✅ 너 프로젝트
+     ***********************/
+    const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
+
+    /***********************
+     * ✅ 입장 비밀번호(세션)
+     ***********************/
+    let ADMIN_PW = "";
+
+    /***********************
+     * 한→베 메뉴 매핑
+     ***********************/
+    const KO_VI_MENU_MAP = {
+      '김치찌개': 'Canh kim chi',
+      '제육볶음': 'Heo xào',
+      '제육쌈밥': 'Heo xào',
+      '삼겹살': 'Thịt nướng',
+      '무한삼겹': 'Thịt nướng buffet',
+      '무삼': 'Thịt nướng buffet',
+      '아티소백숙': 'Gà hầm atiso',
+      '제육+김치찌개': 'Canh kim chi+Heo xào',
+      '우렁쌈밥': 'Ốc tương xào',
+      '장어구이': 'Lươn nướng',
+      '닭볶음탕' : 'Gà hầm cay',
+      '소고기수육세트' : 'Set thịt bò luộc',
+      '사시미세트' : 'bộ sashimi',
+      '묵은지등갈비찜': 'Sườn heo om kim chi',
+      '짬뽕순두부' : 'Món hầm Sun'
+    };
+
+    const BRANCH_PRESETS = ["KT","ANT","AST","엠투어","기쁨","JM","TOT","투어패밀리","빅트래블","실크로드","HANA","OTHER"];
+
+    const $ = (id) => document.getElementById(id);
+
+    function escapeHtml(s){
+      return String(s ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#39;");
+    }
+
+    function setMsg(type, text){
+      const el = $("msg");
+      if(!text){ el.innerHTML = ""; return; }
+      el.innerHTML = `<span class="${type}">${escapeHtml(text)}</span>`;
+    }
+
+    function ymd(d){ return d.toISOString().slice(0,10); }
+
+    function formatVND(n){
+      if(n === null || n === undefined || n === "") return "";
+      const x = Number(n);
+      if(!Number.isFinite(x) || x === 0) return "";
+      return x.toLocaleString("en-US") + " VND";
+    }
+
+    async function rpc(fn, body){
+      const res = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + fn, {
+        method:"POST",
+        headers:{
+          "apikey": SUPABASE_ANON_KEY,
+          "Authorization":"Bearer " + SUPABASE_ANON_KEY,
+          "Content-Type":"application/json"
+        },
+        body: JSON.stringify(body || {})
+      });
+      const text = await res.text();
+      let json=null; try{ json = text ? JSON.parse(text) : null; }catch{}
+      if(!res.ok){
+        const err = (json && (json.message || json.error)) || text || ("HTTP " + res.status);
+        throw new Error(err);
+      }
+      return json;
+    }
+
+    async function fetchJson(url){
+      const res = await fetch(url, {
+        headers:{
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: "Bearer " + SUPABASE_ANON_KEY
+        }
+      });
+      const text = await res.text();
+      let json=null; try{ json = text ? JSON.parse(text) : null; }catch{}
+      if(!res.ok){
+        const err = (json && (json.message || json.error)) || text || ("HTTP " + res.status);
+        throw new Error(err);
+      }
+      return json;
+    }
+
+    function normalizeKey(s){
+      return (s || "").trim().replace(/\s+/g, "");
+    }
+
+    /***********************
+     * TIME 파서 + 10분 보정
+     ***********************/
+    function clamp(n, a, b){ return Math.min(b, Math.max(a, n)); }
+
+    function parseLooseTimeToMinutes(raw){
+      const s0 = (raw || "").trim();
+      if(!s0) return null;
+
+      const s = s0.replace(/\s+/g, "");
+      let h = null, m = null;
+
+      if(s.includes(":")){
+        const parts = s.split(":");
+        if(parts.length !== 2) return null;
+        if(parts[0] === "") return null;
+        h = Number(parts[0]);
+        m = Number(parts[1]);
+        if(!Number.isFinite(h) || !Number.isFinite(m)) return null;
+      }else{
+        if(!/^\d+$/.test(s)) return null;
+        if(s.length <= 2){
+          h = Number(s);
+          m = 0;
+        }else if(s.length === 3){
+          h = Number(s.slice(0,1));
+          m = Number(s.slice(1));
+        }else if(s.length === 4){
+          h = Number(s.slice(0,2));
+          m = Number(s.slice(2));
+        }else{
+          return null;
+        }
+      }
+
+      if(!Number.isFinite(h) || !Number.isFinite(m)) return null;
+      if(h < 0 || h > 23) return null;
+      if(m < 0 || m > 59) return null;
+
+      return h * 60 + m;
+    }
+
+    function roundToNearest10(mins){
+      const rounded = Math.round(mins / 10) * 10;
+      return clamp(rounded, 0, 23*60 + 50);
+    }
+
+    function minutesToHHMM(mins){
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
+    }
+
+    function getNormalizedTimeHHMM(rawInputId){
+      const mins = parseLooseTimeToMinutes($(rawInputId).value);
+      if(mins === null) return null;
+      const r = roundToNearest10(mins);
+      return minutesToHHMM(r);
+    }
+
+    function updateTimePreview(rawId, prevId){
+      const t = getNormalizedTimeHHMM(rawId);
+      $(prevId).textContent = t || "--:--";
+      $(prevId).style.opacity = t ? "1" : ".6";
+    }
+
+    /***********************
+     * 목록 로드 모드
+     ***********************/
+    let MODE = "fromToday"; // today | fromToday | range
+    let SELECTED_ID = null;
+    let ROWS = [];
+
+    function setMode(mode){
+      MODE = mode;
+
+      const on = (id) => {
+        $(id).classList.add("btn-primary");
+        $(id).classList.remove("btn-ghost");
+      };
+      const off = (id) => {
+        $(id).classList.add("btn-ghost");
+        $(id).classList.remove("btn-primary");
+      };
+
+      if(MODE === "today"){
+        on("btnToday"); off("btnFromToday"); off("btnRange");
+        $("listTitle").textContent = "오늘 예약";
+        $("rangeBox").style.display = "none";
+      }else if(MODE === "range"){
+        off("btnToday"); off("btnFromToday"); on("btnRange");
+        $("listTitle").textContent = "기간 조회";
+        $("rangeBox").style.display = "flex";
+      }else{
+        off("btnToday"); on("btnFromToday"); off("btnRange");
+        $("listTitle").textContent = "오늘 이후 전체";
+        $("rangeBox").style.display = "none";
+      }
+    }
+
+    function clearSelection(){
+      SELECTED_ID = null;
+      ["e_id","e_branch","e_date","e_time_raw","e_guests","e_price","e_menu_ko","e_menu_vi","e_note","e_guide"].forEach(id => $(id).value = "");
+      $("e_time_preview").textContent="--:--";
+      document.querySelectorAll(".row.active").forEach(el => el.classList.remove("active"));
+      setMsg("", "");
+    }
+
+    function fillEditor(r){
+      SELECTED_ID = r.id;
+      $("e_id").value = r.id ?? "";
+      $("e_branch").value = r.branch ?? "";
+      $("e_date").value = r.res_date ?? "";
+      $("e_time_raw").value = (r.res_time || "").slice(0,5) || "";
+      $("e_guests").value = r.guests_count ?? "";
+      $("e_price").value = (r.price ?? "") === null ? "" : (r.price ?? "");
+      $("e_menu_ko").value = r.menu_ko ?? "";
+      $("e_menu_vi").value = r.menu_vi ?? "";
+      $("e_note").value = r.note ?? "";
+      $("e_guide").value = r.guide_name ?? "";
+      updateTimePreview("e_time_raw","e_time_preview");
+      setMsg("", "");
+    }
+
+    function renderList(rows){
+      const box = $("rows");
+      $("listCount").textContent = `${rows.length}건`;
+
+      if(!rows.length){
+        box.innerHTML = `<div class="muted" style="padding:12px;">데이터 없음</div>`;
+        return;
+      }
+
+      box.innerHTML = rows.map(r => {
+        const note = (r.note || "").trim();
+        return `
+          <div class="row" data-id="${escapeHtml(r.id)}">
+            <div>
+              <div class="title">${escapeHtml(r.res_date || "")} ${escapeHtml((r.res_time||"").slice(0,5))}</div>
+              <div class="muted" style="margin-top:4px">
+                <span class="pill">${escapeHtml(r.branch || "")}</span>
+                <span class="pill">👥 ${escapeHtml(String(r.guests_count ?? ""))}</span>
+                ${r.price ? `<span class="pill">${escapeHtml(formatVND(r.price))}</span>` : ``}
+              </div>
+              <div class="muted" style="margin-top:6px">
+                <span class="pill">GUIDE: ${escapeHtml(r.guide_name || "")}</span>
+              </div>
+              <div class="note-mini">${escapeHtml(note)}</div>
+            </div>
+            <div style="text-align:right">
+              <div class="muted">${escapeHtml(r.menu_ko || "")}</div>
+              <div class="muted">${escapeHtml(r.menu_vi || "")}</div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      box.querySelectorAll(".row").forEach(el=>{
+        el.addEventListener("click", ()=>{
+          const id = el.getAttribute("data-id");
+          document.querySelectorAll(".row.active").forEach(x => x.classList.remove("active"));
+          el.classList.add("active");
+          const r = ROWS.find(x => String(x.id) === String(id));
+          if(r) fillEditor(r);
+        });
+      });
+    }
+
+    function setDefaultRange(){
+      // 기본: 지난 30일 ~ 오늘
+      const today = new Date();
+      const from = new Date(today);
+      from.setDate(from.getDate() - 30);
+      $("q_from").value = ymd(from);
+      $("q_to").value = ymd(today);
+    }
+
+    async function loadList(){
+      try{
+        setMsg("", "");
+        clearSelection();
+
+        const today = ymd(new Date());
+        const branch = $("q_branch").value;
+
+        let url =
+          `${SUPABASE_URL}/rest/v1/resv_groups` +
+          `?select=id,res_date,res_time,guests_count,price,menu_ko,menu_vi,note,branch,guide_name`;
+
+        if(MODE === "today"){
+          url += `&res_date=eq.${today}`;
+        }else if(MODE === "range"){
+          const from = $("q_from").value;
+          const to = $("q_to").value;
+
+          if(!from || !to){
+            setMsg("bad","기간 조회는 FROM/TO 날짜가 필요해.");
+            $("rows").innerHTML = `<div class="muted" style="padding:12px;">기간을 설정해줘</div>`;
+            return;
+          }
+          if(from > to){
+            setMsg("bad","FROM은 TO보다 클 수 없어.");
+            $("rows").innerHTML = `<div class="muted" style="padding:12px;">FROM/TO 순서를 확인해줘</div>`;
+            return;
+          }
+
+          // ✅ 기간: [from, to] 포함. (to는 다음날 lt로 처리)
+          const toNext = new Date(to + "T00:00:00");
+          toNext.setDate(toNext.getDate() + 1);
+          const toNextYmd = ymd(toNext);
+
+          url += `&res_date=gte.${from}&res_date=lt.${toNextYmd}`;
+        }else{
+          url += `&res_date=gte.${today}`;
+        }
+
+        if(branch) url += `&branch=eq.${encodeURIComponent(branch)}`;
+        url += `&order=res_date.asc,res_time.asc`;
+
+        const rows = await fetchJson(url);
+        ROWS = Array.isArray(rows) ? rows : [];
+        renderList(ROWS);
+      }catch(e){
+        $("rows").innerHTML = `<div class="muted" style="padding:12px;">조회 실패: ${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    async function saveUpdate(){
+      try{
+        setMsg("", "");
+        if(!SELECTED_ID){
+          setMsg("bad","수정할 예약을 왼쪽 목록에서 선택해줘.");
+          return;
+        }
+
+        const res_date = $("e_date").value;
+        const res_time = getNormalizedTimeHHMM("e_time_raw");
+        const branch = ($("e_branch").value || "").trim();
+
+        const guests_count = Number($("e_guests").value);
+        const priceRaw = $("e_price").value;
+        const price = priceRaw === "" ? null : Number(priceRaw);
+
+        const menu_ko = ($("e_menu_ko").value || "").trim();
+        const menu_vi = ($("e_menu_vi").value || "").trim();
+        const note = ($("e_note").value || "").trim();
+        const guide_name = ($("e_guide").value || "").trim();
+
+        if(!res_date || !res_time){
+          setMsg("bad","DATE / TIME은 필수야");
+          return;
+        }
+        if(!branch){
+          setMsg("bad","BRANCH는 필수야");
+          return;
+        }
+        if(!Number.isFinite(guests_count) || guests_count <= 0){
+          setMsg("bad","GUESTS를 숫자로 입력해줘 (예: 13)");
+          return;
+        }
+        if(price !== null && (!Number.isFinite(price) || price < 0)){
+          setMsg("bad","PRICE는 0 이상의 숫자만 가능");
+          return;
+        }
+
+        // KO->VI 자동매핑 (VI 비었을 때만)
+        if(menu_ko && !menu_vi){
+          const mapped = KO_VI_MENU_MAP[normalizeKey(menu_ko)];
+          if(mapped) $("e_menu_vi").value = mapped;
+        }
+
+        const body = {
+          pw: ADMIN_PW,
+          p_id: SELECTED_ID,
+          p_res_date: res_date,
+          p_res_time: res_time,
+          p_guests_count: guests_count,
+          p_price: price,
+          p_menu_ko: menu_ko,
+          p_menu_vi: ($("e_menu_vi").value || "").trim(),
+          p_note: note,
+          p_branch: branch,
+          p_guide_name: guide_name
+        };
+
+        await rpc("admin_update_resv_group", body);
+        setMsg("ok","저장 완료!");
+
+        await loadList();
+      }catch(e){
+        if((e.message || "").toLowerCase().includes("forbidden")){
+          setMsg("bad","비밀번호가 틀렸거나 권한이 없습니다");
+        }else{
+          setMsg("bad","저장 실패: " + e.message);
+        }
+      }
+    }
+
+    function buildBranch(){
+      const sel = $("q_branch");
+      BRANCH_PRESETS.forEach(b=>{
+        const o=document.createElement("option");
+        o.value=b; o.textContent=b;
+        sel.appendChild(o);
+      });
+    }
+
+    // editor time preview
+    $("e_time_raw").addEventListener("input", () => updateTimePreview("e_time_raw","e_time_preview"));
+    $("e_time_raw").addEventListener("blur", () => {
+      const t = getNormalizedTimeHHMM("e_time_raw");
+      if(t){
+        $("e_time_raw").value = t;
+        updateTimePreview("e_time_raw","e_time_preview");
+      }
+    });
+
+    // KO 입력 시 VI 자동
+    $("e_menu_ko").addEventListener("input", () => {
+      const key = normalizeKey($("e_menu_ko").value);
+      const mapped = KO_VI_MENU_MAP[key];
+      if(mapped){
+        $("e_menu_vi").value = mapped;
+      }
+    });
+
+    // buttons
+    $("btnToday").addEventListener("click", async () => { setMode("today"); await loadList(); });
+    $("btnFromToday").addEventListener("click", async () => { setMode("fromToday"); await loadList(); });
+    $("btnRange").addEventListener("click", async () => {
+      setMode("range");
+      if(!$("q_from").value || !$("q_to").value) setDefaultRange();
+      await loadList();
+    });
+    $("btnApplyRange").addEventListener("click", loadList);
+
+    $("btnRefresh").addEventListener("click", loadList);
+    $("q_branch").addEventListener("change", loadList);
+    $("btnClear").addEventListener("click", clearSelection);
+    $("btnSave").addEventListener("click", saveUpdate);
+
+    // init: password gate
+    (function init(){
+      const pw = (prompt("관리자 비밀번호를 입력하세요") || "").trim();
+      if(!pw){
+        document.body.innerHTML = "<div style='padding:24px;font-family:system-ui'>접근이 취소되었습니다.</div>";
+        return;
+      }
+      ADMIN_PW = pw;
+
+      buildBranch();
+      setMode("fromToday");
+      setDefaultRange(); // 기간 모드 기본값 미리 세팅
+      loadList();
+    })();
+  </script>
+</body>
+</html>
