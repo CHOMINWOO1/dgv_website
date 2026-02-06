@@ -554,7 +554,10 @@
         const totalVnd = Number(meta.total_vnd ?? calcVnd);
         const totalUsd = Number(meta.total_usd ?? calcUsd);
 
-        const paidTime = formatTimeLocal(meta.created_at);
+        const paidTime = new Date().toLocaleString("ko-KR", {
+  year:"numeric", month:"2-digit", day:"2-digit",
+  hour:"2-digit", minute:"2-digit"
+});
 
         const guide = (meta.guide_name || "").trim();
         const team  = (meta.team_no || "").trim();
