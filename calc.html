@@ -492,6 +492,20 @@
 
           <div class="metaGrid">
             <div class="metaField">
+              <div class="metaField">
+                <label>주문 날짜 (선택)</label>
+                <div class="payOptions" id="dateOptions" style="gap:10px 12px;">
+                  <label><input type="radio" name="orderDateMode" value="today" checked> today</label>
+                  <label><input type="radio" name="orderDateMode" value="yesterday"> yesterday</label>
+                  <label><input type="radio" name="orderDateMode" value="pick"> pick</label>
+                </div>
+
+                <div class="feeBox" id="datePickBox" style="display:none;">
+                  <div class="feeHint">Pick a date</div>
+                  <input id="orderDateInput" type="date" style="width:220px;">
+                </div>
+              </div>
+
               <label for="guideName">가이드 이름 (선택)</label>
               <input id="guideName" type="text" placeholder="예: 홍길동" autocomplete="off" />
             </div>
@@ -754,35 +768,71 @@
     }
   }
 
-  function applyCardFeeIfNeeded(baseUsd, baseVnd){
-  const pm = getPaymentMethod();
-  const mode = getCardFeeMode();
+  function getOrderDateMode(){
+    return document.querySelector('input[name="orderDateMode"]:checked')?.value || "today";
+  }
+  function toggleDatePickUI(){
+    const mode = getOrderDateMode();
+    const box = document.getElementById("datePickBox");
+    if (!box) return;
+    box.style.display = (mode === "pick") ? "block" : "none";
+  }
+  function getCreatedAtForSave(){
+    // returns ISO string (timestamptz)
+    const mode = getOrderDateMode();
+    const now = new Date();
 
-  if (pm === "card" && mode === "fee7"){
-    const usd = Math.round((Number(baseUsd) || 0) * 1.07);
+    if (mode === "today"){
+      return now.toISOString();
+    }
+    if (mode === "yesterday"){
+      const d = new Date(now);
+      d.setDate(d.getDate() - 1);
+      return d.toISOString();
+    }
 
-    // ✅ VND는 7% 적용 후 1,000 단위 반올림
-    const rawVnd = (Number(baseVnd) || 0) * 1.07;
-    const vnd = roundTo1000(rawVnd);
+    // pick
+    const v = (document.getElementById("orderDateInput")?.value || "").trim();
+    if (!v) return now.toISOString();
 
-    return {
-      usd,
-      vnd,
-      fee_usd: usd - (Number(baseUsd) || 0),
-      fee_vnd: vnd - (Number(baseVnd) || 0),
-      applied: true
-    };
+    // picked date at local 12:00 to avoid timezone shift
+    const picked = new Date(`${v}T12:00:00`);
+    return picked.toISOString();
   }
 
-  return {
-    usd: Math.round(Number(baseUsd) || 0),
-    vnd: Math.round(Number(baseVnd) || 0),
-    fee_usd: 0,
-    fee_vnd: 0,
-    applied: false
-  };
-}
+  function roundTo1000(n){
+    const x = Number(n) || 0;
+    return Math.round(x / 1000) * 1000;   // ✅ 1,000 단위 반올림
+  }
 
+  function applyCardFeeIfNeeded(baseUsd, baseVnd){
+    const pm = getPaymentMethod();
+    const mode = getCardFeeMode();
+
+    if (pm === "card" && mode === "fee7"){
+      const usd = Math.round((Number(baseUsd) || 0) * 1.07);
+
+      // ✅ VND는 7% 적용 후 1,000 단위 반올림
+      const rawVnd = (Number(baseVnd) || 0) * 1.07;
+      const vnd = roundTo1000(rawVnd);
+
+      return {
+        usd,
+        vnd,
+        fee_usd: usd - (Number(baseUsd) || 0),
+        fee_vnd: vnd - (Number(baseVnd) || 0),
+        applied: true
+      };
+    }
+
+    return {
+      usd: Math.round(Number(baseUsd) || 0),
+      vnd: Math.round(Number(baseVnd) || 0),
+      fee_usd: 0,
+      fee_vnd: 0,
+      applied: false
+    };
+  }
 
   function computePickedAndTotals(){
     let totalUsd = 0;
@@ -911,12 +961,14 @@
 
     renderSpecialList();
   }
-  function roundTo1000(n){
-  const x = Number(n) || 0;
-  return Math.round(x / 1000) * 1000;   // ✅ 1,000 단위 반올림
-}
 
   function resetAll(){
+    const todayRadio = document.querySelector('input[name="orderDateMode"][value="today"]');
+    if (todayRadio) todayRadio.checked = true;
+    const di = document.getElementById("orderDateInput");
+    if (di) di.value = "";
+    toggleDatePickUI();
+
     // 1) 수량 초기화
     for (const k in qty) qty[k] = 0;
     document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
@@ -1028,8 +1080,6 @@
 
   /*************************************************
    * ✅ 저장 보호(저장만 비번, 프린트는 제외)
-   * - admin.html에서 만든 RPC: admin_check_password 재사용
-   * - sessionStorage에 비번 캐시
    *************************************************/
   async function verifyAdminPassword(pass){
     try{
@@ -1065,6 +1115,44 @@
     return pass.trim();
   }
 
+  /*************************************************
+   * ✅ (추가) 카드 7%를 DB에 “라인 아이템”으로도 저장해서
+   * admin.html이 라인 합계를 다시 계산해도 7%가 안 날아가게 함
+   *************************************************/
+  const FEE_KIND = "fee7";
+  const FEE_KO = "Service fee 7%";
+  const FEE_VI = "Phí dịch vụ 7%";
+
+  async function deleteFeeLine(orderId){
+    const { error } = await sb
+      .from("order_custom_items")
+      .delete()
+      .eq("order_id", orderId)
+      .eq("kind", FEE_KIND);
+    if (error) throw error;
+  }
+
+  async function insertFeeLineIfNeeded(orderId, adj){
+    // adj.fee_* 는 “추가된 금액”
+    if (!adj?.applied) return;
+    if ((Number(adj.fee_vnd)||0) <= 0 && (Number(adj.fee_usd)||0) <= 0) return;
+
+    const payload = [{
+      order_id: orderId,
+      kind: FEE_KIND,
+      ko_name: FEE_KO,
+      vi_name: FEE_VI,
+      qty: 1,
+      unit_usd: Number(adj.fee_usd) || 0,
+      unit_vnd: Number(adj.fee_vnd) || 0,
+      line_usd: Number(adj.fee_usd) || 0,
+      line_vnd: Number(adj.fee_vnd) || 0
+    }];
+
+    const { error } = await sb.from("order_custom_items").insert(payload);
+    if (error) throw error;
+  }
+
   async function saveNewOrder(){
     const btn = document.getElementById("saveBtn");
     btn.disabled = true;
@@ -1087,23 +1175,35 @@
       // ✅ 저장 total은 카드 옵션 반영(7% 포함 선택 시 반영)
       const adj = applyCardFeeIfNeeded(baseUsd, baseVnd);
 
-      // 1) orders 생성
-      const { data: order, error: orderErr } = await sb
-        .from("orders")
-        .insert([{
-          total_usd: adj.usd,
-          total_vnd: adj.vnd,
-          status: "paid",
-          source: "calc_web",
-          guide_name: guideName || null,
-          team_no: teamNo || null,
-          payment_method: paymentMethod
-        }])
-        .select("id")
-        .single();
+      // 1) orders 생성 (✅ 날짜 지정 가능: RPC 사용)
+      toggleDatePickUI();
+      const createdAtIso = getCreatedAtForSave();
 
-      if (orderErr) throw orderErr;
-      const orderId = order.id;
+      let orderId = null;
+      try{
+        const { data: newId, error: rpcErr } = await sb.rpc("admin_create_order_with_date", {
+          p_password: pass,
+          p_created_at: createdAtIso,
+          p_source: "calc_web",
+          p_status: "paid",
+          p_total_usd: adj.usd,
+          p_total_vnd: adj.vnd,
+          p_guide_name: guideName || "",
+          p_team_no: teamNo || "",
+          p_payment_method: paymentMethod
+        });
+        if (rpcErr) throw rpcErr;
+        orderId = newId;
+      }catch(e){
+        console.error(e);
+        alert("주문 생성 실패 (RPC). 함수/비번/권한 확인");
+        return;
+      }
+
+      if (!orderId){
+        alert("주문 생성 실패: orderId가 없습니다.");
+        return;
+      }
 
       // 2) 일반 메뉴 -> order_items (라인은 기본 가격 그대로)
       const normalItems = picked.filter(p => p.kind === "menu");
@@ -1138,6 +1238,9 @@
         const { error: cErr } = await sb.from("order_custom_items").insert(customPayload);
         if (cErr) throw cErr;
       }
+
+      // ✅ (추가) 카드 7%면 “fee7” 라인도 저장
+      await insertFeeLineIfNeeded(orderId, adj);
 
       alert("저장 완료!");
 
@@ -1201,13 +1304,13 @@
         return;
       }
 
-      // SPECIAL 재구성
-      const { error: delErr } = await sb
+      // SPECIAL/fee7 재구성: 기존 삭제 후 다시 넣기
+      const { error: delSpecialErr } = await sb
         .from("order_custom_items")
         .delete()
         .eq("order_id", editOrderId)
-        .eq("kind", "special");
-      if (delErr) throw delErr;
+        .in("kind", ["special", FEE_KIND]); // ✅ special + fee7 같이 삭제
+      if (delSpecialErr) throw delSpecialErr;
 
       if (specialItems.length){
         const payload = specialItems.map(p => ({
@@ -1224,6 +1327,9 @@
         const { error: insErr } = await sb.from("order_custom_items").insert(payload);
         if (insErr) throw insErr;
       }
+
+      // ✅ fee7 라인 다시 삽입(필요할 때만)
+      await insertFeeLineIfNeeded(editOrderId, adj);
 
       // ✅ orders total 업데이트 (적용된 값으로)
       const { error: updErr } = await sb
@@ -1299,20 +1405,26 @@
     });
 
     // ✅ 카드+7% 자동 추정:
-    // base합 대비 meta.total이 약 1.07이면 fee7로 맞춤
     toggleCardFeeUI();
-    const { totalUsd: baseUsd, totalVnd: baseVnd } = computePickedAndTotals();
-    if (pm === "card"){
-      const savedVnd = Number(meta.total_vnd || 0);
-      const expected = Math.round(baseVnd * 1.07);
+    const { totalVnd: baseVnd } = computePickedAndTotals();
 
-      const tol = Math.max(3000, Math.round(baseVnd * 0.01)); // 최소 3,000 VND 또는 1%
+    if (pm === "card"){
+      // 1) fee7 라인이 있으면 우선 fee7로
+      const hasFeeLine = (cItems||[]).some(x => (x.kind||"").toLowerCase() === FEE_KIND);
       const feeRadio = document.querySelector('input[name="cardFeeMode"][value="fee7"]');
       const noneRadio = document.querySelector('input[name="cardFeeMode"][value="none"]');
 
       if (feeRadio && noneRadio){
-        if (Math.abs(savedVnd - expected) <= tol) feeRadio.checked = true;
-        else noneRadio.checked = true;
+        if (hasFeeLine){
+          feeRadio.checked = true;
+        } else {
+          // 2) 없으면 기존 로직(총액 비교)으로 추정
+          const savedVnd = Number(meta.total_vnd || 0);
+          const expected = roundTo1000(baseVnd * 1.07);
+          const tol = Math.max(3000, Math.round(baseVnd * 0.01)); // 최소 3,000 VND 또는 1%
+          if (Math.abs(savedVnd - expected) <= tol) feeRadio.checked = true;
+          else noneRadio.checked = true;
+        }
       }
     }
 
@@ -1347,6 +1459,10 @@
   document.getElementById("payOptions").addEventListener("change", () => updateAll());
   document.getElementById("cardFeeBox").addEventListener("change", () => updateAll());
 
+  // ✅ 날짜 옵션 UI 토글
+  document.getElementById("dateOptions")?.addEventListener("change", () => toggleDatePickUI());
+  document.getElementById("orderDateInput")?.addEventListener("change", () => toggleDatePickUI());
+
   (async function init(){
     const rows = await loadMenuFromDB();
     mountMenus(rows);
@@ -1354,6 +1470,7 @@
     if (isEditMode){
       await loadOrderForEdit(editOrderId);
     } else {
+      toggleDatePickUI();
       updateAll();
     }
   })();
