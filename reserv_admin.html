@@ -72,6 +72,14 @@
     }
     .btn-danger:hover{ filter:brightness(.98); }
 
+    /* ✅ NEW: 확정 취소 버튼 스타일(중립) */
+    .btn-warn{
+      background:#fff7e8;
+      border:1px solid #efd7a6;
+      color:#7a5a22;
+    }
+    .btn-warn:hover{ filter:brightness(.99); }
+
     .grid{
       display:grid;
       grid-template-columns: 1.2fr .8fr;
@@ -115,6 +123,14 @@
       background:#fff;font-size:12px;font-weight:900;color:var(--sub);
       white-space:nowrap;
     }
+
+    /* ✅ NEW: 확정 배지 */
+    .pill-confirmed{
+      border-color:#bfe5c9;
+      background:#e9fff0;
+      color:#1b7f3a;
+    }
+
     .title{font-weight:1000}
     .muted{color:var(--sub);font-size:12px}
     .note-mini{
@@ -314,6 +330,9 @@
 
           <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">
             <button class="btn-confirm" id="btnConfirm" type="button">확정</button>
+            <!-- ✅ NEW: 확정취소 버튼 -->
+            <button class="btn-warn" id="btnUnconfirm" type="button">확정취소</button>
+
             <button class="btn-ghost" id="btnClear" type="button">선택 해제</button>
             <button class="btn-primary" id="btnSave" type="button">저장(수정)</button>
             <button class="btn-danger" id="btnDelete" type="button">삭제</button>
@@ -574,7 +593,20 @@
      ***********************/
     let MODE = "fromToday"; // today | fromToday | range
     let SELECTED_ID = null;
+    let SELECTED_ROW = null; // ✅ NEW: 선택된 row 저장
     let ROWS = [];
+
+    function setConfirmButtons(){
+      // ✅ NEW: 확정/확정취소 버튼 상태 동기화
+      const isConfirmed = !!(SELECTED_ROW && SELECTED_ROW.confirmed);
+      $("btnConfirm").disabled = !SELECTED_ID || isConfirmed;
+      $("btnUnconfirm").disabled = !SELECTED_ID || !isConfirmed;
+
+      $("btnConfirm").style.opacity = $("btnConfirm").disabled ? ".45" : "1";
+      $("btnUnconfirm").style.opacity = $("btnUnconfirm").disabled ? ".45" : "1";
+      $("btnConfirm").style.cursor = $("btnConfirm").disabled ? "not-allowed" : "pointer";
+      $("btnUnconfirm").style.cursor = $("btnUnconfirm").disabled ? "not-allowed" : "pointer";
+    }
 
     function setMode(mode){
       MODE = mode;
@@ -605,14 +637,17 @@
 
     function clearSelection(){
       SELECTED_ID = null;
+      SELECTED_ROW = null; // ✅ NEW
       ["e_id","e_branch","e_date","e_time_raw","e_guests","e_price","e_menu_ko","e_menu_vi","e_note","e_guide"].forEach(id => $(id).value = "");
       $("e_time_preview").textContent="--:--";
       document.querySelectorAll(".row.active").forEach(el => el.classList.remove("active"));
       setMsg("", "");
+      setConfirmButtons(); // ✅ NEW
     }
 
     function fillEditor(r){
       SELECTED_ID = r.id;
+      SELECTED_ROW = r; // ✅ NEW
       $("e_id").value = r.id ?? "";
       $("e_branch").value = r.branch ?? "";
       $("e_date").value = r.res_date ?? "";
@@ -625,6 +660,7 @@
       $("e_guide").value = r.guide_name ?? "";
       updateTimePreview("e_time_raw","e_time_preview");
       setMsg("", "");
+      setConfirmButtons(); // ✅ NEW
     }
 
     function renderList(rows){
@@ -638,6 +674,7 @@
 
       box.innerHTML = rows.map(r => {
         const note = (r.note || "").trim();
+        const isConfirmed = !!r.confirmed;
         return `
           <div class="row" data-id="${escapeHtml(r.id)}">
             <div>
@@ -646,9 +683,11 @@
                 <span class="pill">${escapeHtml(r.branch || "")}</span>
                 <span class="pill">👥 ${escapeHtml(String(r.guests_count ?? ""))}</span>
                 ${r.price ? `<span class="pill">${escapeHtml(formatVND(r.price))}</span>` : ``}
+                ${isConfirmed ? `<span class="pill pill-confirmed">✅ CONFIRMED</span>` : ``}
               </div>
               <div class="muted" style="margin-top:6px">
                 <span class="pill">GUIDE: ${escapeHtml(r.guide_name || "")}</span>
+                ${isConfirmed && r.confirmed_order_id ? `<span class="pill">ORDER: ${escapeHtml(String(r.confirmed_order_id).slice(0,8))}…</span>` : ``}
               </div>
               <div class="note-mini">${escapeHtml(note)}</div>
             </div>
@@ -669,6 +708,14 @@
           if(r) fillEditor(r);
         });
       });
+
+      // ✅ NEW: 리스트 다시 그린 뒤에도 선택 유지(가능하면)
+      if(SELECTED_ID !== null && SELECTED_ID !== undefined){
+        const active = box.querySelector(`.row[data-id="${CSS.escape(String(SELECTED_ID))}"]`);
+        if(active){
+          active.classList.add("active");
+        }
+      }
     }
 
     function setDefaultRange(){
@@ -679,17 +726,20 @@
       $("q_to").value = ymd(today);
     }
 
-    async function loadList(){
+    async function loadList(opts){
       try{
+        const preserveSelected = !!(opts && opts.preserveSelected);
+        const prevId = preserveSelected ? SELECTED_ID : null;
+
         setMsg("", "");
-        clearSelection();
+        if(!preserveSelected) clearSelection();
 
         const today = ymd(new Date());
         const branch = $("q_branch").value;
 
         let url =
           `${SUPABASE_URL}/rest/v1/resv_groups` +
-          `?select=id,res_date,res_time,guests_count,price,menu_ko,menu_vi,note,branch,guide_name`;
+          `?select=id,res_date,res_time,guests_count,price,menu_ko,menu_vi,note,branch,guide_name,confirmed,confirmed_at,confirmed_order_id`; // ✅ NEW
 
         if(MODE === "today"){
           url += `&res_date=eq.${today}`;
@@ -722,7 +772,22 @@
 
         const rows = await fetchJson(url);
         ROWS = Array.isArray(rows) ? rows : [];
+
+        // ✅ NEW: 선택 유지 옵션
+        if(preserveSelected && prevId !== null && prevId !== undefined){
+          const rr = ROWS.find(x => String(x.id) === String(prevId));
+          if(rr){
+            SELECTED_ID = rr.id;
+            SELECTED_ROW = rr;
+            fillEditor(rr);
+          }else{
+            SELECTED_ID = null;
+            SELECTED_ROW = null;
+          }
+        }
+
         renderList(ROWS);
+        setConfirmButtons(); // ✅ NEW
       }catch(e){
         $("rows").innerHTML = `<div class="muted" style="padding:12px;">조회 실패: ${escapeHtml(e.message)}</div>`;
       }
@@ -731,8 +796,14 @@
     async function confirmToOrders(){
       try{
         setMsg("", "");
-        if(!SELECTED_ID){
+        if(!SELECTED_ID || !SELECTED_ROW){
           setMsg("bad","확정할 예약을 왼쪽 목록에서 선택해줘.");
+          return;
+        }
+
+        // ✅ NEW: 이미 확정이면 막기 (중복 orders 생성 방지)
+        if(SELECTED_ROW.confirmed){
+          setMsg("bad","이미 확정된 예약이야. (확정취소 후 다시 확정 가능)");
           return;
         }
 
@@ -840,12 +911,58 @@
           throw new Error((j && (j.message || j.error)) || cText || ("HTTP " + cRes.status));
         }
 
-        setMsg("ok", `확정 완료! (orders 생성됨)`);
+        // 3) ✅ resv_groups -> confirmed 표시 (RPC)
+        await rpc("admin_mark_resv_confirmed", {
+          pw: ADMIN_PW,
+          p_id: Number(SELECTED_ID), // ✅ NEW: bigint 안전
+          p_order_id: orderId
+        });
+
+        setMsg("ok", `확정 완료! ✅ (order: ${String(orderId).slice(0,8)}...)`);
+        await loadList({ preserveSelected:true }); // ✅ NEW: 상태 반영 + 선택 유지
       }catch(e){
         if((e.message || "").toLowerCase().includes("forbidden")){
-          setMsg("bad","권한이 없습니다(RLS). orders/order_custom_items INSERT 정책을 확인해줘.");
+          setMsg("bad","권한이 없습니다(RLS/비번). 정책 또는 비밀번호를 확인해줘.");
         }else{
           setMsg("bad","확정 실패: " + e.message);
+        }
+      }
+    }
+
+    // ✅ NEW: 확정 취소
+    async function unconfirmReservation(){
+      try{
+        setMsg("", "");
+        if(!SELECTED_ID || !SELECTED_ROW){
+          setMsg("bad","확정취소할 예약을 왼쪽 목록에서 선택해줘.");
+          return;
+        }
+        if(!SELECTED_ROW.confirmed){
+          setMsg("bad","아직 확정되지 않은 예약이야.");
+          return;
+        }
+
+        const ok = confirm(
+          "확정취소하면 예약의 CONFIRMED 표시만 해제됩니다.\n(이미 생성된 orders 기록은 삭제하지 않습니다)\n진행할까요?"
+        );
+        if(!ok) return;
+
+        await rpc("admin_unmark_resv_confirmed", {
+          pw: ADMIN_PW,
+          p_id: Number(SELECTED_ID)
+        });
+
+        setMsg("ok","확정취소 완료!");
+        await loadList({ preserveSelected:true });
+      }catch(e){
+        if((e.message || "").toLowerCase().includes("forbidden")){
+          sessionStorage.removeItem(ADMIN_PASS_KEY);
+          ADMIN_PW = "";
+          setMsg("bad","비밀번호가 틀렸거나 권한이 없습니다. 다시 입력해줘.");
+          const ok = await requireAdminPassword();
+          if(ok) setMsg("bad","다시 확정취소 버튼을 눌러줘.");
+        }else{
+          setMsg("bad","확정취소 실패: " + e.message);
         }
       }
     }
@@ -910,15 +1027,14 @@
 
         await rpc("admin_update_resv_group", body);
         setMsg("ok","저장 완료!");
-        await loadList();
+        await loadList({ preserveSelected:true }); // ✅ NEW: 목록 반영 + 선택 유지
       }catch(e){
         if((e.message || "").toLowerCase().includes("forbidden")){
-          // 비번 틀리면 세션 비번 제거 + 다시 모달 띄우기
           sessionStorage.removeItem(ADMIN_PASS_KEY);
           ADMIN_PW = "";
           setMsg("bad","비밀번호가 틀렸거나 권한이 없습니다. 다시 입력해줘.");
           const ok = await requireAdminPassword();
-          if(ok) setMsg("bad","다시 저장 버튼을 눌러줘."); // 자동 재시도는 안 함(안전)
+          if(ok) setMsg("bad","다시 저장 버튼을 눌러줘.");
         }else{
           setMsg("bad","저장 실패: " + e.message);
         }
@@ -1012,8 +1128,9 @@
     $("btnClear").addEventListener("click", clearSelection);
     $("btnSave").addEventListener("click", saveUpdate);
     $("btnConfirm").addEventListener("click", confirmToOrders);
+    $("btnUnconfirm").addEventListener("click", unconfirmReservation); // ✅ NEW
 
-    // ✅ init: password modal gate (prompt 제거)
+    // ✅ init
     (async function init(){
       const ok = await requireAdminPassword();
       if(!ok) return;
@@ -1021,6 +1138,8 @@
       buildBranch();
       setMode("fromToday");
       setDefaultRange();
+      $("btnUnconfirm").disabled = true; // ✅ NEW
+      $("btnUnconfirm").style.opacity = ".45";
       loadList();
     })();
   </script>
