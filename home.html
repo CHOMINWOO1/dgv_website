@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HANA Pages</title>
+  <style>
+    :root{
+      --bg:#faf6ee;
+      --card:#fffdf7;
+      --ink:#3a2a1f;
+      --sub:#6b5444;
+      --line:#e7d7b8;
+      --gold:#caa24c;
+      --shadow:0 10px 24px rgba(0,0,0,.10);
+      --radius:16px;
+    }
+    *{box-sizing:border-box}
+    html{ -webkit-text-size-adjust:100%; }
+    body{
+      margin:0;
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans KR",sans-serif;
+      background: radial-gradient(1400px 700px at 50% -200px, #fff 0%, var(--bg) 60%);
+      color:var(--ink);
+    }
+    .wrap{max-width:980px;margin:22px auto 60px;padding:0 14px;}
+    .hanaHeader{
+      width:100%;
+      text-align:center;
+      padding: 10px 10px 8px;
+      margin: 0 0 16px;
+      border-bottom: 1px solid #e4d1bf;
+    }
+    .hanaHeader .h1{
+      margin:0;
+      font-size:34px;
+      font-weight:900;
+      letter-spacing:.28em;
+      color:#3f2a1d;
+    }
+    .hanaHeader .h2{
+      margin:6px 0 10px;
+      font-size:14px;
+      font-weight:700;
+      letter-spacing:.26em;
+      color:#6a4c3a;
+    }
+    .card{
+      background: var(--card);
+      border: 2px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px;
+      overflow:hidden;
+      position:relative;
+    }
+    .card:before{
+      content:"";
+      position:absolute; inset:0;
+      background: linear-gradient(135deg, rgba(202,162,76,.10), rgba(255,255,255,0) 60%);
+      pointer-events:none;
+    }
+    .title{
+      position:relative;
+      font-weight:1000;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+      color:var(--sub);
+      font-size:14px;
+      margin-bottom:10px;
+    }
+    .grid{
+      position:relative;
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    @media (max-width:560px){
+      .grid{grid-template-columns: 1fr;}
+    }
+    .btn{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      align-items:flex-start;
+      width:100%;
+      padding:14px 14px;
+      border-radius: 14px;
+      border:1px solid var(--line);
+      background:#fff;
+      box-shadow: 0 6px 16px rgba(0,0,0,.06);
+      cursor:pointer;
+      text-align:left;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform .05s ease, filter .15s ease, border-color .15s ease;
+    }
+    .btn:hover{ border-color: var(--gold); filter: brightness(.99); }
+    .btn:active{ transform: translateY(1px); }
+    .btn .name{
+      font-weight:1000;
+      font-size:18px;
+      color:var(--ink);
+      letter-spacing:.02em;
+    }
+    .btn .desc{
+      font-weight:900;
+      font-size:13px;
+      color:var(--sub);
+      line-height:1.35;
+    }
+    .hint{
+      margin-top:12px;
+      font-size:12px;
+      color:var(--sub);
+      font-weight:900;
+      opacity:.9;
+    }
+    .path{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size:12px;
+      color:#775d4e;
+      font-weight:800;
+      margin-top:2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hanaHeader">
+      <div class="h1">H A N A</div>
+      <div class="h2">P A G E &nbsp; N A V I G A T I O N</div>
+    </div>
+
+    <div class="card">
+      <div class="title">Quick Links</div>
+
+      <div class="grid">
+        <button class="btn" data-href="calc.html" type="button">
+          <div class="name">식당 메뉴 추가</div>
+          <div class="desc">Thêm thực đơn nhà hàng</div>
+        </button>
+
+        <button class="btn" data-href="admin.html" type="button">
+          <div class="name">식당 예약 관리</div>
+          <div class="desc">Quản lý đặt chỗ nhà hàng</div>
+        </button>
+
+        <button class="btn" data-href="reserv_check.html" type="button">
+          <div class="name">단체 예약 확인(직원용)</div>
+          <div class="desc">Xác nhận đặt chỗ theo nhóm (Dành cho nhân viên)</div>
+        </button>
+
+        <button class="btn" data-href="reservation.html" type="button">
+          <div class="name">단체 예약 추가</div>
+          <div class="desc">
+Thêm đặt chỗ theo nhóm</div>
+        </button>
+
+        <button class="btn" data-href="reserv_admin.html" type="button">
+          <div class="name">단체 예약 관리</div>
+          <div class="desc">Quản lý đặt phòng nhóm</div>
+        </button>
+
+        <button class="btn" data-href="report.html" type="button">
+          <div class="name">월간 정산</div>
+          <div class="desc">quyết toán hàng tháng</div>
+        </button>
+      </div>
+
+      <div class="hint">
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll("[data-href]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        location.href = btn.dataset.href; // 같은 폴더
+      });
+    });
+  </script>
+</body>
+</html>
