@@ -216,6 +216,35 @@
   </div>
 
   <script>
+    // ===== Access Gate =====
+const ACCESS_OK_KEY = "hana_access_ok";
+
+async function requireAccessGate(){
+  if (sessionStorage.getItem(ACCESS_OK_KEY) === "1") return true;
+
+  while(true){
+    const code = prompt("보안코드를 입력하세요.");
+    if (!code) return false;
+
+    const { data: ok, error } = await fetch(`${SUPABASE_URL}/rest/v1/rpc/check_page_access_code`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: "Bearer " + SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ p_code: code.trim() })
+    }).then(r => r.json().then(j => ({ data: j, error: null })).catch(()=>({data:null,error:true})));
+
+    if (ok === true){
+      sessionStorage.setItem(ACCESS_OK_KEY, "1");
+      return true;
+    }
+
+    alert("코드가 틀렸습니다.");
+  }
+}
+
     const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
 
@@ -409,9 +438,18 @@
     $("q_branch").addEventListener("change", load);
 
     // init
-    buildBranch();
-    setMode("fromToday"); // 기본: 오늘 이후 전체
-    load();
+    (async function init(){
+  const ok = await requireAccessGate();
+  if(!ok){
+    location.href = "/";
+    return;
+  }
+
+  buildBranch();
+  setMode("fromToday");
+  load();
+})();
+
   </script>
 </body>
 </html>
