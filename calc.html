@@ -737,6 +737,26 @@
   const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
   const { createClient } = supabase;
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const ACCESS_OK_KEY = "hana_access_ok";
+
+async function requireAccessGate(){
+  if (sessionStorage.getItem(ACCESS_OK_KEY) === "1") return true;
+
+  while(true){
+    const code = prompt("보안코드를 입력하세요.");
+    if (!code) return false;
+
+    const { data: ok } = await sb.rpc("check_page_access_code", { p_code: code.trim() });
+
+    if (ok === true){
+      sessionStorage.setItem(ACCESS_OK_KEY, "1");
+      return true;
+    }
+
+    alert("코드가 틀렸습니다.");
+  }
+}
+
 
   let drinkMenu = [];
   let sideMenu = [];
@@ -1602,6 +1622,11 @@
   document.getElementById("orderDateInput")?.addEventListener("change", () => toggleDatePickUI());
 
   (async function init(){
+      const ok = await requireAccessGate();
+  if (!ok) {
+    location.href = "/";
+    return;
+  }
     const rows = await loadMenuFromDB();
     mountMenus(rows);
 
