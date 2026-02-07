@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HANA - Access Code Admin</title>
+  <style>
+    :root{
+      --bg:#faf6ee; --card:#fffdf7; --ink:#3a2a1f; --sub:#6b5444;
+      --line:#e7d7b8; --gold:#caa24c; --shadow:0 10px 24px rgba(0,0,0,.10);
+      --radius:16px; --bad:#b42318;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans KR",sans-serif;
+      background: radial-gradient(1400px 700px at 50% -200px, #fff 0%, var(--bg) 60%);
+      color:var(--ink);
+    }
+    .wrap{max-width:820px;margin:18px auto 60px;padding:0 14px;}
+    .hanaHeader{
+      width:100%; text-align:center; padding: 10px 10px 8px; margin: 0 0 14px;
+      border-bottom: 1px solid #e4d1bf;
+    }
+    .hanaHeader .h1{margin:0;font-size:30px;font-weight:900;letter-spacing:.22em;color:#3f2a1d;}
+    .hanaHeader .h2{margin:6px 0 10px;font-size:13px;font-weight:800;letter-spacing:.22em;color:#6a4c3a;}
+    .card{
+      background:#fff;
+      border:2px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding:16px;
+    }
+    .title{
+      font-weight:1000; letter-spacing:.08em; text-transform:uppercase; color:var(--sub);
+      font-size:14px; margin:0 0 10px;
+    }
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;}
+    .field{flex:1; min-width:220px;}
+    label{display:block;font-size:12px;font-weight:1000;color:var(--sub);margin:0 0 6px;}
+    input{
+      width:100%;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 10px;
+      font-weight:900;
+      background:#fff;
+      color:var(--ink);
+      outline:none;
+      font-size:16px;
+    }
+    input:focus{ border-color: var(--gold); box-shadow: 0 0 0 3px rgba(202,162,76,.18); }
+    .btn{
+      border:1px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      font-weight:1000;
+      border-radius: 12px;
+      padding: 10px 12px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.06);
+      cursor:pointer;
+      white-space: nowrap;
+    }
+    .btn:hover{border-color:var(--gold)}
+    .btnPrimary{ border-color: var(--gold); background: #fff7e6; }
+    .btnDanger{ border:1px solid #f4c7c3; background:#fff1f0; color:var(--bad); }
+    .muted{color:var(--sub); font-weight:900; font-size:13px;}
+    .statusBox{
+      margin-top:10px;
+      border-top:1px dashed var(--line);
+      padding-top:10px;
+      display:flex; flex-direction:column; gap:6px;
+    }
+
+    /* modal (calc.html과 동일한 스타일) */
+    .modalBack{
+      position:fixed; inset:0; background:rgba(0,0,0,.35);
+      display:none; align-items:center; justify-content:center;
+      padding:14px; z-index:9999;
+    }
+    .modal{
+      width:min(420px, 100%);
+      background:var(--card);
+      border:2px solid var(--line);
+      border-radius:16px;
+      box-shadow:0 18px 40px rgba(0,0,0,.20);
+      padding:14px;
+    }
+    .modalTitle{font-weight:1000; letter-spacing:.06em; color:var(--ink); margin:2px 0 10px;}
+    .modalDesc{font-size:13px; color:var(--sub); font-weight:900; margin:0 0 10px;}
+    .modalRow{display:flex; gap:8px; align-items:center;}
+    .modalRow input{
+      flex:1;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 10px;
+      font-weight:900;
+      background:#fff;
+    }
+    .modalBtns{margin-top:10px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hanaHeader">
+      <div class="h1">H A N A</div>
+      <div class="h2">ACCESS CODE ADMIN</div>
+    </div>
+
+    <div class="card">
+      <p class="title">Access Code Setting</p>
+
+      <div class="row">
+        <div class="field">
+          <label>새 보안코드</label>
+          <input id="newCode" type="text" placeholder="예: HANA2026 (최소 4자)" autocomplete="off" />
+        </div>
+        <button class="btn btnPrimary" id="saveCodeBtn" type="button">코드 변경</button>
+      </div>
+
+      <div class="statusBox">
+        <div class="muted" id="statusLine">상태: (확인 중...)</div>
+        <div class="muted" id="currentCodeLine"></div>
+
+        <div class="muted" id="updatedLine"></div>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn" id="refreshBtn" type="button">상태 새로고침</button>
+          <button class="btn btnDanger" id="clearSessionBtn" type="button">이 탭 접근세션 초기화(테스트)</button>
+          <button class="btn" id="goCalcBtn" type="button">calc.html 이동</button>
+          <button class="btn" id="goReservBtn" type="button">reserv_check.html 이동</button>
+        </div>
+      </div>
+      <div class="statusBox" style="margin-top:14px;">
+  <div class="title" style="margin:0 0 8px;">Admin Password Change</div>
+
+  <div class="row">
+    <div class="field">
+      <label>새 관리자 비밀번호</label>
+      <input id="newAdminPw" type="password" placeholder="최소 4자" autocomplete="off" />
+    </div>
+    <button class="btn btnPrimary" id="saveAdminPwBtn" type="button">비밀번호 변경</button>
+  </div>
+
+  <div class="muted" style="margin-top:6px;">
+    ※ 변경 후부터 저장/삭제 등 관리자 작업에 새 비밀번호가 적용됩니다.
+  </div>
+</div>
+
+    </div>
+    
+  </div>
+
+  <!-- 관리자 비번 모달 -->
+  <div class="modalBack" id="adminPassModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalTitle" id="adminPassTitle">관리자 확인</div>
+      <p class="modalDesc" id="adminPassDesc">코드 관리를 위해 관리자 비밀번호를 입력하세요.</p>
+      <div class="modalRow">
+        <input id="adminPassInput" type="password" placeholder="관리자 비밀번호" autocomplete="off"/>
+      </div>
+      <div class="modalBtns">
+        <button class="btn" id="adminPassCancelBtn" type="button">취소</button>
+        <button class="btn btnPrimary" id="adminPassConfirmBtn" type="button">확인</button>
+      </div>
+      <p class="muted" style="font-size:12px;margin:10px 2px 0;">
+        ※ 비밀번호는 브라우저 탭(session)에서만 유지됩니다.
+      </p>
+    </div>
+    
+  </div>
+  
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
+    const { createClient } = supabase;
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const ADMIN_PASS_CACHE_KEY = "hana_admin_pass";
+    const ACCESS_OK_KEY = "hana_access_ok";
+
+    const passModal = document.getElementById("adminPassModal");
+    const passInput = document.getElementById("adminPassInput");
+    const passOkBtn = document.getElementById("adminPassConfirmBtn");
+    const passCancelBtn = document.getElementById("adminPassCancelBtn");
+
+    let passModalResolve = null;
+    let passModalBusy = false;
+
+    function openPassModal(){
+      passInput.value = "";
+      passModal.style.display = "flex";
+      setTimeout(()=> passInput.focus(), 50);
+      return new Promise((resolve)=>{ passModalResolve = resolve; });
+    }
+    function closePassModal(val){
+      passModal.style.display = "none";
+      const r = passModalResolve;
+      passModalResolve = null;
+      if (typeof r === "function") r(val);
+    }
+
+    passModal.addEventListener("click", (e)=>{
+      if (e.target && e.target.id === "adminPassModal"){
+        if (passModalBusy) return;
+        closePassModal(null);
+      }
+    });
+    passCancelBtn.addEventListener("click", ()=>{
+      if (passModalBusy) return;
+      closePassModal(null);
+    });
+    passInput.addEventListener("keydown", (e)=>{
+      if (e.key === "Enter") passOkBtn.click();
+      if (e.key === "Escape"){
+        if (passModalBusy) return;
+        closePassModal(null);
+      }
+    });
+    passOkBtn.addEventListener("click", ()=>{
+      if (passModalBusy) return;
+      closePassModal((passInput.value || "").trim());
+    });
+
+    // ✅ 디버그: admin_check_password RPC 에러를 alert로 표시
+    async function verifyAdminPassword(pass){
+      const { data, error } = await sb.rpc("admin_check_password", { p_password: pass });
+      if (error){
+        console.error("admin_check_password error:", error);
+        alert("admin_check_password RPC ERROR:\n" + JSON.stringify(error, null, 2));
+        return false;
+      }
+      return data === true;
+    }
+
+    async function requireAdminPassword(){
+      let pass = (sessionStorage.getItem(ADMIN_PASS_CACHE_KEY) || "").trim();
+      if (pass){
+        const ok = await verifyAdminPassword(pass);
+        if (ok) return pass;
+        sessionStorage.removeItem(ADMIN_PASS_CACHE_KEY);
+      }
+
+      while(true){
+        const entered = await openPassModal();
+        if (!entered) return null;
+
+        const candidate = String(entered).trim();
+        if (!candidate) continue;
+
+        passModalBusy = true;
+        passOkBtn.disabled = true;
+        passCancelBtn.disabled = true;
+
+        const ok = await verifyAdminPassword(candidate);
+
+        passModalBusy = false;
+        passOkBtn.disabled = false;
+        passCancelBtn.disabled = false;
+
+        if (!ok){
+          alert("비밀번호가 틀렸거나 권한이 없습니다.");
+          continue;
+        }
+
+        sessionStorage.setItem(ADMIN_PASS_CACHE_KEY, candidate);
+        return candidate;
+      }
+    }
+
+    function fmtDate(d){
+      if (!d) return "";
+      const x = new Date(d);
+      if (isNaN(x.getTime())) return String(d);
+      return x.toLocaleString("ko-KR");
+    }
+
+    // ✅ 디버그: status RPC 에러를 alert로 표시
+    async function refreshStatus(pw){
+      const statusLine = document.getElementById("statusLine");
+      const updatedLine = document.getElementById("updatedLine");
+              // ✅ 현재 코드도 표시
+        const currentCodeLine = document.getElementById("currentCodeLine");
+        const { data: cd, error: cdErr } = await sb.rpc("admin_get_page_access_code", { pw });
+        if (cdErr) throw cdErr;
+
+        // 보안상 일부만 보여주고 싶으면 mask 처리 가능
+        // const codeText = (cd?.code || "");
+        // const masked = codeText ? (codeText.slice(0,2) + "****" + codeText.slice(-2)) : "";
+
+        const codeText = (cd?.code || "");
+        currentCodeLine.textContent = codeText ? `현재 코드: ${codeText}` : "현재 코드: (없음)";
+
+
+      try{
+        const { data, error } = await sb.rpc("admin_get_page_access_code_status", { pw });
+        if (error) throw error;
+
+        const isSet = data?.is_set === true;
+        const updatedAt = data?.updated_at;
+
+        statusLine.textContent = "상태: " + (isSet ? "✅ 코드 설정됨" : "⚠️ 코드 없음 (설정 필요)");
+        updatedLine.textContent = updatedAt ? ("마지막 변경: " + fmtDate(updatedAt)) : "";
+      }catch(e){
+        console.error("admin_get_page_access_code_status error:", e);
+        statusLine.textContent = "상태: ❌ 조회 실패";
+        updatedLine.textContent = "";
+
+        const msg =
+          (e && typeof e === "object")
+            ? JSON.stringify(e, null, 2)
+            : String(e);
+
+        alert("상태 조회 RPC ERROR:\n" + msg);
+      }
+    }
+
+    // ✅ 디버그: update RPC 에러를 alert로 표시
+    async function updateCode(pw, newCode){
+      const code = String(newCode||"").trim();
+      if (code.length < 4){
+        alert("코드는 최소 4자 이상으로 입력하세요.");
+        return;
+      }
+
+      try{
+        const { data, error } = await sb.rpc("admin_update_page_access_code", { pw, new_code: code });
+        if (error) throw error;
+        if (data === true){
+          alert("코드 변경 완료!");
+          document.getElementById("newCode").value = "";
+          await refreshStatus(pw);
+        } else {
+          alert("코드 변경 실패");
+        }
+      }catch(e){
+        console.error("admin_update_page_access_code error:", e);
+
+        const raw = (e && typeof e === "object") ? JSON.stringify(e, null, 2) : String(e);
+        const msg = (e?.message || raw || "");
+
+        if (msg.includes("BAD_PASSWORD")) alert("관리자 비밀번호가 틀렸습니다.");
+        else if (msg.includes("CODE_TOO_SHORT")) alert("코드가 너무 짧습니다.");
+        else alert("코드 변경 RPC ERROR:\n" + raw);
+      }
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", async ()=>{
+      const pw = (sessionStorage.getItem(ADMIN_PASS_CACHE_KEY)||"").trim();
+      if (!pw) return alert("관리자 비번이 없습니다. 새로고침 후 다시 입력하세요.");
+      await refreshStatus(pw);
+    });
+
+    document.getElementById("saveCodeBtn").addEventListener("click", async ()=>{
+      const pw = (sessionStorage.getItem(ADMIN_PASS_CACHE_KEY)||"").trim();
+      if (!pw) return alert("관리자 비번이 없습니다. 새로고침 후 다시 입력하세요.");
+      await updateCode(pw, document.getElementById("newCode").value);
+    });
+
+    document.getElementById("clearSessionBtn").addEventListener("click", ()=>{
+      sessionStorage.removeItem(ACCESS_OK_KEY);
+      alert("이 탭 접근세션(hana_access_ok) 삭제 완료. calc/reserv 페이지에서 다시 코드 입력이 뜹니다.");
+    });
+
+    document.getElementById("goCalcBtn").addEventListener("click", ()=> location.href="calc.html");
+    document.getElementById("goReservBtn").addEventListener("click", ()=> location.href="reserv_check.html");
+    async function updateAdminPassword(pw, newPw){
+  const np = String(newPw||"").trim();
+  if (np.length < 4){
+    alert("새 비밀번호는 최소 4자 이상이어야 합니다.");
+    return;
+  }
+
+  try{
+    const { data, error } = await sb.rpc("admin_update_password", { pw, new_pw: np });
+    if (error) throw error;
+
+    if (data === true){
+      alert("관리자 비밀번호 변경 완료!\n(이 탭에서는 자동으로 새 비번을 계속 사용합니다)");
+      // 이 탭에서 이후 작업도 새 비번으로 계속 하도록 캐시 갱신
+      sessionStorage.setItem(ADMIN_PASS_CACHE_KEY, np);
+      document.getElementById("newAdminPw").value = "";
+    }else{
+      alert("비밀번호 변경 실패");
+    }
+  }catch(e){
+    console.error("admin_update_password error:", e);
+    const msg = e?.message || JSON.stringify(e, null, 2) || "";
+    if (msg.includes("BAD_PASSWORD")) alert("현재 관리자 비밀번호가 틀렸습니다.");
+    else if (msg.includes("PW_TOO_SHORT")) alert("새 비밀번호가 너무 짧습니다.");
+    else alert("비밀번호 변경 RPC ERROR:\n" + (typeof e==="object" ? JSON.stringify(e,null,2) : String(e)));
+  }
+}
+
+document.getElementById("saveAdminPwBtn").addEventListener("click", async ()=>{
+  const pw = (sessionStorage.getItem(ADMIN_PASS_CACHE_KEY)||"").trim();
+  if (!pw) return alert("관리자 비번이 없습니다. 새로고침 후 다시 입력하세요.");
+  await updateAdminPassword(pw, document.getElementById("newAdminPw").value);
+});
+
+    (async function init(){
+      const pw = await requireAdminPassword();
+      if (!pw){
+        location.href = "/";
+        return;
+      }
+      await refreshStatus(pw);
+    })();
+  </script>
+</body>
+</html>
