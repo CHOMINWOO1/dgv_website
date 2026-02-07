@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HANA Notice</title>
+  <style>
+    :root{
+      --bg:#faf6ee; --card:#fffdf7; --ink:#3a2a1f; --sub:#6b5444;
+      --line:#e7d7b8; --gold:#caa24c; --shadow: 0 10px 24px rgba(0,0,0,.10);
+      --radius:16px; --bad:#b42318;
+    }
+    *{box-sizing:border-box}
+    html{-webkit-text-size-adjust:100%}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif;
+      background: radial-gradient(1400px 700px at 50% -200px, #fff 0%, var(--bg) 60%);
+      color:var(--ink);
+    }
+    .wrap{max-width:980px;margin:18px auto 60px;padding:0 14px;}
+    .hanaHeader{width:100%;text-align:center;padding:10px 10px 8px;margin:0 0 14px;border-bottom:1px solid #e4d1bf;}
+    .hanaHeader .h1{margin:0;font-size:32px;font-weight:900;letter-spacing:.28em;color:#3f2a1d;}
+    .hanaHeader .h2{margin:6px 0 10px;font-size:13px;font-weight:800;letter-spacing:.26em;color:#6a4c3a;}
+
+    .topBar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px;}
+    .search{
+      flex:1;min-width:220px;display:flex;gap:8px;align-items:center;
+      border:1px solid var(--line);background:#fff;border-radius:14px;padding:10px 12px;
+      box-shadow:0 6px 16px rgba(0,0,0,.04);
+    }
+    .search input{border:0;outline:none;flex:1;font-weight:900;font-size:15px;color:var(--ink);background:transparent;}
+    .btn{
+      border:1px solid var(--line);background:var(--card);color:var(--ink);
+      font-weight:1000;border-radius:12px;padding:11px 14px;box-shadow:0 6px 16px rgba(0,0,0,.06);
+      cursor:pointer;white-space:nowrap;
+    }
+    .btn:hover{border-color:var(--gold)}
+    .btnPrimary{border-color:var(--gold);background:#fff7e6;}
+    .btnDanger{border-color:#f4c7c3;background:#fff1f0;color:var(--bad);}
+    .btn:disabled{opacity:.55;cursor:not-allowed}
+    .muted{color:var(--sub);font-weight:900;font-size:12px}
+
+    .list{display:flex;flex-direction:column;gap:10px;}
+    .card{
+      background:var(--card);border:2px solid var(--line);border-radius:var(--radius);
+      box-shadow:var(--shadow);padding:12px 12px 10px;position:relative;overflow:hidden;
+    }
+    .card:before{
+      content:"";position:absolute;inset:0;
+      background: linear-gradient(135deg, rgba(202,162,76,.10), rgba(255,255,255,0) 60%);
+      pointer-events:none;
+    }
+    .meta{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;position:relative;}
+    .title{font-weight:1000;letter-spacing:.02em;font-size:18px;margin:0;}
+    .date{font-size:12px;font-weight:900;color:var(--sub);margin-top:4px;}
+    .body{margin:10px 0 0;font-size:14px;font-weight:900;color:#4a3527;line-height:1.5;white-space:pre-wrap;position:relative;}
+    .moreRow{margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;position:relative;}
+    .rightBtns{display:flex;gap:8px;flex-wrap:wrap}
+
+    /* modal */
+    .modalBack{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;padding:14px;z-index:9999;}
+    .modal{
+      width:min(560px,100%);background:var(--card);border:2px solid var(--line);
+      border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.20);padding:14px;
+    }
+    .modalTitle{font-weight:1000;letter-spacing:.06em;color:var(--ink);margin:2px 0 10px;}
+    .modalDesc{font-size:13px;color:var(--sub);font-weight:900;margin:0 0 10px;}
+    .field{margin:10px 0}
+    .field label{display:block;font-size:12px;font-weight:1000;color:var(--sub);margin:0 0 6px;}
+    .field input,.field textarea{
+      width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 10px;
+      font-weight:900;background:#fff;color:var(--ink);outline:none;font-size:15px;
+    }
+    .field textarea{min-height:160px;resize:vertical;line-height:1.5;}
+    .field input:focus,.field textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(202,162,76,.18);}
+    .modalBtns{margin-top:10px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hanaHeader">
+      <div class="h1">H A N A</div>
+      <div class="h2">N O T I C E</div>
+    </div>
+
+    <div class="topBar">
+      <div class="search">
+        <span style="font-weight:1000;color:var(--sub)">검색</span>
+        <input id="q" type="text" placeholder="제목/내용 검색..." autocomplete="off">
+      </div>
+      <button class="btn" id="backBtn" type="button">← 돌아가기 / Back</button>
+      <button class="btn btnPrimary" id="newBtn" type="button">+ 공지 작성</button>
+    </div>
+
+    <div class="muted" id="statusTxt" style="margin:0 2px 10px;"></div>
+    <div class="list" id="list"></div>
+  </div>
+
+  <!-- 편집 모달 -->
+  <div class="modalBack" id="editModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalTitle" id="editTitle">공지 작성</div>
+      <p class="modalDesc">작성시간은 저장 시 자동으로 들어갑니다.</p>
+
+      <div class="field">
+        <label>제목</label>
+        <input id="nTitle" type="text" placeholder="예: 설 연휴 영업 안내" autocomplete="off">
+      </div>
+
+      <div class="field">
+        <label>내용</label>
+        <textarea id="nBody" placeholder="공지 내용을 입력하세요. (줄바꿈 가능)"></textarea>
+      </div>
+
+      <div class="field">
+        <label>작성자(선택)</label>
+        <input id="nAuthor" type="text" placeholder="예: Minwoo / Staff" autocomplete="off">
+      </div>
+
+      <div class="modalBtns">
+        <button class="btn" id="editCancelBtn" type="button">취소</button>
+        <button class="btn btnPrimary" id="editSaveBtn" type="button">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+  const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
+  const { createClient } = supabase;
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const listEl = document.getElementById("list");
+  const statusTxt = document.getElementById("statusTxt");
+  const qEl = document.getElementById("q");
+
+  const editModal = document.getElementById("editModal");
+  const editTitleEl = document.getElementById("editTitle");
+  const nTitle = document.getElementById("nTitle");
+  const nBody  = document.getElementById("nBody");
+  const nAuthor= document.getElementById("nAuthor");
+  const editSaveBtn = document.getElementById("editSaveBtn");
+  const editCancelBtn = document.getElementById("editCancelBtn");
+
+  let cache = [];
+  let editing = null; // null or row
+
+  function escapeHtml(s){
+    return String(s ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+  function fmtDate(iso){
+    if (!iso) return "";
+    const d = new Date(iso);
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const da= String(d.getDate()).padStart(2,"0");
+    const hh= String(d.getHours()).padStart(2,"0");
+    const mm= String(d.getMinutes()).padStart(2,"0");
+    return `${y}-${m}-${da} ${hh}:${mm}`;
+  }
+  function matchesQuery(row, q){
+    if (!q) return true;
+    const s = q.toLowerCase();
+    return (row.title || "").toLowerCase().includes(s) || (row.body || "").toLowerCase().includes(s);
+  }
+
+  async function fetchNotices(){
+    statusTxt.textContent = "불러오는 중...";
+    const { data, error } = await sb
+      .from("notices")
+      .select("id,title,body,author,created_at,updated_at")
+      .order("created_at", { ascending: false });
+
+    if (error){
+      console.error(error);
+      statusTxt.textContent = "공지 로드 실패";
+      return [];
+    }
+    statusTxt.textContent = "";
+    return data || [];
+  }
+
+  function render(rows){
+    listEl.innerHTML = "";
+    const q = (qEl.value || "").trim();
+    const filtered = rows.filter(r => matchesQuery(r, q));
+
+    if (filtered.length === 0){
+      listEl.innerHTML = `<div class="card"><div class="muted">공지사항이 없습니다.</div></div>`;
+      return;
+    }
+
+    filtered.forEach(row => {
+      const div = document.createElement("div");
+      div.className = "card";
+
+      const authorTxt = row.author ? ` · 작성자: ${escapeHtml(row.author)}` : "";
+      const editHint = `수정: ${fmtDate(row.updated_at)} / 작성: ${fmtDate(row.created_at)}`;
+
+      div.innerHTML = `
+        <div class="meta">
+          <div>
+            <div class="title">${escapeHtml(row.title || "")}</div>
+            <div class="date">작성: ${fmtDate(row.created_at)}${authorTxt}</div>
+          </div>
+          <div class="muted">${escapeHtml(editHint)}</div>
+        </div>
+        <div class="body">${escapeHtml(row.body || "")}</div>
+        <div class="moreRow">
+          
+          <div class="rightBtns">
+            <button class="btn" data-act="copy">복사</button>
+            <button class="btn btnPrimary" data-act="edit">수정</button>
+            <button class="btn btnDanger" data-act="del">삭제</button>
+          </div>
+        </div>
+      `;
+
+      div.querySelector('[data-act="copy"]').addEventListener("click", async ()=>{
+        const text = `${row.title}\n\n${row.body}`;
+        try{
+          await navigator.clipboard.writeText(text);
+          alert("복사 완료!");
+        }catch(e){
+          alert("복사 실패 (브라우저 권한 확인)");
+        }
+      });
+      div.querySelector('[data-act="edit"]').addEventListener("click", ()=> openEdit(row));
+      div.querySelector('[data-act="del"]').addEventListener("click", ()=> delNotice(row));
+
+      listEl.appendChild(div);
+    });
+  }
+
+  function openEdit(rowOrNull){
+    editing = rowOrNull || null;
+    editTitleEl.textContent = editing ? "공지 수정" : "공지 작성";
+    nTitle.value = editing?.title || "";
+    nBody.value  = editing?.body || "";
+    nAuthor.value= editing?.author || "";
+    editModal.style.display = "flex";
+    setTimeout(()=> nTitle.focus(), 50);
+  }
+  function closeEdit(){
+    editModal.style.display = "none";
+    editing = null;
+  }
+  editModal.addEventListener("click",(e)=>{ if (e.target?.id === "editModal") closeEdit(); });
+  editCancelBtn.addEventListener("click", closeEdit);
+
+  async function saveNotice(){
+    const title = (nTitle.value||"").trim();
+    const body  = (nBody.value||"").trim();
+    const author= (nAuthor.value||"").trim();
+
+    if (!title){ alert("제목을 입력하세요."); return; }
+    if (!body){ alert("내용을 입력하세요."); return; }
+
+    editSaveBtn.disabled = true;
+    try{
+      if (editing){
+        const { error } = await sb
+          .from("notices")
+          .update({ title, body, author: author || null })
+          .eq("id", editing.id);
+        if (error) throw error;
+        alert("수정 완료!");
+      } else {
+        const { error } = await sb
+          .from("notices")
+          .insert([{ title, body, author: author || null }]);
+        if (error) throw error;
+        alert("작성 완료!");
+      }
+      closeEdit();
+      await reload();
+    } catch(e){
+      console.error(e);
+      alert("저장 실패");
+    } finally{
+      editSaveBtn.disabled = false;
+    }
+  }
+
+  async function delNotice(row){
+    const ok = confirm("정말 삭제할까요? (되돌릴 수 없음)");
+    if (!ok) return;
+
+    try{
+      const { error } = await sb.from("notices").delete().eq("id", row.id);
+      if (error) throw error;
+      alert("삭제 완료!");
+      await reload();
+    }catch(e){
+      console.error(e);
+      alert("삭제 실패");
+    }
+  }
+
+  async function reload(){
+    cache = await fetchNotices();
+    render(cache);
+  }
+
+  qEl.addEventListener("input", ()=> render(cache));
+  document.getElementById("backBtn").addEventListener("click", ()=> history.back());
+  document.getElementById("newBtn").addEventListener("click", ()=> openEdit(null));
+  editSaveBtn.addEventListener("click", saveNotice);
+
+  (async function init(){
+    await reload();
+  })();
+  </script>
+</body>
+</html>
