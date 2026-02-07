@@ -15,9 +15,10 @@
       --shadow: 0 10px 24px rgba(0,0,0,.10);
       --radius:16px;
       --bad:#b42318;
+      --info:#2563eb;
     }
     *{box-sizing:border-box}
-    html{ -webkit-text-size-adjust:100%; } /* ✅ iOS Safari text autosize fix */
+    html{ -webkit-text-size-adjust:100%; }
 
     body{
       margin:0;
@@ -120,6 +121,38 @@
     .saveBtn:hover{ filter: brightness(0.98); }
     .saveBtn:disabled{ opacity:.55; cursor:not-allowed; }
 
+    /* ✅ 상단 액션바(예약확인/공지사항) */
+    .actionBar{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+      padding:10px 10px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:#fff;
+      box-shadow: 0 6px 16px rgba(0,0,0,.04);
+      margin-bottom:10px; /* Optional Info 위쪽 */
+    }
+    .noticeBtn{
+      border:1px solid var(--line);
+      background:#fff;
+      color:var(--ink);
+      font-weight:1000;
+      border-radius:12px;
+      padding:12px 16px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.06);
+      cursor:pointer;
+      white-space:nowrap;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+
+    .noticeBtn:hover{ border-color: var(--gold); }
+    .actionBar .goBtn{ box-shadow: 0 6px 16px rgba(0,0,0,.06); }
+
     .metaBox{
       margin-bottom:10px;
       padding:10px 10px 12px;
@@ -167,7 +200,6 @@
       box-shadow: 0 0 0 3px rgba(202,162,76,.18);
     }
 
-    /* ===== 결제 라디오 iOS Safari FIX ===== */
     .payOptions, .feeOptions{
       display:flex;
       gap: 10px 14px;
@@ -352,7 +384,6 @@
     .row b{font-weight: 1000}
     .print-only{ display:none; }
 
-    /* ===== SPECIAL MENU ===== */
     .specialBox{
       border:2px solid var(--line);
       border-radius: var(--radius);
@@ -461,8 +492,9 @@
       .hanaHeader{ display:block !important; margin:0 0 10px !important; }
       .summaryBar{ display:block !important; margin:0 !important; }
 
-      /* ✅ 인쇄 시 Optional Info 숨김 */
       .metaBox{ display:none !important; }
+      /* ✅ 인쇄 시 액션바도 숨김(원하면 지워도 됨) */
+      .actionBar{ display:none !important; }
 
       #sumLeft{
         display:block !important;
@@ -485,10 +517,6 @@
       @page { margin: 8mm; }
     }
 
-    /* =================================================
-       ✅ 관리자 비밀번호 모달 (admin.html 스타일)
-       - 저장(신규/수정)할 때만 뜸
-       ================================================= */
     .modalBack{
       position:fixed; inset:0; background:rgba(0,0,0,.35);
       display:none; align-items:center; justify-content:center;
@@ -532,7 +560,6 @@
       background: #fff7e6;
     }
     .btn:disabled{opacity:.55;cursor:not-allowed}
-
   </style>
 </head>
 
@@ -549,8 +576,18 @@
 
     <div class="summaryBar">
       <div class="sumCard" id="sumLeft">
+
+        <!-- ✅ 예약확인/공지사항: Optional Info 위 -->
+        <div class="actionBar">
+          
+          <button class="goBtn" id="goReservBtn" type="button">예약/Kiểm tra đặt chỗ</button>
+          <button class="noticeBtn" id="noticeBtn" type="button" title="공지사항">
+            <span class="dot"></span>Thông báo
+          </button>
+        </div>
+
         <div class="metaBox">
-          <div class="metaTitle">Optional Info</div>
+         
 
           <div class="metaGrid">
             <div class="metaField">
@@ -558,7 +595,7 @@
                 <label>주문 날짜 (선택)</label>
                 <div class="payOptions" id="dateOptions" style="gap:10px 12px;">
                   <label><input type="radio" name="orderDateMode" value="today" checked> today</label>
-                  <label><input type="radio" name="orderDateMode" value="yesterday"> yesterday</label>
+                 
                   <label><input type="radio" name="orderDateMode" value="pick"> pick</label>
                 </div>
 
@@ -585,7 +622,6 @@
                 <label><input type="radio" name="payMethod" value="bank"> bank</label>
               </div>
 
-              <!-- ✅ 카드일 때만 보이는 추가 옵션 -->
               <div class="feeBox" id="cardFeeBox">
                 <div class="feeHint">Card amount option</div>
                 <div class="feeOptions">
@@ -619,7 +655,8 @@
         <button class="printBtnOnly" id="printBtn">&nbsp;&nbsp;인&nbsp;쇄   /   máy in&nbsp;&nbsp;</button>
         <button class="saveBtn" id="saveBtn" type="button">저장하기 / Lưu</button>
         <button class="resetBtn" id="resetBtn" type="button">초기화 / Quay lại</button>
-        <button class="goBtn" id="goReservBtn" type="button">예약 확인 / Check</button>
+
+        <!-- ✅ 기존 오른쪽에 있던 예약확인 버튼 제거(위 actionBar로 이동) -->
       </div>
     </div>
 
@@ -677,7 +714,6 @@
     </div>
   </div>
 
-  <!-- ✅ 저장용 관리자 비밀번호 모달(디자인=admin.html) -->
   <div class="modalBack" id="adminPassModal">
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modalTitle" id="adminPassTitle">관리자 확인</div>
@@ -697,9 +733,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-  /*************************************************
-   * ✅ Supabase 설정
-   *************************************************/
   const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
   const { createClient } = supabase;
@@ -711,12 +744,7 @@
   let allMenu = [];
 
   const qty = Object.create(null);
-
-  // SPECIAL lines (custom)
   const specialLines = [];
-  // { id, ko, vi, qty, unit_vnd, unit_usd }
-
-  // edit mode
   const params = new URLSearchParams(location.search);
   const editOrderId = params.get("edit");
   const isEditMode = !!editOrderId;
@@ -800,7 +828,6 @@
     otherMenu = rows.filter(r => r.type === "other");
     allMenu   = [...drinkMenu, ...sideMenu, ...otherMenu];
 
-    // qty 초기화
     for (const k in qty) delete qty[k];
     allMenu.forEach(m => qty[m.id] = 0);
 
@@ -827,7 +854,6 @@
     updateAll();
   }
 
-  // helpers
   function getPaymentMethod(){
     return document.querySelector('input[name="payMethod"]:checked')?.value || "cash";
   }
@@ -843,7 +869,6 @@
       box.style.display = "block";
     } else {
       box.style.display = "none";
-      // 카드가 아니면 fee 옵션은 기본값으로 복귀
       const noneRadio = document.querySelector('input[name="cardFeeMode"][value="none"]');
       if (noneRadio) noneRadio.checked = true;
     }
@@ -859,31 +884,25 @@
     box.style.display = (mode === "pick") ? "block" : "none";
   }
   function getCreatedAtForSave(){
-    // returns ISO string (timestamptz)
     const mode = getOrderDateMode();
     const now = new Date();
 
-    if (mode === "today"){
-      return now.toISOString();
-    }
+    if (mode === "today") return now.toISOString();
     if (mode === "yesterday"){
       const d = new Date(now);
       d.setDate(d.getDate() - 1);
       return d.toISOString();
     }
 
-    // pick
     const v = (document.getElementById("orderDateInput")?.value || "").trim();
     if (!v) return now.toISOString();
-
-    // picked date at local 12:00 to avoid timezone shift
     const picked = new Date(`${v}T12:00:00`);
     return picked.toISOString();
   }
 
   function roundTo1000(n){
     const x = Number(n) || 0;
-    return Math.round(x / 1000) * 1000;   // ✅ 1,000 단위 반올림
+    return Math.round(x / 1000) * 1000;
   }
 
   function applyCardFeeIfNeeded(baseUsd, baseVnd){
@@ -892,8 +911,6 @@
 
     if (pm === "card" && mode === "fee7"){
       const usd = Math.round((Number(baseUsd) || 0) * 1.07);
-
-      // ✅ VND는 7% 적용 후 1,000 단위 반올림
       const rawVnd = (Number(baseVnd) || 0) * 1.07;
       const vnd = roundTo1000(rawVnd);
 
@@ -920,7 +937,6 @@
     let totalVnd = 0;
     const picked = [];
 
-    // normal menu items
     for (const m of allMenu){
       const q = qty[m.id] || 0;
       const unitUsd = Number(m.price_usd) || 0;
@@ -946,7 +962,6 @@
       }
     }
 
-    // special custom lines
     for (const s of specialLines){
       const q = Number(s.qty || 0);
       const unitUsd = Number(s.unit_usd || 0);
@@ -981,7 +996,6 @@
     const { picked, totalUsd: baseUsd, totalVnd: baseVnd } = computePickedAndTotals();
     const adj = applyCardFeeIfNeeded(baseUsd, baseVnd);
 
-    // update menu cards line totals
     for (const m of allMenu){
       const q = qty[m.id] || 0;
       const lineUsd = (Number(m.price_usd) || 0) * q;
@@ -996,7 +1010,6 @@
       }
     }
 
-    // ✅ 화면 총액은 (카드+7% 선택 시) 적용된 값
     document.getElementById("totalUsd").textContent = fmtInt(adj.usd);
     document.getElementById("totalVnd").textContent = fmtInt(adj.vnd);
 
@@ -1011,7 +1024,6 @@
       }
     }
 
-    // picked list
     const list = document.getElementById("pickedList");
     list.innerHTML = "";
 
@@ -1051,22 +1063,18 @@
     if (di) di.value = "";
     toggleDatePickUI();
 
-    // 1) 수량 초기화
     for (const k in qty) qty[k] = 0;
     document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
 
-    // 2) SPECIAL 초기화
     specialLines.length = 0;
     clearSpecialDraft();
 
-    // 3) Optional Info 초기화
     document.getElementById("guideName").value = "";
     document.getElementById("teamNo").value = "";
 
     const cashRadio = document.querySelector('input[name="payMethod"][value="cash"]');
     warningSilentSet(cashRadio, true);
 
-    // 카드 fee 기본으로
     const noneRadio = document.querySelector('input[name="cardFeeMode"][value="none"]');
     warningSilentSet(noneRadio, true);
 
@@ -1077,7 +1085,6 @@
     el.checked = !!checked;
   }
 
-  // SPECIAL UI
   function clearSpecialDraft(){
     document.getElementById("spKo").value = "";
     document.getElementById("spVi").value = "";
@@ -1165,13 +1172,7 @@
     });
   }
 
-  /*************************************************
-   * ✅ 저장 보호(모달 버전 / 디자인=admin.html)
-   * - 신규 저장, 수정 저장 모두 적용
-   *************************************************/
-  const ADMIN_PASS_CACHE_KEY = "hana_admin_pass"; // (기존과 동일) sessionStorage에 저장
-
-  // 모달 helpers
+  const ADMIN_PASS_CACHE_KEY = "hana_admin_pass";
   const passModal = document.getElementById("adminPassModal");
   const passInput = document.getElementById("adminPassInput");
   const passTitle = document.getElementById("adminPassTitle");
@@ -1200,7 +1201,6 @@
     if (typeof r === "function") r(result);
   }
 
-  // 바깥 클릭 닫기(취소)
   passModal.addEventListener("click", (e)=>{
     if (e.target && e.target.id === "adminPassModal"){
       if (passModalBusy) return;
@@ -1232,7 +1232,6 @@
   }
 
   async function requireAdminPasswordModal({ actionLabel="저장" } = {}){
-    // 1) 캐시된 비번이 있으면 먼저 검증
     let pass = (sessionStorage.getItem(ADMIN_PASS_CACHE_KEY) || "").trim();
     if (pass){
       const ok = await verifyAdminPassword(pass);
@@ -1240,7 +1239,6 @@
       sessionStorage.removeItem(ADMIN_PASS_CACHE_KEY);
     }
 
-    // 2) 모달로 입력 받기 + 검증(틀리면 모달 유지)
     while (true){
       const entered = await openPassModal({
         title: "관리자 확인",
@@ -1264,7 +1262,6 @@
 
       if (!ok){
         alert("비밀번호가 틀렸거나 권한이 없습니다.");
-        // 모달 다시 열기(지금 열린 상태라서 닫지 말고, 입력만 비우고 포커스)
         passInput.value = "";
         setTimeout(()=> passInput.focus(), 50);
         continue;
@@ -1276,22 +1273,16 @@
     }
   }
 
-  // 확인 버튼: 값 리턴만(검증은 requireAdminPasswordModal에서)
   passOkBtn.addEventListener("click", ()=>{
     if (passModalBusy) return;
     closePassModal((passInput.value || "").trim());
   });
 
-  /*************************************************
-   * ✅ (추가) 카드 7%를 DB에 “라인 아이템”으로도 저장해서
-   * admin.html이 라인 합계를 다시 계산해도 7%가 안 날아가게 함
-   *************************************************/
   const FEE_KIND = "fee7";
   const FEE_KO = "Service fee 7%";
   const FEE_VI = "Phí dịch vụ 7%";
 
   async function insertFeeLineIfNeeded(orderId, adj){
-    // adj.fee_* 는 “추가된 금액”
     if (!adj?.applied) return;
     if ((Number(adj.fee_vnd)||0) <= 0 && (Number(adj.fee_usd)||0) <= 0) return;
 
@@ -1311,9 +1302,6 @@
     if (error) throw error;
   }
 
-  /*************************************************
-   * ✅ 저장(신규/수정)
-   *************************************************/
   async function saveNewOrder(){
     const btn = document.getElementById("saveBtn");
     btn.disabled = true;
@@ -1325,18 +1313,14 @@
         return;
       }
 
-      // ✅ 신규 저장도 비번 확인(모달)
       const pass = await requireAdminPasswordModal({ actionLabel: "저장" });
       if (!pass) return;
 
       const guideName = (document.getElementById("guideName").value || "").trim();
       const teamNo = (document.getElementById("teamNo").value || "").trim();
       const paymentMethod = getPaymentMethod();
-
-      // ✅ 저장 total은 카드 옵션 반영(7% 포함 선택 시 반영)
       const adj = applyCardFeeIfNeeded(baseUsd, baseVnd);
 
-      // 1) orders 생성 (✅ 날짜 지정 가능: RPC 사용)
       toggleDatePickUI();
       const createdAtIso = getCreatedAtForSave();
 
@@ -1366,7 +1350,6 @@
         return;
       }
 
-      // 2) 일반 메뉴 -> order_items (라인은 기본 가격 그대로)
       const normalItems = picked.filter(p => p.kind === "menu");
       if (normalItems.length){
         const itemsPayload = normalItems.map(p => ({
@@ -1382,7 +1365,6 @@
         if (itemsErr) throw itemsErr;
       }
 
-      // 3) SPECIAL -> order_custom_items
       const specialItems = picked.filter(p => p.kind === "special");
       if (specialItems.length){
         const customPayload = specialItems.map(p => ({
@@ -1400,9 +1382,7 @@
         if (cErr) throw cErr;
       }
 
-      // ✅ 카드 7%면 “fee7” 라인도 저장
       await insertFeeLineIfNeeded(orderId, adj);
-
       alert("저장 완료!");
     } catch(e){
       console.error(e);
@@ -1423,7 +1403,6 @@
         return;
       }
 
-      // ✅ 수정 저장도 비번 확인(모달)
       const pass = await requireAdminPasswordModal({ actionLabel: "수정 저장" });
       if (!pass) return;
 
@@ -1432,8 +1411,6 @@
       const paymentMethod = getPaymentMethod();
       const normalItems = picked.filter(p => p.kind === "menu");
       const specialItems = picked.filter(p => p.kind === "special");
-
-      // ✅ 저장 total은 카드 옵션 반영(7% 포함 선택 시 반영)
       const adj = applyCardFeeIfNeeded(baseUsd, baseVnd);
 
       const rpcItems = normalItems.map(p => ({
@@ -1464,12 +1441,11 @@
         return;
       }
 
-      // SPECIAL/fee7 재구성: 기존 삭제 후 다시 넣기
       const { error: delSpecialErr } = await sb
         .from("order_custom_items")
         .delete()
         .eq("order_id", editOrderId)
-        .in("kind", ["special", FEE_KIND]); // ✅ special + fee7 같이 삭제
+        .in("kind", ["special", FEE_KIND]);
       if (delSpecialErr) throw delSpecialErr;
 
       if (specialItems.length){
@@ -1488,10 +1464,8 @@
         if (insErr) throw insErr;
       }
 
-      // ✅ fee7 라인 다시 삽입(필요할 때만)
       await insertFeeLineIfNeeded(editOrderId, adj);
 
-      // ✅ orders total 업데이트 (적용된 값으로)
       const { error: updErr } = await sb
         .from("orders")
         .update({ total_usd: adj.usd, total_vnd: adj.vnd, payment_method: paymentMethod, guide_name: guideName || "", team_no: teamNo || "" })
@@ -1509,11 +1483,7 @@
     }
   }
 
-  /*************************************************
-   * ✅ 수정모드 로드
-   *************************************************/
   async function loadOrderForEdit(orderId){
-    // ✅ total도 함께 가져와서 (카드+7% 여부) 자동 추정
     const { data: meta, error: metaErr } = await sb
       .from("orders")
       .select("id,guide_name,team_no,payment_method,total_usd,total_vnd")
@@ -1528,7 +1498,6 @@
     const radio = document.querySelector(`input[name="payMethod"][value="${pm}"]`);
     if (radio) radio.checked = true;
 
-    // 초기화
     for (const k in qty) qty[k] = 0;
     document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
     specialLines.length = 0;
@@ -1567,12 +1536,10 @@
       });
     });
 
-    // ✅ 카드+7% 자동 추정:
     toggleCardFeeUI();
     const { totalVnd: baseVnd } = computePickedAndTotals();
 
     if (pm === "card"){
-      // 1) fee7 라인이 있으면 우선 fee7로
       const hasFeeLine = (cItems||[]).some(x => (x.kind||"").toLowerCase() === FEE_KIND);
       const feeRadio = document.querySelector('input[name="cardFeeMode"][value="fee7"]');
       const noneRadio = document.querySelector('input[name="cardFeeMode"][value="none"]');
@@ -1581,10 +1548,9 @@
         if (hasFeeLine){
           feeRadio.checked = true;
         } else {
-          // 2) 없으면 기존 로직(총액 비교)으로 추정
           const savedVnd = Number(meta.total_vnd || 0);
           const expected = roundTo1000(baseVnd * 1.07);
-          const tol = Math.max(3000, Math.round(baseVnd * 0.01)); // 최소 3,000 VND 또는 1%
+          const tol = Math.max(3000, Math.round(baseVnd * 0.01));
           if (Math.abs(savedVnd - expected) <= tol) feeRadio.checked = true;
           else noneRadio.checked = true;
         }
@@ -1605,29 +1571,33 @@
     if (el) el.textContent = `Printed: ${date} ${time}`;
   }
 
-  // ✅ 프린트는 비번 안 물음
   document.getElementById("printBtn").addEventListener("click", () => { setPrintTime(); window.print(); });
   document.getElementById("resetBtn").addEventListener("click", resetAll);
 
-  // ✅ 저장만 보호(신규/수정 모두)
   document.getElementById("saveBtn").addEventListener("click", async () => {
     if (isEditMode) await saveEditOrder();
     else await saveNewOrder();
   });
 
   window.addEventListener("beforeprint", setPrintTime);
-
   document.getElementById("spAddBtn").addEventListener("click", addSpecialLine);
 
-  // ✅ 결제/카드옵션 바뀌면 즉시 총액 재계산
   document.getElementById("payOptions").addEventListener("change", () => updateAll());
   document.getElementById("cardFeeBox").addEventListener("change", () => updateAll());
 
+  // ✅ 예약 확인 버튼(위로 이동됨)
   document.getElementById("goReservBtn").addEventListener("click", () => {
-    location.href = "reserv_check.html"; // 같은 폴더
+    location.href = "reserv_check.html";
   });
 
-  // ✅ 날짜 옵션 UI 토글
+  // ✅ 공지사항 버튼(기본: notice.html 이동)
+  document.getElementById("noticeBtn").addEventListener("click", () => {
+    // 원하는 방식으로 변경 가능:
+    // 1) location.href = "notice.html";
+    // 2) alert("공지사항 ...");
+    location.href = "notice.html";
+  });
+
   document.getElementById("dateOptions")?.addEventListener("change", () => toggleDatePickUI());
   document.getElementById("orderDateInput")?.addEventListener("change", () => toggleDatePickUI());
 
