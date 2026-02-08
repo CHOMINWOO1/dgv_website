@@ -488,7 +488,7 @@
     /*************************************************
      * ✅ 저장 보호(모달 비번, sessionStorage 캐시)
      *************************************************/
-    const ADMIN_PASS_KEY = "hana_admin_pass_group_v1";
+    const ADMIN_PASS_KEY = "hana_admin_pass";
 
     function openPassModal(){
       $("passInput").value = "";
@@ -498,53 +498,75 @@
     function closePassModal(){
       $("passModal").style.display = "none";
     }
-
+    async function verifyAdminPassword(pass){
+  const ok = await rpc("admin_check_password", { p_password: pass });
+  return ok === true;
+}
     // ※ 여기선 verify RPC가 없으니 "저장 RPC로 검증" 방식:
     // - 캐시된 비번이 있으면 그걸로 저장 시도
     // - 실패(권한/비번 오류)면 캐시 삭제하고 모달 다시 띄움
     async function getAdminPasswordForSave(){
-      const cached = (sessionStorage.getItem(ADMIN_PASS_KEY) || "").trim();
-      if (cached) return cached;
-      return new Promise((resolve) => {
-        openPassModal();
+  const cached = (sessionStorage.getItem(ADMIN_PASS_KEY) || "").trim();
+  if (cached){
+    const ok = await verifyAdminPassword(cached);
+    if (ok) return cached;
+    sessionStorage.removeItem(ADMIN_PASS_KEY);
+  }
 
-        const ok = () => {
-          const pass = ($("passInput").value || "").trim();
-          if(!pass){ setMsg("bad","비밀번호를 입력하세요"); return; }
-          closePassModal();
-          cleanup();
-          sessionStorage.setItem(ADMIN_PASS_KEY, pass);
-          resolve(pass);
-        };
+  while(true){
+    const pass = await new Promise((resolve) => {
+      openPassModal();
 
-        const cancel = () => {
-          closePassModal();
-          cleanup();
-          resolve(null);
-        };
+      const ok = async () => {
+        const v = ($("passInput").value || "").trim();
+        if(!v){ setMsg("bad","비밀번호를 입력하세요"); return; }
 
-        const onKey = (e) => {
-          if(e.key === "Enter") ok();
-          if(e.key === "Escape") cancel();
-        };
+        closePassModal();
+        cleanup();
+        resolve(v);
+      };
 
-        const onBackClick = (e) => {
-          if (e.target && e.target.id === "passModal") cancel();
-        };
+      const cancel = () => {
+        closePassModal();
+        cleanup();
+        resolve(null);
+      };
 
-        function cleanup(){
-          $("passOkBtn").removeEventListener("click", ok);
-          $("passCancelBtn").removeEventListener("click", cancel);
-          $("passInput").removeEventListener("keydown", onKey);
-          $("passModal").removeEventListener("click", onBackClick);
-        }
+      const onKey = (e) => {
+        if(e.key === "Enter") ok();
+        if(e.key === "Escape") cancel();
+      };
 
-        $("passOkBtn").addEventListener("click", ok);
-        $("passCancelBtn").addEventListener("click", cancel);
-        $("passInput").addEventListener("keydown", onKey);
-        $("passModal").addEventListener("click", onBackClick);
-      });
+      const onBackClick = (e) => {
+        if (e.target && e.target.id === "passModal") cancel();
+      };
+
+      function cleanup(){
+        $("passOkBtn").removeEventListener("click", ok);
+        $("passCancelBtn").removeEventListener("click", cancel);
+        $("passInput").removeEventListener("keydown", onKey);
+        $("passModal").removeEventListener("click", onBackClick);
+      }
+
+      $("passOkBtn").addEventListener("click", ok);
+      $("passCancelBtn").addEventListener("click", cancel);
+      $("passInput").addEventListener("keydown", onKey);
+      $("passModal").addEventListener("click", onBackClick);
+    });
+
+    if(!pass) return null;
+
+    const ok = await verifyAdminPassword(pass);
+    if(!ok){
+      alert("비밀번호가 틀렸거나 권한이 없습니다.");
+      continue;
     }
+
+    sessionStorage.setItem(ADMIN_PASS_KEY, pass);
+    return pass;
+  }
+}
+
 
     /***********************
      * 저장 (모달 비밀번호)
