@@ -179,7 +179,8 @@
 
         <div style="display:flex;gap:8px;">
           <button class="btn-ghost btn-mini" id="btnToday" type="button">Hôm nay</button>
-          <button class="btn-primary btn-mini" id="btnFromToday" type="button">Các ngày tiếp theo</button>
+          <button class="btn-ghost btn-mini" id="btnTomorrow" type="button">Ngày mai</button>
+          <button class="btn-primary btn-mini" id="btnFromToday" type="button">tất cả</button>
         </div>
 
         <button class="btn-ghost" id="btnRefresh" type="button">Quay lại</button>
@@ -285,45 +286,71 @@ async function requireAccessGate(){
       return json;
     }
 
-    // mode: today | fromToday
-    let MODE = "fromToday";
+    // mode: today | fromToday | tomorrow
+    let MODE = "today";
 
     function setMode(mode){
-      MODE = mode;
-      $("modePill").textContent = (MODE === "today") ? "모드: 오늘" : "모드: 오늘 이후 전체";
+  MODE = mode;
 
-      if(MODE === "today"){
-        $("btnToday").classList.add("btn-primary");
-        $("btnToday").classList.remove("btn-ghost");
-        $("btnFromToday").classList.add("btn-ghost");
-        $("btnFromToday").classList.remove("btn-primary");
-      }else{
-        $("btnFromToday").classList.add("btn-primary");
-        $("btnFromToday").classList.remove("btn-ghost");
-        $("btnToday").classList.add("btn-ghost");
-        $("btnToday").classList.remove("btn-primary");
-      }
-    }
+  $("modePill").textContent =
+    (MODE === "today") ? "Mode: Hôm nay" :
+    (MODE === "tomorrow") ? "Mode: Ngày mai" :
+    "Mode: tất cả";
+
+  // 버튼 클래스 초기화(안전하게 한번에)
+  ["btnToday","btnTomorrow","btnFromToday"].forEach(id=>{
+    $(id).classList.add("btn-ghost");
+    $(id).classList.remove("btn-primary");
+  });
+
+  if(MODE === "today"){
+    $("btnToday").classList.add("btn-primary");
+    $("btnToday").classList.remove("btn-ghost");
+  }else if(MODE === "tomorrow"){
+    $("btnTomorrow").classList.add("btn-primary");
+    $("btnTomorrow").classList.remove("btn-ghost");
+  }else{
+    $("btnFromToday").classList.add("btn-primary");
+    $("btnFromToday").classList.remove("btn-ghost");
+  }
+}
+
 
     async function load(){
-      const today = ymd(new Date());
-      const branch = $("q_branch").value;
+  const now = new Date();
 
-      let url =
-        `${SUPABASE_URL}/rest/v1/resv_groups` +
-        `?select=id,res_date,res_time,guests_count,price,menu_ko,menu_vi,note,branch,guide_name`;
+  const today = ymd(now);
 
-      url += (MODE === "today") ? `&res_date=eq.${today}` : `&res_date=gte.${today}`;
+  // ✅ 내일 계산 (로컬 기준)
+  const tmr = new Date(now);
+  tmr.setDate(tmr.getDate() + 1);
+  const tomorrow = ymd(tmr);
 
-      if(branch){
-        url += `&branch=eq.${encodeURIComponent(branch)}`;
-      }
+  const branch = $("q_branch").value;
 
-      url += `&order=res_date.asc,res_time.asc`;
+  let url =
+    `${SUPABASE_URL}/rest/v1/resv_groups` +
+    `?select=id,res_date,res_time,guests_count,price,menu_ko,menu_vi,note,branch,guide_name`;
 
-      const rows = await fetchJson(url);
-      renderAll(Array.isArray(rows) ? rows : []);
-    }
+  // ✅ MODE별 날짜 필터
+  if(MODE === "today"){
+    url += `&res_date=eq.${today}`;
+  }else if(MODE === "tomorrow"){
+    url += `&res_date=eq.${tomorrow}`;
+  }else{
+    url += `&res_date=gte.${today}`;
+  }
+
+  if(branch){
+    url += `&branch=eq.${encodeURIComponent(branch)}`;
+  }
+
+  url += `&order=res_date.asc,res_time.asc`;
+
+  const rows = await fetchJson(url);
+  renderAll(Array.isArray(rows) ? rows : []);
+}
+
 
     function renderStats(rows){
       const totalGuests = rows.reduce((a,r)=>a + (Number(r.guests_count)||0), 0);
@@ -435,6 +462,8 @@ async function requireAccessGate(){
     $("btnFromToday").addEventListener("click", () => { setMode("fromToday"); load(); });
     $("btnRefresh").addEventListener("click", load);
     $("q_branch").addEventListener("change", load);
+    $("btnTomorrow").addEventListener("click", () => { setMode("tomorrow"); load(); });
+
 
     // init
     (async function init(){
@@ -445,7 +474,7 @@ async function requireAccessGate(){
   }
 
   buildBranch();
-  setMode("fromToday");
+  setMode("today");
   load();
 })();
 
