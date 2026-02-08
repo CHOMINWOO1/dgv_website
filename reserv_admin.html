@@ -72,7 +72,7 @@
     }
     .btn-danger:hover{ filter:brightness(.98); }
 
-    /* ✅ NEW: 확정 취소 버튼 스타일(중립) */
+    /* ✅ 확정 취소 버튼 */
     .btn-warn{
       background:#fff7e8;
       border:1px solid #efd7a6;
@@ -123,8 +123,6 @@
       background:#fff;font-size:12px;font-weight:900;color:var(--sub);
       white-space:nowrap;
     }
-
-    /* ✅ NEW: 확정 배지 */
     .pill-confirmed{
       border-color:#bfe5c9;
       background:#e9fff0;
@@ -177,6 +175,22 @@
       .rows{max-height:42vh}
     }
 
+    /* ✅ NEW: MENU KO/VI 한 줄 + 결제 라디오 */
+    .inline2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+    .radioRow{
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+      padding:10px 12px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      background:#fff;
+    }
+    .radioRow label{
+      margin:0;
+      display:flex; align-items:center; gap:6px;
+      font-weight:900; color:var(--ink); font-size:13px;
+    }
+    .radioRow input{ width:auto; }
+
     /* ===== Admin Password Modal ===== */
     .modalBack{
       position:fixed; inset:0; background:rgba(0,0,0,.35);
@@ -222,7 +236,7 @@
     <div class="card">
       <div class="top">
         <div>
-          <h1>관리자 - 단체 예약 관리 </h1>
+          <h1>관리자 - 단체 예약 관리</h1>
         </div>
       </div>
 
@@ -306,15 +320,30 @@
               <input id="e_price" type="number" min="0" step="1000" placeholder="예: 2500000" />
             </div>
 
+            <!-- ✅ MENU KO/VI 한 줄 -->
             <div class="span2">
-              <label>MENU KO</label>
-              <input id="e_menu_ko" type="text" placeholder="예: 무한삼겹" />
+              <label>MENU (KO / VI)</label>
+              <div class="inline2">
+                <input id="e_menu_ko" type="text" placeholder="예: 무한삼겹" />
+                <input id="e_menu_vi" type="text" placeholder="예: Thịt nướng buffet" />
+              </div>
+              <div class="muted" style="margin-top:6px">* KO 입력 시 매핑표에 있으면 VI 자동 입력</div>
             </div>
 
+            <!-- ✅ 결제수단(orders.payment_method로 저장) -->
             <div class="span2">
-              <label>MENU VI</label>
-              <input id="e_menu_vi" type="text" placeholder="예: Thịt nướng buffet" />
-              <div class="muted" style="margin-top:6px">* KO 입력 시 매핑표에 있으면 VI 자동 입력</div>
+              <label>PAYMENT METHOD</label>
+              <div class="radioRow">
+                <label><input type="radio" name="pay_method" value="cash" checked> cash</label>
+                <label><input type="radio" name="pay_method" value="card"> card</label>
+                <label><input type="radio" name="pay_method" value="bank"> bank</label>
+              </div>
+            </div>
+
+            <!-- ✅ NOTE 위 추가 정보(orders.team_no로 저장) -->
+            <div class="span2">
+              <label>OPTIONAL INFO (TEAM / 메모)</label>
+              <input id="e_optional_info" type="text" placeholder="예: Team 4.2 / 단체명 / 차량번호 등" />
             </div>
 
             <div class="span2">
@@ -330,7 +359,6 @@
 
           <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">
             <button class="btn-confirm" id="btnConfirm" type="button">확정</button>
-            <!-- ✅ NEW: 확정취소 버튼 -->
             <button class="btn-warn" id="btnUnconfirm" type="button">확정취소</button>
 
             <button class="btn-ghost" id="btnClear" type="button">선택 해제</button>
@@ -396,8 +424,12 @@
     };
 
     const BRANCH_PRESETS = ["KT","ANT","AST","엠투어","기쁨","JM","TOT","투어패밀리","빅트래블","실크로드","HANA","OTHER"];
-
     const $ = (id) => document.getElementById(id);
+
+    function getPaymentMethod(){
+      const el = document.querySelector('input[name="pay_method"]:checked');
+      return el ? el.value : "cash";
+    }
 
     function escapeHtml(s){
       return String(s ?? "")
@@ -593,11 +625,10 @@
      ***********************/
     let MODE = "fromToday"; // today | fromToday | range
     let SELECTED_ID = null;
-    let SELECTED_ROW = null; // ✅ NEW: 선택된 row 저장
+    let SELECTED_ROW = null;
     let ROWS = [];
 
     function setConfirmButtons(){
-      // ✅ NEW: 확정/확정취소 버튼 상태 동기화
       const isConfirmed = !!(SELECTED_ROW && SELECTED_ROW.confirmed);
       $("btnConfirm").disabled = !SELECTED_ID || isConfirmed;
       $("btnUnconfirm").disabled = !SELECTED_ID || !isConfirmed;
@@ -637,17 +668,21 @@
 
     function clearSelection(){
       SELECTED_ID = null;
-      SELECTED_ROW = null; // ✅ NEW
-      ["e_id","e_branch","e_date","e_time_raw","e_guests","e_price","e_menu_ko","e_menu_vi","e_note","e_guide"].forEach(id => $(id).value = "");
+      SELECTED_ROW = null;
+      ["e_id","e_branch","e_date","e_time_raw","e_guests","e_price","e_menu_ko","e_menu_vi","e_optional_info","e_note","e_guide"]
+        .forEach(id => $(id).value = "");
       $("e_time_preview").textContent="--:--";
       document.querySelectorAll(".row.active").forEach(el => el.classList.remove("active"));
+      // payment method 기본 cash
+      const cash = document.querySelector('input[name="pay_method"][value="cash"]');
+      if(cash) cash.checked = true;
       setMsg("", "");
-      setConfirmButtons(); // ✅ NEW
+      setConfirmButtons();
     }
 
     function fillEditor(r){
       SELECTED_ID = r.id;
-      SELECTED_ROW = r; // ✅ NEW
+      SELECTED_ROW = r;
       $("e_id").value = r.id ?? "";
       $("e_branch").value = r.branch ?? "";
       $("e_date").value = r.res_date ?? "";
@@ -658,9 +693,15 @@
       $("e_menu_vi").value = r.menu_vi ?? "";
       $("e_note").value = r.note ?? "";
       $("e_guide").value = r.guide_name ?? "";
+      // OPTIONAL INFO는 resv_groups에 없으니 편집값 유지용(선택시 초기화)
+      $("e_optional_info").value = "";
+      // payment method도 orders에서만 쓸 거라 선택시 기본 cash
+      const cash = document.querySelector('input[name="pay_method"][value="cash"]');
+      if(cash) cash.checked = true;
+
       updateTimePreview("e_time_raw","e_time_preview");
       setMsg("", "");
-      setConfirmButtons(); // ✅ NEW
+      setConfirmButtons();
     }
 
     function renderList(rows){
@@ -709,12 +750,9 @@
         });
       });
 
-      // ✅ NEW: 리스트 다시 그린 뒤에도 선택 유지(가능하면)
       if(SELECTED_ID !== null && SELECTED_ID !== undefined){
         const active = box.querySelector(`.row[data-id="${CSS.escape(String(SELECTED_ID))}"]`);
-        if(active){
-          active.classList.add("active");
-        }
+        if(active) active.classList.add("active");
       }
     }
 
@@ -739,7 +777,7 @@
 
         let url =
           `${SUPABASE_URL}/rest/v1/resv_groups` +
-          `?select=id,res_date,res_time,guests_count,price,menu_ko,menu_vi,note,branch,guide_name,confirmed,confirmed_at,confirmed_order_id`; // ✅ NEW
+          `?select=id,res_date,res_time,guests_count,price,menu_ko,menu_vi,note,branch,guide_name,confirmed,confirmed_at,confirmed_order_id`;
 
         if(MODE === "today"){
           url += `&res_date=eq.${today}`;
@@ -773,7 +811,6 @@
         const rows = await fetchJson(url);
         ROWS = Array.isArray(rows) ? rows : [];
 
-        // ✅ NEW: 선택 유지 옵션
         if(preserveSelected && prevId !== null && prevId !== undefined){
           const rr = ROWS.find(x => String(x.id) === String(prevId));
           if(rr){
@@ -787,7 +824,7 @@
         }
 
         renderList(ROWS);
-        setConfirmButtons(); // ✅ NEW
+        setConfirmButtons();
       }catch(e){
         $("rows").innerHTML = `<div class="muted" style="padding:12px;">조회 실패: ${escapeHtml(e.message)}</div>`;
       }
@@ -801,7 +838,6 @@
           return;
         }
 
-        // ✅ NEW: 이미 확정이면 막기 (중복 orders 생성 방지)
         if(SELECTED_ROW.confirmed){
           setMsg("bad","이미 확정된 예약이야. (확정취소 후 다시 확정 가능)");
           return;
@@ -820,6 +856,9 @@
         const menu_vi = ($("e_menu_vi").value || "").trim();
         const note = ($("e_note").value || "").trim();
         const guide_name = ($("e_guide").value || "").trim();
+
+        const optional_info = ($("e_optional_info").value || "").trim(); // ✅ NEW
+        const payment_method = getPaymentMethod(); // ✅ NEW
 
         if(!res_date || !res_time){
           setMsg("bad","DATE / TIME은 필수야");
@@ -851,7 +890,7 @@
 
         const created_at = `${res_date}T${res_time}:00+07:00`;
 
-        // 1) orders insert -> id
+        // 1) orders insert -> id (payment_method + team_no 저장)
         const orderInsertUrl = `${SUPABASE_URL}/rest/v1/orders?select=id`;
         const orderRes = await fetch(orderInsertUrl, {
           method:"POST",
@@ -868,8 +907,8 @@
             total_usd: 0,
             total_vnd: line_vnd,
             guide_name: guide_name || null,
-            team_no: note || null,
-            payment_method: "cash"
+            team_no: optional_info || note || null,         // ✅ NEW
+            payment_method: payment_method || "cash"        // ✅ NEW
           })
         });
 
@@ -883,7 +922,7 @@
         const orderId = Array.isArray(orderJson) ? orderJson[0]?.id : orderJson?.id;
         if(!orderId) throw new Error("orders insert 후 order id를 받지 못했어");
 
-        // 2) order_custom_items insert
+        // 2) order_custom_items insert (기존 유지)
         const customInsertUrl = `${SUPABASE_URL}/rest/v1/order_custom_items`;
         const cRes = await fetch(customInsertUrl, {
           method:"POST",
@@ -911,15 +950,15 @@
           throw new Error((j && (j.message || j.error)) || cText || ("HTTP " + cRes.status));
         }
 
-        // 3) ✅ resv_groups -> confirmed 표시 (RPC)
+        // 3) resv_groups -> confirmed 표시 (RPC)
         await rpc("admin_mark_resv_confirmed", {
           pw: ADMIN_PW,
-          p_id: Number(SELECTED_ID), // ✅ NEW: bigint 안전
+          p_id: Number(SELECTED_ID),
           p_order_id: orderId
         });
 
         setMsg("ok", `확정 완료! ✅ (order: ${String(orderId).slice(0,8)}...)`);
-        await loadList({ preserveSelected:true }); // ✅ NEW: 상태 반영 + 선택 유지
+        await loadList({ preserveSelected:true });
       }catch(e){
         if((e.message || "").toLowerCase().includes("forbidden")){
           setMsg("bad","권한이 없습니다(RLS/비번). 정책 또는 비밀번호를 확인해줘.");
@@ -929,7 +968,6 @@
       }
     }
 
-    // ✅ NEW: 확정 취소
     async function unconfirmReservation(){
       try{
         setMsg("", "");
@@ -942,9 +980,7 @@
           return;
         }
 
-        const ok = confirm(
-          "확정취소하면 orders 기록도 삭제합니다.\n진행할까요?"
-        );
+        const ok = confirm("확정취소하면 orders 기록도 삭제합니다.\n진행할까요?");
         if(!ok) return;
 
         await rpc("admin_unmark_resv_confirmed", {
@@ -1005,7 +1041,6 @@
           return;
         }
 
-        // KO->VI 자동매핑 (VI 비었을 때만)
         if(menu_ko && !menu_vi){
           const mapped = KO_VI_MENU_MAP[normalizeKey(menu_ko)];
           if(mapped) $("e_menu_vi").value = mapped;
@@ -1027,7 +1062,7 @@
 
         await rpc("admin_update_resv_group", body);
         setMsg("ok","저장 완료!");
-        await loadList({ preserveSelected:true }); // ✅ NEW: 목록 반영 + 선택 유지
+        await loadList({ preserveSelected:true });
       }catch(e){
         if((e.message || "").toLowerCase().includes("forbidden")){
           sessionStorage.removeItem(ADMIN_PASS_KEY);
@@ -1128,7 +1163,7 @@
     $("btnClear").addEventListener("click", clearSelection);
     $("btnSave").addEventListener("click", saveUpdate);
     $("btnConfirm").addEventListener("click", confirmToOrders);
-    $("btnUnconfirm").addEventListener("click", unconfirmReservation); // ✅ NEW
+    $("btnUnconfirm").addEventListener("click", unconfirmReservation);
 
     // ✅ init
     (async function init(){
@@ -1138,7 +1173,7 @@
       buildBranch();
       setMode("fromToday");
       setDefaultRange();
-      $("btnUnconfirm").disabled = true; // ✅ NEW
+      $("btnUnconfirm").disabled = true;
       $("btnUnconfirm").style.opacity = ".45";
       loadList();
     })();
