@@ -293,9 +293,15 @@
               <input id="e_id" type="text" disabled />
             </div>
             <div>
-              <label>BRANCH</label>
-              <input id="e_branch" type="text" placeholder="예: ANT / KT / 실크로드" />
-            </div>
+  <label>BRANCH</label>
+
+  <select id="e_branch_select"></select>
+
+  <div id="e_branch_custom_box" style="margin-top:10px; display:none;">
+    <input id="e_branch_custom" type="text" placeholder="BRANCH 직접입력 (예: ANT2 / DALAT)" />
+    <div class="muted" style="margin-top:6px">* 커스텀 선택 시 입력한 값이 저장됨</div>
+  </div>
+</div>
 
             <div>
               <label>DATE</label>
@@ -667,24 +673,34 @@
     }
 
     function clearSelection(){
-      SELECTED_ID = null;
-      SELECTED_ROW = null;
-      ["e_id","e_branch","e_date","e_time_raw","e_guests","e_price","e_menu_ko","e_menu_vi","e_optional_info","e_note","e_guide"]
-        .forEach(id => $(id).value = "");
-      $("e_time_preview").textContent="--:--";
-      document.querySelectorAll(".row.active").forEach(el => el.classList.remove("active"));
-      // payment method 기본 cash
-      const cash = document.querySelector('input[name="pay_method"][value="cash"]');
-      if(cash) cash.checked = true;
-      setMsg("", "");
-      setConfirmButtons();
-    }
+  SELECTED_ID = null;
+  SELECTED_ROW = null;
+
+  ["e_id","e_date","e_time_raw","e_guests","e_price","e_menu_ko","e_menu_vi","e_optional_info","e_note","e_guide"]
+    .forEach(id => { if($(id)) $(id).value = ""; });
+
+  // ✅ branch 초기화
+  if($("e_branch_select")) $("e_branch_select").value = "ANT";
+  if($("e_branch_custom")) $("e_branch_custom").value = "";
+  if($("e_branch_custom_box")) $("e_branch_custom_box").style.display = "none";
+
+  $("e_time_preview").textContent="--:--";
+  document.querySelectorAll(".row.active").forEach(el => el.classList.remove("active"));
+
+  const cash = document.querySelector('input[name="pay_method"][value="cash"]');
+  if(cash) cash.checked = true;
+
+  setMsg("", "");
+  setConfirmButtons();
+}
+
 
     function fillEditor(r){
       SELECTED_ID = r.id;
       SELECTED_ROW = r;
       $("e_id").value = r.id ?? "";
-      $("e_branch").value = r.branch ?? "";
+      setEditorBranchFromValue(r.branch ?? "");
+
       $("e_date").value = r.res_date ?? "";
       $("e_time_raw").value = (r.res_time || "").slice(0,5) || "";
       $("e_guests").value = r.guests_count ?? "";
@@ -1013,7 +1029,8 @@
 
         const res_date = $("e_date").value;
         const res_time = getNormalizedTimeHHMM("e_time_raw");
-        const branch = ($("e_branch").value || "").trim();
+        const branch = getEditorBranchValue();
+
 
         const guests_count = Number($("e_guests").value);
         const priceRaw = $("e_price").value;
@@ -1126,6 +1143,70 @@
         sel.appendChild(o);
       });
     }
+    function buildEditorBranchSelect(){
+  const sel = $("e_branch_select");
+  if(!sel) return;
+
+  sel.innerHTML = "";
+
+  const custom = document.createElement("option");
+  custom.value = "__custom__";
+  custom.textContent = "✍️ 직접입력 (커스텀)";
+  sel.appendChild(custom);
+
+  for(const b of BRANCH_PRESETS){
+    const opt = document.createElement("option");
+    opt.value = b;
+    opt.textContent = b;
+    sel.appendChild(opt);
+  }
+
+  sel.value = "ANT"; // 기본값(원하는 값으로 변경 가능)
+  applyEditorBranchMode();
+}
+
+function applyEditorBranchMode(){
+  const val = $("e_branch_select").value;
+  const box = $("e_branch_custom_box");
+  if(val === "__custom__"){
+    box.style.display = "block";
+    setTimeout(()=> $("e_branch_custom").focus(), 0);
+  }else{
+    box.style.display = "none";
+    $("e_branch_custom").value = "";
+  }
+}
+
+$("e_branch_select").addEventListener("change", applyEditorBranchMode);
+
+function getEditorBranchValue(){
+  const val = $("e_branch_select").value;
+  if(val === "__custom__"){
+    return ($("e_branch_custom").value || "").trim();
+  }
+  return val;
+}
+
+// 선택된 row의 branch를 editor에 반영 (프리셋에 없으면 커스텀으로)
+function setEditorBranchFromValue(branch){
+  const b = (branch || "").trim();
+  if(!b){
+    $("e_branch_select").value = "ANT";
+    $("e_branch_custom").value = "";
+    applyEditorBranchMode();
+    return;
+  }
+
+  if(BRANCH_PRESETS.includes(b)){
+    $("e_branch_select").value = b;
+    $("e_branch_custom").value = "";
+    applyEditorBranchMode();
+  }else{
+    $("e_branch_select").value = "__custom__";
+    $("e_branch_custom").value = b;
+    applyEditorBranchMode();
+  }
+}
 
     // editor time preview
     $("e_time_raw").addEventListener("input", () => updateTimePreview("e_time_raw","e_time_preview"));
@@ -1171,6 +1252,8 @@
       if(!ok) return;
 
       buildBranch();
+      buildEditorBranchSelect();
+
       setMode("fromToday");
       setDefaultRange();
       $("btnUnconfirm").disabled = true;
