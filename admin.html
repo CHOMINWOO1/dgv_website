@@ -189,6 +189,41 @@
       gap:8px;
       flex-wrap:wrap;
     }
+    /* ✅ 모바일 세로(좁은 폭)에서 Order Lines 영역 줄바꿈/버튼 표시 보장 */
+@media (max-width: 560px){
+  .lineHead{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .lineHead > div:first-child{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    align-items:center;
+    max-width:100%;
+  }
+  .lineMeta{
+    width:100%;
+    white-space: normal;
+    word-break: break-word;
+    text-align:left;
+  }
+
+  /* ✅ 버튼: 좌측정렬 + 작게 + 줄바꿈 허용 */
+  .lineFooter{
+    justify-content:flex-start;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .lineFooter .btn{
+    flex: 0 0 auto;       /* ❌ 늘어나지 않게 */
+    padding: 8px 10px;    /* ✅ 좀 더 컴팩트 */
+    border-radius: 12px;
+  }
+}
+
+
 
     /* ===== 오른쪽: 판매 요약 ===== */
     .summaryGrid{
@@ -1222,3 +1257,4 @@
   </script>
 </body>
 </html>
+
