@@ -920,10 +920,43 @@ async function requireAccessGate(){
     return picked.toISOString();
   }
 
+
   function roundTo1000(n){
     const x = Number(n) || 0;
     return Math.round(x / 1000) * 1000;
   }
+  // ✅ SPECIAL 입력 자동 환산 (1 USD = 25,000 VND)
+const FX_VND_PER_USD = 25000;
+
+function roundTo1000Floor(n){
+  const x = Number(n) || 0;
+  return Math.floor(x / 1000) * 1000; // VND 1000단위 내림
+}
+
+function syncSpecialFromVnd(){
+  const vndEl = document.getElementById("spVnd");
+  const usdEl = document.getElementById("spUsd");
+  if (!vndEl || !usdEl) return;
+
+  const vnd = Number(vndEl.value || 0);
+  if (!Number.isFinite(vnd) || vnd <= 0) { usdEl.value = ""; return; }
+
+  const usd = Math.round(vnd / FX_VND_PER_USD); // USD 정수
+  usdEl.value = String(usd);
+}
+
+function syncSpecialFromUsd(){
+  const vndEl = document.getElementById("spVnd");
+  const usdEl = document.getElementById("spUsd");
+  if (!vndEl || !usdEl) return;
+
+  const usd = Number(usdEl.value || 0);
+  if (!Number.isFinite(usd) || usd <= 0) { vndEl.value = ""; return; }
+
+  const vndRaw = usd * FX_VND_PER_USD;
+  vndEl.value = String(roundTo1000Floor(vndRaw)); // VND 자동 입력
+}
+
 
   function applyCardFeeIfNeeded(baseUsd, baseVnd){
     const pm = getPaymentMethod();
@@ -1601,6 +1634,22 @@ async function requireAccessGate(){
 
   window.addEventListener("beforeprint", setPrintTime);
   document.getElementById("spAddBtn").addEventListener("click", addSpecialLine);
+// ✅ SPECIAL 입력: VND ↔ USD 자동 계산
+let spSyncLock = false;
+
+document.getElementById("spVnd")?.addEventListener("input", () => {
+  if (spSyncLock) return;
+  spSyncLock = true;
+  syncSpecialFromVnd();
+  spSyncLock = false;
+});
+
+document.getElementById("spUsd")?.addEventListener("input", () => {
+  if (spSyncLock) return;
+  spSyncLock = true;
+  syncSpecialFromUsd();
+  spSyncLock = false;
+});
 
   document.getElementById("payOptions").addEventListener("change", () => updateAll());
   document.getElementById("cardFeeBox").addEventListener("change", () => updateAll());
