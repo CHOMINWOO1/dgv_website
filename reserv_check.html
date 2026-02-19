@@ -182,6 +182,21 @@
           <button class="btn-ghost btn-mini" id="btnTomorrow" type="button">Ngày mai</button>
           <button class="btn-primary btn-mini" id="btnFromToday" type="button">tất cả</button>
         </div>
+        <!-- ✅ RANGE: 기간 조회 UI -->
+<div id="rangeBox" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+  <div>
+    <label>FROM</label>
+    <input id="q_from" type="date"
+      style="padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#fff;min-width:160px;">
+  </div>
+  <div>
+    <label>TO</label>
+    <input id="q_to" type="date"
+      style="padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#fff;min-width:160px;">
+  </div>
+  <button class="btn-ghost btn-mini" id="btnRange" type="button">기간조회</button>
+</div>
+
 
         <button class="btn-ghost" id="btnRefresh" type="button">Quay lại</button>
       </div>
@@ -286,21 +301,22 @@ async function requireAccessGate(){
       return json;
     }
 
-    // mode: today | fromToday | tomorrow
+    // mode: today | fromToday | tomorrow | range
     let MODE = "today";
 
-    function setMode(mode){
+   function setMode(mode){
   MODE = mode;
 
   $("modePill").textContent =
     (MODE === "today") ? "Mode: Hôm nay" :
     (MODE === "tomorrow") ? "Mode: Ngày mai" :
+    (MODE === "range") ? "Mode: 기간" :
     "Mode: tất cả";
 
-  // 버튼 클래스 초기화(안전하게 한번에)
-  ["btnToday","btnTomorrow","btnFromToday"].forEach(id=>{
-    $(id).classList.add("btn-ghost");
-    $(id).classList.remove("btn-primary");
+  ["btnToday","btnTomorrow","btnFromToday","btnRange"].forEach(id=>{
+    const el = $(id); if(!el) return;
+    el.classList.add("btn-ghost");
+    el.classList.remove("btn-primary");
   });
 
   if(MODE === "today"){
@@ -309,11 +325,15 @@ async function requireAccessGate(){
   }else if(MODE === "tomorrow"){
     $("btnTomorrow").classList.add("btn-primary");
     $("btnTomorrow").classList.remove("btn-ghost");
+  }else if(MODE === "range"){
+    $("btnRange").classList.add("btn-primary");
+    $("btnRange").classList.remove("btn-ghost");
   }else{
     $("btnFromToday").classList.add("btn-primary");
     $("btnFromToday").classList.remove("btn-ghost");
   }
 }
+
 
 
     async function load(){
@@ -333,13 +353,29 @@ async function requireAccessGate(){
     `?select=id,res_date,res_time,guests_count,price,menu_ko,menu_vi,note,branch,guide_name`;
 
   // ✅ MODE별 날짜 필터
+    // ✅ MODE별 날짜 필터
   if(MODE === "today"){
     url += `&res_date=eq.${today}`;
   }else if(MODE === "tomorrow"){
     url += `&res_date=eq.${tomorrow}`;
+  }else if(MODE === "range"){
+    const from = $("q_from").value;
+    const to   = $("q_to").value;
+
+    // 값이 없으면 today 기준으로 안전하게 동작
+    const f = from || today;
+    const t = to || from || today;
+
+    // from > to 방지
+    const f2 = (f <= t) ? f : t;
+    const t2 = (f <= t) ? t : f;
+
+    // Supabase filter: gte / lte
+    url += `&res_date=gte.${f2}&res_date=lte.${t2}`;
   }else{
     url += `&res_date=gte.${today}`;
   }
+
 
   if(branch){
     url += `&branch=eq.${encodeURIComponent(branch)}`;
@@ -463,6 +499,10 @@ async function requireAccessGate(){
     $("btnRefresh").addEventListener("click", load);
     $("q_branch").addEventListener("change", load);
     $("btnTomorrow").addEventListener("click", () => { setMode("tomorrow"); load(); });
+    $("btnRange").addEventListener("click", () => { setMode("range"); load(); });
+$("q_from").addEventListener("change", () => { setMode("range"); load(); });
+$("q_to").addEventListener("change", () => { setMode("range"); load(); });
+
 
 
     // init
@@ -481,3 +521,4 @@ async function requireAccessGate(){
   </script>
 </body>
 </html>
+
