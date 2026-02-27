@@ -417,13 +417,19 @@
     }
 
     function monthRange(yyyyMM){
-      const [y,m] = yyyyMM.split("-").map(Number);
-      const start = new Date(y, m-1, 1);
-      const end = new Date(y, m, 1);
-      const s = start.toISOString().slice(0,10);
-      const e = end.toISOString().slice(0,10);
-      return {start:s, end:e};
-    }
+  const [y, m] = yyyyMM.split("-").map(Number);
+  const mm = String(m).padStart(2,"0");
+
+  // 다음달 계산(연도 넘어감 처리)
+  const nextY = (m === 12) ? (y + 1) : y;
+  const nextM = (m === 12) ? 1 : (m + 1);
+  const nextMM = String(nextM).padStart(2,"0");
+
+  return {
+    start: `${y}-${mm}-01`,
+    end: `${nextY}-${nextMM}-01`,
+  };
+}
 
     function calcDiscount(rows){
       let g10 = 0, g20 = 0;
@@ -571,3 +577,4 @@
   </script>
 </body>
 </html>
+
