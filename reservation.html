@@ -120,6 +120,63 @@
       border-color: var(--gold);
       background: #fff7e6;
     }
+  /* ... 기존 CSS ... */
+
+  /* ===== Saved cards list ===== */
+  .savedWrap{margin-top:16px}
+  .savedHead{
+    display:flex; align-items:flex-end; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    margin:10px 0 10px;
+  }
+  .savedTitle{font-weight:1000; letter-spacing:.02em}
+  .savedSub{font-size:12px; color:var(--sub); font-weight:900}
+
+  .cards{display:grid; gap:12px}
+  .rcard{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:16px;
+    box-shadow:0 10px 24px rgba(0,0,0,.08);
+    padding:14px;
+  }
+  .rTop{
+    display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;
+    margin-bottom:10px;
+  }
+  .chips{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+  .chip{
+    display:inline-flex; align-items:center; justify-content:center;
+    padding:6px 10px;
+    border:1px solid var(--line);
+    border-radius:999px;
+    background:#fffdf7;
+    font-size:12px; font-weight:1000; color:var(--ink);
+  }
+  .chip.mini{font-weight:900; color:var(--sub); background:#fff}
+
+  .guestPill{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:7px 10px;
+    border:1px solid var(--line);
+    border-radius:999px;
+    background:#fff;
+    font-size:12px; font-weight:1000; color:var(--sub);
+  }
+  .guestPill b{color:var(--ink)}
+  .row{display:grid; grid-template-columns:74px 1fr; gap:10px; padding:7px 0; border-top:1px dashed var(--line)}
+  .row:first-of-type{border-top:0}
+  .k{font-size:12px; color:var(--sub); font-weight:1000}
+  .v{font-size:13px; color:var(--ink); font-weight:1000}
+  .v .muted{color:var(--sub); font-weight:900}
+  .emptyBox{
+    border:1px dashed var(--line);
+    border-radius:14px;
+    padding:12px;
+    color:var(--sub);
+    font-weight:900;
+    background:#fff;
+  }
+
   </style>
 </head>
 <body>
@@ -198,6 +255,18 @@
       </div>
 
       <div class="msg" id="msg"></div>
+<div class="savedWrap">
+  <div class="savedHead">
+    <div>
+      <div class="savedTitle">최근 예약</div>
+      <div class="savedSub">저장하면 자동으로 아래 카드가 갱신됩니다.</div>
+    </div>
+    <button class="btn-ghost" id="btnReload" type="button">새로고침</button>
+  </div>
+
+  <div id="savedMsg" class="mini"></div>
+  <div class="cards" id="savedCards"></div>
+</div>
     </div>
   </div>
 
@@ -653,6 +722,7 @@
         setMsg("ok", `저장 완료! (id: ${newId})`);
         $("btnClear").click();
         setMsg("ok", `저장 완료! (id: ${newId})`);
+await refreshSavedCards();   // ✅ 저장 후 아래 카드 갱신
 
       }catch(e){
         const msg = (e.message || "");
@@ -665,13 +735,136 @@
         btn.disabled = false;
       }
     };
+	/***********************
+ * ✅ Saved cards (recent reservations)
+ ***********************/
+function esc(s){
+  return String(s ?? "").replace(/[&<>"']/g, (m)=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[m]));
+}
 
+function moneyVND(n){
+  if(n === null || n === undefined || n === "") return "-";
+  const x = Number(n);
+  if(!Number.isFinite(x)) return "-";
+  return x.toLocaleString("en-US") + " VND";
+}
+
+function setSavedMsg(t){
+  $("savedMsg").textContent = t || "";
+}
+
+async function fetchRecentResvGroups(limit = 20){
+  // ✅ 테이블명이 다르면 여기만 바꿔줘
+  const table = "resv_groups";
+
+  const url =
+  SUPABASE_URL +
+  `/rest/v1/${table}?select=id,created_at,res_date,res_time,branch,guests_count,price,menu_ko,menu_vi,guide_name,note` +
+  `&order=created_at.desc` +
+  `&limit=${limit}`;
+
+  const res = await fetch(url, {
+    headers:{
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization":"Bearer " + SUPABASE_ANON_KEY
+    }
+  });
+
+  const text = await res.text();
+  let json=null; try{ json = text ? JSON.parse(text) : null; }catch{}
+  if(!res.ok){
+    const err = (json && (json.message || json.error)) || text || ("HTTP " + res.status);
+    throw new Error(err);
+  }
+  return json || [];
+}
+
+function renderSavedCards(rows){
+  const host = $("savedCards");
+  host.innerHTML = "";
+
+  if(!rows || rows.length === 0){
+    host.innerHTML = `<div class="emptyBox">아직 표시할 예약이 없습니다.</div>`;
+    return;
+  }
+
+  for(const r of rows){
+    const date = esc(r.res_date || "-");
+    const time = esc(r.res_time || "--:--");
+    const branch = esc(r.branch || "-");
+    const guests = esc(r.guests_count ?? "-");
+    const price = esc(moneyVND(r.price));
+
+    const ko = (r.menu_ko || "").trim();
+    const vi = (r.menu_vi || "").trim();
+    const menuMain = esc(ko || vi || "-");
+    const menuSub  = esc((ko && vi) ? vi : (ko ? vi : "")); // KO 있으면 VI를 아래줄로
+
+    const guide = esc(r.guide_name || "-");
+    const note  = esc(r.note || "-");
+
+    const card = document.createElement("div");
+    card.className = "rcard";
+    card.innerHTML = `
+      <div class="rTop">
+        <div class="chips">
+          <span class="chip">${date}</span>
+          <span class="chip">${time}</span>
+          <span class="chip mini">${branch}</span>
+        </div>
+        <div class="guestPill">👥 <b>${guests}</b></div>
+      </div>
+
+      <div class="row">
+        <div class="k">PRICE</div>
+        <div class="v">${price}</div>
+      </div>
+
+      <div class="row">
+        <div class="k">MENU</div>
+        <div class="v">
+          ${menuMain}
+          ${menuSub ? `<div class="muted">${menuSub}</div>` : ``}
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="k">GUIDE</div>
+        <div class="v">${guide}</div>
+      </div>
+
+      <div class="row">
+        <div class="k">NOTE</div>
+        <div class="v">${note}</div>
+      </div>
+    `;
+    host.appendChild(card);
+  }
+}
+
+async function refreshSavedCards(){
+  try{
+    setSavedMsg("불러오는 중...");
+    const rows = await fetchRecentResvGroups(20);
+    renderSavedCards(rows);
+    setSavedMsg("");
+  }catch(e){
+    setSavedMsg("불러오기 실패: " + (e.message || e));
+    $("savedCards").innerHTML = `<div class="emptyBox">리스트를 불러올 수 없습니다.</div>`;
+  }
+}
+
+$("btnReload").addEventListener("click", refreshSavedCards);
     /***********************
      * init
      ***********************/
+
     buildMenuSelect();
     buildBranchSelect();
     updateTimePreview();
+refreshSavedCards();
   </script>
 </body>
 </html>
