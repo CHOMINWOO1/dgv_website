@@ -1,0 +1,1313 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HANA Admin Hidden</title>
+  <style>
+    :root{
+      --bg:#faf6ee;
+      --card:#fffdf7;
+      --ink:#3a2a1f;
+      --sub:#6b5444;
+      --line:#e7d7b8;
+      --gold:#caa24c;
+      --shadow: 0 10px 24px rgba(0,0,0,.10);
+      --radius:16px;
+      --ok:#1b7f3a;
+      --bad:#b42318;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif;
+      background: radial-gradient(1400px 700px at 50% -200px, #fff 0%, var(--bg) 60%);
+      color:var(--ink);
+    }
+    .wrap{max-width:1200px;margin:18px auto 60px;padding:0 14px;}
+    .header{
+      display:flex;justify-content:space-between;align-items:flex-end;gap:12px;
+      padding:10px 10px 12px;margin:0 0 14px;border-bottom:1px solid #e4d1bf;
+    }
+    .brand .h1{margin:0;font-size:26px;font-weight:1000;letter-spacing:.16em}
+    .brand .h2{margin:6px 0 0;font-size:12px;font-weight:800;letter-spacing:.22em;color:var(--sub)}
+    .rightMeta{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:8px 10px;border:1px solid var(--line);border-radius:999px;background:var(--card);
+      font-weight:900;color:var(--sub);box-shadow:0 6px 16px rgba(0,0,0,.05);
+      font-size:12px;
+    }
+    .pill b{color:var(--ink)}
+    .btn{
+      border:1px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      font-weight:1000;
+      border-radius: 12px;
+      padding: 10px 12px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.06);
+      cursor:pointer;
+      white-space: nowrap;
+    }
+    .btn:hover{border-color:var(--gold)}
+    .btnPrimary{
+      border-color: var(--gold);
+      background: #fff7e6;
+    }
+    .btn:disabled{opacity:.55;cursor:not-allowed}
+    .btnDanger{
+      border-color:#f4c7c3;
+      background:#fff1f0;
+      color:var(--bad);
+    }
+    .gridCards{
+      display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px;
+    }
+    @media (max-width: 980px){ .gridCards{grid-template-columns:repeat(2,minmax(0,1fr));} }
+    @media (max-width: 560px){ .gridCards{grid-template-columns:1fr;} }
+    .card{
+      background:var(--card);
+      border:2px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:12px 12px 10px;
+      position:relative;overflow:hidden;
+    }
+    .card:before{
+      content:"";
+      position:absolute; inset:0;
+      background: linear-gradient(135deg, rgba(202,162,76,.10), rgba(255,255,255,0) 60%);
+      pointer-events:none;
+    }
+    .cardTitle{
+      position:relative;
+      font-weight:1000;color:var(--sub);letter-spacing:.08em;text-transform:uppercase;
+      font-size:12px;margin-bottom:8px;
+      display:flex;justify-content:space-between;align-items:center;gap:8px;
+    }
+    .big{position:relative;font-size:26px;font-weight:1000;line-height:1.15}
+    .small{position:relative;margin-top:6px;color:var(--sub);font-weight:900;font-size:13px}
+    .muted{color:var(--sub); font-weight:900}
+    .layout{
+      display:grid;
+      grid-template-columns: 1.55fr 1fr;
+      gap:12px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .layout{grid-template-columns: 1fr;}
+    }
+    .panelTitle{
+      font-weight:1000;color:var(--sub);letter-spacing:.08em;text-transform:uppercase;
+      font-size:13px;margin:0 0 10px 2px;
+      display:flex;justify-content:space-between;align-items:center;gap:10px;
+    }
+    .toolbar{
+      display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end;
+    }
+    .toolbar .group{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .input{
+      border:1px solid var(--line);
+      background:#fff;border-radius:12px;
+      padding:10px 10px;font-weight:900;color:var(--ink);
+      box-shadow:0 6px 16px rgba(0,0,0,.04);
+    }
+    .table{width:100%;border-collapse:collapse;position:relative;}
+    .table th,.table td{
+      border-top:1px dashed var(--line);
+      padding:10px 8px;
+      text-align:left;
+      vertical-align:top;
+      position:relative;
+      font-size:13px;
+    }
+    .table th{
+      border-top:none;
+      color:var(--sub);
+      font-weight:1000;
+      font-size:12px;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+    }
+    .rowBtn{
+      width:100%;
+      text-align:left;
+      background:transparent;
+      border:none;
+      padding:0;
+      cursor:pointer;
+      font:inherit;
+      color:inherit;
+    }
+    .badge{
+      display:inline-flex;align-items:center;
+      padding:4px 8px;border-radius:999px;font-weight:1000;font-size:12px;
+      border:1px solid var(--line);background:#fff;
+      color:var(--sub);
+      max-width:100%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .badge.ok{border-color:#bfe5c9;color:var(--ok);background:#f0fbf3}
+    .badge.bad{border-color:#f4c7c3;color:var(--bad);background:#fff1f0}
+
+    /* ===== 주문 라인 펼침 영역 ===== */
+    .expandRow td{
+      background:#fff;
+      border-top:1px dashed var(--line);
+      padding: 10px 10px 12px;
+    }
+    .lineWrap{
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:#fff;
+      padding:10px;
+      box-shadow:0 6px 16px rgba(0,0,0,.04);
+    }
+    .lineHead{
+      display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
+      font-weight:1000;color:var(--sub);margin-bottom:8px;
+      align-items:flex-end;
+    }
+    .lineList{display:flex;flex-direction:column;gap:6px;}
+    .lineItem{display:flex;justify-content:space-between;gap:12px;font-size:13px;}
+    .lineItem b{font-weight:1000}
+    .lineRight{white-space:nowrap;font-weight:1000;}
+    .lineMeta{font-weight:900;color:var(--sub)}
+    .hint{font-size:12px;color:var(--sub);font-weight:900}
+    .stickyBottom{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+
+    /* ✅ 펼침 영역 우측 하단 버튼들 */
+    .lineFooter{
+      margin-top:10px;
+      padding-top:10px;
+      border-top:1px dashed var(--line);
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    /* ✅ 모바일 세로(좁은 폭)에서 Order Lines 영역 줄바꿈/버튼 표시 보장 */
+@media (max-width: 560px){
+  .lineHead{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .lineHead > div:first-child{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    align-items:center;
+    max-width:100%;
+  }
+  .lineMeta{
+    width:100%;
+    white-space: normal;
+    word-break: break-word;
+    text-align:left;
+  }
+
+  /* ✅ 버튼: 좌측정렬 + 작게 + 줄바꿈 허용 */
+  .lineFooter{
+    justify-content:flex-start;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .lineFooter .btn{
+    flex: 0 0 auto;       /* ❌ 늘어나지 않게 */
+    padding: 8px 10px;    /* ✅ 좀 더 컴팩트 */
+    border-radius: 12px;
+  }
+}
+
+
+
+    /* ===== 오른쪽: 판매 요약 ===== */
+    .summaryGrid{
+      display:grid;
+      grid-template-columns: 1fr;
+      gap:10px;
+    }
+    .kv{
+      display:flex;justify-content:space-between;gap:12px;
+      border-top:1px dashed var(--line);
+      padding-top:10px;margin-top:10px;
+      font-size:13px;
+    }
+    .kv b{font-weight:1000}
+    .topList{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px;}
+    .topRow{display:flex;justify-content:space-between;gap:12px;font-size:13px;}
+    .topRow .name{font-weight:1000}
+    .topRow .meta{font-weight:900;color:var(--sub)}
+
+    /* ===== Modal ===== */
+    .modalBack{
+      position:fixed; inset:0; background:rgba(0,0,0,.35);
+      display:none; align-items:center; justify-content:center;
+      padding:14px; z-index:9999;
+    }
+    .modal{
+      width:min(420px, 100%);
+      background:var(--card);
+      border:2px solid var(--line);
+      border-radius:16px;
+      box-shadow:0 18px 40px rgba(0,0,0,.20);
+      padding:14px;
+    }
+    .modalTitle{font-weight:1000; letter-spacing:.06em; color:var(--ink); margin:2px 0 10px;}
+    .modalDesc{font-size:13px; color:var(--sub); font-weight:900; margin:0 0 10px;}
+    .modalRow{display:flex; gap:8px; align-items:center;}
+    .modalRow input{
+      flex:1;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 10px;
+      font-weight:900;
+      background:#fff;
+    }
+    .modalBtns{margin-top:10px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;}
+
+    /* ✅ 로그인 전 페이지 잠금 */
+    .locked .wrap{
+  pointer-events:none;
+  user-select:none;
+  filter:none !important;
+}
+.locked:before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background: rgba(250,246,238,.65);
+  z-index: 9998;
+}
+#gateModal{ z-index: 9999; }
+
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="brand">
+        <p class="h1">HANA ADMIN</p>
+        <p class="h2">Sales · Orders · Lines · Hidden Control</p>
+      </div>
+      <div class="rightMeta">
+        <div class="pill">Status: <b id="statusText">connecting…</b></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+          <button class="btn" id="refreshBtn">새로고침</button>
+          <button class="btn btnPrimary" id="todayBtn">오늘</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="gridCards">
+      <div class="card">
+        <div class="cardTitle">Today Sales <span class="muted" id="kpiTodayDate">—</span></div>
+        <div class="big"><span id="kpiTodayVnd">0</span> VND</div>
+        <div class="small"><span id="kpiTodayUsd">0</span>$ · <span id="kpiTodayCount">0</span> orders</div>
+      </div>
+      <div class="card">
+        <div class="cardTitle">This Month <span class="muted" id="kpiMonthLabel">—</span></div>
+        <div class="big"><span id="kpiMonthVnd">0</span> VND</div>
+        <div class="small"><span id="kpiMonthUsd">0</span>$ · <span id="kpiMonthCount">0</span> orders</div>
+      </div>
+      <div class="card">
+        <div class="cardTitle">Range Orders</div>
+        <div class="big"><span id="kpiRangeCount">0</span></div>
+        <div class="small">선택한 기간 주문 건수</div>
+      </div>
+      <div class="card">
+        <div class="cardTitle">Range Sales</div>
+        <div class="big"><span id="kpiRangeVnd">0</span> VND</div>
+        <div class="small"><span id="kpiRangeUsd">0</span>$</div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <!-- Orders -->
+      <div class="card">
+        <div class="panelTitle">
+          <span>Orders (클릭하면 아래로 라인 펼침)</span>
+          <div class="toolbar">
+            <div class="group">
+              <button class="btn" id="rangeToday">오늘</button>
+              <button class="btn" id="range7">7일</button>
+              <button class="btn" id="range30">30일</button>
+            </div>
+            <div class="group">
+              <input class="input" type="date" id="fromDate">
+              <span class="hint">~</span>
+              <input class="input" type="date" id="toDate">
+              <button class="btn btnPrimary" id="applyRange">적용</button>
+              <button class="btn" id="printRangeBtn">전체 출력</button>
+            </div>
+          </div>
+        </div>
+
+        <table class="table" id="ordersTable">
+          <thead>
+            <tr>
+              <th style="width:140px;">Time</th>
+              <th>Total</th>
+              <th style="width:170px;">Guide / Team</th>
+              <th style="width:120px;">Pay</th>
+              <th style="width:120px;">매출 제외</th>
+            </tr>
+          </thead>
+          <tbody id="ordersBody">
+            <tr><td colspan="5" class="muted">불러오는 중…</td></tr>
+          </tbody>
+        </table>
+
+        <div class="stickyBottom">
+          <span class="hint" id="rangeHint">—</span>
+        </div>
+      </div>
+
+      <!-- Right: Sales Summary -->
+      <div class="card" id="summaryCard">
+        <div class="panelTitle">
+          <span>Sales Summary (Range)</span>
+          <span class="hint" id="summaryHint">선택한 기간 기준</span>
+        </div>
+
+        <div class="summaryGrid">
+          <div class="kv">
+            <div class="muted">Range</div>
+            <div><b id="sumRangeText">—</b></div>
+          </div>
+          <div class="kv">
+            <div class="muted">Orders</div>
+            <div><b><span id="sumOrders">0</span></b></div>
+          </div>
+
+          <!-- ✅ 결제수단별 합계 -->
+          <div class="kv">
+            <div class="muted">Cash Total</div>
+            <div><b><span id="sumCashUsd">0</span>$</b> · <b><span id="sumCashVnd">0</span> VND</b></div>
+          </div>
+          <div class="kv">
+            <div class="muted">Card Total</div>
+            <div><b><span id="sumCardUsd">0</span>$</b> · <b><span id="sumCardVnd">0</span> VND</b></div>
+          </div>
+          <div class="kv">
+            <div class="muted">Bank Total</div>
+            <div><b><span id="sumBankUsd">0</span>$</b> · <b><span id="sumBankVnd">0</span> VND</b></div>
+          </div>
+
+          <div class="kv">
+            <div class="muted">Total</div>
+            <div><b><span id="sumUsd">0</span>$</b> · <b><span id="sumVnd">0</span> VND</b></div>
+          </div>
+
+          <div class="topList">
+            <div class="muted" style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;">Items Sold (Top 50)</div>
+            <div id="itemsSoldList" class="muted">불러오는 중…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ Admin Gate Modal -->
+  <div class="modalBack" id="gateModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalTitle">관리자 로그인</div>
+      <p class="modalDesc">비밀번호를 입력하면 관리자 페이지에 입장합니다.</p>
+      <div class="modalRow">
+        <input id="gatePassInput" type="password" placeholder="관리자 비밀번호" autocomplete="off"/>
+      </div>
+      <div class="modalBtns">
+        <button class="btn btnPrimary" id="gateConfirmBtn">입장</button>
+      </div>
+      <p class="hint" style="margin-top:10px;">※ 브라우저 탭(session)에서만 유지됩니다.</p>
+    </div>
+  </div>
+
+  <!-- ✅ Delete Password Modal -->
+  <div class="modalBack" id="deleteModal">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modalTitle">관리자 삭제</div>
+      <p class="modalDesc">비밀번호를 입력하면 해당 주문이 DB에서 완전 삭제됩니다.</p>
+      <div class="modalRow">
+        <input id="deletePassInput" type="password" placeholder="관리자 비밀번호" autocomplete="off"/>
+      </div>
+      <div class="modalBtns">
+        <button class="btn" id="deleteCancelBtn">취소</button>
+        <button class="btn btnDanger" id="deleteConfirmBtn">삭제</button>
+      </div>
+      <p class="hint" style="margin-top:10px;">※ 삭제하면 복구가 어렵습니다.</p>
+    </div>
+  </div>
+
+  <!-- Supabase JS (UMD) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    /*************************************************
+     * ✅ Supabase 설정
+     *************************************************/
+    const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
+
+    const { createClient } = supabase;
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    /*************************************************
+     * 유틸
+     *************************************************/
+    const fmtInt = (n) => (Math.round(Number(n) || 0)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    const toISODate = (d) => {
+      const z = new Date(d);
+      const yyyy = z.getFullYear();
+      const mm = String(z.getMonth()+1).padStart(2,'0');
+      const dd = String(z.getDate()).padStart(2,'0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+    const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+    const endOfDay = (d) => { const x = new Date(d); x.setHours(23,59,59,999); return x; };
+    const formatTimeLocal = (iso) => {
+      const d = new Date(iso);
+      return d.toLocaleString("ko-KR", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" });
+    };
+    const payLabel = (pm) => {
+      const v = (pm || "cash").toLowerCase();
+      if (v === "card") return "CARD";
+      if (v === "bank") return "BANK";
+      return "CASH";
+    };
+
+    /*************************************************
+     * ✅ Admin Gate (입장 비번)
+     * - 서버에서 비번 검증 RPC 필요: admin_check_password(p_password)
+     *************************************************/
+    const ADMIN_GATE_KEY = "hana_admin_ok_v1";
+
+    function isGateOk(){
+      return sessionStorage.getItem(ADMIN_GATE_KEY) === "1";
+    }
+    function lockPage(){
+      document.body.classList.add("locked");
+      const back = document.getElementById("gateModal");
+      back.style.display = "flex";
+      const inp = document.getElementById("gatePassInput");
+      inp.value = "";
+      setTimeout(()=> inp.focus(), 50);
+    }
+    function unlockPage(){
+      document.body.classList.remove("locked");
+      document.getElementById("gateModal").style.display = "none";
+    }
+
+    async function checkGatePassword(pass){
+      // ✅ 여기 RPC가 DB에 있어야 함 (없으면 DB에 함수 추가 필요)
+      const { data, error } = await sb.rpc("admin_check_password", { p_password: pass });
+      if (error) throw error;
+      return data === true;
+    }
+
+    async function enterAdmin(){
+      const pass = (document.getElementById("gatePassInput").value || "").trim();
+      if (!pass){ alert("비밀번호를 입력하세요."); return; }
+      try{
+        const ok = await checkGatePassword(pass);
+        if (!ok){
+          alert("비밀번호가 틀렸습니다.");
+          return;
+        }
+        sessionStorage.setItem(ADMIN_GATE_KEY, "1");
+        unlockPage();
+        await bootAfterGate(); // 통과 후 로드
+      }catch(e){
+        console.error(e);
+        alert("로그인 실패");
+      }
+    }
+
+    /*************************************************
+     * 상태
+     *************************************************/
+    let currentRange = { from: startOfDay(new Date()), to: endOfDay(new Date()) };
+    let expandedOrderId = null;
+    let pendingDeleteOrderId = null;
+
+    const orderLinesCache = new Map();
+
+    /*************************************************
+     * Print helpers
+     *************************************************/
+    function openPrintWindow(html){
+      const w = window.open("", "_blank", "width=420,height=700");
+      if (!w){ alert("팝업이 차단됨"); return; }
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      w.print();
+    }
+
+    async function fetchOrderMeta(orderId){
+      const { data, error } = await sb
+        .from("orders")
+        .select("id,created_at,status,total_usd,total_vnd,guide_name,team_no,payment_method,sales_excluded")
+        .eq("id", orderId)
+        .single();
+
+      if (error) throw error;
+      return data;
+    }
+
+    async function fetchOrderLines(orderId){
+      if (orderLinesCache.has(orderId)) return orderLinesCache.get(orderId);
+
+      const { data, error } = await sb
+        .from("v_order_detail_all")
+        .select("order_id,ko_name,vi_name,qty,line_usd,line_vnd")
+        .eq("order_id", orderId);
+
+      if (error) throw error;
+
+      const lines = data || [];
+      orderLinesCache.set(orderId, lines);
+      return lines;
+    }
+
+    async function printOneOrder(orderId){
+      try{
+        const [meta, lines] = await Promise.all([
+          fetchOrderMeta(orderId),
+          fetchOrderLines(orderId)
+        ]);
+
+        if (!lines.length){ alert("상세가 없습니다."); return; }
+
+        const calcVnd = lines.reduce((s,r)=> s + Number(r.line_vnd||0), 0);
+        const calcUsd = lines.reduce((s,r)=> s + Number(r.line_usd||0), 0);
+
+        const totalVnd = Number(meta.total_vnd ?? calcVnd);
+        const totalUsd = Number(meta.total_usd ?? calcUsd);
+
+        const paidTime = new Date().toLocaleString("ko-KR", {
+  year:"numeric", month:"2-digit", day:"2-digit",
+  hour:"2-digit", minute:"2-digit"
+});
+
+        const guide = (meta.guide_name || "").trim();
+        const team  = (meta.team_no || "").trim();
+        const guideText = (guide || team) ? `${guide || "—"} / ${team || "—"}` : "—";
+        const pmText = payLabel(meta.payment_method);
+
+        const rowsHtml = lines.map(r=>`
+          <div class="r">
+            <div class="l">
+              <b>${r.ko_name}</b><br/>
+              <span>${r.vi_name}</span>
+            </div>
+            <div class="m">x ${fmtInt(r.qty)}</div>
+            <div class="p">${fmtInt(r.line_vnd)}₫</div>
+          </div>
+        `).join("");
+
+        const html = `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Order Print</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:14px;color:#111;}
+    .h1{font-weight:900;letter-spacing:.18em;text-align:center;font-size:18px;margin:0;}
+    .h2{text-align:center;margin:6px 0 12px;font-size:12px;color:#333;font-weight:700;}
+    .meta{display:flex;justify-content:space-between;font-size:12px;color:#333;font-weight:800;margin:8px 0;gap:10px;flex-wrap:wrap;}
+    .box{border-top:1px dashed #999;padding-top:10px;margin-top:10px;}
+    .r{display:grid;grid-template-columns: 1fr 70px 90px;gap:10px;align-items:start;padding:8px 0;border-top:1px dashed #ddd;}
+    .r:first-child{border-top:none;}
+    .l b{font-weight:900;}
+    .l span{color:#444;font-size:11px;}
+    .m{font-weight:900;text-align:right;white-space:nowrap;}
+    .p{font-weight:900;text-align:right;white-space:nowrap;}
+    .tot{display:flex;justify-content:space-between;margin-top:12px;padding-top:10px;border-top:1px dashed #999;font-weight:900;}
+    .foot{margin-top:10px;font-size:11px;color:#444;}
+    @media print{ @page{margin:8mm;} }
+  </style>
+</head>
+<body>
+  <div class="h1">H A N A</div>
+  <div class="h2">KOREAN RESTAURANT</div>
+
+  <div class="meta">
+    <div>${paidTime}</div>
+    <div>${pmText}</div>
+  </div>
+  <div class="meta">
+    <div>Guide/Team: ${guideText}</div>
+    <div>${(meta.status||"").toUpperCase()}</div>
+  </div>
+
+  <div class="box">
+    ${rowsHtml}
+  </div>
+
+  <div class="tot">
+    <div>Total</div>
+    <div>${fmtInt(totalVnd)}₫  ·  ${fmtInt(totalUsd)}$</div>
+  </div>
+
+  <div class="foot">결제시간: ${paidTime}</div>
+</body>
+</html>`;
+        openPrintWindow(html);
+
+      } catch(e){
+        console.error(e);
+        alert("출력 실패");
+      }
+    }
+
+    async function printRangeSummary(){
+      try{
+        const rangeText = `${toISODate(currentRange.from)} ~ ${toISODate(currentRange.to)}`;
+        const fromIso = currentRange.from.toISOString();
+        const toIso = currentRange.to.toISOString();
+
+        const { data, error } = await sb
+          .from("v_order_detail_all")
+          .select("created_at,status,ko_name,vi_name,qty")
+          .gte("created_at", fromIso)
+          .lte("created_at", toIso)
+          .eq("status", "paid");
+
+        if (error) throw error;
+
+        const map = new Map();
+        (data||[]).forEach(r=>{
+          const key = `${r.ko_name}||${r.vi_name}`;
+          map.set(key, (map.get(key)||0) + Number(r.qty||0));
+        });
+
+        const agg = Array.from(map.entries()).map(([k, qty])=>{
+          const [ko, vi] = k.split("||");
+          return { ko, vi, qty };
+        }).sort((a,b)=>b.qty-a.qty).slice(0,80);
+
+        const totalVnd = document.getElementById("sumVnd").textContent || "0";
+        const totalUsd = document.getElementById("sumUsd").textContent || "0";
+        const orderCount = document.getElementById("sumOrders").textContent || "0";
+
+        const cashVnd = document.getElementById("sumCashVnd").textContent || "0";
+        const cashUsd = document.getElementById("sumCashUsd").textContent || "0";
+        const cardVnd = document.getElementById("sumCardVnd").textContent || "0";
+        const cardUsd = document.getElementById("sumCardUsd").textContent || "0";
+        const bankVnd = document.getElementById("sumBankVnd").textContent || "0";
+        const bankUsd = document.getElementById("sumBankUsd").textContent || "0";
+
+        const rowsHtml = agg.map(r=>`
+          <div class="r">
+            <div class="l"><b>${r.ko}</b><br/><span>${r.vi}</span></div>
+            <div class="m">x ${fmtInt(r.qty)}</div>
+          </div>
+        `).join("");
+
+        const html = `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Range Print</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:14px;color:#111;}
+    .h1{font-weight:900;letter-spacing:.18em;text-align:center;font-size:18px;margin:0;}
+    .h2{text-align:center;margin:6px 0 12px;font-size:12px;color:#333;font-weight:700;}
+    .meta{font-size:12px;color:#333;font-weight:800;margin:8px 0;}
+    .tot{display:flex;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px dashed #999;font-weight:900;}
+    .r{display:grid;grid-template-columns: 1fr 80px;gap:10px;align-items:start;padding:8px 0;border-top:1px dashed #ddd;}
+    .r:first-child{border-top:none;}
+    .l b{font-weight:900;}
+    .l span{color:#444;font-size:11px;}
+    .m{font-weight:900;text-align:right;white-space:nowrap;}
+    @media print{ @page{margin:8mm;} }
+  </style>
+</head>
+<body>
+  <div class="h1">H A N A</div>
+  <div class="h2">RANGE SUMMARY</div>
+
+  <div class="meta">Range: ${rangeText}</div>
+  <div class="meta">Orders: ${orderCount}</div>
+
+  <div class="meta">Cash: ${cashVnd}₫ · ${cashUsd}$</div>
+  <div class="meta">Card: ${cardVnd}₫ · ${cardUsd}$</div>
+  <div class="meta">Bank: ${bankVnd}₫ · ${bankUsd}$</div>
+
+  <div class="tot">
+    <div>Total Sales</div>
+    <div>${totalVnd}₫  ·  ${totalUsd}$</div>
+  </div>
+
+  <div style="margin-top:10px;font-weight:900;">Items Sold</div>
+  ${rowsHtml || "<div style='margin-top:8px;color:#444;'>No sales</div>"}
+</body>
+</html>`;
+        openPrintWindow(html);
+      } catch(e){
+        console.error(e);
+        alert("전체 출력 실패");
+      }
+    }
+
+    /*************************************************
+     * ✅ 관리자 삭제 모달 + RPC 삭제
+     * (DB에 admin_delete_order 함수 필요)
+     *************************************************/
+    function openDeleteModal(orderId){
+      pendingDeleteOrderId = orderId;
+      const back = document.getElementById("deleteModal");
+      const inp = document.getElementById("deletePassInput");
+      inp.value = "";
+      back.style.display = "flex";
+      setTimeout(()=> inp.focus(), 50);
+    }
+    function closeDeleteModal(){
+      pendingDeleteOrderId = null;
+      document.getElementById("deleteModal").style.display = "none";
+    }
+
+    async function adminDeleteOrder(){
+      if (!pendingDeleteOrderId) return;
+
+      const pass = (document.getElementById("deletePassInput").value || "").trim();
+      if (!pass){ alert("비밀번호를 입력하세요."); return; }
+
+      const okConfirm = confirm("정말 삭제할까요? (되돌릴 수 없음)");
+      if (!okConfirm) return;
+
+      try{
+        const { data, error } = await sb.rpc("admin_delete_order", {
+          p_order_id: pendingDeleteOrderId,
+          p_password: pass
+        });
+        if (error) throw error;
+
+        if (data === true){
+          alert("삭제 완료");
+          closeDeleteModal();
+          await refreshRange();
+        } else {
+          alert("비밀번호가 틀렸거나 삭제 권한이 없습니다.");
+        }
+      } catch(e){
+        console.error(e);
+        alert("삭제 실패");
+      }
+    }
+
+
+    /*************************************************
+     * 매출 제외 / 복구
+     *************************************************/
+    async function toggleSalesExcluded(order){
+      const pm = (order.payment_method || "cash").toLowerCase();
+      if (pm !== "cash"){
+        alert("CASH 주문만 매출 제외 처리할 수 있습니다.");
+        return;
+      }
+
+      const nextValue = !Boolean(order.sales_excluded);
+      const actionText = nextValue ? "매출에서 제외" : "매출에 복구";
+      if (!confirm(`이 주문을 ${actionText}할까요?`)) return;
+
+      try{
+        const { error } = await sb
+          .from("orders")
+          .update({ sales_excluded: nextValue })
+          .eq("id", order.id)
+          .eq("payment_method", "cash");
+
+        if (error) throw error;
+
+        order.sales_excluded = nextValue;
+        alert(nextValue ? "매출 제외 처리되었습니다." : "매출 복구되었습니다.");
+        await loadKpis();
+        await refreshRange();
+      }catch(e){
+        console.error(e);
+        alert("처리 실패: " + (e.message || "권한 또는 DB 설정을 확인하세요."));
+      }
+    }
+
+    /*************************************************
+     * KPI 로드
+     *************************************************/
+    async function loadKpis(){
+      const today = toISODate(new Date());
+      document.getElementById("kpiTodayDate").textContent = today;
+
+      const { data: daily, error: dErr } = await sb
+        .from("v_sales_daily")
+        .select("day,order_count,total_usd,total_vnd")
+        .eq("day", today)
+        .limit(1);
+
+      if (!dErr && daily && daily.length){
+        const r = daily[0];
+        document.getElementById("kpiTodayVnd").textContent = fmtInt(r.total_vnd);
+        document.getElementById("kpiTodayUsd").textContent = fmtInt(r.total_usd);
+        document.getElementById("kpiTodayCount").textContent = fmtInt(r.order_count);
+      } else {
+        document.getElementById("kpiTodayVnd").textContent = "0";
+        document.getElementById("kpiTodayUsd").textContent = "0";
+        document.getElementById("kpiTodayCount").textContent = "0";
+      }
+
+      const { data: monthly, error: mErr } = await sb
+        .from("v_sales_monthly")
+        .select("month,order_count,total_usd,total_vnd")
+        .order("month", { ascending: false })
+        .limit(1);
+
+      if (!mErr && monthly && monthly.length){
+        const r = monthly[0];
+        document.getElementById("kpiMonthLabel").textContent = r.month;
+        document.getElementById("kpiMonthVnd").textContent = fmtInt(r.total_vnd);
+        document.getElementById("kpiMonthUsd").textContent = fmtInt(r.total_usd);
+        document.getElementById("kpiMonthCount").textContent = fmtInt(r.order_count);
+      } else {
+        document.getElementById("kpiMonthLabel").textContent = "—";
+        document.getElementById("kpiMonthVnd").textContent = "0";
+        document.getElementById("kpiMonthUsd").textContent = "0";
+        document.getElementById("kpiMonthCount").textContent = "0";
+      }
+    }
+
+    /*************************************************
+     * Range summary: 메뉴별 판매수량 합계
+     *************************************************/
+    function renderItemsSold(agg){
+      const box = document.getElementById("itemsSoldList");
+      box.innerHTML = "";
+      if (!agg || agg.length === 0){
+        box.textContent = "해당 기간 판매가 없습니다.";
+        return;
+      }
+      agg.slice(0,50).forEach(r=>{
+        const div = document.createElement("div");
+        div.className = "topRow";
+        div.innerHTML = `
+          <div class="name">${r.ko_name} <span class="meta">/ ${r.vi_name}</span></div>
+          <div class="meta">${fmtInt(r.qty)} 개</div>
+        `;
+        box.appendChild(div);
+      });
+    }
+
+    async function loadRangeSummaryFromLines(){
+      const fromIso = currentRange.from.toISOString();
+      const toIso = currentRange.to.toISOString();
+
+      document.getElementById("sumRangeText").textContent = `${toISODate(currentRange.from)} ~ ${toISODate(currentRange.to)}`;
+
+      const { data, error } = await sb
+        .from("v_order_detail_all")
+        .select("created_at,status,ko_name,vi_name,qty")
+        .gte("created_at", fromIso)
+        .lte("created_at", toIso)
+        .eq("status", "paid");
+
+      if (error){
+        console.error(error);
+        document.getElementById("itemsSoldList").textContent = "집계 로드 실패";
+        return;
+      }
+
+      const map = new Map();
+      (data || []).forEach(r=>{
+        const key = `${r.ko_name}||${r.vi_name}`;
+        map.set(key, (map.get(key) || 0) + Number(r.qty || 0));
+      });
+
+      const agg = Array.from(map.entries()).map(([k, qty])=>{
+        const [ko_name, vi_name] = k.split("||");
+        return { ko_name, vi_name, qty };
+      }).sort((a,b)=> b.qty - a.qty);
+
+      renderItemsSold(agg);
+    }
+
+    /*************************************************
+     * 주문 리스트 + 펼침
+     *************************************************/
+    function removeExpandedRow(){
+      const old = document.querySelector('tr.expandRow');
+      if (old) old.remove();
+    }
+
+    function buildLinesHTML(lines, orderMeta){
+      const list = document.createElement("div");
+      list.className = "lineWrap";
+
+      const head = document.createElement("div");
+      head.className = "lineHead";
+
+      const guide = (orderMeta.guide_name || "").trim();
+      const team  = (orderMeta.team_no || "").trim();
+      const guideText = (guide || team) ? `${guide || "—"} / ${team || "—"}` : "—";
+      const pmText = payLabel(orderMeta.payment_method);
+
+      head.innerHTML = `
+        <div>Order Lines <span class="badge" style="margin-left:8px;">${pmText}</span> <span class="badge" style="margin-left:6px;">${guideText}</span></div>
+        <div class="lineMeta">
+          Total: <b>${fmtInt(orderMeta.total_vnd)}</b> VND · <b>${fmtInt(orderMeta.total_usd)}</b>$
+        </div>
+      `;
+      list.appendChild(head);
+
+      const body = document.createElement("div");
+      body.className = "lineList";
+
+      if (!lines || lines.length === 0){
+        body.innerHTML = `<div class="muted">상세 라인이 없습니다.</div>`;
+      } else {
+        lines.forEach(r=>{
+          const row = document.createElement("div");
+          row.className = "lineItem";
+          row.innerHTML = `
+            <div>
+              <b>${r.ko_name}</b>
+              <span class="muted"> / ${r.vi_name}</span>
+              <span class="muted"> × ${fmtInt(r.qty)}</span>
+            </div>
+            <div class="lineRight">
+              ${fmtInt(r.line_vnd)} VND <span class="muted">· ${fmtInt(r.line_usd)}$</span>
+            </div>
+          `;
+          body.appendChild(row);
+        });
+      }
+
+      list.appendChild(body);
+
+      const footer = document.createElement("div");
+      footer.className = "lineFooter";
+      footer.innerHTML = `
+        <button class="btn" data-act="printExpanded" style="padding:8px 12px;">출력</button>
+        <button class="btn" data-act="editExpanded" style="padding:8px 12px;">수정</button>
+        <button class="btn btnDanger" data-act="deleteExpanded" style="padding:8px 12px;">삭제</button>
+      `;
+
+      footer.querySelector('button[data-act="printExpanded"]').addEventListener("click", (e)=>{
+        e.stopPropagation();
+        printOneOrder(orderMeta.id);
+      });
+
+      footer.querySelector('button[data-act="editExpanded"]').addEventListener("click", (e)=>{
+        e.stopPropagation();
+        window.open(`calc.html?edit=${orderMeta.id}`, "_blank");
+      });
+
+      footer.querySelector('button[data-act="deleteExpanded"]').addEventListener("click", (e)=>{
+        e.stopPropagation();
+        openDeleteModal(orderMeta.id);
+      });
+
+      list.appendChild(footer);
+
+      return list;
+    }
+
+    async function toggleExpandOrder(orderId, orderMeta){
+      if (expandedOrderId === orderId){
+        expandedOrderId = null;
+        removeExpandedRow();
+        return;
+      }
+
+      expandedOrderId = orderId;
+      removeExpandedRow();
+
+      const targetTr = document.querySelector(`#ordersBody tr[data-order-id="${orderId}"]`);
+      if (!targetTr) return;
+
+      const expandTr = document.createElement("tr");
+      expandTr.className = "expandRow";
+      const td = document.createElement("td");
+      td.colSpan = 5;
+      td.innerHTML = `<div class="muted">상세 불러오는 중…</div>`;
+      expandTr.appendChild(td);
+      targetTr.insertAdjacentElement("afterend", expandTr);
+
+      if (orderLinesCache.has(orderId)){
+        td.innerHTML = "";
+        td.appendChild(buildLinesHTML(orderLinesCache.get(orderId), orderMeta));
+        return;
+      }
+
+      const { data, error } = await sb
+        .from("v_order_detail_all")
+        .select("order_id,ko_name,vi_name,qty,line_usd,line_vnd,unit_usd,unit_vnd")
+        .eq("order_id", orderId);
+
+      if (error){
+        console.error(error);
+        td.innerHTML = `<div class="muted">상세 로드 실패</div>`;
+        return;
+      }
+
+      const lines = data || [];
+      orderLinesCache.set(orderId, lines);
+
+      if (expandedOrderId !== orderId) return;
+
+      td.innerHTML = "";
+      td.appendChild(buildLinesHTML(lines, orderMeta));
+    }
+
+    async function loadOrders(){
+      const fromIso = currentRange.from.toISOString();
+      const toIso = currentRange.to.toISOString();
+
+      document.getElementById("rangeHint").textContent =
+        `Range: ${toISODate(currentRange.from)} ~ ${toISODate(currentRange.to)}`;
+
+      const tbody = document.getElementById("ordersBody");
+      tbody.innerHTML = `<tr><td colspan="5" class="muted">불러오는 중…</td></tr>`;
+
+      const { data, error } = await sb
+        .from("orders")
+        .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method,sales_excluded")
+        .gte("created_at", fromIso)
+        .lte("created_at", toIso)
+        .order("created_at", { ascending: false })
+        .limit(200);
+
+      if (error){
+        tbody.innerHTML = `<tr><td colspan="5" class="muted">로드 실패</td></tr>`;
+        console.error(error);
+        return;
+      }
+
+      let sumUsd = 0, sumVnd = 0;
+      let cashUsd = 0, cashVnd = 0;
+      let cardUsd = 0, cardVnd = 0;
+      let bankUsd = 0, bankVnd = 0;
+
+      (data || []).forEach(o => {
+        const u = Number(o.total_usd || 0);
+        const v = Number(o.total_vnd || 0);
+        sumUsd += u; sumVnd += v;
+
+        const pm = (o.payment_method || "cash").toLowerCase();
+        if (pm === "card"){
+          cardUsd += u; cardVnd += v;
+        } else if (pm === "bank"){
+          bankUsd += u; bankVnd += v;
+        } else {
+          cashUsd += u; cashVnd += v;
+        }
+      });
+
+      document.getElementById("kpiRangeCount").textContent = fmtInt((data||[]).length);
+      document.getElementById("kpiRangeUsd").textContent = fmtInt(sumUsd);
+      document.getElementById("kpiRangeVnd").textContent = fmtInt(sumVnd);
+
+      document.getElementById("sumOrders").textContent = fmtInt((data||[]).length);
+      document.getElementById("sumUsd").textContent = fmtInt(sumUsd);
+      document.getElementById("sumVnd").textContent = fmtInt(sumVnd);
+      document.getElementById("sumRangeText").textContent = `${toISODate(currentRange.from)} ~ ${toISODate(currentRange.to)}`;
+
+      document.getElementById("sumCashUsd").textContent = fmtInt(cashUsd);
+      document.getElementById("sumCashVnd").textContent = fmtInt(cashVnd);
+      document.getElementById("sumCardUsd").textContent = fmtInt(cardUsd);
+      document.getElementById("sumCardVnd").textContent = fmtInt(cardVnd);
+      document.getElementById("sumBankUsd").textContent = fmtInt(bankUsd);
+      document.getElementById("sumBankVnd").textContent = fmtInt(bankVnd);
+
+      expandedOrderId = null;
+      removeExpandedRow();
+      orderLinesCache.clear();
+
+      if (!data || data.length === 0){
+        tbody.innerHTML = `<tr><td colspan="5" class="muted">해당 기간 주문이 없습니다.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = "";
+      data.forEach(o => {
+        const tr = document.createElement("tr");
+        tr.dataset.orderId = o.id;
+        tr.setAttribute("data-order-id", o.id);
+
+        const guide = (o.guide_name || "").trim();
+        const team  = (o.team_no || "").trim();
+        const guideText = (guide || team) ? `${guide || "—"} / ${team || "—"}` : "—";
+        const pmText = payLabel(o.payment_method);
+
+        tr.innerHTML = `
+          <td>
+            <button class="rowBtn" data-act="toggle">
+              ${formatTimeLocal(o.created_at)}
+            </button>
+          </td>
+          <td>
+            <button class="rowBtn" data-act="toggle">
+              <b>${fmtInt(o.total_vnd)}</b> VND
+              <span class="muted"> · ${fmtInt(o.total_usd)}$</span>
+            </button>
+          </td>
+          <td>
+            <button class="rowBtn" data-act="toggle">
+              <span class="badge">${guideText}</span>
+            </button>
+          </td>
+          <td>
+            <button class="rowBtn" data-act="toggle" title="${pmText}">
+              <span class="badge">${pmText}</span>
+            </button>
+          </td>
+          <td>
+            ${
+              (o.payment_method || "cash").toLowerCase() === "cash"
+                ? `<button class="btn ${o.sales_excluded ? "" : "btnDanger"}"
+                     data-act="toggleSales"
+                     style="padding:7px 9px;">
+                     ${o.sales_excluded ? "복구" : "매출 제외"}
+                   </button>`
+                : `<button class="btn" disabled style="padding:7px 9px;">대상 아님</button>`
+            }
+          </td>
+        `;
+
+        tr.querySelectorAll('button[data-act="toggle"]').forEach(btn=>{
+          btn.addEventListener("click", ()=>{
+            toggleExpandOrder(o.id, o);
+          });
+        });
+
+        const salesBtn = tr.querySelector('button[data-act="toggleSales"]');
+        if (salesBtn){
+          salesBtn.addEventListener("click", (e)=>{
+            e.stopPropagation();
+            toggleSalesExcluded(o);
+          });
+        }
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    /*************************************************
+     * 범위 버튼
+     *************************************************/
+    function setRangeDays(days){
+      const now = new Date();
+      const from = startOfDay(new Date(now.getTime() - (days-1)*86400000));
+      const to = endOfDay(now);
+      currentRange = { from, to };
+      document.getElementById("fromDate").value = toISODate(from);
+      document.getElementById("toDate").value = toISODate(to);
+      refreshRange();
+    }
+
+    function setRangeToday(){
+      const now = new Date();
+      currentRange = { from: startOfDay(now), to: endOfDay(now) };
+      document.getElementById("fromDate").value = toISODate(currentRange.from);
+      document.getElementById("toDate").value = toISODate(currentRange.to);
+      refreshRange();
+    }
+
+    function applyRange(){
+      const f = document.getElementById("fromDate").value;
+      const t = document.getElementById("toDate").value;
+      if (!f || !t){ alert("날짜를 선택하세요."); return; }
+      const from = startOfDay(new Date(f));
+      const to = endOfDay(new Date(t));
+      if (from > to){ alert("기간이 올바르지 않습니다."); return; }
+      currentRange = { from, to };
+      refreshRange();
+    }
+
+    async function refreshRange(){
+      await loadOrders();
+      await loadRangeSummaryFromLines();
+    }
+
+    /*************************************************
+     * 버튼/이벤트
+     *************************************************/
+    document.getElementById("refreshBtn").addEventListener("click", async ()=>{
+      await loadKpis();
+      await refreshRange();
+    });
+
+    document.getElementById("todayBtn").addEventListener("click", async ()=>{
+      await loadKpis();
+      setRangeToday();
+    });
+
+    document.getElementById("rangeToday").addEventListener("click", setRangeToday);
+    document.getElementById("range7").addEventListener("click", ()=>setRangeDays(7));
+    document.getElementById("range30").addEventListener("click", ()=>setRangeDays(30));
+    document.getElementById("applyRange").addEventListener("click", applyRange);
+
+    document.getElementById("printRangeBtn").addEventListener("click", printRangeSummary);
+
+    // Gate 이벤트
+    document.getElementById("gateConfirmBtn").addEventListener("click", enterAdmin);
+    document.getElementById("gatePassInput").addEventListener("keydown", (e)=>{
+      if (e.key === "Enter") enterAdmin();
+      if (e.key === "Escape") { /* 그냥 무시 */ }
+    });
+
+    // 모달 이벤트(삭제)
+    document.getElementById("deleteCancelBtn").addEventListener("click", closeDeleteModal);
+    document.getElementById("deleteConfirmBtn").addEventListener("click", adminDeleteOrder);
+    document.getElementById("deleteModal").addEventListener("click", (e)=>{
+      if (e.target && e.target.id === "deleteModal") closeDeleteModal();
+    });
+    document.getElementById("deletePassInput").addEventListener("keydown", (e)=>{
+      if (e.key === "Enter") adminDeleteOrder();
+      if (e.key === "Escape") closeDeleteModal();
+    });
+
+    /*************************************************
+     * 게이트 통과 후 실제 부팅
+     *************************************************/
+    async function bootAfterGate(){
+      const statusEl = document.getElementById("statusText");
+      try{
+        const { error } = await sb.from("menu_items").select("id").limit(1);
+        statusEl.textContent = error ? "error" : "connected";
+      } catch(e){
+        statusEl.textContent = "error";
+      }
+
+      setRangeToday();
+      await loadKpis();
+
+      document.getElementById("fromDate").value = toISODate(currentRange.from);
+      document.getElementById("toDate").value = toISODate(currentRange.to);
+
+      await refreshRange();
+    }
+
+    /*************************************************
+     * 시작
+     *************************************************/
+    (async function init(){
+      // ✅ gate 먼저
+      if (!isGateOk()){
+        lockPage();
+        document.getElementById("statusText").textContent = "locked";
+        return;
+      }
+      unlockPage();
+      await bootAfterGate();
+    })();
+  </script>
+</body>
+</html>
