@@ -552,6 +552,7 @@
       const { data, error } = await sb
         .from("orders")
         .select("id,created_at,status,total_usd,total_vnd,guide_name,team_no,payment_method")
+        .eq("sales_excluded", false)
         .eq("id", orderId)
         .single();
 
@@ -809,40 +810,57 @@
      * KPI 로드
      *************************************************/
     async function loadKpis(){
-      const today = toISODate(new Date());
+      const now = new Date();
+      const today = toISODate(now);
+      const todayFrom = startOfDay(now).toISOString();
+      const todayTo = endOfDay(now).toISOString();
+
       document.getElementById("kpiTodayDate").textContent = today;
 
-      const { data: daily, error: dErr } = await sb
-        .from("v_sales_daily")
-        .select("day,order_count,total_usd,total_vnd")
-        .eq("day", today)
-        .limit(1);
+      const { data: todayRows, error: todayErr } = await sb
+        .from("orders")
+        .select("total_usd,total_vnd")
+        .eq("status", "paid")
+        .eq("sales_excluded", false)
+        .gte("created_at", todayFrom)
+        .lte("created_at", todayTo);
 
-      if (!dErr && daily && daily.length){
-        const r = daily[0];
-        document.getElementById("kpiTodayVnd").textContent = fmtInt(r.total_vnd);
-        document.getElementById("kpiTodayUsd").textContent = fmtInt(r.total_usd);
-        document.getElementById("kpiTodayCount").textContent = fmtInt(r.order_count);
+      if (!todayErr){
+        const rows = todayRows || [];
+        document.getElementById("kpiTodayVnd").textContent =
+          fmtInt(rows.reduce((s,r)=>s + Number(r.total_vnd||0), 0));
+        document.getElementById("kpiTodayUsd").textContent =
+          fmtInt(rows.reduce((s,r)=>s + Number(r.total_usd||0), 0));
+        document.getElementById("kpiTodayCount").textContent = fmtInt(rows.length);
       } else {
+        console.error(todayErr);
         document.getElementById("kpiTodayVnd").textContent = "0";
         document.getElementById("kpiTodayUsd").textContent = "0";
         document.getElementById("kpiTodayCount").textContent = "0";
       }
 
-      const { data: monthly, error: mErr } = await sb
-        .from("v_sales_monthly")
-        .select("month,order_count,total_usd,total_vnd")
-        .order("month", { ascending: false })
-        .limit(1);
+      const monthFromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthToDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      document.getElementById("kpiMonthLabel").textContent =
+        `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
 
-      if (!mErr && monthly && monthly.length){
-        const r = monthly[0];
-        document.getElementById("kpiMonthLabel").textContent = r.month;
-        document.getElementById("kpiMonthVnd").textContent = fmtInt(r.total_vnd);
-        document.getElementById("kpiMonthUsd").textContent = fmtInt(r.total_usd);
-        document.getElementById("kpiMonthCount").textContent = fmtInt(r.order_count);
+      const { data: monthRows, error: monthErr } = await sb
+        .from("orders")
+        .select("total_usd,total_vnd")
+        .eq("status", "paid")
+        .eq("sales_excluded", false)
+        .gte("created_at", monthFromDate.toISOString())
+        .lte("created_at", monthToDate.toISOString());
+
+      if (!monthErr){
+        const rows = monthRows || [];
+        document.getElementById("kpiMonthVnd").textContent =
+          fmtInt(rows.reduce((s,r)=>s + Number(r.total_vnd||0), 0));
+        document.getElementById("kpiMonthUsd").textContent =
+          fmtInt(rows.reduce((s,r)=>s + Number(r.total_usd||0), 0));
+        document.getElementById("kpiMonthCount").textContent = fmtInt(rows.length);
       } else {
-        document.getElementById("kpiMonthLabel").textContent = "—";
+        console.error(monthErr);
         document.getElementById("kpiMonthVnd").textContent = "0";
         document.getElementById("kpiMonthUsd").textContent = "0";
         document.getElementById("kpiMonthCount").textContent = "0";
@@ -1044,6 +1062,7 @@
       const { data, error } = await sb
         .from("orders")
         .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method")
+        .eq("sales_excluded", false)
         .gte("created_at", fromIso)
         .lte("created_at", toIso)
         .order("created_at", { ascending: false })
@@ -1257,4 +1276,3 @@
   </script>
 </body>
 </html>
-
