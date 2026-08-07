@@ -1,0 +1,48 @@
+# Local/staging configuration. Production promotion remains a separate,
+# explicitly approved operation.
+project_id = "dgv_website"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+major_version = 17
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:4173"
+additional_redirect_urls = [
+  "http://127.0.0.1:4173",
+  "http://localhost:4173",
+  "https://dalatgolfvoucher.com"
+]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+enable_anonymous_sign_ins = false
+minimum_password_length = 6
+
+[auth.email]
+enable_signup = false
+enable_confirmations = false
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
+deno_version = 2
+
+[functions.tg_notify_v2]
+verify_jwt = true
+
+[functions.admin-credential-settings]
+verify_jwt = true

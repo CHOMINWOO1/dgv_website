@@ -286,12 +286,16 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/dgv-data.js"></script>
+  <script src="assets/supabase-client.js"></script>
   <script>
     /***********************
      * ✅ 너 프로젝트로 교체
      ***********************/
-    const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
+    const SUPABASE_URL = DGV.config.url;
+    const sb = DGV.supabase;
 
     /***********************
      * 한→베 메뉴 매핑
@@ -319,26 +323,13 @@
     function setMsg(type, text){
       const el = $("msg");
       if(!text){ el.innerHTML = ""; return; }
-      el.innerHTML = `<span class="${type}">${text}</span>`;
+      el.innerHTML = `<span class="${type}">${DGV.escapeHTML(text)}</span>`;
     }
 
     async function rpc(fn, body){
-      const res = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + fn, {
-        method:"POST",
-        headers:{
-          "apikey": SUPABASE_ANON_KEY,
-          "Authorization":"Bearer " + SUPABASE_ANON_KEY,
-          "Content-Type":"application/json"
-        },
-        body: JSON.stringify(body || {})
-      });
-      const text = await res.text();
-      let json=null; try{ json = text ? JSON.parse(text) : null; }catch{}
-      if(!res.ok){
-        const err = (json && (json.message || json.error)) || text || ("HTTP " + res.status);
-        throw new Error(err);
-      }
-      return json;
+      const { data, error } = await sb.rpc(fn, body || {});
+      if (error) throw error;
+      return data;
     }
 
     function normalizeKey(s){
@@ -557,8 +548,6 @@
     /*************************************************
      * ✅ 저장 보호(모달 비번, sessionStorage 캐시)
      *************************************************/
-    const ADMIN_PASS_KEY = "hana_admin_pass";
-
     function openPassModal(){
       $("passInput").value = "";
       $("passModal").style.display = "flex";
@@ -568,19 +557,16 @@
       $("passModal").style.display = "none";
     }
     async function verifyAdminPassword(pass){
-  const ok = await rpc("admin_check_password", { p_password: pass });
-  return ok === true;
+      try{
+        await DGV.signInAs("admin", pass);
+        return true;
+      }catch(error){
+        return false;
+      }
 }
-    // ※ 여기선 verify RPC가 없으니 "저장 RPC로 검증" 방식:
-    // - 캐시된 비번이 있으면 그걸로 저장 시도
-    // - 실패(권한/비번 오류)면 캐시 삭제하고 모달 다시 띄움
     async function getAdminPasswordForSave(){
-  const cached = (sessionStorage.getItem(ADMIN_PASS_KEY) || "").trim();
-  if (cached){
-    const ok = await verifyAdminPassword(cached);
-    if (ok) return cached;
-    sessionStorage.removeItem(ADMIN_PASS_KEY);
-  }
+  const identity = await DGV.getIdentity();
+  if (identity.role === "admin") return true;
 
   while(true){
     const pass = await new Promise((resolve) => {
@@ -631,8 +617,7 @@
       continue;
     }
 
-    sessionStorage.setItem(ADMIN_PASS_KEY, pass);
-    return pass;
+    return true;
   }
 }
 
@@ -677,15 +662,14 @@
           return;
         }
 
-        // 1) 비번 확보 (캐시 있으면 재사용, 없으면 모달)
-        let pw = await getAdminPasswordForSave();
-        if(!pw){
+        // 관리자 세션이 없으면 기존 모달에서 인증한다. 비밀번호는 저장하지 않는다.
+        const authenticated = await getAdminPasswordForSave();
+        if(!authenticated){
           setMsg("bad","비밀번호 입력이 취소되었습니다");
           return;
         }
 
         const body = {
-          pw,
           p_res_date: res_date,
           p_res_time: res_time,
           p_guests_count: guests_count,
@@ -697,27 +681,7 @@
           p_guide_name: guide_name
         };
 
-        // 2) 저장 시도
-        let newId;
-        try{
-          newId = await rpc("admin_insert_resv_group", body);
-        }catch(e){
-          // 비번/권한 오류면 캐시 삭제 후 다시 모달 띄워 재시도 1회
-          const msg = (e.message || "").toLowerCase();
-          if (msg.includes("forbidden") || msg.includes("permission") || msg.includes("not allowed")){
-            sessionStorage.removeItem(ADMIN_PASS_KEY);
-
-            pw = await getAdminPasswordForSave();
-            if(!pw){
-              setMsg("bad","비밀번호 입력이 취소되었습니다");
-              return;
-            }
-            body.pw = pw;
-            newId = await rpc("admin_insert_resv_group", body);
-          } else {
-            throw e;
-          }
-        }
+        const newId = await rpc("app_create_reservation", body);
 
         setMsg("ok", `저장 완료! (id: ${newId})`);
         $("btnClear").click();
@@ -762,14 +726,11 @@ async function fetchRecentResvGroups(limit = 20){
   const url =
   SUPABASE_URL +
   `/rest/v1/${table}?select=id,created_at,res_date,res_time,branch,guests_count,price,menu_ko,menu_vi,guide_name,note` +
-  `&order=created_at.desc` +
+  `&order=created_at.desc,id.desc` +
   `&limit=${limit}`;
 
   const res = await fetch(url, {
-    headers:{
-      "apikey": SUPABASE_ANON_KEY,
-      "Authorization":"Bearer " + SUPABASE_ANON_KEY
-    }
+    headers: await DGV.authHeaders()
   });
 
   const text = await res.text();
@@ -861,10 +822,14 @@ $("btnReload").addEventListener("click", refreshSavedCards);
      * init
      ***********************/
 
-    buildMenuSelect();
-    buildBranchSelect();
-    updateTimePreview();
-refreshSavedCards();
+    (async function init(){
+      const ok = await getAdminPasswordForSave();
+      if (!ok){ location.href = "/"; return; }
+      buildMenuSelect();
+      buildBranchSelect();
+      updateTimePreview();
+      await refreshSavedCards();
+    })();
   </script>
 </body>
 </html>

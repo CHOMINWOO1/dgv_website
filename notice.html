@@ -125,12 +125,12 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/dgv-data.js"></script>
+  <script src="assets/supabase-client.js"></script>
   <script>
-  const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
-  const { createClient } = supabase;
-  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const sb = DGV.supabase;
 
   const listEl = document.getElementById("list");
   const statusTxt = document.getElementById("statusTxt");
@@ -147,13 +147,21 @@
   let cache = [];
   let editing = null; // null or row
 
-  function escapeHtml(s){
-    return String(s ?? "")
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
+  const escapeHtml = DGV.escapeHTML;
+
+  async function ensureAdmin(){
+    const identity = await DGV.getIdentity();
+    if (identity.role === "admin") return true;
+
+    const password = prompt("관리자 비밀번호를 입력하세요.");
+    if (!password) return false;
+    try{
+      await DGV.signInAs("admin", password);
+      return true;
+    }catch(error){
+      alert("관리자 비밀번호가 올바르지 않습니다.");
+      return false;
+    }
   }
   function fmtDate(iso){
     if (!iso) return "";
@@ -173,18 +181,23 @@
 
   async function fetchNotices(){
     statusTxt.textContent = "불러오는 중...";
-    const { data, error } = await sb
-      .from("notices")
-      .select("id,title,body,author,created_at,updated_at")
-      .order("created_at", { ascending: false });
-
-    if (error){
+    try{
+      const data = await DGV.collectSupabasePages(
+        () => sb
+          .from("notices")
+          .select("id,title,body,author,created_at,updated_at"),
+        { order: [
+          { column: "created_at", ascending: false },
+          { column: "id", ascending: false }
+        ] }
+      );
+      statusTxt.textContent = "";
+      return data;
+    }catch(error){
       console.error(error);
       statusTxt.textContent = "공지 로드 실패";
       return [];
     }
-    statusTxt.textContent = "";
-    return data || [];
   }
 
   function render(rows){
@@ -256,6 +269,7 @@
   editCancelBtn.addEventListener("click", closeEdit);
 
   async function saveNotice(){
+    if (!await ensureAdmin()) return;
     const title = (nTitle.value||"").trim();
     const body  = (nBody.value||"").trim();
     const author= (nAuthor.value||"").trim();
@@ -290,6 +304,7 @@
   }
 
   async function delNotice(row){
+    if (!await ensureAdmin()) return;
     const ok = confirm("정말 삭제할까요? (되돌릴 수 없음)");
     if (!ok) return;
 
@@ -311,7 +326,9 @@
 
   qEl.addEventListener("input", ()=> render(cache));
   document.getElementById("backBtn").addEventListener("click", ()=> history.back());
-  document.getElementById("newBtn").addEventListener("click", ()=> openEdit(null));
+  document.getElementById("newBtn").addEventListener("click", async ()=>{
+    if (await ensureAdmin()) openEdit(null);
+  });
   editSaveBtn.addEventListener("click", saveNotice);
 
   (async function init(){

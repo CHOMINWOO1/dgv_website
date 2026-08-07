@@ -170,15 +170,12 @@
   </div>
   
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/dgv-data.js"></script>
+  <script src="assets/supabase-client.js"></script>
   <script>
-    const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
-    const { createClient } = supabase;
-    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    const ADMIN_PASS_CACHE_KEY = "hana_admin_pass";
-    const ACCESS_OK_KEY = "hana_access_ok";
+    const sb = DGV.supabase;
 
     const passModal = document.getElementById("adminPassModal");
     const passInput = document.getElementById("adminPassInput");
@@ -223,24 +220,18 @@
       closePassModal((passInput.value || "").trim());
     });
 
-    // ✅ 디버그: admin_check_password RPC 에러를 alert로 표시
     async function verifyAdminPassword(pass){
-      const { data, error } = await sb.rpc("admin_check_password", { p_password: pass });
-      if (error){
-        console.error("admin_check_password error:", error);
-        alert("admin_check_password RPC ERROR:\n" + JSON.stringify(error, null, 2));
+      try{
+        await DGV.signInAs("admin", pass);
+        return true;
+      }catch(error){
         return false;
       }
-      return data === true;
     }
 
     async function requireAdminPassword(){
-      let pass = (sessionStorage.getItem(ADMIN_PASS_CACHE_KEY) || "").trim();
-      if (pass){
-        const ok = await verifyAdminPassword(pass);
-        if (ok) return pass;
-        sessionStorage.removeItem(ADMIN_PASS_CACHE_KEY);
-      }
+      const identity = await DGV.getIdentity();
+      if (identity.role === "admin") return true;
 
       while(true){
         const entered = await openPassModal();
@@ -264,8 +255,8 @@
           continue;
         }
 
-        sessionStorage.setItem(ADMIN_PASS_CACHE_KEY, candidate);
-        return candidate;
+        passInput.value = "";
+        return true;
       }
     }
 
@@ -276,48 +267,30 @@
       return x.toLocaleString("ko-KR");
     }
 
-    // ✅ 디버그: status RPC 에러를 alert로 표시
-    async function refreshStatus(pw){
+    async function refreshStatus(){
       const statusLine = document.getElementById("statusLine");
       const updatedLine = document.getElementById("updatedLine");
-              // ✅ 현재 코드도 표시
-        const currentCodeLine = document.getElementById("currentCodeLine");
-        const { data: cd, error: cdErr } = await sb.rpc("admin_get_page_access_code", { pw });
-        if (cdErr) throw cdErr;
-
-        // 보안상 일부만 보여주고 싶으면 mask 처리 가능
-        // const codeText = (cd?.code || "");
-        // const masked = codeText ? (codeText.slice(0,2) + "****" + codeText.slice(-2)) : "";
-
-        const codeText = (cd?.code || "");
-        currentCodeLine.textContent = codeText ? `현재 코드: ${codeText}` : "현재 코드: (없음)";
-
-
+      const currentCodeLine = document.getElementById("currentCodeLine");
       try{
-        const { data, error } = await sb.rpc("admin_get_page_access_code_status", { pw });
+        const { data, error } = await sb.functions.invoke("admin-credential-settings", {
+          body: { action: "get_staff_code" }
+        });
         if (error) throw error;
+        if (data?.ok !== true) throw new Error(data?.error || "조회 실패");
 
-        const isSet = data?.is_set === true;
-        const updatedAt = data?.updated_at;
-
-        statusLine.textContent = "상태: " + (isSet ? "✅ 코드 설정됨" : "⚠️ 코드 없음 (설정 필요)");
-        updatedLine.textContent = updatedAt ? ("마지막 변경: " + fmtDate(updatedAt)) : "";
-      }catch(e){
-        console.error("admin_get_page_access_code_status error:", e);
+        const codeText = String(data.staff_code ?? data.code ?? "");
+        statusLine.textContent = "상태: " + (codeText ? "✅ 코드 설정됨" : "⚠️ 코드 없음 (설정 필요)");
+        currentCodeLine.textContent = codeText ? `현재 코드: ${codeText}` : "현재 코드: (없음)";
+        updatedLine.textContent = data.updated_at ? ("마지막 변경: " + fmtDate(data.updated_at)) : "";
+      }catch(error){
+        console.error("staff code status error:", error);
         statusLine.textContent = "상태: ❌ 조회 실패";
+        currentCodeLine.textContent = "현재 코드: (조회 실패)";
         updatedLine.textContent = "";
-
-        const msg =
-          (e && typeof e === "object")
-            ? JSON.stringify(e, null, 2)
-            : String(e);
-
-        alert("상태 조회 RPC ERROR:\n" + msg);
       }
     }
 
-    // ✅ 디버그: update RPC 에러를 alert로 표시
-    async function updateCode(pw, newCode){
+    async function updateCode(newCode){
       const code = String(newCode||"").trim();
       if (code.length < 4){
         alert("코드는 최소 4자 이상으로 입력하세요.");
@@ -325,47 +298,40 @@
       }
 
       try{
-        const { data, error } = await sb.rpc("admin_update_page_access_code", { pw, new_code: code });
+        const { data, error } = await sb.functions.invoke("admin-credential-settings", {
+          body: { action: "set_staff_code", new_password: code }
+        });
         if (error) throw error;
-        if (data === true){
+        if (data?.ok === true){
           alert("코드 변경 완료!");
           document.getElementById("newCode").value = "";
-          await refreshStatus(pw);
+          await refreshStatus();
         } else {
           alert("코드 변경 실패");
         }
       }catch(e){
-        console.error("admin_update_page_access_code error:", e);
-
-        const raw = (e && typeof e === "object") ? JSON.stringify(e, null, 2) : String(e);
-        const msg = (e?.message || raw || "");
-
-        if (msg.includes("BAD_PASSWORD")) alert("관리자 비밀번호가 틀렸습니다.");
-        else if (msg.includes("CODE_TOO_SHORT")) alert("코드가 너무 짧습니다.");
-        else alert("코드 변경 RPC ERROR:\n" + raw);
+        console.error("staff password reset error:", e);
+        alert("코드 변경 실패: 보안 재설정 함수 상태를 확인하세요.");
       }
     }
 
     document.getElementById("refreshBtn").addEventListener("click", async ()=>{
-      const pw = (sessionStorage.getItem(ADMIN_PASS_CACHE_KEY)||"").trim();
-      if (!pw) return alert("관리자 비번이 없습니다. 새로고침 후 다시 입력하세요.");
-      await refreshStatus(pw);
+      await refreshStatus();
     });
 
     document.getElementById("saveCodeBtn").addEventListener("click", async ()=>{
-      const pw = (sessionStorage.getItem(ADMIN_PASS_CACHE_KEY)||"").trim();
-      if (!pw) return alert("관리자 비번이 없습니다. 새로고침 후 다시 입력하세요.");
-      await updateCode(pw, document.getElementById("newCode").value);
+      await updateCode(document.getElementById("newCode").value);
     });
 
-    document.getElementById("clearSessionBtn").addEventListener("click", ()=>{
-      sessionStorage.removeItem(ACCESS_OK_KEY);
-      alert("이 탭 접근세션(hana_access_ok) 삭제 완료. calc/reserv 페이지에서 다시 코드 입력이 뜹니다.");
+    document.getElementById("clearSessionBtn").addEventListener("click", async ()=>{
+      await DGV.signOut({ reload:false });
+      alert("현재 탭의 인증 세션을 초기화했습니다.");
+      location.reload();
     });
 
     document.getElementById("goCalcBtn").addEventListener("click", ()=> location.href="calc.html");
     document.getElementById("goReservBtn").addEventListener("click", ()=> location.href="reserv_check.html");
-    async function updateAdminPassword(pw, newPw){
+    async function updateAdminPassword(newPw){
   const np = String(newPw||"").trim();
   if (np.length < 4){
     alert("새 비밀번호는 최소 4자 이상이어야 합니다.");
@@ -373,39 +339,35 @@
   }
 
   try{
-    const { data, error } = await sb.rpc("admin_update_password", { pw, new_pw: np });
+    const { data, error } = await sb.functions.invoke("admin-credential-settings", {
+      body: { action: "set_admin_password", new_password: np }
+    });
     if (error) throw error;
 
-    if (data === true){
+    if (data?.ok === true){
+      await DGV.signInAs("admin", np);
       alert("관리자 비밀번호 변경 완료!\n(이 탭에서는 자동으로 새 비번을 계속 사용합니다)");
-      // 이 탭에서 이후 작업도 새 비번으로 계속 하도록 캐시 갱신
-      sessionStorage.setItem(ADMIN_PASS_CACHE_KEY, np);
       document.getElementById("newAdminPw").value = "";
     }else{
       alert("비밀번호 변경 실패");
     }
   }catch(e){
-    console.error("admin_update_password error:", e);
-    const msg = e?.message || JSON.stringify(e, null, 2) || "";
-    if (msg.includes("BAD_PASSWORD")) alert("현재 관리자 비밀번호가 틀렸습니다.");
-    else if (msg.includes("PW_TOO_SHORT")) alert("새 비밀번호가 너무 짧습니다.");
-    else alert("비밀번호 변경 RPC ERROR:\n" + (typeof e==="object" ? JSON.stringify(e,null,2) : String(e)));
+    console.error("admin password update error:", e);
+    alert("관리자 비밀번호 변경에 실패했습니다.");
   }
 }
 
 document.getElementById("saveAdminPwBtn").addEventListener("click", async ()=>{
-  const pw = (sessionStorage.getItem(ADMIN_PASS_CACHE_KEY)||"").trim();
-  if (!pw) return alert("관리자 비번이 없습니다. 새로고침 후 다시 입력하세요.");
-  await updateAdminPassword(pw, document.getElementById("newAdminPw").value);
+  await updateAdminPassword(document.getElementById("newAdminPw").value);
 });
 
     (async function init(){
-      const pw = await requireAdminPassword();
-      if (!pw){
+      const ok = await requireAdminPassword();
+      if (!ok){
         location.href = "/";
         return;
       }
-      await refreshStatus(pw);
+      await refreshStatus();
     })();
   </script>
 </body>

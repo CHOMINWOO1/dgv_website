@@ -444,16 +444,15 @@
   </div>
 
   <!-- Supabase JS (UMD) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/dgv-data.js"></script>
+  <script src="assets/supabase-client.js"></script>
   <script>
     /*************************************************
      * ✅ Supabase 설정
      *************************************************/
-    const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
-
-    const { createClient } = supabase;
-    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const sb = DGV.supabase;
 
     /*************************************************
      * 유틸
@@ -480,13 +479,11 @@
     };
 
     /*************************************************
-     * ✅ Admin Gate (입장 비번)
-     * - 서버에서 비번 검증 RPC 필요: admin_check_password(p_password)
+     * ✅ Admin Gate (기존 비밀번호 UI → Supabase Auth)
      *************************************************/
-    const ADMIN_GATE_KEY = "hana_admin_ok_v1";
-
-    function isGateOk(){
-      return sessionStorage.getItem(ADMIN_GATE_KEY) === "1";
+    async function isGateOk(){
+      const identity = await DGV.getIdentity();
+      return identity.role === "admin";
     }
     function lockPage(){
       document.body.classList.add("locked");
@@ -502,10 +499,8 @@
     }
 
     async function checkGatePassword(pass){
-      // ✅ 여기 RPC가 DB에 있어야 함 (없으면 DB에 함수 추가 필요)
-      const { data, error } = await sb.rpc("admin_check_password", { p_password: pass });
-      if (error) throw error;
-      return data === true;
+      await DGV.signInAs("admin", pass);
+      return true;
     }
 
     async function enterAdmin(){
@@ -517,7 +512,6 @@
           alert("비밀번호가 틀렸습니다.");
           return;
         }
-        sessionStorage.setItem(ADMIN_GATE_KEY, "1");
         unlockPage();
         await bootAfterGate(); // 통과 후 로드
       }catch(e){
@@ -551,7 +545,7 @@
     async function fetchOrderMeta(orderId){
       const { data, error } = await sb
         .from("orders")
-        .select("id,created_at,status,total_usd,total_vnd,guide_name,team_no,payment_method")
+        .select("id,created_at,status,total_usd,total_vnd,guide_name,team_no,payment_method,source")
         .eq("sales_excluded", false)
         .eq("id", orderId)
         .single();
@@ -563,14 +557,13 @@
     async function fetchOrderLines(orderId){
       if (orderLinesCache.has(orderId)) return orderLinesCache.get(orderId);
 
-      const { data, error } = await sb
-        .from("v_order_detail")
-        .select("order_id,ko_name,vi_name,qty,line_usd,line_vnd")
-        .eq("order_id", orderId);
-
-      if (error) throw error;
-
-      const lines = data || [];
+      const lines = await DGV.collectSupabasePages(
+        () => sb
+          .from("v_order_detail")
+          .select("order_id,order_item_id,ko_name,vi_name,qty,line_usd,line_vnd")
+          .eq("order_id", orderId),
+        { order: [{ column: "order_item_id", ascending: true }] }
+      );
       orderLinesCache.set(orderId, lines);
       return lines;
     }
@@ -603,8 +596,8 @@
         const rowsHtml = lines.map(r=>`
           <div class="r">
             <div class="l">
-              <b>${r.ko_name}</b><br/>
-              <span>${r.vi_name}</span>
+              <b>${DGV.escapeHTML(r.ko_name)}</b><br/>
+              <span>${DGV.escapeHTML(r.vi_name)}</span>
             </div>
             <div class="m">x ${fmtInt(r.qty)}</div>
             <div class="p">${fmtInt(r.line_vnd)}₫</div>
@@ -644,8 +637,8 @@
     <div>${pmText}</div>
   </div>
   <div class="meta">
-    <div>Guide/Team: ${guideText}</div>
-    <div>${(meta.status||"").toUpperCase()}</div>
+    <div>Guide/Team: ${DGV.escapeHTML(guideText)}</div>
+    <div>${DGV.escapeHTML((meta.status||"").toUpperCase())}</div>
   </div>
 
   <div class="box">
@@ -674,14 +667,19 @@
         const fromIso = currentRange.from.toISOString();
         const toIso = currentRange.to.toISOString();
 
-        const { data, error } = await sb
-          .from("v_order_detail")
-          .select("created_at,status,ko_name,vi_name,qty")
-          .gte("created_at", fromIso)
-          .lte("created_at", toIso)
-          .eq("status", "paid");
-
-        if (error) throw error;
+        const data = await DGV.collectSupabasePages(
+          () => sb
+            .from("v_order_detail")
+            .select("order_id,order_item_id,created_at,status,ko_name,vi_name,qty")
+            .gte("created_at", fromIso)
+            .lte("created_at", toIso)
+            .eq("status", "paid"),
+          { order: [
+            { column: "created_at", ascending: true },
+            { column: "order_id", ascending: true },
+            { column: "order_item_id", ascending: true }
+          ] }
+        );
 
         const map = new Map();
         (data||[]).forEach(r=>{
@@ -707,7 +705,7 @@
 
         const rowsHtml = agg.map(r=>`
           <div class="r">
-            <div class="l"><b>${r.ko}</b><br/><span>${r.vi}</span></div>
+            <div class="l"><b>${DGV.escapeHTML(r.ko)}</b><br/><span>${DGV.escapeHTML(r.vi)}</span></div>
             <div class="m">x ${fmtInt(r.qty)}</div>
           </div>
         `).join("");
@@ -761,8 +759,7 @@
     }
 
     /*************************************************
-     * ✅ 관리자 삭제 모달 + RPC 삭제
-     * (DB에 admin_delete_order 함수 필요)
+     * ✅ 관리자 삭제 모달 + 원자적 RPC 삭제
      *************************************************/
     function openDeleteModal(orderId){
       pendingDeleteOrderId = orderId;
@@ -787,9 +784,9 @@
       if (!okConfirm) return;
 
       try{
-        const { data, error } = await sb.rpc("admin_delete_order", {
-          p_order_id: pendingDeleteOrderId,
-          p_password: pass
+        await DGV.signInAs("admin", pass);
+        const { data, error } = await sb.rpc("app_delete_order", {
+          p_order_id: pendingDeleteOrderId
         });
         if (error) throw error;
 
@@ -817,13 +814,25 @@
 
       document.getElementById("kpiTodayDate").textContent = today;
 
-      const { data: todayRows, error: todayErr } = await sb
-        .from("orders")
-        .select("total_usd,total_vnd")
-        .eq("status", "paid")
-        .eq("sales_excluded", false)
-        .gte("created_at", todayFrom)
-        .lte("created_at", todayTo);
+      let todayRows = [];
+      let todayErr = null;
+      try{
+        todayRows = await DGV.collectSupabasePages(
+          () => sb
+            .from("orders")
+            .select("id,created_at,total_usd,total_vnd")
+            .eq("status", "paid")
+            .eq("sales_excluded", false)
+            .gte("created_at", todayFrom)
+            .lte("created_at", todayTo),
+          { order: [
+            { column: "created_at", ascending: true },
+            { column: "id", ascending: true }
+          ] }
+        );
+      }catch(error){
+        todayErr = error;
+      }
 
       if (!todayErr){
         const rows = todayRows || [];
@@ -844,13 +853,25 @@
       document.getElementById("kpiMonthLabel").textContent =
         `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
 
-      const { data: monthRows, error: monthErr } = await sb
-        .from("orders")
-        .select("total_usd,total_vnd")
-        .eq("status", "paid")
-        .eq("sales_excluded", false)
-        .gte("created_at", monthFromDate.toISOString())
-        .lte("created_at", monthToDate.toISOString());
+      let monthRows = [];
+      let monthErr = null;
+      try{
+        monthRows = await DGV.collectSupabasePages(
+          () => sb
+            .from("orders")
+            .select("id,created_at,total_usd,total_vnd")
+            .eq("status", "paid")
+            .eq("sales_excluded", false)
+            .gte("created_at", monthFromDate.toISOString())
+            .lte("created_at", monthToDate.toISOString()),
+          { order: [
+            { column: "created_at", ascending: true },
+            { column: "id", ascending: true }
+          ] }
+        );
+      }catch(error){
+        monthErr = error;
+      }
 
       if (!monthErr){
         const rows = monthRows || [];
@@ -881,7 +902,7 @@
         const div = document.createElement("div");
         div.className = "topRow";
         div.innerHTML = `
-          <div class="name">${r.ko_name} <span class="meta">/ ${r.vi_name}</span></div>
+          <div class="name">${DGV.escapeHTML(r.ko_name)} <span class="meta">/ ${DGV.escapeHTML(r.vi_name)}</span></div>
           <div class="meta">${fmtInt(r.qty)} 개</div>
         `;
         box.appendChild(div);
@@ -894,14 +915,22 @@
 
       document.getElementById("sumRangeText").textContent = `${toISODate(currentRange.from)} ~ ${toISODate(currentRange.to)}`;
 
-      const { data, error } = await sb
-        .from("v_order_detail")
-        .select("created_at,status,ko_name,vi_name,qty")
-        .gte("created_at", fromIso)
-        .lte("created_at", toIso)
-        .eq("status", "paid");
-
-      if (error){
+      let data = [];
+      try{
+        data = await DGV.collectSupabasePages(
+          () => sb
+            .from("v_order_detail")
+            .select("order_id,order_item_id,created_at,status,ko_name,vi_name,qty")
+            .gte("created_at", fromIso)
+            .lte("created_at", toIso)
+            .eq("status", "paid"),
+          { order: [
+            { column: "created_at", ascending: true },
+            { column: "order_id", ascending: true },
+            { column: "order_item_id", ascending: true }
+          ] }
+        );
+      }catch(error){
         console.error(error);
         document.getElementById("itemsSoldList").textContent = "집계 로드 실패";
         return;
@@ -942,7 +971,7 @@
       const pmText = payLabel(orderMeta.payment_method);
 
       head.innerHTML = `
-        <div>Order Lines <span class="badge" style="margin-left:8px;">${pmText}</span> <span class="badge" style="margin-left:6px;">${guideText}</span></div>
+        <div>Order Lines <span class="badge" style="margin-left:8px;">${pmText}</span> <span class="badge" style="margin-left:6px;">${DGV.escapeHTML(guideText)}</span></div>
         <div class="lineMeta">
           Total: <b>${fmtInt(orderMeta.total_vnd)}</b> VND · <b>${fmtInt(orderMeta.total_usd)}</b>$
         </div>
@@ -960,8 +989,8 @@
           row.className = "lineItem";
           row.innerHTML = `
             <div>
-              <b>${r.ko_name}</b>
-              <span class="muted"> / ${r.vi_name}</span>
+              <b>${DGV.escapeHTML(r.ko_name)}</b>
+              <span class="muted"> / ${DGV.escapeHTML(r.vi_name)}</span>
               <span class="muted"> × ${fmtInt(r.qty)}</span>
             </div>
             <div class="lineRight">
@@ -978,7 +1007,7 @@
       footer.className = "lineFooter";
       footer.innerHTML = `
         <button class="btn" data-act="printExpanded" style="padding:8px 12px;">출력</button>
-        <button class="btn" data-act="editExpanded" style="padding:8px 12px;">수정</button>
+        ${orderMeta.source === "reservation_confirm" ? "" : `<button class="btn" data-act="editExpanded" style="padding:8px 12px;">수정</button>`}
         <button class="btn btnDanger" data-act="deleteExpanded" style="padding:8px 12px;">삭제</button>
       `;
 
@@ -987,7 +1016,7 @@
         printOneOrder(orderMeta.id);
       });
 
-      footer.querySelector('button[data-act="editExpanded"]').addEventListener("click", (e)=>{
+      footer.querySelector('button[data-act="editExpanded"]')?.addEventListener("click", (e)=>{
         e.stopPropagation();
         window.open(`calc.html?edit=${orderMeta.id}`, "_blank");
       });
@@ -1029,12 +1058,16 @@
         return;
       }
 
-      const { data, error } = await sb
-        .from("v_order_detail")
-        .select("order_id,ko_name,vi_name,qty,line_usd,line_vnd,unit_usd,unit_vnd")
-        .eq("order_id", orderId);
-
-      if (error){
+      let data = [];
+      try{
+        data = await DGV.collectSupabasePages(
+          () => sb
+            .from("v_order_detail")
+            .select("order_id,order_item_id,ko_name,vi_name,qty,line_usd,line_vnd,unit_usd,unit_vnd")
+            .eq("order_id", orderId),
+          { order: [{ column: "order_item_id", ascending: true }] }
+        );
+      }catch(error){
         console.error(error);
         td.innerHTML = `<div class="muted">상세 로드 실패</div>`;
         return;
@@ -1059,16 +1092,21 @@
       const tbody = document.getElementById("ordersBody");
       tbody.innerHTML = `<tr><td colspan="4" class="muted">불러오는 중…</td></tr>`;
 
-      const { data, error } = await sb
-        .from("orders")
-        .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method")
-        .eq("sales_excluded", false)
-        .gte("created_at", fromIso)
-        .lte("created_at", toIso)
-        .order("created_at", { ascending: false })
-        .limit(200);
-
-      if (error){
+      let data = [];
+      try{
+        data = await DGV.collectSupabasePages(
+          () => sb
+            .from("orders")
+            .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method,source")
+            .eq("sales_excluded", false)
+            .gte("created_at", fromIso)
+            .lte("created_at", toIso),
+          { order: [
+            { column: "created_at", ascending: false },
+            { column: "id", ascending: false }
+          ] }
+        );
+      }catch(error){
         tbody.innerHTML = `<tr><td colspan="4" class="muted">로드 실패</td></tr>`;
         console.error(error);
         return;
@@ -1144,7 +1182,7 @@
           </td>
           <td>
             <button class="rowBtn" data-act="toggle">
-              <span class="badge">${guideText}</span>
+              <span class="badge">${DGV.escapeHTML(guideText)}</span>
             </button>
           </td>
           <td>
@@ -1265,7 +1303,7 @@
      *************************************************/
     (async function init(){
       // ✅ gate 먼저
-      if (!isGateOk()){
+      if (!await isGateOk()){
         lockPage();
         document.getElementById("statusText").textContent = "locked";
         return;

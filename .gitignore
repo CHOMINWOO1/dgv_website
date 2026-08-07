@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+.supabase/
+.supabase-cli-home/
+supabase/.temp/
+node_modules/
+test-results/
