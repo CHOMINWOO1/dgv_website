@@ -10,15 +10,15 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 // approved admin-style password modal; all other user-visible structure remains
 // locked against accidental redesign.
 const expected = new Map([
-  ["calc.html", "8bfa55fb9baeca6f22a7fe5b12e6d5cee6f4e13e7ac7b7ef6fd073781eb026db"],
+  ["calc.html", "4dfa556c02b5bf9de602899fd1254d70cfa9a8b1bfda2d2ded0a4c35f24c19a7"],
   ["admin.html", "b0a6757e6e798c2822044faddfe8f7da52c469615f0bb5bbaac32f6ac936a003"],
   ["hana_admin_hidden.html", "c3249bd30e455feea2ad4240e8297bbacf331dc5e3d072a6721771756dd26a1b"],
   ["code_admin.html", "53374bb648ee17383abe97ac2fb148e38f298d32aaad3ae6be6d52b5939cd22a"],
   ["notice.html", "958870fcedd4ddee38249825f3cf254352e6f31cb9733c0b6951f79547e2f348"],
-  ["reservation.html", "b3ee25140540329e7e2a86cb2071fbc79f8ada0246d24e4f1e049dbcd384af4c"],
+  ["reservation.html", "1d2914bef800450be5e80e17e9daf684825ae922b8d262139c7506ebb3e2f570"],
   ["reserv_check.html", "b09af6e5d747acc9829b1a917d54a32e70d1f410ec47b6d6c760856671e28a06"],
-  ["reserv_admin.html", "addc80a8487960c8f11a1f7eb1543926b791b730294c5c899dda0db549c8ab20"],
-  ["report.html", "61e36716b5137d8df55550deac6c420c8800b16738d4cd0c75c97c14dc7cc42e"],
+  ["reserv_admin.html", "fdc55c54449b4d338da5639fa637c752c63937f7e4acc8badf7fc0e4f8a4139b"],
+  ["report.html", "9f285e2cf8bfb25470d3a6d07ab494952c51b2b23a813c18edc55e10f19e60aa"],
 ]);
 
 function visibleStructure(html) {

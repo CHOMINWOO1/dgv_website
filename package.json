@@ -13,6 +13,7 @@
     "test:cutover:db": "supabase test db --local supabase/tests/connector_cutover_transactional_sequence.sql",
     "test:frontend-data": "node tests/frontend-data-regression.mjs",
     "test:frontend-syntax": "node tests/frontend-syntax.mjs",
+    "test:messages": "node tests/polite-messages-regression.mjs",
     "test:ui": "node tests/ui-structure-regression.mjs"
   },
   "dependencies": {

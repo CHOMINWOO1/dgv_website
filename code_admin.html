@@ -251,7 +251,7 @@
         passCancelBtn.disabled = false;
 
         if (!ok){
-          alert("비밀번호가 틀렸거나 권한이 없습니다.");
+          alert("비밀번호가 올바르지 않거나 권한이 없습니다.");
           continue;
         }
 
@@ -276,16 +276,16 @@
           body: { action: "get_staff_code" }
         });
         if (error) throw error;
-        if (data?.ok !== true) throw new Error(data?.error || "조회 실패");
+        if (data?.ok !== true) throw new Error(data?.error || "조회에 실패했습니다.");
 
         const codeText = String(data.staff_code ?? data.code ?? "");
-        statusLine.textContent = "상태: " + (codeText ? "✅ 코드 설정됨" : "⚠️ 코드 없음 (설정 필요)");
-        currentCodeLine.textContent = codeText ? `현재 코드: ${codeText}` : "현재 코드: (없음)";
+        statusLine.textContent = "상태: " + (codeText ? "✅ 코드가 설정되었습니다." : "⚠️ 코드가 없습니다. 설정이 필요합니다.");
+        currentCodeLine.textContent = codeText ? `현재 코드: ${codeText}` : "현재 코드가 설정되어 있지 않습니다.";
         updatedLine.textContent = data.updated_at ? ("마지막 변경: " + fmtDate(data.updated_at)) : "";
       }catch(error){
         console.error("staff code status error:", error);
-        statusLine.textContent = "상태: ❌ 조회 실패";
-        currentCodeLine.textContent = "현재 코드: (조회 실패)";
+        statusLine.textContent = "상태: ❌ 조회에 실패했습니다.";
+        currentCodeLine.textContent = "현재 코드를 조회하지 못했습니다.";
         updatedLine.textContent = "";
       }
     }
@@ -293,7 +293,7 @@
     async function updateCode(newCode){
       const code = String(newCode||"").trim();
       if (code.length < 4){
-        alert("코드는 최소 4자 이상으로 입력하세요.");
+        alert("보안코드는 4자 이상 입력해 주세요.");
         return;
       }
 
@@ -303,15 +303,15 @@
         });
         if (error) throw error;
         if (data?.ok === true){
-          alert("코드 변경 완료!");
+          alert("보안코드가 변경되었습니다.");
           document.getElementById("newCode").value = "";
           await refreshStatus();
         } else {
-          alert("코드 변경 실패");
+          alert("보안코드를 변경하지 못했습니다.");
         }
       }catch(e){
         console.error("staff password reset error:", e);
-        alert("코드 변경 실패: 보안 재설정 함수 상태를 확인하세요.");
+        alert("보안코드를 변경하지 못했습니다. 보안 재설정 함수 상태를 확인해 주세요.");
       }
     }
 
@@ -346,10 +346,10 @@
 
     if (data?.ok === true){
       await DGV.signInAs("admin", np);
-      alert("관리자 비밀번호 변경 완료!\n(이 탭에서는 자동으로 새 비번을 계속 사용합니다)");
+      alert("관리자 비밀번호가 변경되었습니다.\n현재 탭에서도 새 비밀번호를 계속 사용합니다.");
       document.getElementById("newAdminPw").value = "";
     }else{
-      alert("비밀번호 변경 실패");
+      alert("비밀번호를 변경하지 못했습니다.");
     }
   }catch(e){
     console.error("admin password update error:", e);

@@ -510,14 +510,14 @@
       try{
         const ok = await checkGatePassword(pass);
         if (!ok){
-          alert("비밀번호가 틀렸습니다.");
+          alert("관리자 비밀번호가 올바르지 않습니다.");
           return;
         }
         unlockPage();
         await bootAfterGate(); // 통과 후 로드
       }catch(e){
         console.error(e);
-        alert("로그인 실패");
+        alert("로그인에 실패했습니다.");
       }
     }
 
@@ -535,7 +535,7 @@
      *************************************************/
     function openPrintWindow(html){
       const w = window.open("", "_blank", "width=420,height=700");
-      if (!w){ alert("팝업이 차단됨"); return; }
+      if (!w){ alert("팝업이 차단되었습니다. 브라우저 팝업 설정을 확인해 주세요."); return; }
       w.document.open();
       w.document.write(html);
       w.document.close();
@@ -657,7 +657,7 @@
 
       } catch(e){
         console.error(e);
-        alert("출력 실패");
+        alert("출력에 실패했습니다.");
       }
     }
 
@@ -754,7 +754,7 @@
         openPrintWindow(html);
       } catch(e){
         console.error(e);
-        alert("전체 출력 실패");
+        alert("전체 출력에 실패했습니다.");
       }
     }
 
@@ -780,7 +780,7 @@
       const pass = (document.getElementById("deletePassInput").value || "").trim();
       if (!pass){ alert("비밀번호를 입력하세요."); return; }
 
-      const okConfirm = confirm("정말 삭제할까요? (되돌릴 수 없음)");
+      const okConfirm = confirm("이 주문을 삭제하시겠습니까?\n삭제한 주문은 복구할 수 없습니다.");
       if (!okConfirm) return;
 
       try{
@@ -791,15 +791,18 @@
         if (error) throw error;
 
         if (data === true){
-          alert("삭제 완료");
+          alert("주문이 삭제되었습니다.");
           closeDeleteModal();
           await refreshRange();
         } else {
-          alert("비밀번호가 틀렸거나 삭제 권한이 없습니다.");
+          alert("주문을 찾을 수 없거나 삭제 권한이 없습니다.");
         }
       } catch(e){
         console.error(e);
-        alert("삭제 실패");
+        const message = String(e?.message || "");
+        alert(message.includes("unconfirm the reservation before deleting its order")
+          ? "예약 확정으로 생성된 주문은 이 페이지에서 직접 삭제할 수 없습니다. 예약 관리 페이지에서 확정을 취소해 주세요."
+          : "주문 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.");
       }
     }
 
@@ -815,8 +818,10 @@
       }
 
       const nextValue = !Boolean(order.sales_excluded);
-      const actionText = nextValue ? "매출에서 제외" : "매출에 복구";
-      if (!confirm(`이 주문을 ${actionText}할까요?`)) return;
+      const confirmation = nextValue
+        ? "이 주문을 매출에서 제외하시겠습니까?"
+        : "이 주문을 매출에 다시 반영하시겠습니까?";
+      if (!confirm(confirmation)) return;
 
       try{
         const { error } = await sb.rpc("app_set_sales_excluded", {
@@ -827,12 +832,12 @@
         if (error) throw error;
 
         order.sales_excluded = nextValue;
-        alert(nextValue ? "매출 제외 처리되었습니다." : "매출 복구되었습니다.");
+        alert(nextValue ? "매출 제외 처리가 완료되었습니다." : "매출에 다시 반영되었습니다.");
         await loadKpis();
         await refreshRange();
       }catch(e){
         console.error(e);
-        alert("처리 실패: " + (e.message || "권한 또는 DB 설정을 확인하세요."));
+        alert("처리에 실패했습니다. 관리자 권한과 DB 설정을 확인해 주세요.");
       }
     }
 
@@ -924,7 +929,7 @@
         );
       }catch(error){
         console.error(error);
-        document.getElementById("itemsSoldList").textContent = "집계 로드 실패";
+        document.getElementById("itemsSoldList").textContent = "판매 집계를 불러오지 못했습니다.";
         return;
       }
 
@@ -1061,7 +1066,7 @@
         );
       }catch(error){
         console.error(error);
-        td.innerHTML = `<div class="muted">상세 로드 실패</div>`;
+        td.innerHTML = `<div class="muted">주문 상세를 불러오지 못했습니다.</div>`;
         return;
       }
 
@@ -1098,7 +1103,7 @@
           ] }
         );
       }catch(error){
-        tbody.innerHTML = `<tr><td colspan="5" class="muted">로드 실패</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="muted">주문 목록을 불러오지 못했습니다.</td></tr>`;
         console.error(error);
         return;
       }
@@ -1189,7 +1194,7 @@
                      style="padding:7px 9px;">
                      ${o.sales_excluded ? "복구" : "매출 제외"}
                    </button>`
-                : `<button class="btn" disabled style="padding:7px 9px;">대상 아님</button>`
+                : `<button class="btn" disabled style="padding:7px 9px;">적용 대상이 아닙니다.</button>`
             }
           </td>
         `;

@@ -299,7 +299,7 @@
 
   <div id="e_branch_custom_box" style="margin-top:10px; display:none;">
     <input id="e_branch_custom" type="text" placeholder="BRANCH 직접입력 (예: ANT2 / DALAT)" />
-    <div class="muted" style="margin-top:6px">* 커스텀 선택 시 입력한 값이 저장됨</div>
+    <div class="muted" style="margin-top:6px">* 커스텀을 선택하면 입력한 값이 저장됩니다.</div>
   </div>
 </div>
 
@@ -333,7 +333,7 @@
                 <input id="e_menu_ko" type="text" placeholder="예: 무한삼겹" />
                 <input id="e_menu_vi" type="text" placeholder="예: Thịt nướng buffet" />
               </div>
-              <div class="muted" style="margin-top:6px">* KO 입력 시 매핑표에 있으면 VI 자동 입력</div>
+              <div class="muted" style="margin-top:6px">* KO를 입력하면 매핑표에 있는 VI 값이 자동으로 입력됩니다.</div>
             </div>
 
             <!-- ✅ 결제수단(orders.payment_method로 저장) -->
@@ -492,7 +492,7 @@
             cleanup();
             resolve(true);
           }catch(error){
-            alert("비밀번호가 틀렸거나 권한이 없습니다.");
+            alert("비밀번호가 올바르지 않거나 권한이 없습니다.");
             $("pwInput").value = "";
             $("pwInput").focus();
           }
@@ -700,7 +700,7 @@
       $("listCount").textContent = `${rows.length}건`;
 
       if(!rows.length){
-        box.innerHTML = `<div class="muted" style="padding:12px;">데이터 없음</div>`;
+        box.innerHTML = `<div class="muted" style="padding:12px;">데이터가 없습니다.</div>`;
         return;
       }
 
@@ -777,13 +777,13 @@
           const to = $("q_to").value;
 
           if(!from || !to){
-            setMsg("bad","기간 조회는 FROM/TO 날짜가 필요해.");
-            $("rows").innerHTML = `<div class="muted" style="padding:12px;">기간을 설정해줘</div>`;
+            setMsg("bad","기간을 조회하려면 FROM/TO 날짜가 필요합니다.");
+            $("rows").innerHTML = `<div class="muted" style="padding:12px;">기간을 설정해 주세요.</div>`;
             return;
           }
           if(from > to){
-            setMsg("bad","FROM은 TO보다 클 수 없어.");
-            $("rows").innerHTML = `<div class="muted" style="padding:12px;">FROM/TO 순서를 확인해줘</div>`;
+            setMsg("bad","FROM 날짜는 TO 날짜보다 늦을 수 없습니다.");
+            $("rows").innerHTML = `<div class="muted" style="padding:12px;">FROM/TO 순서를 확인해 주세요.</div>`;
             return;
           }
 
@@ -824,7 +824,8 @@
         renderList(ROWS);
         setConfirmButtons();
       }catch(e){
-        $("rows").innerHTML = `<div class="muted" style="padding:12px;">조회 실패: ${escapeHtml(e.message)}</div>`;
+        console.error(e);
+        $("rows").innerHTML = `<div class="muted" style="padding:12px;">예약 목록을 불러오지 못했습니다.</div>`;
       }
     }
 
@@ -832,16 +833,16 @@
       try{
         setMsg("", "");
         if(!SELECTED_ID || !SELECTED_ROW){
-          setMsg("bad","확정할 예약을 왼쪽 목록에서 선택해줘.");
+          setMsg("bad","확정할 예약을 왼쪽 목록에서 선택해 주세요.");
           return;
         }
 
         if(SELECTED_ROW.confirmed){
-          setMsg("bad","이미 확정된 예약이야. (확정취소 후 다시 확정 가능)");
+          setMsg("bad","이미 확정된 예약입니다. 확정을 취소한 후 다시 확정할 수 있습니다.");
           return;
         }
 
-        const ok = confirm("확정하면 orders로 매출이 생성됩니다. 진행할까요?");
+        const ok = confirm("예약을 확정하면 주문이 생성되어 매출에 반영됩니다. 계속하시겠습니까?");
         if(!ok) return;
 
         const res_date = $("e_date").value;
@@ -859,19 +860,19 @@
         const payment_method = getPaymentMethod(); // ✅ NEW
 
         if(!res_date || !res_time){
-          setMsg("bad","DATE / TIME은 필수야");
+          setMsg("bad","DATE / TIME은 필수입니다.");
           return;
         }
         if(!Number.isFinite(guests_count) || guests_count <= 0){
-          setMsg("bad","GUESTS를 숫자로 입력해줘");
+          setMsg("bad","GUESTS를 숫자로 입력해 주세요.");
           return;
         }
         if(!Number.isFinite(price) || price <= 0){
-          setMsg("bad","PRICE(VND) 값이 필요해");
+          setMsg("bad","PRICE(VND) 값이 필요합니다.");
           return;
         }
         if(!menu_ko){
-          setMsg("bad","MENU KO는 필수야");
+          setMsg("bad","MENU KO는 필수입니다.");
           return;
         }
 
@@ -898,13 +899,14 @@
           p_team_no: optional_info || note || null
         });
 
-        setMsg("ok", `확정 완료! ✅ (order: ${String(orderId).slice(0,8)}...)`);
+        setMsg("ok", `예약 확정이 완료되었습니다. ✅ (주문: ${String(orderId).slice(0,8)}...)`);
         await loadList({ preserveSelected:true });
       }catch(e){
         if((e.message || "").toLowerCase().includes("forbidden")){
-          setMsg("bad","권한이 없습니다(RLS/비번). 정책 또는 비밀번호를 확인해줘.");
+          setMsg("bad","관리자 권한이 없거나 세션이 만료되었습니다. 비밀번호를 다시 확인해 주세요.");
         }else{
-          setMsg("bad","확정 실패: " + e.message);
+          console.error(e);
+          setMsg("bad","예약 확정에 실패했습니다. 잠시 후 다시 시도해 주세요.");
         }
       }
     }
@@ -913,28 +915,29 @@
       try{
         setMsg("", "");
         if(!SELECTED_ID || !SELECTED_ROW){
-          setMsg("bad","확정취소할 예약을 왼쪽 목록에서 선택해줘.");
+          setMsg("bad","확정을 취소할 예약을 왼쪽 목록에서 선택해 주세요.");
           return;
         }
         if(!SELECTED_ROW.confirmed){
-          setMsg("bad","아직 확정되지 않은 예약이야.");
+          setMsg("bad","아직 확정되지 않은 예약입니다.");
           return;
         }
 
-        const ok = confirm("확정취소하면 orders 기록도 삭제합니다.\n진행할까요?");
+        const ok = confirm("예약 확정을 취소하면 연결된 주문 기록도 함께 삭제됩니다. 계속하시겠습니까?");
         if(!ok) return;
 
         await rpc("app_unconfirm_reservation", {
           p_id: Number(SELECTED_ID)
         });
 
-        setMsg("ok","확정취소 완료!");
+        setMsg("ok","예약 확정이 취소되었습니다.");
         await loadList({ preserveSelected:true });
       }catch(e){
         if((e.message || "").toLowerCase().includes("forbidden")){
           setMsg("bad","관리자 권한이 없거나 세션이 만료되었습니다.");
         }else{
-          setMsg("bad","확정취소 실패: " + e.message);
+          console.error(e);
+          setMsg("bad","예약 확정 취소에 실패했습니다. 잠시 후 다시 시도해 주세요.");
         }
       }
     }
@@ -943,7 +946,7 @@
       try{
         setMsg("", "");
         if(!SELECTED_ID){
-          setMsg("bad","수정할 예약을 왼쪽 목록에서 선택해줘.");
+          setMsg("bad","수정할 예약을 왼쪽 목록에서 선택해 주세요.");
           return;
         }
 
@@ -962,19 +965,19 @@
         const guide_name = ($("e_guide").value || "").trim();
 
         if(!res_date || !res_time){
-          setMsg("bad","DATE / TIME은 필수야");
+          setMsg("bad","DATE / TIME은 필수입니다.");
           return;
         }
         if(!branch){
-          setMsg("bad","BRANCH는 필수야");
+          setMsg("bad","BRANCH는 필수입니다.");
           return;
         }
         if(!Number.isFinite(guests_count) || guests_count <= 0){
-          setMsg("bad","GUESTS를 숫자로 입력해줘 (예: 13)");
+          setMsg("bad","GUESTS를 숫자로 입력해 주세요. 예: 13");
           return;
         }
         if(price !== null && (!Number.isFinite(price) || price < 0)){
-          setMsg("bad","PRICE는 0 이상의 숫자만 가능");
+          setMsg("bad","PRICE에는 0 이상의 숫자만 입력할 수 있습니다.");
           return;
         }
 
@@ -997,13 +1000,14 @@
         };
 
         await rpc("app_update_reservation", body);
-        setMsg("ok","저장 완료!");
+        setMsg("ok","예약 정보가 저장되었습니다.");
         await loadList({ preserveSelected:true });
       }catch(e){
         if((e.message || "").toLowerCase().includes("forbidden")){
           setMsg("bad","관리자 권한이 없거나 세션이 만료되었습니다.");
         }else{
-          setMsg("bad","저장 실패: " + e.message);
+          console.error(e);
+          setMsg("bad","저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
         }
       }
     }
@@ -1012,23 +1016,24 @@
       try{
         setMsg("", "");
         if(!SELECTED_ID){
-          setMsg("bad","삭제할 예약을 왼쪽 목록에서 선택해줘.");
+          setMsg("bad","삭제할 예약을 왼쪽 목록에서 선택해 주세요.");
           return;
         }
 
-        const ok = confirm("정말 삭제할까요? (되돌릴 수 없습니다)");
+        const ok = confirm("이 예약을 삭제하시겠습니까?\n삭제한 예약은 복구할 수 없습니다.");
         if(!ok) return;
 
         await rpc("app_delete_reservation", { p_id: Number(SELECTED_ID) });
 
-        setMsg("ok","삭제 완료!");
+        setMsg("ok","예약이 삭제되었습니다.");
         await loadList();
         clearSelection();
       }catch(e){
         if((e.message || "").toLowerCase().includes("forbidden")){
-          setMsg("bad","권한이 없습니다(삭제 불가). RLS/정책 또는 비밀번호 RPC가 필요해.");
+          setMsg("bad","관리자 권한이 없거나 세션이 만료되었습니다. 비밀번호를 다시 확인해 주세요.");
         }else{
-          setMsg("bad","삭제 실패: " + e.message);
+          console.error(e);
+          setMsg("bad","예약 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.");
         }
       }
     }

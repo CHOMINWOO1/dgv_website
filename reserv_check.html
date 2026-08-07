@@ -249,7 +249,7 @@ async function requireAccessGate(){
       await DGV.signInAs("staff", code.trim());
       return true;
     }catch(error){
-      alert("코드가 틀렸습니다.");
+      alert("보안코드가 올바르지 않습니다.");
     }
   }
 }
@@ -385,7 +385,7 @@ async function requireAccessGate(){
     function renderTable(rows){
       const tb = $("tbody");
       if(!rows.length){
-        tb.innerHTML = `<tr><td colspan="8" class="muted">예약 없음</td></tr>`;
+        tb.innerHTML = `<tr><td colspan="8" class="muted">예약이 없습니다.</td></tr>`;
         return;
       }
 
@@ -409,7 +409,7 @@ async function requireAccessGate(){
     function renderCards(rows){
       const wrap = $("cards");
       if(!rows.length){
-        wrap.innerHTML = `<div class="muted" style="padding:6px 2px;">예약 없음</div>`;
+        wrap.innerHTML = `<div class="muted" style="padding:6px 2px;">예약이 없습니다.</div>`;
         return;
       }
 
