@@ -195,7 +195,7 @@
       return data;
     }catch(error){
       console.error(error);
-      statusTxt.textContent = "공지 로드 실패";
+      statusTxt.textContent = "공지사항을 불러오지 못했습니다.";
       return [];
     }
   }
@@ -240,9 +240,10 @@
         const text = `${row.title}\n\n${row.body}`;
         try{
           await navigator.clipboard.writeText(text);
-          alert("복사 완료!");
+          alert("복사가 완료되었습니다.");
         }catch(e){
-          alert("복사 실패 (브라우저 권한 확인)");
+          console.error(e);
+          alert("복사에 실패했습니다. 브라우저 권한을 확인해 주세요.");
         }
       });
       div.querySelector('[data-act="edit"]').addEventListener("click", ()=> openEdit(row));
@@ -285,19 +286,19 @@
           .update({ title, body, author: author || null })
           .eq("id", editing.id);
         if (error) throw error;
-        alert("수정 완료!");
+        alert("수정이 완료되었습니다.");
       } else {
         const { error } = await sb
           .from("notices")
           .insert([{ title, body, author: author || null }]);
         if (error) throw error;
-        alert("작성 완료!");
+        alert("공지가 작성되었습니다.");
       }
       closeEdit();
       await reload();
     } catch(e){
       console.error(e);
-      alert("저장 실패");
+      alert("저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     } finally{
       editSaveBtn.disabled = false;
     }
@@ -305,17 +306,17 @@
 
   async function delNotice(row){
     if (!await ensureAdmin()) return;
-    const ok = confirm("정말 삭제할까요? (되돌릴 수 없음)");
+    const ok = confirm("이 공지를 삭제하시겠습니까?\n삭제한 공지는 복구할 수 없습니다.");
     if (!ok) return;
 
     try{
       const { error } = await sb.from("notices").delete().eq("id", row.id);
       if (error) throw error;
-      alert("삭제 완료!");
+      alert("공지가 삭제되었습니다.");
       await reload();
     }catch(e){
       console.error(e);
-      alert("삭제 실패");
+      alert("삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     }
   }
 

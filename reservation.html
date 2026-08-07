@@ -209,7 +209,7 @@
 
           <div id="branch_custom_box" style="margin-top:10px; display:none;">
             <input id="branch_custom" type="text" placeholder="BRANCH 직접입력 (예: ANT2 / DALAT)" />
-            <div class="mini">* 커스텀 선택 시 입력한 값이 저장됨</div>
+            <div class="mini">* 커스텀을 선택하면 입력한 값이 저장됩니다.</div>
           </div>
         </div>
 
@@ -232,7 +232,7 @@
               <input id="menu_ko" type="text" placeholder="한국어 메뉴 직접입력" />
               <input id="menu_vi" type="text" placeholder="베트남어 메뉴 직접입력(선택)" />
             </div>
-            <div class="mini">KO 입력 시 매핑표에 있으면 VI 자동 입력</div>
+            <div class="mini">KO를 입력하면 매핑표에 있는 VI 값이 자동으로 입력됩니다.</div>
           </div>
 
           <div id="menu_preview" class="mini" style="margin-top:8px;"></div>
@@ -452,7 +452,7 @@
         $("menu_ko").value = ko;
         $("menu_vi").value = vi;
         customBox.style.display = "none";
-        preview.textContent = `선택됨: KO="${ko}" / VI="${vi}"`;
+        preview.textContent = `선택되었습니다: KO="${ko}" / VI="${vi}"`;
       }
     }
 
@@ -574,7 +574,7 @@
 
       const ok = async () => {
         const v = ($("passInput").value || "").trim();
-        if(!v){ setMsg("bad","비밀번호를 입력하세요"); return; }
+        if(!v){ setMsg("bad","비밀번호를 입력해 주세요."); return; }
 
         closePassModal();
         cleanup();
@@ -613,7 +613,7 @@
 
     const ok = await verifyAdminPassword(pass);
     if(!ok){
-      alert("비밀번호가 틀렸거나 권한이 없습니다.");
+      alert("비밀번호가 올바르지 않거나 권한이 없습니다.");
       continue;
     }
 
@@ -646,26 +646,26 @@
         const guide_name = ($("guide_name").value || "").trim();
 
         if(!res_date || !res_time){
-          setMsg("bad","DATE / TIME은 필수야");
+          setMsg("bad","DATE / TIME은 필수입니다.");
           return;
         }
         if(!branch){
-          setMsg("bad","BRANCH를 선택하거나 직접 입력해줘");
+          setMsg("bad","BRANCH를 선택하거나 직접 입력해 주세요.");
           return;
         }
         if(!Number.isFinite(guests_count) || guests_count <= 0){
-          setMsg("bad","NUMBER OF GUESTS를 숫자로 입력해줘 (예: 13)");
+          setMsg("bad","NUMBER OF GUESTS를 숫자로 입력해 주세요. 예: 13");
           return;
         }
         if(price !== null && (!Number.isFinite(price) || price < 0)){
-          setMsg("bad","PRICE는 0 이상의 숫자만 가능");
+          setMsg("bad","PRICE에는 0 이상의 숫자만 입력할 수 있습니다.");
           return;
         }
 
         // 관리자 세션이 없으면 기존 모달에서 인증한다. 비밀번호는 저장하지 않는다.
         const authenticated = await getAdminPasswordForSave();
         if(!authenticated){
-          setMsg("bad","비밀번호 입력이 취소되었습니다");
+          setMsg("bad","비밀번호 입력이 취소되었습니다.");
           return;
         }
 
@@ -683,17 +683,18 @@
 
         const newId = await rpc("app_create_reservation", body);
 
-        setMsg("ok", `저장 완료! (id: ${newId})`);
+        setMsg("ok", `저장이 완료되었습니다. (id: ${newId})`);
         $("btnClear").click();
-        setMsg("ok", `저장 완료! (id: ${newId})`);
+        setMsg("ok", `저장이 완료되었습니다. (id: ${newId})`);
 await refreshSavedCards();   // ✅ 저장 후 아래 카드 갱신
 
       }catch(e){
         const msg = (e.message || "");
         if(msg.toLowerCase().includes("forbidden")){
-          setMsg("bad","비밀번호가 틀렸거나 권한이 없습니다");
+          setMsg("bad","비밀번호가 올바르지 않거나 권한이 없습니다.");
         }else{
-          setMsg("bad","저장 실패: " + msg);
+          console.error(e);
+          setMsg("bad","저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
         }
       } finally {
         btn.disabled = false;
@@ -812,7 +813,8 @@ async function refreshSavedCards(){
     renderSavedCards(rows);
     setSavedMsg("");
   }catch(e){
-    setSavedMsg("불러오기 실패: " + (e.message || e));
+    console.error(e);
+    setSavedMsg("예약 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
     $("savedCards").innerHTML = `<div class="emptyBox">리스트를 불러올 수 없습니다.</div>`;
   }
 }

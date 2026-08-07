@@ -286,7 +286,7 @@
                 </tr>
               </thead>
               <tbody id="pRows">
-                <tr><td colspan="5" style="color:#6b5444;">데이터 없음</td></tr>
+                <tr><td colspan="5" style="color:#6b5444;">데이터가 없습니다.</td></tr>
               </tbody>
             </table>
           </div>
@@ -448,7 +448,7 @@
 
       const box = $("rows");
       if(!rows.length){
-        box.innerHTML = `<div class="muted" style="padding:12px;">데이터 없음</div>`;
+        box.innerHTML = `<div class="muted" style="padding:12px;">데이터가 없습니다.</div>`;
         return;
       }
 
@@ -488,7 +488,7 @@
 
       const tbody = $("pRows");
       if(!rows.length){
-        tbody.innerHTML = `<tr><td colspan="5" style="color:#6b5444;">데이터 없음</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="color:#6b5444;">데이터가 없습니다.</td></tr>`;
         return;
       }
 
@@ -518,8 +518,8 @@
         const branch = $("branch").value;
         const yyyyMM = $("month").value;
 
-        if(!branch){ setMsg("bad","BRANCH를 선택해줘"); return; }
-        if(!yyyyMM){ setMsg("bad","MONTH(YYYY-MM)을 선택해줘"); return; }
+        if(!branch){ setMsg("bad","BRANCH를 선택해 주세요."); return; }
+        if(!yyyyMM){ setMsg("bad","MONTH(YYYY-MM)을 선택해 주세요."); return; }
 
         const {start, end} = monthRange(yyyyMM);
 
@@ -550,9 +550,10 @@
         renderPrintTable(list, branch, yyyyMM);
         calcDiscount(list);
 
-        setMsg("ok", `완료: ${branch} / ${yyyyMM}`);
+        setMsg("ok", `정산을 불러왔습니다: ${branch} / ${yyyyMM}`);
       }catch(e){
-        setMsg("bad","실패: " + e.message);
+        console.error(e);
+        setMsg("bad","정산을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
       }
     }
 
