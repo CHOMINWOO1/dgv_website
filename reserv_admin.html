@@ -395,19 +395,20 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/dgv-data.js"></script>
+  <script src="assets/supabase-client.js"></script>
   <script>
     /***********************
      * ✅ 너 프로젝트
      ***********************/
-    const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
+    const SUPABASE_URL = DGV.config.url;
+    const sb = DGV.supabase;
 
     /***********************
      * ✅ 입장 비밀번호(세션)
      ***********************/
-    let ADMIN_PW = "";
-    const ADMIN_PASS_KEY = "hana_admin_pw_edit_v1";
-
     /***********************
      * 한→베 메뉴 매핑
      ***********************/
@@ -452,7 +453,7 @@
       el.innerHTML = `<span class="${type}">${escapeHtml(text)}</span>`;
     }
 
-    function ymd(d){ return d.toISOString().slice(0,10); }
+    function ymd(d){ return DGV.formatLocalYmd(d); }
 
     function formatVND(n){
       if(n === null || n === undefined || n === "") return "";
@@ -474,24 +475,27 @@
     }
 
     async function requireAdminPassword(){
-      const cached = (sessionStorage.getItem(ADMIN_PASS_KEY) || "").trim();
-      if(cached){
-        ADMIN_PW = cached;
-        return true;
-      }
+      const identity = await DGV.getIdentity();
+      if(identity.role === "admin") return true;
 
       return new Promise((resolve)=>{
         openPwModal();
 
-        const ok = () => {
+        const ok = async () => {
           const pw = ($("pwInput").value || "").trim();
           if(!pw) return;
 
-          ADMIN_PW = pw;
-          sessionStorage.setItem(ADMIN_PASS_KEY, pw);
-          closePwModal();
-          cleanup();
-          resolve(true);
+          try{
+            await DGV.signInAs("admin", pw);
+            $("pwInput").value = "";
+            closePwModal();
+            cleanup();
+            resolve(true);
+          }catch(error){
+            alert("비밀번호가 틀렸거나 권한이 없습니다.");
+            $("pwInput").value = "";
+            $("pwInput").focus();
+          }
         };
 
         const cancel = () => {
@@ -522,38 +526,9 @@
      * RPC / Fetch Helpers
      ***********************/
     async function rpc(fn, body){
-      const res = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + fn, {
-        method:"POST",
-        headers:{
-          "apikey": SUPABASE_ANON_KEY,
-          "Authorization":"Bearer " + SUPABASE_ANON_KEY,
-          "Content-Type":"application/json"
-        },
-        body: JSON.stringify(body || {})
-      });
-      const text = await res.text();
-      let json=null; try{ json = text ? JSON.parse(text) : null; }catch{}
-      if(!res.ok){
-        const err = (json && (json.message || json.error)) || text || ("HTTP " + res.status);
-        throw new Error(err);
-      }
-      return json;
-    }
-
-    async function fetchJson(url){
-      const res = await fetch(url, {
-        headers:{
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: "Bearer " + SUPABASE_ANON_KEY
-        }
-      });
-      const text = await res.text();
-      let json=null; try{ json = text ? JSON.parse(text) : null; }catch{}
-      if(!res.ok){
-        const err = (json && (json.message || json.error)) || text || ("HTTP " + res.status);
-        throw new Error(err);
-      }
-      return json;
+      const { data, error } = await sb.rpc(fn, body || {});
+      if (error) throw error;
+      return data;
     }
 
     function normalizeKey(s){
@@ -824,7 +799,14 @@
         if(branch) url += `&branch=eq.${encodeURIComponent(branch)}`;
         url += `&order=res_date.asc,res_time.asc`;
 
-        const rows = await fetchJson(url);
+        const rows = await DGV.collectRestPages(url, {
+          headers: () => DGV.authHeaders(),
+          order: [
+            { column: "res_date", ascending: true },
+            { column: "res_time", ascending: true },
+            { column: "id", ascending: true }
+          ]
+        });
         ROWS = Array.isArray(rows) ? rows : [];
 
         if(preserveSelected && prevId !== null && prevId !== undefined){
@@ -900,77 +882,20 @@
           if(mapped) final_vi = mapped;
         }
 
-        const unit_vnd = Math.round(price);
-        const qty = guests_count;
-        const line_vnd = unit_vnd * qty;
-
-        const created_at = `${res_date}T${res_time}:00+07:00`;
-
-        // 1) orders insert -> id (payment_method + team_no 저장)
-        const orderInsertUrl = `${SUPABASE_URL}/rest/v1/orders?select=id`;
-        const orderRes = await fetch(orderInsertUrl, {
-          method:"POST",
-          headers:{
-            "apikey": SUPABASE_ANON_KEY,
-            "Authorization":"Bearer " + SUPABASE_ANON_KEY,
-            "Content-Type":"application/json",
-            "Prefer":"return=representation"
-          },
-          body: JSON.stringify({
-            created_at,
-            source: "reservation_confirm",
-            status: "paid",
-            total_usd: 0,
-            total_vnd: line_vnd,
-            guide_name: guide_name || null,
-            team_no: optional_info || note || null,         // ✅ NEW
-            payment_method: payment_method || "cash"        // ✅ NEW
-          })
-        });
-
-        const orderText = await orderRes.text();
-        if(!orderRes.ok){
-          let j=null; try{ j = orderText ? JSON.parse(orderText) : null; }catch{}
-          throw new Error((j && (j.message || j.error)) || orderText || ("HTTP " + orderRes.status));
-        }
-
-        const orderJson = orderText ? JSON.parse(orderText) : null;
-        const orderId = Array.isArray(orderJson) ? orderJson[0]?.id : orderJson?.id;
-        if(!orderId) throw new Error("orders insert 후 order id를 받지 못했어");
-
-        // 2) order_custom_items insert (기존 유지)
-        const customInsertUrl = `${SUPABASE_URL}/rest/v1/order_custom_items`;
-        const cRes = await fetch(customInsertUrl, {
-          method:"POST",
-          headers:{
-            "apikey": SUPABASE_ANON_KEY,
-            "Authorization":"Bearer " + SUPABASE_ANON_KEY,
-            "Content-Type":"application/json"
-          },
-          body: JSON.stringify({
-            order_id: orderId,
-            kind: "group_resv",
-            ko_name: menu_ko,
-            vi_name: final_vi || null,
-            qty,
-            unit_usd: 0,
-            unit_vnd,
-            line_usd: 0,
-            line_vnd
-          })
-        });
-
-        const cText = await cRes.text();
-        if(!cRes.ok){
-          let j=null; try{ j = cText ? JSON.parse(cText) : null; }catch{}
-          throw new Error((j && (j.message || j.error)) || cText || ("HTTP " + cRes.status));
-        }
-
-        // 3) resv_groups -> confirmed 표시 (RPC)
-        await rpc("admin_mark_resv_confirmed", {
-          pw: ADMIN_PW,
+        // 최신 예약값 저장과 주문 생성/확정을 하나의 DB 트랜잭션에서 처리한다.
+        const orderId = await rpc("app_update_and_confirm_reservation", {
           p_id: Number(SELECTED_ID),
-          p_order_id: orderId
+          p_res_date: res_date,
+          p_res_time: res_time,
+          p_guests_count: guests_count,
+          p_price: price,
+          p_menu_ko: menu_ko,
+          p_menu_vi: final_vi || "",
+          p_note: note,
+          p_branch: getEditorBranchValue(),
+          p_guide_name: guide_name,
+          p_payment_method: payment_method || "cash",
+          p_team_no: optional_info || note || null
         });
 
         setMsg("ok", `확정 완료! ✅ (order: ${String(orderId).slice(0,8)}...)`);
@@ -999,8 +924,7 @@
         const ok = confirm("확정취소하면 orders 기록도 삭제합니다.\n진행할까요?");
         if(!ok) return;
 
-        await rpc("admin_unmark_resv_confirmed", {
-          pw: ADMIN_PW,
+        await rpc("app_unconfirm_reservation", {
           p_id: Number(SELECTED_ID)
         });
 
@@ -1008,11 +932,7 @@
         await loadList({ preserveSelected:true });
       }catch(e){
         if((e.message || "").toLowerCase().includes("forbidden")){
-          sessionStorage.removeItem(ADMIN_PASS_KEY);
-          ADMIN_PW = "";
-          setMsg("bad","비밀번호가 틀렸거나 권한이 없습니다. 다시 입력해줘.");
-          const ok = await requireAdminPassword();
-          if(ok) setMsg("bad","다시 확정취소 버튼을 눌러줘.");
+          setMsg("bad","관리자 권한이 없거나 세션이 만료되었습니다.");
         }else{
           setMsg("bad","확정취소 실패: " + e.message);
         }
@@ -1064,8 +984,7 @@
         }
 
         const body = {
-          pw: ADMIN_PW,
-          p_id: SELECTED_ID,
+          p_id: Number(SELECTED_ID),
           p_res_date: res_date,
           p_res_time: res_time,
           p_guests_count: guests_count,
@@ -1077,16 +996,12 @@
           p_guide_name: guide_name
         };
 
-        await rpc("admin_update_resv_group", body);
+        await rpc("app_update_reservation", body);
         setMsg("ok","저장 완료!");
         await loadList({ preserveSelected:true });
       }catch(e){
         if((e.message || "").toLowerCase().includes("forbidden")){
-          sessionStorage.removeItem(ADMIN_PASS_KEY);
-          ADMIN_PW = "";
-          setMsg("bad","비밀번호가 틀렸거나 권한이 없습니다. 다시 입력해줘.");
-          const ok = await requireAdminPassword();
-          if(ok) setMsg("bad","다시 저장 버튼을 눌러줘.");
+          setMsg("bad","관리자 권한이 없거나 세션이 만료되었습니다.");
         }else{
           setMsg("bad","저장 실패: " + e.message);
         }
@@ -1104,24 +1019,7 @@
         const ok = confirm("정말 삭제할까요? (되돌릴 수 없습니다)");
         if(!ok) return;
 
-        const url = `${SUPABASE_URL}/rest/v1/resv_groups?id=eq.${encodeURIComponent(SELECTED_ID)}`;
-
-        const res = await fetch(url, {
-          method: "DELETE",
-          headers: {
-            "apikey": SUPABASE_ANON_KEY,
-            "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-            "Content-Type": "application/json",
-            "Prefer": "return=representation"
-          }
-        });
-
-        const text = await res.text();
-        if(!res.ok){
-          let json=null; try{ json = text ? JSON.parse(text) : null; }catch{}
-          const err = (json && (json.message || json.error)) || text || ("HTTP " + res.status);
-          throw new Error(err);
-        }
+        await rpc("app_delete_reservation", { p_id: Number(SELECTED_ID) });
 
         setMsg("ok","삭제 완료!");
         await loadList();

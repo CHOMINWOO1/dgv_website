@@ -1,0 +1,24 @@
+{
+  "name": "dgv-website",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "supabase": "supabase",
+    "db:lint": "supabase db lint",
+    "test:security": "node tests/security-regression.mjs",
+    "test:notifications": "node tests/notification-chunking.mjs",
+    "test:legacy-compatibility": "node tests/legacy-cutover-compatibility-static.mjs",
+    "test:legacy-compatibility:db": "supabase test db --local supabase/tests/legacy_cutover_compatibility.sql",
+    "test:cutover": "node tests/connector-cutover-contract.mjs",
+    "test:cutover:db": "supabase test db --local supabase/tests/connector_cutover_transactional_sequence.sql",
+    "test:frontend-data": "node tests/frontend-data-regression.mjs",
+    "test:frontend-syntax": "node tests/frontend-syntax.mjs",
+    "test:ui": "node tests/ui-structure-regression.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.112.2"
+  },
+  "devDependencies": {
+    "supabase": "2.112.0"
+  }
+}

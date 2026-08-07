@@ -542,6 +542,7 @@
       background:#fff;
     }
     .modalBtns{margin-top:10px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;}
+    .hint{font-size:12px;color:var(--sub);font-weight:900}
 
     .btn{
       border:1px solid var(--line);
@@ -716,44 +717,57 @@
 
   <div class="modalBack" id="adminPassModal">
     <div class="modal" role="dialog" aria-modal="true">
-      <div class="modalTitle" id="adminPassTitle">관리자 확인</div>
-      <p class="modalDesc" id="adminPassDesc">저장하려면 관리자 비밀번호를 입력하세요.</p>
+      <div class="modalTitle" id="adminPassTitle">직원 로그인</div>
+      <p class="modalDesc" id="adminPassDesc">보안코드를 입력하면 계산 페이지에 입장합니다.</p>
       <div class="modalRow">
-        <input id="adminPassInput" type="password" placeholder="관리자 비밀번호" autocomplete="off"/>
+        <input id="adminPassInput" type="password" placeholder="보안코드" autocomplete="off"/>
       </div>
       <div class="modalBtns">
-        <button class="btn" id="adminPassCancelBtn">취소</button>
-        <button class="btn btnPrimary" id="adminPassConfirmBtn">확인</button>
+        <button class="btn btnPrimary" id="adminPassConfirmBtn">입장</button>
       </div>
-      <p class="muted" style="font-size:12px;margin:10px 2px 0;">
-        ※ 비밀번호는 브라우저 탭(session)에서만 유지됩니다.
-      </p>
+      <p class="hint" style="margin-top:10px;">※ 브라우저 탭(session)에서만 유지됩니다.</p>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/dgv-data.js"></script>
+  <script src="assets/supabase-client.js"></script>
   <script>
-  const SUPABASE_URL = "https://qzuynzreamdkpmakvefm.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_cr1uTfwC5-yOXoV8Ice1_w_3Eqg1cZ_";
-  const { createClient } = supabase;
-  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  const ACCESS_OK_KEY = "hana_access_ok";
+  const sb = DGV.supabase;
 
 async function requireAccessGate(){
-  if (sessionStorage.getItem(ACCESS_OK_KEY) === "1") return true;
+  const identity = await DGV.getIdentity();
+  if (["staff", "admin"].includes(identity.role)) return true;
 
   while(true){
-    const code = prompt("보안코드를 입력하세요.");
-    if (!code) return false;
+    const entered = await openPassModal({
+      title: "직원 로그인",
+      desc: "보안코드를 입력하면 계산 페이지에 입장합니다.",
+      placeholder: "보안코드",
+      confirmLabel: "입장"
+    });
+    if (entered === null) return false;
 
-    const { data: ok } = await sb.rpc("check_page_access_code", { p_code: code.trim() });
-
-    if (ok === true){
-      sessionStorage.setItem(ACCESS_OK_KEY, "1");
-      return true;
+    const code = String(entered).trim();
+    if (!code){
+      alert("보안코드를 입력하세요.");
+      continue;
     }
 
-    alert("코드가 틀렸습니다.");
+    passModalBusy = true;
+    passOkBtn.disabled = true;
+    try{
+      await DGV.signInAs("staff", code);
+      passModalBusy = false;
+      passOkBtn.disabled = false;
+      closePassModal(true);
+      return true;
+    }catch(error){
+      passModalBusy = false;
+      passOkBtn.disabled = false;
+      alert("코드가 틀렸습니다.");
+    }
   }
 }
 
@@ -768,6 +782,15 @@ async function requireAccessGate(){
   const params = new URLSearchParams(location.search);
   const editOrderId = params.get("edit");
   const isEditMode = !!editOrderId;
+  let loadedEditOrderState = null;
+
+  function isLoadedLegacyEmptyOrder(pickedCount){
+    return isEditMode
+      && loadedEditOrderState?.orderId === editOrderId
+      && loadedEditOrderState.childCount === 0
+      && loadedEditOrderState.source !== "reservation_confirm"
+      && pickedCount === 0;
+  }
 
   const fmtInt = (n) => (Math.round(Number(n) || 0)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const clampNonNegInt = (v) => {
@@ -787,8 +810,8 @@ async function requireAccessGate(){
 
     card.innerHTML = `
       <div class="name">
-        ${m.ko_name || "-"}
-        <small>${m.vi_name || ""}</small>
+        ${DGV.escapeHTML(m.ko_name || "-")}
+        <small>${DGV.escapeHTML(m.vi_name || "")}</small>
       </div>
       <div class="priceBox">
         <div class="priceLine">
@@ -821,17 +844,21 @@ async function requireAccessGate(){
   }
 
   async function loadMenuFromDB(){
-    const { data, error } = await sb
-      .from("menu_items")
-      .select("id,type,ko_name,vi_name,price_usd,price_vnd,is_active,sort_order")
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true });
-
-    if (error){
+    try{
+      return await DGV.collectSupabasePages(
+        () => sb
+          .from("menu_items")
+          .select("id,type,ko_name,vi_name,price_usd,price_vnd,is_active,sort_order")
+          .eq("is_active", true),
+        { order: [
+          { column: "sort_order", ascending: true },
+          { column: "id", ascending: true }
+        ] }
+      );
+    }catch(error){
       alert("메뉴 로드 실패: " + (error.message || "unknown"));
       return [];
     }
-    return data || [];
   }
 
   function clearGrids(){
@@ -1047,7 +1074,15 @@ function syncSpecialFromUsd(){
     toggleCardFeeUI();
 
     const { picked, totalUsd: baseUsd, totalVnd: baseVnd } = computePickedAndTotals();
-    const adj = applyCardFeeIfNeeded(baseUsd, baseVnd);
+    const adj = isLoadedLegacyEmptyOrder(picked.length)
+      ? {
+          usd: loadedEditOrderState.totalUsd,
+          vnd: loadedEditOrderState.totalVnd,
+          fee_usd: 0,
+          fee_vnd: 0,
+          applied: false
+        }
+      : applyCardFeeIfNeeded(baseUsd, baseVnd);
 
     for (const m of allMenu){
       const q = qty[m.id] || 0;
@@ -1093,8 +1128,8 @@ function syncSpecialFromUsd(){
 
         row.innerHTML = `
           <div>
-            <b>${p.ko || "-"}</b>
-            <span style="color:#6b5444;font-weight:800;"> / ${p.vi || ""}</span>
+            <b>${DGV.escapeHTML(p.ko || "-")}</b>
+            <span style="color:#6b5444;font-weight:800;"> / ${DGV.escapeHTML(p.vi || "")}</span>
             × ${p.qty}
             ${tag}
           </div>
@@ -1191,8 +1226,8 @@ function syncSpecialFromUsd(){
       div.className = "specialItem";
       div.innerHTML = `
         <div class="left">
-          <b>${s.ko}</b> <span class="tag">SPECIAL</span>
-          <div class="sub">${s.vi || ""}</div>
+          <b>${DGV.escapeHTML(s.ko)}</b> <span class="tag">SPECIAL</span>
+          <div class="sub">${DGV.escapeHTML(s.vi || "")}</div>
           <div class="sub">Unit: ${fmtInt(s.unit_vnd)} VND · ${fmtInt(s.unit_usd)}$</div>
           <div class="sub">Line: ${fmtInt(lineVnd)} VND · ${fmtInt(lineUsd)}$</div>
         </div>
@@ -1225,20 +1260,25 @@ function syncSpecialFromUsd(){
     });
   }
 
-  const ADMIN_PASS_CACHE_KEY = "hana_admin_pass";
   const passModal = document.getElementById("adminPassModal");
   const passInput = document.getElementById("adminPassInput");
   const passTitle = document.getElementById("adminPassTitle");
   const passDesc  = document.getElementById("adminPassDesc");
   const passOkBtn = document.getElementById("adminPassConfirmBtn");
-  const passCancelBtn = document.getElementById("adminPassCancelBtn");
 
   let passModalResolve = null;
   let passModalBusy = false;
 
-  function openPassModal({ title="관리자 확인", desc="저장하려면 관리자 비밀번호를 입력하세요." } = {}){
+  function openPassModal({
+    title="관리자 로그인",
+    desc="저장하려면 관리자 비밀번호를 입력하세요.",
+    placeholder="관리자 비밀번호",
+    confirmLabel="확인"
+  } = {}){
     passTitle.textContent = title;
     passDesc.textContent = desc;
+    passInput.placeholder = placeholder;
+    passOkBtn.textContent = confirmLabel;
     passInput.value = "";
     passModal.style.display = "flex";
     setTimeout(()=> passInput.focus(), 50);
@@ -1260,10 +1300,6 @@ function syncSpecialFromUsd(){
       closePassModal(null);
     }
   });
-  passCancelBtn.addEventListener("click", ()=>{
-    if (passModalBusy) return;
-    closePassModal(null);
-  });
 
   passInput.addEventListener("keydown", (e)=>{
     if (e.key === "Enter") passOkBtn.click();
@@ -1275,9 +1311,8 @@ function syncSpecialFromUsd(){
 
   async function verifyAdminPassword(pass){
     try{
-      const { data, error } = await sb.rpc("admin_check_password", { p_password: pass });
-      if (error) throw error;
-      return data === true;
+      await DGV.signInAs("admin", pass);
+      return true;
     }catch(e){
       console.error(e);
       return false;
@@ -1285,33 +1320,32 @@ function syncSpecialFromUsd(){
   }
 
   async function requireAdminPasswordModal({ actionLabel="저장" } = {}){
-    let pass = (sessionStorage.getItem(ADMIN_PASS_CACHE_KEY) || "").trim();
-    if (pass){
-      const ok = await verifyAdminPassword(pass);
-      if (ok) return pass;
-      sessionStorage.removeItem(ADMIN_PASS_CACHE_KEY);
-    }
+    const identity = await DGV.getIdentity();
+    if (identity.role === "admin") return true;
 
     while (true){
       const entered = await openPassModal({
-        title: "관리자 확인",
-        desc: `${actionLabel}하려면 관리자 비밀번호를 입력하세요.`
+        title: "관리자 로그인",
+        desc: `${actionLabel}하려면 관리자 비밀번호를 입력하세요.`,
+        placeholder: "관리자 비밀번호",
+        confirmLabel: "확인"
       });
 
-      if (!entered) return null;
+      if (entered === null) return null;
 
       const candidate = String(entered).trim();
-      if (!candidate) continue;
+      if (!candidate){
+        alert("비밀번호를 입력하세요.");
+        continue;
+      }
 
       passModalBusy = true;
       passOkBtn.disabled = true;
-      passCancelBtn.disabled = true;
 
       const ok = await verifyAdminPassword(candidate);
 
       passModalBusy = false;
       passOkBtn.disabled = false;
-      passCancelBtn.disabled = false;
 
       if (!ok){
         alert("비밀번호가 틀렸거나 권한이 없습니다.");
@@ -1320,9 +1354,8 @@ function syncSpecialFromUsd(){
         continue;
       }
 
-      sessionStorage.setItem(ADMIN_PASS_CACHE_KEY, candidate);
-      closePassModal(candidate);
-      return candidate;
+      closePassModal(true);
+      return true;
     }
   }
 
@@ -1335,24 +1368,31 @@ function syncSpecialFromUsd(){
   const FEE_KO = "Service fee 7%";
   const FEE_VI = "Phí dịch vụ 7%";
 
-  async function insertFeeLineIfNeeded(orderId, adj){
-    if (!adj?.applied) return;
-    if ((Number(adj.fee_vnd)||0) <= 0 && (Number(adj.fee_usd)||0) <= 0) return;
+  function buildRpcItems(picked, adj){
+    const items = picked.map((item) => ({
+      item_type: item.kind === "menu" ? "menu" : "custom",
+      menu_item_id: item.kind === "menu" ? item.id : null,
+      kind: item.kind === "menu" ? null : "special",
+      ko_name: item.ko || (item.kind === "menu" ? "" : "SPECIAL"),
+      vi_name: item.vi || null,
+      qty: Number(item.qty) || 0,
+      unit_usd: Number(item.unit_usd) || 0,
+      unit_vnd: Number(item.unit_vnd) || 0
+    }));
 
-    const payload = [{
-      order_id: orderId,
-      kind: FEE_KIND,
-      ko_name: FEE_KO,
-      vi_name: FEE_VI,
-      qty: 1,
-      unit_usd: Number(adj.fee_usd) || 0,
-      unit_vnd: Number(adj.fee_vnd) || 0,
-      line_usd: Number(adj.fee_usd) || 0,
-      line_vnd: Number(adj.fee_vnd) || 0
-    }];
-
-    const { error } = await sb.from("order_custom_items").insert(payload);
-    if (error) throw error;
+    if (adj?.applied && ((Number(adj.fee_vnd) || 0) > 0 || (Number(adj.fee_usd) || 0) > 0)) {
+      items.push({
+        item_type: "custom",
+        menu_item_id: null,
+        kind: FEE_KIND,
+        ko_name: FEE_KO,
+        vi_name: FEE_VI,
+        qty: 1,
+        unit_usd: Number(adj.fee_usd) || 0,
+        unit_vnd: Number(adj.fee_vnd) || 0
+      });
+    }
+    return items;
   }
 
   async function saveNewOrder(){
@@ -1366,8 +1406,8 @@ function syncSpecialFromUsd(){
         return;
       }
 
-      const pass = await requireAdminPasswordModal({ actionLabel: "저장" });
-      if (!pass) return;
+      const authenticated = await requireAdminPasswordModal({ actionLabel: "저장" });
+      if (!authenticated) return;
 
       const guideName = (document.getElementById("guideName").value || "").trim();
       const teamNo = (document.getElementById("teamNo").value || "").trim();
@@ -1377,65 +1417,22 @@ function syncSpecialFromUsd(){
       toggleDatePickUI();
       const createdAtIso = getCreatedAtForSave();
 
-      let orderId = null;
-      try{
-        const { data: newId, error: rpcErr } = await sb.rpc("admin_create_order_with_date", {
-          p_password: pass,
-          p_created_at: createdAtIso,
-          p_source: "calc_web",
-          p_status: "paid",
-          p_total_usd: adj.usd,
-          p_total_vnd: adj.vnd,
-          p_guide_name: guideName || "",
-          p_team_no: teamNo || "",
-          p_payment_method: paymentMethod
-        });
-        if (rpcErr) throw rpcErr;
-        orderId = newId;
-      }catch(e){
-        console.error(e);
-        alert("주문 생성 실패 (RPC). 함수/비번/권한 확인");
-        return;
-      }
+      const { data: orderId, error: rpcErr } = await sb.rpc("app_create_order", {
+        p_created_at: createdAtIso,
+        p_source: "calc_web",
+        p_status: "paid",
+        p_guide_name: guideName || "",
+        p_team_no: teamNo || "",
+        p_payment_method: paymentMethod,
+        p_items: buildRpcItems(picked, adj)
+      });
+      if (rpcErr) throw rpcErr;
 
       if (!orderId){
         alert("주문 생성 실패: orderId가 없습니다.");
         return;
       }
 
-      const normalItems = picked.filter(p => p.kind === "menu");
-      if (normalItems.length){
-        const itemsPayload = normalItems.map(p => ({
-          order_id: orderId,
-          menu_item_id: p.id,
-          qty: p.qty,
-          unit_usd: p.unit_usd,
-          unit_vnd: p.unit_vnd,
-          line_usd: p.line_usd,
-          line_vnd: p.line_vnd,
-        }));
-        const { error: itemsErr } = await sb.from("order_items").insert(itemsPayload);
-        if (itemsErr) throw itemsErr;
-      }
-
-      const specialItems = picked.filter(p => p.kind === "special");
-      if (specialItems.length){
-        const customPayload = specialItems.map(p => ({
-          order_id: orderId,
-          kind: "special",
-          ko_name: p.ko || "SPECIAL",
-          vi_name: p.vi || null,
-          qty: p.qty,
-          unit_usd: p.unit_usd,
-          unit_vnd: p.unit_vnd,
-          line_usd: p.line_usd,
-          line_vnd: p.line_vnd,
-        }));
-        const { error: cErr } = await sb.from("order_custom_items").insert(customPayload);
-        if (cErr) throw cErr;
-      }
-
-      await insertFeeLineIfNeeded(orderId, adj);
       alert("저장 완료!");
     } catch(e){
       console.error(e);
@@ -1451,79 +1448,34 @@ function syncSpecialFromUsd(){
 
     try{
       const { picked, totalUsd: baseUsd, totalVnd: baseVnd } = computePickedAndTotals();
-      if (picked.length === 0){
+      const isLegacyEmptyMetadataSave = isLoadedLegacyEmptyOrder(picked.length);
+      if (picked.length === 0 && !isLegacyEmptyMetadataSave){
         alert("저장할 메뉴가 없습니다.");
         return;
       }
 
-      const pass = await requireAdminPasswordModal({ actionLabel: "수정 저장" });
-      if (!pass) return;
+      const authenticated = await requireAdminPasswordModal({ actionLabel: "수정 저장" });
+      if (!authenticated) return;
 
       const guideName = (document.getElementById("guideName").value || "").trim();
       const teamNo = (document.getElementById("teamNo").value || "").trim();
       const paymentMethod = getPaymentMethod();
-      const normalItems = picked.filter(p => p.kind === "menu");
-      const specialItems = picked.filter(p => p.kind === "special");
       const adj = applyCardFeeIfNeeded(baseUsd, baseVnd);
 
-      const rpcItems = normalItems.map(p => ({
-        menu_item_id: p.id,
-        qty: p.qty,
-        unit_usd: p.unit_usd,
-        unit_vnd: p.unit_vnd,
-        line_usd: p.line_usd,
-        line_vnd: p.line_vnd,
-        is_custom: false,
-        custom_ko_name: "",
-        custom_vi_name: ""
-      }));
-
-      const { data, error } = await sb.rpc("admin_update_order", {
+      const { data, error } = await sb.rpc("app_update_order", {
         p_order_id: editOrderId,
-        p_password: pass,
+        p_status: "paid",
         p_guide_name: guideName || "",
         p_team_no: teamNo || "",
         p_payment_method: paymentMethod,
-        p_items: rpcItems
+        p_items: isLegacyEmptyMetadataSave ? [] : buildRpcItems(picked, adj)
       });
 
       if (error) throw error;
       if (data !== true){
-        alert("비밀번호가 틀렸거나 권한이 없습니다.");
-        sessionStorage.removeItem(ADMIN_PASS_CACHE_KEY);
+        alert("주문 수정에 실패했습니다.");
         return;
       }
-
-      const { error: delSpecialErr } = await sb
-        .from("order_custom_items")
-        .delete()
-        .eq("order_id", editOrderId)
-        .in("kind", ["special", FEE_KIND]);
-      if (delSpecialErr) throw delSpecialErr;
-
-      if (specialItems.length){
-        const payload = specialItems.map(p => ({
-          order_id: editOrderId,
-          kind: "special",
-          ko_name: p.ko || "SPECIAL",
-          vi_name: p.vi || null,
-          qty: p.qty,
-          unit_usd: p.unit_usd,
-          unit_vnd: p.unit_vnd,
-          line_usd: p.line_usd,
-          line_vnd: p.line_vnd
-        }));
-        const { error: insErr } = await sb.from("order_custom_items").insert(payload);
-        if (insErr) throw insErr;
-      }
-
-      await insertFeeLineIfNeeded(editOrderId, adj);
-
-      const { error: updErr } = await sb
-        .from("orders")
-        .update({ total_usd: adj.usd, total_vnd: adj.vnd, payment_method: paymentMethod, guide_name: guideName || "", team_no: teamNo || "" })
-        .eq("id", editOrderId);
-      if (updErr) throw updErr;
 
       alert("수정 저장 완료!");
       location.href = "/admin.html";
@@ -1537,9 +1489,10 @@ function syncSpecialFromUsd(){
   }
 
   async function loadOrderForEdit(orderId){
+    loadedEditOrderState = null;
     const { data: meta, error: metaErr } = await sb
       .from("orders")
-      .select("id,guide_name,team_no,payment_method,total_usd,total_vnd")
+      .select("id,guide_name,team_no,payment_method,total_usd,total_vnd,source")
       .eq("id", orderId)
       .single();
     if (metaErr){ console.error(metaErr); alert("주문 메타 로드 실패"); return; }
@@ -1555,11 +1508,16 @@ function syncSpecialFromUsd(){
     document.querySelectorAll('input[data-act="qty"]').forEach(inp => { inp.value = 0; });
     specialLines.length = 0;
 
-    const { data: items, error: itemsErr } = await sb
-      .from("order_items")
-      .select("menu_item_id,qty,unit_usd,unit_vnd")
-      .eq("order_id", orderId);
-    if (itemsErr){ console.error(itemsErr); alert("주문 라인 로드 실패"); return; }
+    let items = [];
+    try{
+      items = await DGV.collectSupabasePages(
+        () => sb
+          .from("order_items")
+          .select("id,menu_item_id,qty,unit_usd,unit_vnd")
+          .eq("order_id", orderId),
+        { order: [{ column: "id", ascending: true }] }
+      );
+    }catch(itemsErr){ console.error(itemsErr); alert("주문 라인 로드 실패"); return; }
 
     (items||[]).forEach(it => {
       if (!it.menu_item_id) return;
@@ -1571,11 +1529,27 @@ function syncSpecialFromUsd(){
       }
     });
 
-    const { data: cItems, error: cErr } = await sb
-      .from("order_custom_items")
-      .select("kind,ko_name,vi_name,qty,unit_usd,unit_vnd")
-      .eq("order_id", orderId);
-    if (cErr){ console.error(cErr); alert("SPECIAL 로드 실패"); return; }
+    let cItems = [];
+    try{
+      cItems = await DGV.collectSupabasePages(
+        () => sb
+          .from("order_custom_items")
+          .select("id,kind,ko_name,vi_name,qty,unit_usd,unit_vnd")
+          .eq("order_id", orderId),
+        { order: [{ column: "id", ascending: true }] }
+      );
+    }catch(cErr){ console.error(cErr); alert("SPECIAL 로드 실패"); return; }
+
+    // Only an order loaded with no persisted children may use the RPC's
+    // metadata-only empty-array compatibility path. An order whose items were
+    // removed in this UI remains blocked here and by the database invariant.
+    loadedEditOrderState = Object.freeze({
+      orderId: String(meta.id),
+      source: String(meta.source || ""),
+      childCount: (items || []).length + (cItems || []).length,
+      totalUsd: Number(meta.total_usd) || 0,
+      totalVnd: Number(meta.total_vnd) || 0
+    });
 
     (cItems||[]).forEach(it=>{
       if ((it.kind||"").toLowerCase() !== "special") return;
