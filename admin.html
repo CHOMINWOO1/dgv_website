@@ -777,10 +777,6 @@
           }
         });
 
-        const metricText = (id, fallback="0") => {
-          const value = document.getElementById(id)?.textContent?.trim();
-          return value || fallback;
-        };
         const generatedAt = new Date().toLocaleString("ko-KR", {
           year:"numeric", month:"2-digit", day:"2-digit",
           hour:"2-digit", minute:"2-digit"
@@ -847,11 +843,6 @@
     .h1{font-weight:900;letter-spacing:.16em;font-size:20px;margin:0;}
     .h2{margin:4px 0 0;font-size:11px;color:#5f5143;font-weight:800;letter-spacing:.08em;}
     .reportMeta{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:7px;color:#4f4439;font-weight:700;}
-    .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:10px 0;}
-    .metric{border:1px solid #d8cbbd;border-radius:7px;padding:8px;min-width:0;}
-    .metricLabel{color:#6b5b4b;font-size:9px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;}
-    .metricMain{font-size:13px;font-weight:900;margin-top:3px;overflow-wrap:anywhere;}
-    .metricSub{font-size:9px;color:#65584c;font-weight:700;margin-top:2px;}
     .sectionTitle{font-size:13px;font-weight:900;margin:13px 0 6px;padding-bottom:4px;border-bottom:1px solid #8d7c6a;}
     table{width:100%;border-collapse:collapse;table-layout:fixed;}
     th{background:#f4eee7;color:#4d4135;font-size:9px;letter-spacing:.04em;text-transform:uppercase;text-align:left;}
@@ -876,7 +867,6 @@
     .itemsTable{margin-bottom:10px;}
     .itemsTable th:last-child,.itemsTable td:last-child{width:18%;text-align:right;}
     @media (max-width:700px){
-      .metrics{grid-template-columns:repeat(2,minmax(0,1fr));}
       .orderHead{grid-template-columns:1fr;}
       .orderTotal{text-align:left;}
     }
@@ -897,29 +887,6 @@
       <span>출력: ${DGV.escapeHTML(generatedAt)}</span>
     </div>
   </header>
-
-  <section class="metrics" aria-label="Dashboard summary">
-    <div class="metric">
-      <div class="metricLabel">Today Sales · ${DGV.escapeHTML(metricText("kpiTodayDate", "—"))}</div>
-      <div class="metricMain">${DGV.escapeHTML(metricText("kpiTodayVnd"))} VND</div>
-      <div class="metricSub">${DGV.escapeHTML(metricText("kpiTodayUsd"))}$ · ${DGV.escapeHTML(metricText("kpiTodayCount"))} orders</div>
-    </div>
-    <div class="metric">
-      <div class="metricLabel">This Month · ${DGV.escapeHTML(metricText("kpiMonthLabel", "—"))}</div>
-      <div class="metricMain">${DGV.escapeHTML(metricText("kpiMonthVnd"))} VND</div>
-      <div class="metricSub">${DGV.escapeHTML(metricText("kpiMonthUsd"))}$ · ${DGV.escapeHTML(metricText("kpiMonthCount"))} orders</div>
-    </div>
-    <div class="metric">
-      <div class="metricLabel">Range Orders</div>
-      <div class="metricMain">${fmtInt(visibleOrders.length)}</div>
-      <div class="metricSub">${DGV.escapeHTML(rangeText)}</div>
-    </div>
-    <div class="metric">
-      <div class="metricLabel">Range Sales</div>
-      <div class="metricMain">${fmtInt(totalVnd)} VND</div>
-      <div class="metricSub">${fmtInt(totalUsd)}$</div>
-    </div>
-  </section>
 
   <section>
     <h2 class="sectionTitle">Sales Summary · 결제수단별 합계</h2>
