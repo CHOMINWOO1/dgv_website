@@ -210,16 +210,16 @@ assert.match(rangePrintBlock, /fmtInt\(r\.line_usd\)/);
 assert.match(rangePrintBlock, /상세 라인이 없습니다\./, "legacy zero-child orders must remain visible in print");
 assert.match(rangePrintBlock, /해당 기간 주문이 없습니다\./);
 for (const heading of [
-  "Today Sales",
-  "This Month",
-  "Range Orders",
-  "Range Sales",
   "Sales Summary",
   "Orders · 주문 상세",
   "Items Sold",
 ]) {
   assert.ok(rangePrintBlock.includes(heading), `range print must contain ${heading}`);
 }
+for (const removedMetric of ["Today Sales", "This Month", "Range Orders", "Range Sales"]) {
+  assert.ok(!rangePrintBlock.includes(removedMetric), `range print must omit ${removedMetric}`);
+}
+assert.doesNotMatch(rangePrintBlock, /<section class="metrics"/, "range print must omit the dashboard KPI cards");
 assert.doesNotMatch(rangePrintBlock, /visibleOrders\.slice\(/, "range print must not truncate the order list");
 assert.match(rangePrintBlock, /\.slice\(0,50\)/, "Items Sold must match the admin screen's Top 50 limit");
 assert.doesNotMatch(rangePrintBlock, /data-act=/, "print output must not expose admin action controls");
@@ -238,16 +238,6 @@ const printFixtureCustomLines = [
 ];
 let printFixtureQueryCalls = 0;
 let printFixtureHtml = "";
-const printMetricValues = {
-  kpiTodayDate: "2026-09-12",
-  kpiTodayVnd: "3,750,000",
-  kpiTodayUsd: "150",
-  kpiTodayCount: "2",
-  kpiMonthLabel: "2026-09",
-  kpiMonthVnd: "3,750,000",
-  kpiMonthUsd: "150",
-  kpiMonthCount: "2",
-};
 const printFixtureContext = {
   console,
   DGV: {
@@ -259,13 +249,13 @@ const printFixtureContext = {
   formatTimeLocal: (value) => `TIME:${value}`,
   fmtInt: (value) => Math.round(Number(value) || 0).toLocaleString("en-US"),
   payLabel: (value) => ({ cash: "CASH", card: "CARD", bank: "BANK" }[String(value || "cash").toLowerCase()] || "CASH"),
-  document: { getElementById: (id) => ({ textContent: printMetricValues[id] || "" }) },
   openPrintWindow: (html) => { printFixtureHtml = html; },
   alert: (message) => { throw new Error(message); },
 };
 vm.runInNewContext(`${rangePrintBlock}\nthis.printRangeSummaryForTest = printRangeSummary;`, printFixtureContext);
 await printFixtureContext.printRangeSummaryForTest();
 assert.equal(printFixtureQueryCalls, 3, "range print must use one order read and one stable read per line source");
+assert.doesNotMatch(printFixtureHtml, /<section class="metrics"/);
 assert.equal((printFixtureHtml.match(/<section class="orderBlock">/g) || []).length, 2);
 assert.equal((printFixtureHtml.match(/shared-line-id/g) || []).length, 0, "internal line ids must not be exposed");
 assert.match(printFixtureHtml, /Orders · 주문 상세 \(2\)/);
