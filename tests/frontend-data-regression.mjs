@@ -184,20 +184,24 @@ assert.match(
 );
 
 const admin = await readFile(path.join(projectRoot, "admin.html"), "utf8");
+const reportLoaderBlock = admin.slice(
+  admin.indexOf("async function loadRangeReportData"),
+  admin.indexOf("async function printRangeSummary"),
+);
 const rangePrintBlock = admin.slice(
   admin.indexOf("async function printRangeSummary"),
-  admin.indexOf("/*************************************************", admin.indexOf("async function printRangeSummary")),
+  admin.indexOf("async function exportRangeExcel"),
 );
-assert.match(rangePrintBlock, /Promise\.all\(\[/, "range print must load orders and both line sources in bulk");
-assert.match(rangePrintBlock, /\.from\("orders"\)[\s\S]*?\.select\("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method"\)[\s\S]*?\.eq\("sales_excluded", false\)/);
-assert.match(rangePrintBlock, /column: "created_at", ascending: false[\s\S]*?column: "id", ascending: false/, "all printable orders need stable pagination");
-assert.match(rangePrintBlock, /\.from\("order_items"\)[\s\S]*?\.select\("id,order_id,qty,line_usd,line_vnd,is_custom,custom_ko_name,custom_vi_name,menu_items\(ko_name,vi_name\),orders!inner\(created_at,sales_excluded\)"\)[\s\S]*?column: "order_id", ascending: false[\s\S]*?column: "id", ascending: true/, "regular lines need their own unique stable pagination");
-assert.match(rangePrintBlock, /\.from\("order_custom_items"\)[\s\S]*?\.select\("id,order_id,ko_name,vi_name,qty,line_usd,line_vnd,orders!inner\(created_at,sales_excluded\)"\)[\s\S]*?column: "order_id", ascending: false[\s\S]*?column: "id", ascending: true/, "custom lines need their own unique stable pagination");
-const rangePrintQueryBlock = rangePrintBlock.slice(0, rangePrintBlock.indexOf("const visibleOrders"));
-assert.doesNotMatch(rangePrintQueryBlock, /\.eq\("status", "paid"\)/, "printable orders must match the unfiltered admin order list");
-assert.doesNotMatch(rangePrintBlock, /\.(?:insert|update|upsert|delete|rpc)\s*\(/, "printing must remain read-only");
-assert.match(rangePrintBlock, /String\(order\?\.status \|\| ""\)\.toLowerCase\(\) !== "paid"/, "Items Sold must retain the screen's paid-only rule");
-assert.match(rangePrintBlock, /visibleOrderIds\.has\(String\(r\.order_id\)\)/, "lines from excluded orders must not leak into print");
+assert.match(reportLoaderBlock, /Promise\.all\(\[/, "range exports must load orders and both line sources in bulk");
+assert.match(reportLoaderBlock, /\.from\("orders"\)[\s\S]*?\.select\("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method,source"\)[\s\S]*?\.eq\("sales_excluded", false\)/);
+assert.match(reportLoaderBlock, /column: "created_at", ascending: false[\s\S]*?column: "id", ascending: false/, "all printable orders need stable pagination");
+assert.match(reportLoaderBlock, /\.from\("order_items"\)[\s\S]*?menu_items\(ko_name,vi_name,type\)[\s\S]*?column: "order_id", ascending: false[\s\S]*?column: "id", ascending: true/, "regular lines need their own unique stable pagination");
+assert.match(reportLoaderBlock, /\.from\("order_custom_items"\)[\s\S]*?unit_usd,unit_vnd,line_usd,line_vnd[\s\S]*?column: "order_id", ascending: false[\s\S]*?column: "id", ascending: true/, "custom lines need their own unique stable pagination");
+assert.doesNotMatch(reportLoaderBlock, /\.eq\("status", "paid"\)/, "printable orders must match the unfiltered admin order list");
+assert.doesNotMatch(`${reportLoaderBlock}\n${rangePrintBlock}`, /\.(?:insert|update|upsert|delete|rpc)\s*\(/, "printing must remain read-only");
+assert.match(reportLoaderBlock, /String\(order\?\.status \|\| ""\)\.toLowerCase\(\) !== "paid"/, "Items Sold must retain the screen's paid-only rule");
+assert.match(reportLoaderBlock, /visibleOrderIds\.has\(String\(r\.order_id\)\)/, "lines from excluded orders must not leak into print");
+assert.match(rangePrintBlock, /await loadRangeReportData\(\)/, "print and Excel must share one report model");
 assert.match(rangePrintBlock, /formatTimeLocal\(o\.created_at\)/);
 assert.match(rangePrintBlock, /DGV\.escapeHTML\(guideText\)/);
 assert.match(rangePrintBlock, /payLabel\(o\.payment_method\)/);
@@ -221,20 +225,20 @@ for (const removedMetric of ["Today Sales", "This Month", "Range Orders", "Range
 }
 assert.doesNotMatch(rangePrintBlock, /<section class="metrics"/, "range print must omit the dashboard KPI cards");
 assert.doesNotMatch(rangePrintBlock, /visibleOrders\.slice\(/, "range print must not truncate the order list");
-assert.match(rangePrintBlock, /\.slice\(0,50\)/, "Items Sold must match the admin screen's Top 50 limit");
+assert.match(rangePrintBlock, /report\.itemsSold\.slice\(0,50\)/, "Items Sold must match the admin screen's Top 50 limit");
 assert.doesNotMatch(rangePrintBlock, /data-act=/, "print output must not expose admin action controls");
 assert.match(rangePrintBlock, /@media print\{[\s\S]*?\.orderBlock\{box-shadow:none;overflow:visible;\}/, "long orders must not be clipped when printed");
 
 const printFixtureOrders = [
-  { id: "order-a", created_at: "2026-09-12T01:02:00Z", total_usd: 100, total_vnd: 2500000, guide_name: `<img src=x onerror=alert(1)>`, team_no: "A-1", status: "paid", payment_method: "cash" },
-  { id: "order-b", created_at: "2026-09-11T03:04:00Z", total_usd: 50, total_vnd: 1250000, guide_name: "Guide B", team_no: "B-2", status: `paid</span><script>alert(2)</script>`, payment_method: "card" },
+  { id: "order-a", created_at: "2026-09-12T01:02:00Z", total_usd: 100, total_vnd: 2500000, guide_name: `<img src=x onerror=alert(1)>`, team_no: "A-1", status: "paid", payment_method: "cash", source: "calc_web" },
+  { id: "order-b", created_at: "2026-09-11T03:04:00Z", total_usd: 50, total_vnd: 1250000, guide_name: "Guide B", team_no: "B-2", status: `paid</span><script>alert(2)</script>`, payment_method: "card", source: "reservation_confirm" },
 ];
 const printFixtureRegularLines = [
-  { id: "shared-line-id", order_id: "order-a", qty: 2, line_usd: 80, line_vnd: 2000000, is_custom: false, custom_ko_name: null, custom_vi_name: null, menu_items: { ko_name: `<img src=x onerror=alert(3)>`, vi_name: "Món & đồ uống" } },
+  { id: "shared-line-id", order_id: "order-a", menu_item_id: "menu-a", qty: 2, unit_usd: 40, unit_vnd: 1000000, line_usd: 80, line_vnd: 2000000, is_custom: false, custom_ko_name: null, custom_vi_name: null, menu_items: { ko_name: `<img src=x onerror=alert(3)>`, vi_name: "Món & đồ uống", type: "drink" } },
 ];
 const printFixtureCustomLines = [
-  { id: "shared-line-id", order_id: "order-a", ko_name: "Custom item", vi_name: "Món riêng", qty: 1, line_usd: 20, line_vnd: 500000 },
-  { id: "excluded-line-id", order_id: "excluded-order", ko_name: "SHOULD_NOT_PRINT", vi_name: "excluded", qty: 99, line_usd: 999, line_vnd: 9999999 },
+  { id: "shared-line-id", kind: "food", order_id: "order-a", ko_name: "Custom item", vi_name: "Món riêng", qty: 1, unit_usd: 20, unit_vnd: 500000, line_usd: 20, line_vnd: 500000 },
+  { id: "excluded-line-id", kind: "food", order_id: "excluded-order", ko_name: "SHOULD_NOT_PRINT", vi_name: "excluded", qty: 99, unit_usd: 999, unit_vnd: 9999999, line_usd: 999, line_vnd: 9999999 },
 ];
 let printFixtureQueryCalls = 0;
 let printFixtureHtml = "";
@@ -249,10 +253,11 @@ const printFixtureContext = {
   formatTimeLocal: (value) => `TIME:${value}`,
   fmtInt: (value) => Math.round(Number(value) || 0).toLocaleString("en-US"),
   payLabel: (value) => ({ cash: "CASH", card: "CARD", bank: "BANK" }[String(value || "cash").toLowerCase()] || "CASH"),
+  sb: {},
   openPrintWindow: (html) => { printFixtureHtml = html; },
   alert: (message) => { throw new Error(message); },
 };
-vm.runInNewContext(`${rangePrintBlock}\nthis.printRangeSummaryForTest = printRangeSummary;`, printFixtureContext);
+vm.runInNewContext(`${reportLoaderBlock}\n${rangePrintBlock}\nthis.printRangeSummaryForTest = printRangeSummary;`, printFixtureContext);
 await printFixtureContext.printRangeSummaryForTest();
 assert.equal(printFixtureQueryCalls, 3, "range print must use one order read and one stable read per line source");
 assert.doesNotMatch(printFixtureHtml, /<section class="metrics"/);

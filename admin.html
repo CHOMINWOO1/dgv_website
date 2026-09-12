@@ -344,6 +344,7 @@
               <input class="input" type="date" id="toDate">
               <button class="btn btnPrimary" id="applyRange">적용</button>
               <button class="btn" id="printRangeBtn">전체 출력</button>
+              <button class="btn" id="excelRangeBtn">엑셀 출력</button>
             </div>
           </div>
         </div>
@@ -447,6 +448,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
   <script src="assets/supabase-config.js"></script>
   <script src="assets/dgv-data.js"></script>
+  <script src="assets/dgv-xlsx.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script>
     /*************************************************
@@ -661,123 +663,166 @@
       }
     }
 
-    async function printRangeSummary(){
-      try{
-        const rangeText = `${toISODate(currentRange.from)} ~ ${toISODate(currentRange.to)}`;
-        const fromIso = currentRange.from.toISOString();
-        const toIso = currentRange.to.toISOString();
+    async function loadRangeReportData(){
+      const rangeFrom = new Date(currentRange.from);
+      const rangeTo = new Date(currentRange.to);
+      const rangeText = `${toISODate(rangeFrom)} ~ ${toISODate(rangeTo)}`;
+      const fromIso = rangeFrom.toISOString();
+      const toIso = rangeTo.toISOString();
 
-        const [orders, regularRows, customRows] = await Promise.all([
-          DGV.collectSupabasePages(
-            () => sb
-              .from("orders")
-              .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method")
-              .eq("sales_excluded", false)
-              .gte("created_at", fromIso)
-              .lte("created_at", toIso),
-            { order: [
-              { column: "created_at", ascending: false },
-              { column: "id", ascending: false }
-            ] }
-          ),
-          DGV.collectSupabasePages(
-            () => sb
-              .from("order_items")
-              .select("id,order_id,qty,line_usd,line_vnd,is_custom,custom_ko_name,custom_vi_name,menu_items(ko_name,vi_name),orders!inner(created_at,sales_excluded)")
-              .eq("orders.sales_excluded", false)
-              .gte("orders.created_at", fromIso)
-              .lte("orders.created_at", toIso),
-            { order: [
-              { column: "order_id", ascending: false },
-              { column: "id", ascending: true }
-            ] }
-          ),
-          DGV.collectSupabasePages(
-            () => sb
-              .from("order_custom_items")
-              .select("id,order_id,ko_name,vi_name,qty,line_usd,line_vnd,orders!inner(created_at,sales_excluded)")
-              .eq("orders.sales_excluded", false)
-              .gte("orders.created_at", fromIso)
-              .lte("orders.created_at", toIso),
-            { order: [
-              { column: "order_id", ascending: false },
-              { column: "id", ascending: true }
-            ] }
-          )
-        ]);
+      const [orders, regularRows, customRows] = await Promise.all([
+        DGV.collectSupabasePages(
+          () => sb
+            .from("orders")
+            .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method,source")
+            .eq("sales_excluded", false)
+            .gte("created_at", fromIso)
+            .lte("created_at", toIso),
+          { order: [
+            { column: "created_at", ascending: false },
+            { column: "id", ascending: false }
+          ] }
+        ),
+        DGV.collectSupabasePages(
+          () => sb
+            .from("order_items")
+            .select("id,order_id,menu_item_id,qty,unit_usd,unit_vnd,line_usd,line_vnd,is_custom,custom_ko_name,custom_vi_name,menu_items(ko_name,vi_name,type),orders!inner(created_at,sales_excluded)")
+            .eq("orders.sales_excluded", false)
+            .gte("orders.created_at", fromIso)
+            .lte("orders.created_at", toIso),
+          { order: [
+            { column: "order_id", ascending: false },
+            { column: "id", ascending: true }
+          ] }
+        ),
+        DGV.collectSupabasePages(
+          () => sb
+            .from("order_custom_items")
+            .select("id,kind,order_id,ko_name,vi_name,qty,unit_usd,unit_vnd,line_usd,line_vnd,orders!inner(created_at,sales_excluded)")
+            .eq("orders.sales_excluded", false)
+            .gte("orders.created_at", fromIso)
+            .lte("orders.created_at", toIso),
+          { order: [
+            { column: "order_id", ascending: false },
+            { column: "id", ascending: true }
+          ] }
+        )
+      ]);
 
-        const visibleOrders = orders || [];
-        const visibleOrderById = new Map(visibleOrders.map(o=>[String(o.id), o]));
-        const visibleOrderIds = new Set(visibleOrderById.keys());
-        const relationRow = (value) => Array.isArray(value) ? (value[0] || {}) : (value || {});
-        const regularLines = (regularRows || []).map(r=>{
-          const menu = relationRow(r.menu_items);
-          return {
-            order_id: r.order_id,
-            order_item_id: `regular:${r.id}`,
-            ko_name: r.is_custom ? r.custom_ko_name : menu.ko_name,
-            vi_name: r.is_custom ? r.custom_vi_name : menu.vi_name,
-            qty: r.qty,
-            line_usd: r.line_usd,
-            line_vnd: r.line_vnd
-          };
-        });
-        const customLines = (customRows || []).map(r=>({
+      const visibleOrders = orders || [];
+      const visibleOrderById = new Map(visibleOrders.map(o=>[String(o.id), o]));
+      const visibleOrderIds = new Set(visibleOrderById.keys());
+      const relationRow = (value) => Array.isArray(value) ? (value[0] || {}) : (value || {});
+      const regularLines = (regularRows || []).map(r=>{
+        const menu = relationRow(r.menu_items);
+        return {
           order_id: r.order_id,
-          order_item_id: `custom:${r.id}`,
-          ko_name: r.ko_name,
-          vi_name: r.vi_name,
+          order_item_id: `regular:${r.id}`,
+          line_source: "order_items",
+          line_id: String(r.id || ""),
+          menu_item_id: r.menu_item_id ? String(r.menu_item_id) : "",
+          kind: r.is_custom ? "custom" : String(menu.type || "menu"),
+          is_custom: Boolean(r.is_custom),
+          ko_name: r.is_custom ? r.custom_ko_name : menu.ko_name,
+          vi_name: r.is_custom ? r.custom_vi_name : menu.vi_name,
           qty: r.qty,
+          unit_usd: r.unit_usd,
+          unit_vnd: r.unit_vnd,
           line_usd: r.line_usd,
           line_vnd: r.line_vnd
-        }));
-        const visibleLines = [...regularLines, ...customLines]
-          .filter(r=>visibleOrderIds.has(String(r.order_id)));
-        const linesByOrder = new Map();
-        visibleLines.forEach(r=>{
-          const key = String(r.order_id);
-          if (!linesByOrder.has(key)) linesByOrder.set(key, []);
-          linesByOrder.get(key).push(r);
-        });
+        };
+      });
+      const customLines = (customRows || []).map(r=>({
+        order_id: r.order_id,
+        order_item_id: `custom:${r.id}`,
+        line_source: "order_custom_items",
+        line_id: String(r.id || ""),
+        menu_item_id: "",
+        kind: String(r.kind || "custom"),
+        is_custom: true,
+        ko_name: r.ko_name,
+        vi_name: r.vi_name,
+        qty: r.qty,
+        unit_usd: r.unit_usd,
+        unit_vnd: r.unit_vnd,
+        line_usd: r.line_usd,
+        line_vnd: r.line_vnd
+      }));
+      const visibleLines = [...regularLines, ...customLines]
+        .filter(r=>visibleOrderIds.has(String(r.order_id)));
+      const linesByOrder = new Map();
+      visibleLines.forEach(r=>{
+        const key = String(r.order_id);
+        if (!linesByOrder.has(key)) linesByOrder.set(key, []);
+        linesByOrder.get(key).push(r);
+      });
 
-        const soldMap = new Map();
-        visibleLines.forEach(r=>{
-          const order = visibleOrderById.get(String(r.order_id));
-          if (String(order?.status || "").toLowerCase() !== "paid") return;
-          const ko = String(r.ko_name || "");
-          const vi = String(r.vi_name || "");
-          const key = JSON.stringify([ko, vi]);
-          const current = soldMap.get(key) || { ko, vi, qty: 0 };
-          current.qty += Number(r.qty || 0);
-          soldMap.set(key, current);
-        });
+      const soldMap = new Map();
+      visibleLines.forEach(r=>{
+        const order = visibleOrderById.get(String(r.order_id));
+        if (String(order?.status || "").toLowerCase() !== "paid") return;
+        const ko = String(r.ko_name || "");
+        const vi = String(r.vi_name || "");
+        const key = JSON.stringify([ko, vi]);
+        const current = soldMap.get(key) || { ko, vi, qty: 0, orderIds:new Set() };
+        current.qty += Number(r.qty || 0);
+        current.orderIds.add(String(r.order_id));
+        soldMap.set(key, current);
+      });
+      const itemsSold = Array.from(soldMap.values())
+        .map(({ ko, vi, qty, orderIds })=>({ ko, vi, qty, orderCount:orderIds.size }))
+        .sort((a,b)=>b.qty-a.qty || a.ko.localeCompare(b.ko, "ko"));
 
-        const itemsSold = Array.from(soldMap.values())
-          .sort((a,b)=>b.qty-a.qty || a.ko.localeCompare(b.ko, "ko"))
-          .slice(0,50);
+      const payments = {
+        cash:{ count:0, usd:0, vnd:0 },
+        card:{ count:0, usd:0, vnd:0 },
+        bank:{ count:0, usd:0, vnd:0 }
+      };
+      let totalUsd = 0;
+      let totalVnd = 0;
+      visibleOrders.forEach(o=>{
+        const usd = Number(o.total_usd || 0);
+        const vnd = Number(o.total_vnd || 0);
+        totalUsd += usd;
+        totalVnd += vnd;
+        const rawPayment = String(o.payment_method || "cash").toLowerCase();
+        const payment = rawPayment === "card" || rawPayment === "bank" ? rawPayment : "cash";
+        payments[payment].count += 1;
+        payments[payment].usd += usd;
+        payments[payment].vnd += vnd;
+      });
 
-        let totalUsd = 0, totalVnd = 0;
-        let cashUsd = 0, cashVnd = 0;
-        let cardUsd = 0, cardVnd = 0;
-        let bankUsd = 0, bankVnd = 0;
+      return {
+        rangeFrom,
+        rangeTo,
+        rangeText,
+        generatedAt:new Date(),
+        visibleOrders,
+        visibleLines,
+        linesByOrder,
+        itemsSold,
+        totalUsd,
+        totalVnd,
+        cashUsd:payments.cash.usd,
+        cashVnd:payments.cash.vnd,
+        cardUsd:payments.card.usd,
+        cardVnd:payments.card.vnd,
+        bankUsd:payments.bank.usd,
+        bankVnd:payments.bank.vnd,
+        payments
+      };
+    }
 
-        visibleOrders.forEach(o=>{
-          const usd = Number(o.total_usd || 0);
-          const vnd = Number(o.total_vnd || 0);
-          totalUsd += usd;
-          totalVnd += vnd;
-
-          const payment = String(o.payment_method || "cash").toLowerCase();
-          if (payment === "card"){
-            cardUsd += usd; cardVnd += vnd;
-          } else if (payment === "bank"){
-            bankUsd += usd; bankVnd += vnd;
-          } else {
-            cashUsd += usd; cashVnd += vnd;
-          }
-        });
-
-        const generatedAt = new Date().toLocaleString("ko-KR", {
+    async function printRangeSummary(){
+      try{
+        const report = await loadRangeReportData();
+        const {
+          rangeText, visibleOrders, linesByOrder,
+          totalUsd, totalVnd, cashUsd, cashVnd,
+          cardUsd, cardVnd, bankUsd, bankVnd
+        } = report;
+        const itemsSold = report.itemsSold.slice(0,50);
+        const generatedAt = report.generatedAt.toLocaleString("ko-KR", {
           year:"numeric", month:"2-digit", day:"2-digit",
           hour:"2-digit", minute:"2-digit"
         });
@@ -921,6 +966,181 @@
       } catch(e){
         console.error(e);
         alert("전체 출력에 실패했습니다.");
+      }
+    }
+
+    async function exportRangeExcel(){
+      const button = document.getElementById("excelRangeBtn");
+      if (button.disabled) return;
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = "생성 중…";
+
+      try{
+        if (!window.DGV_XLSX?.downloadWorkbook){
+          throw new Error("XLSX exporter is unavailable");
+        }
+
+        const report = await loadRangeReportData();
+        const numberCell = (value, style="integer") => {
+          const number = Number(value ?? 0);
+          if (!Number.isFinite(number)) throw new Error("Invalid numeric value in report");
+          return { value:number, style };
+        };
+        const dateCell = (value) => ({ value:new Date(value), style:"dateTime" });
+        const textCell = (value, style="normal") => ({ value:String(value ?? ""), style });
+        const headerRow = (labels) => labels.map(label=>({ value:label, style:"header" }));
+
+        const summaryRows = [
+          [{ value:"HANA ADMIN SALES REPORT", style:"title" }, "", "", ""],
+          ["조회 기간", report.rangeText, "", ""],
+          ["생성 시각", dateCell(report.generatedAt), "", ""],
+          ["시간대", Intl.DateTimeFormat().resolvedOptions().timeZone || "Browser local time", "", ""],
+          [],
+          headerRow(["결제수단", "주문 수", "VND", "USD"]),
+          ["현금", numberCell(report.payments.cash.count), numberCell(report.payments.cash.vnd), numberCell(report.payments.cash.usd)],
+          ["카드", numberCell(report.payments.card.count), numberCell(report.payments.card.vnd), numberCell(report.payments.card.usd)],
+          ["계좌", numberCell(report.payments.bank.count), numberCell(report.payments.bank.vnd), numberCell(report.payments.bank.usd)],
+          [
+            { value:"합계", style:"totalLabel" },
+            numberCell(report.visibleOrders.length, "totalNumber"),
+            numberCell(report.totalVnd, "totalNumber"),
+            numberCell(report.totalUsd, "totalNumber")
+          ],
+          [],
+          ["집계 기준", "주문 및 금액은 sales_excluded=false인 선택 기간 주문입니다.", "", ""],
+          ["판매수량 기준", "판매수량 시트는 status=paid인 주문만 집계합니다.", "", ""]
+        ];
+
+        const orderRows = [headerRow([
+          "주문 일시", "가이드", "팀", "결제", "상태",
+          "VND 합계", "USD 합계", "품목 행 수", "총 수량", "생성 경로", "주문 ID"
+        ])];
+        report.visibleOrders.forEach(order=>{
+          const lines = report.linesByOrder.get(String(order.id)) || [];
+          orderRows.push([
+            dateCell(order.created_at),
+            textCell(order.guide_name),
+            textCell(order.team_no),
+            textCell(payLabel(order.payment_method)),
+            textCell(String(order.status || "").toUpperCase()),
+            numberCell(order.total_vnd),
+            numberCell(order.total_usd),
+            numberCell(lines.length),
+            numberCell(lines.reduce((sum, line)=>sum + Number(line.qty || 0), 0)),
+            textCell(order.source),
+            textCell(order.id)
+          ]);
+        });
+
+        const lineRows = [headerRow([
+          "주문 일시", "가이드", "팀", "메뉴(한국어)", "메뉴(베트남어)",
+          "수량", "단가 VND", "금액 VND", "단가 USD", "금액 USD",
+          "결제", "상태", "메뉴 유형", "직접 입력", "주문 생성 경로",
+          "주문 ID", "라인 출처", "라인 ID"
+        ])];
+        report.visibleOrders.forEach(order=>{
+          const lines = report.linesByOrder.get(String(order.id)) || [];
+          const common = [
+            dateCell(order.created_at),
+            textCell(order.guide_name),
+            textCell(order.team_no)
+          ];
+          if (!lines.length){
+            lineRows.push([
+              ...common,
+              textCell("상세 라인이 없습니다.", "wrapped"), "",
+              "", "", "", "", "",
+              textCell(payLabel(order.payment_method)),
+              textCell(String(order.status || "").toUpperCase()),
+              "", "", textCell(order.source), textCell(order.id), "", ""
+            ]);
+            return;
+          }
+          lines.forEach(line=>{
+            lineRows.push([
+              ...common,
+              textCell(line.ko_name, "wrapped"),
+              textCell(line.vi_name, "wrapped"),
+              numberCell(line.qty),
+              numberCell(line.unit_vnd),
+              numberCell(line.line_vnd),
+              numberCell(line.unit_usd),
+              numberCell(line.line_usd),
+              textCell(payLabel(order.payment_method)),
+              textCell(String(order.status || "").toUpperCase()),
+              textCell(line.kind),
+              textCell(line.is_custom ? "예" : "아니오"),
+              textCell(order.source),
+              textCell(order.id),
+              textCell(line.line_source),
+              textCell(line.line_id)
+            ]);
+          });
+        });
+
+        const soldRows = [headerRow([
+          "순위", "메뉴(한국어)", "메뉴(베트남어)", "판매수량", "주문 수"
+        ])];
+        report.itemsSold.forEach((item, index)=>{
+          soldRows.push([
+            numberCell(index + 1),
+            textCell(item.ko, "wrapped"),
+            textCell(item.vi, "wrapped"),
+            numberCell(item.qty),
+            numberCell(item.orderCount)
+          ]);
+        });
+
+        const maxDataRows = 1048575;
+        if (
+          orderRows.length - 1 > maxDataRows ||
+          lineRows.length - 1 > maxDataRows ||
+          soldRows.length - 1 > maxDataRows
+        ){
+          alert("선택한 기간의 데이터가 Excel 최대 행 수를 초과했습니다. 기간을 줄여서 다시 시도해 주세요.");
+          return;
+        }
+
+        window.DGV_XLSX.downloadWorkbook({
+          filename:`HANA_Admin_${toISODate(report.rangeFrom)}_${toISODate(report.rangeTo)}.xlsx`,
+          sheets:[
+            {
+              name:"요약",
+              rows:summaryRows,
+              columnWidths:[18,58,18,18],
+              merges:["A1:D1"],
+              autoFilterRange:"A6:D10"
+            },
+            {
+              name:"주문",
+              rows:orderRows,
+              columnWidths:[20,18,12,11,12,16,14,13,12,20,38],
+              freezeRows:1,
+              autoFilterRange:`A1:K${Math.max(1, orderRows.length)}`
+            },
+            {
+              name:"주문 상세",
+              rows:lineRows,
+              columnWidths:[20,18,12,24,24,10,14,16,12,14,11,12,14,11,20,38,20,38],
+              freezeRows:1,
+              autoFilterRange:`A1:R${Math.max(1, lineRows.length)}`
+            },
+            {
+              name:"판매 수량",
+              rows:soldRows,
+              columnWidths:[10,28,28,14,12],
+              freezeRows:1,
+              autoFilterRange:`A1:E${Math.max(1, soldRows.length)}`
+            }
+          ]
+        });
+      } catch(e){
+        console.error(e);
+        alert("엑셀 파일 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
       }
     }
 
@@ -1427,6 +1647,7 @@
     document.getElementById("applyRange").addEventListener("click", applyRange);
 
     document.getElementById("printRangeBtn").addEventListener("click", printRangeSummary);
+    document.getElementById("excelRangeBtn").addEventListener("click", exportRangeExcel);
 
     // Gate 이벤트
     document.getElementById("gateConfirmBtn").addEventListener("click", enterAdmin);

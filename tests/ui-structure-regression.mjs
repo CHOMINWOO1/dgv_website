@@ -11,7 +11,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 // locked against accidental redesign.
 const expected = new Map([
   ["calc.html", "4dfa556c02b5bf9de602899fd1254d70cfa9a8b1bfda2d2ded0a4c35f24c19a7"],
-  ["admin.html", "b0a6757e6e798c2822044faddfe8f7da52c469615f0bb5bbaac32f6ac936a003"],
+  ["admin.html", "a011d0101d671572855333eac20fdf341ce23355e99326d3b2a833a2cfb75c89"],
   ["hana_admin_hidden.html", "c3249bd30e455feea2ad4240e8297bbacf331dc5e3d072a6721771756dd26a1b"],
   ["code_admin.html", "53374bb648ee17383abe97ac2fb148e38f298d32aaad3ae6be6d52b5939cd22a"],
   ["notice.html", "958870fcedd4ddee38249825f3cf254352e6f31cb9733c0b6951f79547e2f348"],
