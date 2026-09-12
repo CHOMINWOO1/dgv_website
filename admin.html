@@ -667,47 +667,169 @@
         const fromIso = currentRange.from.toISOString();
         const toIso = currentRange.to.toISOString();
 
-        const data = await DGV.collectSupabasePages(
-          () => sb
-            .from("v_order_detail")
-            .select("order_id,order_item_id,created_at,status,ko_name,vi_name,qty")
-            .gte("created_at", fromIso)
-            .lte("created_at", toIso)
-            .eq("status", "paid"),
-          { order: [
-            { column: "created_at", ascending: true },
-            { column: "order_id", ascending: true },
-            { column: "order_item_id", ascending: true }
-          ] }
-        );
+        const [orders, regularRows, customRows] = await Promise.all([
+          DGV.collectSupabasePages(
+            () => sb
+              .from("orders")
+              .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method")
+              .eq("sales_excluded", false)
+              .gte("created_at", fromIso)
+              .lte("created_at", toIso),
+            { order: [
+              { column: "created_at", ascending: false },
+              { column: "id", ascending: false }
+            ] }
+          ),
+          DGV.collectSupabasePages(
+            () => sb
+              .from("order_items")
+              .select("id,order_id,qty,line_usd,line_vnd,is_custom,custom_ko_name,custom_vi_name,menu_items(ko_name,vi_name),orders!inner(created_at,sales_excluded)")
+              .eq("orders.sales_excluded", false)
+              .gte("orders.created_at", fromIso)
+              .lte("orders.created_at", toIso),
+            { order: [
+              { column: "order_id", ascending: false },
+              { column: "id", ascending: true }
+            ] }
+          ),
+          DGV.collectSupabasePages(
+            () => sb
+              .from("order_custom_items")
+              .select("id,order_id,ko_name,vi_name,qty,line_usd,line_vnd,orders!inner(created_at,sales_excluded)")
+              .eq("orders.sales_excluded", false)
+              .gte("orders.created_at", fromIso)
+              .lte("orders.created_at", toIso),
+            { order: [
+              { column: "order_id", ascending: false },
+              { column: "id", ascending: true }
+            ] }
+          )
+        ]);
 
-        const map = new Map();
-        (data||[]).forEach(r=>{
-          const key = `${r.ko_name}||${r.vi_name}`;
-          map.set(key, (map.get(key)||0) + Number(r.qty||0));
+        const visibleOrders = orders || [];
+        const visibleOrderById = new Map(visibleOrders.map(o=>[String(o.id), o]));
+        const visibleOrderIds = new Set(visibleOrderById.keys());
+        const relationRow = (value) => Array.isArray(value) ? (value[0] || {}) : (value || {});
+        const regularLines = (regularRows || []).map(r=>{
+          const menu = relationRow(r.menu_items);
+          return {
+            order_id: r.order_id,
+            order_item_id: `regular:${r.id}`,
+            ko_name: r.is_custom ? r.custom_ko_name : menu.ko_name,
+            vi_name: r.is_custom ? r.custom_vi_name : menu.vi_name,
+            qty: r.qty,
+            line_usd: r.line_usd,
+            line_vnd: r.line_vnd
+          };
+        });
+        const customLines = (customRows || []).map(r=>({
+          order_id: r.order_id,
+          order_item_id: `custom:${r.id}`,
+          ko_name: r.ko_name,
+          vi_name: r.vi_name,
+          qty: r.qty,
+          line_usd: r.line_usd,
+          line_vnd: r.line_vnd
+        }));
+        const visibleLines = [...regularLines, ...customLines]
+          .filter(r=>visibleOrderIds.has(String(r.order_id)));
+        const linesByOrder = new Map();
+        visibleLines.forEach(r=>{
+          const key = String(r.order_id);
+          if (!linesByOrder.has(key)) linesByOrder.set(key, []);
+          linesByOrder.get(key).push(r);
         });
 
-        const agg = Array.from(map.entries()).map(([k, qty])=>{
-          const [ko, vi] = k.split("||");
-          return { ko, vi, qty };
-        }).sort((a,b)=>b.qty-a.qty).slice(0,80);
+        const soldMap = new Map();
+        visibleLines.forEach(r=>{
+          const order = visibleOrderById.get(String(r.order_id));
+          if (String(order?.status || "").toLowerCase() !== "paid") return;
+          const ko = String(r.ko_name || "");
+          const vi = String(r.vi_name || "");
+          const key = JSON.stringify([ko, vi]);
+          const current = soldMap.get(key) || { ko, vi, qty: 0 };
+          current.qty += Number(r.qty || 0);
+          soldMap.set(key, current);
+        });
 
-        const totalVnd = document.getElementById("sumVnd").textContent || "0";
-        const totalUsd = document.getElementById("sumUsd").textContent || "0";
-        const orderCount = document.getElementById("sumOrders").textContent || "0";
+        const itemsSold = Array.from(soldMap.values())
+          .sort((a,b)=>b.qty-a.qty || a.ko.localeCompare(b.ko, "ko"))
+          .slice(0,50);
 
-        const cashVnd = document.getElementById("sumCashVnd").textContent || "0";
-        const cashUsd = document.getElementById("sumCashUsd").textContent || "0";
-        const cardVnd = document.getElementById("sumCardVnd").textContent || "0";
-        const cardUsd = document.getElementById("sumCardUsd").textContent || "0";
-        const bankVnd = document.getElementById("sumBankVnd").textContent || "0";
-        const bankUsd = document.getElementById("sumBankUsd").textContent || "0";
+        let totalUsd = 0, totalVnd = 0;
+        let cashUsd = 0, cashVnd = 0;
+        let cardUsd = 0, cardVnd = 0;
+        let bankUsd = 0, bankVnd = 0;
 
-        const rowsHtml = agg.map(r=>`
-          <div class="r">
-            <div class="l"><b>${DGV.escapeHTML(r.ko)}</b><br/><span>${DGV.escapeHTML(r.vi)}</span></div>
-            <div class="m">x ${fmtInt(r.qty)}</div>
-          </div>
+        visibleOrders.forEach(o=>{
+          const usd = Number(o.total_usd || 0);
+          const vnd = Number(o.total_vnd || 0);
+          totalUsd += usd;
+          totalVnd += vnd;
+
+          const payment = String(o.payment_method || "cash").toLowerCase();
+          if (payment === "card"){
+            cardUsd += usd; cardVnd += vnd;
+          } else if (payment === "bank"){
+            bankUsd += usd; bankVnd += vnd;
+          } else {
+            cashUsd += usd; cashVnd += vnd;
+          }
+        });
+
+        const metricText = (id, fallback="0") => {
+          const value = document.getElementById(id)?.textContent?.trim();
+          return value || fallback;
+        };
+        const generatedAt = new Date().toLocaleString("ko-KR", {
+          year:"numeric", month:"2-digit", day:"2-digit",
+          hour:"2-digit", minute:"2-digit"
+        });
+
+        const orderDetailsHtml = visibleOrders.map((o, index)=>{
+          const guide = String(o.guide_name || "").trim();
+          const team = String(o.team_no || "").trim();
+          const guideText = (guide || team) ? `${guide || "—"} / ${team || "—"}` : "—";
+          const orderLines = linesByOrder.get(String(o.id)) || [];
+          const lineRows = orderLines.length ? orderLines.map(r=>`
+            <tr>
+              <td class="itemName"><b>${DGV.escapeHTML(String(r.ko_name || "—"))}</b><br/><span>${DGV.escapeHTML(String(r.vi_name || ""))}</span></td>
+              <td class="number">${fmtInt(r.qty)}</td>
+              <td class="number">${fmtInt(r.line_vnd)}₫</td>
+              <td class="number">${fmtInt(r.line_usd)}$</td>
+            </tr>
+          `).join("") : `
+            <tr><td class="empty" colspan="4">상세 라인이 없습니다.</td></tr>
+          `;
+
+          return `
+            <section class="orderBlock">
+              <div class="orderHead">
+                <div>
+                  <span class="orderNo">ORDER ${index + 1}</span>
+                  <b>${DGV.escapeHTML(formatTimeLocal(o.created_at))}</b>
+                </div>
+                <div class="orderTags">
+                  <span>${DGV.escapeHTML(guideText)}</span>
+                  <span>${payLabel(o.payment_method)}</span>
+                  <span>${DGV.escapeHTML(String(o.status || "—").toUpperCase())}</span>
+                </div>
+                <div class="orderTotal">${fmtInt(o.total_vnd)}₫ <span>· ${fmtInt(o.total_usd)}$</span></div>
+              </div>
+              <table class="lineTable">
+                <colgroup><col/><col class="qtyCol"/><col class="moneyCol"/><col class="usdCol"/></colgroup>
+                <thead><tr><th>Menu / 메뉴</th><th>Qty</th><th>VND</th><th>USD</th></tr></thead>
+                <tbody>${lineRows}</tbody>
+              </table>
+            </section>
+          `;
+        }).join("");
+
+        const itemsSoldHtml = itemsSold.map(r=>`
+          <tr>
+            <td class="itemName"><b>${DGV.escapeHTML(r.ko || "—")}</b><br/><span>${DGV.escapeHTML(r.vi || "")}</span></td>
+            <td class="number">${fmtInt(r.qty)}</td>
+          </tr>
         `).join("");
 
         const html = `
@@ -716,39 +838,116 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Range Print</title>
+  <title>HANA Admin Sales Report</title>
   <style>
-    body{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;margin:14px;color:#111;}
-    .h1{font-weight:900;letter-spacing:.18em;text-align:center;font-size:18px;margin:0;}
-    .h2{text-align:center;margin:6px 0 12px;font-size:12px;color:#333;font-weight:700;}
-    .meta{font-size:12px;color:#333;font-weight:800;margin:8px 0;}
-    .tot{display:flex;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px dashed #999;font-weight:900;}
-    .r{display:grid;grid-template-columns: 1fr 80px;gap:10px;align-items:start;padding:8px 0;border-top:1px dashed #ddd;}
-    .r:first-child{border-top:none;}
-    .l b{font-weight:900;}
-    .l span{color:#444;font-size:11px;}
-    .m{font-weight:900;text-align:right;white-space:nowrap;}
-    @media print{ @page{margin:8mm;} }
+    :root{color-scheme:light;}
+    *{box-sizing:border-box;}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",Arial,sans-serif;max-width:190mm;margin:0 auto;padding:12px;color:#17130e;background:#fff;font-size:11px;}
+    .reportHead{text-align:center;border-bottom:2px solid #33291f;padding-bottom:9px;margin-bottom:10px;}
+    .h1{font-weight:900;letter-spacing:.16em;font-size:20px;margin:0;}
+    .h2{margin:4px 0 0;font-size:11px;color:#5f5143;font-weight:800;letter-spacing:.08em;}
+    .reportMeta{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:7px;color:#4f4439;font-weight:700;}
+    .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:10px 0;}
+    .metric{border:1px solid #d8cbbd;border-radius:7px;padding:8px;min-width:0;}
+    .metricLabel{color:#6b5b4b;font-size:9px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;}
+    .metricMain{font-size:13px;font-weight:900;margin-top:3px;overflow-wrap:anywhere;}
+    .metricSub{font-size:9px;color:#65584c;font-weight:700;margin-top:2px;}
+    .sectionTitle{font-size:13px;font-weight:900;margin:13px 0 6px;padding-bottom:4px;border-bottom:1px solid #8d7c6a;}
+    table{width:100%;border-collapse:collapse;table-layout:fixed;}
+    th{background:#f4eee7;color:#4d4135;font-size:9px;letter-spacing:.04em;text-transform:uppercase;text-align:left;}
+    th,td{padding:5px 6px;border-bottom:1px solid #ded5ca;vertical-align:top;}
+    .summaryTable th:first-child{width:30%;}
+    .summaryTable th:not(:first-child),.summaryTable td:not(:first-child){text-align:right;}
+    .summaryTable .totalRow td{font-weight:900;border-top:2px solid #8d7c6a;}
+    .orderBlock{border:1px solid #cfc2b4;border-radius:7px;margin:0 0 8px;overflow:hidden;break-inside:avoid-page;page-break-inside:avoid;}
+    .orderHead{display:grid;grid-template-columns:minmax(145px,1fr) minmax(150px,1.25fr) auto;gap:8px;align-items:center;padding:7px 8px;background:#fbf8f3;border-bottom:1px solid #cfc2b4;}
+    .orderNo{display:inline-block;margin-right:6px;color:#8a6b49;font-size:9px;font-weight:900;}
+    .orderTags{display:flex;gap:4px;flex-wrap:wrap;}
+    .orderTags span{border:1px solid #d5c8ba;border-radius:999px;padding:2px 6px;font-size:9px;font-weight:800;overflow-wrap:anywhere;}
+    .orderTotal{text-align:right;font-weight:900;white-space:nowrap;}
+    .orderTotal span{color:#65584c;}
+    .lineTable thead{display:table-header-group;}
+    .lineTable tr,.itemsTable tr{break-inside:avoid;page-break-inside:avoid;}
+    .qtyCol{width:11%;}.moneyCol{width:20%;}.usdCol{width:14%;}
+    .itemName{overflow-wrap:anywhere;}
+    .itemName span{color:#61564c;font-size:9px;}
+    .number{text-align:right;white-space:nowrap;font-weight:800;}
+    .empty{text-align:center;color:#70645a;font-style:italic;padding:9px;}
+    .itemsTable{margin-bottom:10px;}
+    .itemsTable th:last-child,.itemsTable td:last-child{width:18%;text-align:right;}
+    @media (max-width:700px){
+      .metrics{grid-template-columns:repeat(2,minmax(0,1fr));}
+      .orderHead{grid-template-columns:1fr;}
+      .orderTotal{text-align:left;}
+    }
+    @media print{
+      @page{size:A4 portrait;margin:9mm;}
+      body{max-width:none;margin:0;padding:0;print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+      .sectionTitle,.orderHead{break-after:avoid-page;page-break-after:avoid;}
+      .orderBlock{box-shadow:none;overflow:visible;}
+    }
   </style>
 </head>
 <body>
-  <div class="h1">H A N A</div>
-  <div class="h2">RANGE SUMMARY</div>
+  <header class="reportHead">
+    <div class="h1">H A N A&nbsp;&nbsp;A D M I N</div>
+    <div class="h2">SALES · ORDERS · LINES</div>
+    <div class="reportMeta">
+      <span>Range: ${DGV.escapeHTML(rangeText)}</span>
+      <span>출력: ${DGV.escapeHTML(generatedAt)}</span>
+    </div>
+  </header>
 
-  <div class="meta">Range: ${rangeText}</div>
-  <div class="meta">Orders: ${orderCount}</div>
+  <section class="metrics" aria-label="Dashboard summary">
+    <div class="metric">
+      <div class="metricLabel">Today Sales · ${DGV.escapeHTML(metricText("kpiTodayDate", "—"))}</div>
+      <div class="metricMain">${DGV.escapeHTML(metricText("kpiTodayVnd"))} VND</div>
+      <div class="metricSub">${DGV.escapeHTML(metricText("kpiTodayUsd"))}$ · ${DGV.escapeHTML(metricText("kpiTodayCount"))} orders</div>
+    </div>
+    <div class="metric">
+      <div class="metricLabel">This Month · ${DGV.escapeHTML(metricText("kpiMonthLabel", "—"))}</div>
+      <div class="metricMain">${DGV.escapeHTML(metricText("kpiMonthVnd"))} VND</div>
+      <div class="metricSub">${DGV.escapeHTML(metricText("kpiMonthUsd"))}$ · ${DGV.escapeHTML(metricText("kpiMonthCount"))} orders</div>
+    </div>
+    <div class="metric">
+      <div class="metricLabel">Range Orders</div>
+      <div class="metricMain">${fmtInt(visibleOrders.length)}</div>
+      <div class="metricSub">${DGV.escapeHTML(rangeText)}</div>
+    </div>
+    <div class="metric">
+      <div class="metricLabel">Range Sales</div>
+      <div class="metricMain">${fmtInt(totalVnd)} VND</div>
+      <div class="metricSub">${fmtInt(totalUsd)}$</div>
+    </div>
+  </section>
 
-  <div class="meta">Cash: ${cashVnd}₫ · ${cashUsd}$</div>
-  <div class="meta">Card: ${cardVnd}₫ · ${cardUsd}$</div>
-  <div class="meta">Bank: ${bankVnd}₫ · ${bankUsd}$</div>
+  <section>
+    <h2 class="sectionTitle">Sales Summary · 결제수단별 합계</h2>
+    <table class="summaryTable">
+      <thead><tr><th>Payment</th><th>VND</th><th>USD</th><th>Orders</th></tr></thead>
+      <tbody>
+        <tr><td>Cash</td><td>${fmtInt(cashVnd)}₫</td><td>${fmtInt(cashUsd)}$</td><td>${fmtInt(visibleOrders.filter(o=>payLabel(o.payment_method)==="CASH").length)}</td></tr>
+        <tr><td>Card</td><td>${fmtInt(cardVnd)}₫</td><td>${fmtInt(cardUsd)}$</td><td>${fmtInt(visibleOrders.filter(o=>payLabel(o.payment_method)==="CARD").length)}</td></tr>
+        <tr><td>Bank</td><td>${fmtInt(bankVnd)}₫</td><td>${fmtInt(bankUsd)}$</td><td>${fmtInt(visibleOrders.filter(o=>payLabel(o.payment_method)==="BANK").length)}</td></tr>
+        <tr class="totalRow"><td>Total Sales</td><td>${fmtInt(totalVnd)}₫</td><td>${fmtInt(totalUsd)}$</td><td>${fmtInt(visibleOrders.length)}</td></tr>
+      </tbody>
+    </table>
+  </section>
 
-  <div class="tot">
-    <div>Total Sales</div>
-    <div>${totalVnd}₫  ·  ${totalUsd}$</div>
-  </div>
+  <section>
+    <h2 class="sectionTitle">Orders · 주문 상세 (${fmtInt(visibleOrders.length)})</h2>
+    ${orderDetailsHtml || '<div class="empty">해당 기간 주문이 없습니다.</div>'}
+  </section>
 
-  <div style="margin-top:10px;font-weight:900;">Items Sold</div>
-  ${rowsHtml || "<div style='margin-top:8px;color:#444;'>No sales</div>"}
+  <section>
+    <h2 class="sectionTitle">Items Sold · 메뉴별 판매수량 (Top 50)</h2>
+    <table class="itemsTable">
+      <thead><tr><th>Menu / 메뉴</th><th>Qty</th></tr></thead>
+      <tbody>
+        ${itemsSoldHtml || '<tr><td class="empty" colspan="2">해당 기간 판매가 없습니다.</td></tr>'}
+      </tbody>
+    </table>
+  </section>
 </body>
 </html>`;
         openPrintWindow(html);
