@@ -387,6 +387,41 @@ button { touch-action: manipulation; }
 .qr-table-card-name { font-size: 18px; font-weight: 1000; }
 .qr-token-url { width: 100%; min-height: 86px; word-break: break-all; }
 
+.qr-order-card-preview {
+  margin: 14px 0;
+  padding: 20px 16px 16px;
+  border: 2px solid var(--qr-line);
+  border-radius: 16px;
+  background: #fffdf7;
+  box-shadow: inset 0 0 0 4px #fff, inset 0 0 0 5px rgba(202, 162, 76, .35);
+  color: var(--qr-ink);
+  text-align: center;
+}
+
+.qr-order-card-brand {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.qr-order-card-callout {
+  margin-top: 7px;
+  color: #7a4f11;
+  font-size: 30px;
+  font-weight: 1000;
+  letter-spacing: .04em;
+  line-height: 1.05;
+}
+
+.qr-order-card-table {
+  margin-top: 10px;
+  font-size: 20px;
+  font-weight: 1000;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
 .qr-code-preview {
   display: grid;
   place-items: center;
@@ -398,6 +433,12 @@ button { touch-action: manipulation; }
   background: #fff;
   color: var(--qr-sub);
   text-align: center;
+}
+
+.qr-order-card-preview .qr-code-preview {
+  margin: 12px 0 0;
+  border: 0;
+  background: #fff;
 }
 
 .qr-code-preview canvas,
@@ -443,8 +484,62 @@ button { touch-action: manipulation; }
   background: var(--qr-card);
   box-shadow: 0 20px 46px rgba(0, 0, 0, .22);
 }
+.qr-modal-wide {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
 .qr-modal h2 { margin: 0 0 8px; font-size: 19px; }
 .qr-modal p { margin: 0 0 12px; color: var(--qr-sub); font-size: 13px; font-weight: 800; }
+
+.qr-edit-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(40vh, 390px);
+  margin: 12px 0;
+  overflow: auto;
+}
+
+.qr-edit-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px auto auto;
+  gap: 9px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--qr-line);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.qr-edit-line-info { min-width: 0; }
+.qr-edit-qty { display: flex; flex-direction: column; gap: 4px; }
+.qr-edit-qty .qr-input { min-height: 38px; padding: 6px 8px; }
+.qr-edit-line-total { min-width: 96px; text-align: right; font-weight: 950; white-space: nowrap; }
+.qr-edit-empty { padding: 24px 12px; }
+
+.qr-edit-add-fieldset {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px dashed var(--qr-line);
+  border-radius: 12px;
+}
+
+.qr-edit-add-fieldset legend {
+  padding: 0 6px;
+  color: var(--qr-sub);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.qr-edit-add-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px;
+  gap: 9px;
+  align-items: end;
+}
+
+.qr-edit-total { margin: 12px 0 0; }
 
 .qr-toast-stack { position: fixed; right: 14px; bottom: 14px; z-index: 11000; display: flex; flex-direction: column; gap: 8px; width: min(390px, calc(100vw - 28px)); }
 .qr-toast { padding: 12px 14px; border: 1px solid var(--qr-line); border-radius: 12px; background: #fff; box-shadow: 0 12px 28px rgba(0,0,0,.17); font-size: 13px; font-weight: 850; }
@@ -481,6 +576,12 @@ button { touch-action: manipulation; }
   .qr-filter-row .qr-select { width: 100%; }
   .qr-order-actions { grid-template-columns: 1fr; }
   .qr-header-actions .qr-btn { flex: 1 1 auto; }
+  .qr-modal-back { align-items: flex-start; padding: 8px; }
+  .qr-modal-wide { max-height: calc(100vh - 16px); }
+  .qr-edit-line { grid-template-columns: minmax(0, 1fr) 82px; }
+  .qr-edit-line-total { min-width: 0; text-align: left; }
+  .qr-edit-line .qr-btn { width: 100%; }
+  .qr-edit-add-grid { grid-template-columns: minmax(0, 1fr) 88px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -491,16 +592,14 @@ button { touch-action: manipulation; }
   body > :not(.qr-print-sheet) { display: none !important; }
 
   .qr-print-sheet {
-    display: grid;
+    display: grid !important;
     min-height: 90vh;
-    place-content: center;
-    justify-items: center;
-    gap: 10px;
-    color: #111;
-    text-align: center;
+    place-items: center;
   }
 
-  .qr-print-sheet img { width: 92mm; height: 92mm; }
-  .qr-print-sheet h1,
-  .qr-print-sheet p { margin: 0; }
+  .qr-print-sheet img {
+    display: block;
+    width: min(180mm, 100%);
+    height: auto;
+  }
 }

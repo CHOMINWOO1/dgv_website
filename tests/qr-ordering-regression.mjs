@@ -6,8 +6,16 @@ import vm from "node:vm";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(projectRoot, file), "utf8");
+const migrationFiles = await readdir(path.join(projectRoot, "supabase/migrations"));
+const inboxAccessMigrationFile = migrationFiles.find((file) => file.endsWith("_qr_inbox_staff_card_fee.sql"));
+assert.ok(inboxAccessMigrationFile, "missing QR inbox staff/card-fee migration");
+const guestOpenOrdersMigrationFile = migrationFiles.find((file) => file.endsWith("_qr_guest_open_orders.sql"));
+assert.ok(guestOpenOrdersMigrationFile, "missing QR guest open-orders migration");
+const finalizeCutoverMigrationFile = migrationFiles.find((file) => file.endsWith("_disable_legacy_qr_finalize_rpc.sql"));
+assert.ok(finalizeCutoverMigrationFile, "missing legacy QR finalize cutover migration");
 
 const [
+  adminHtml,
   menuHtml,
   guestSource,
   inboxHtml,
@@ -21,7 +29,11 @@ const [
   storageMigration,
   archiveMigration,
   cafeMigration,
+  inboxAccessMigration,
+  guestOpenOrdersMigration,
+  finalizeCutoverMigration,
 ] = await Promise.all([
+  read("admin.html"),
   read("menu.html"),
   read("assets/qr-menu.js"),
   read("order_inbox.html"),
@@ -35,7 +47,16 @@ const [
   read("supabase/migrations/20260926140000_qr_menu_images_storage.sql"),
   read("supabase/migrations/20260926150000_qr_menu_archive.sql"),
   read("supabase/migrations/20260926160000_add_cafe_menu_items.sql"),
+  read(`supabase/migrations/${inboxAccessMigrationFile}`),
+  read(`supabase/migrations/${guestOpenOrdersMigrationFile}`),
+  read(`supabase/migrations/${finalizeCutoverMigrationFile}`),
 ]);
+
+assert.match(
+  adminHtml,
+  /\["reservation_confirm", "qr_table"\]\.includes\(orderMeta\.source\)[\s\S]*?data-act="editExpanded"/,
+  "QR-ledger rows must not expose the incompatible calc edit action",
+);
 
 function functionSource(source, name) {
   const match = source.match(new RegExp(`^  (?:async )?function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?^  \\}$`, "m"));
@@ -155,7 +176,7 @@ assert.match(migration, /invalid or inactive table token[\s\S]*?private\.qr_sha2
 assert.match(migration, /invalid or inactive table token[\s\S]*?private\.qr_sha256\('submit_order:table:' \|\| p_token_hash\)/i);
 
 // Table identity and all prices are resolved on the server. Existing orders are
-// separate until an admin explicitly finalizes a served QR order.
+// separate until authenticated inbox staff explicitly finalize an accepted QR order.
 assert.match(migration, /join private\.qr_table_tokens as tokens on tokens\.table_id = t\.id[\s\S]*?tokens\.token_hash = p_token_hash[\s\S]*?t\.is_active = true/i);
 assert.match(migration, /left join public\.menu_items as m[\s\S]*?m\.is_orderable is distinct from true[\s\S]*?m\.is_sold_out is distinct from false/i);
 assert.match(migration, /sum\(\(e\.item ->> 'qty'\)::bigint \* m\.price_vnd::bigint\)/i);
@@ -178,7 +199,18 @@ assert.match(inboxSource, /fetchWithRelations\(\["accepted"\], null, false\)/, "
 assert.match(inboxSource, /fetchWithRelations\(\["accepted"\], 80, true\)/, "finalized history must be bounded");
 assert.match(inboxSource, /fetchWithRelations\(\["cancelled"\], 80\)/, "cancelled history must be bounded");
 assert.match(inboxSource, /new Map\(groups\.flat\(\)\.map\(\(order\) => \[order\.id, order\]\)\)/, "overlapping order groups must be deduplicated");
-assert.match(inboxSource, /order\.status === "accepted" && !order\.finalized_order_id && identity\?\.role === "admin"/);
+assert.doesNotMatch(functionSource(inboxSource, "actionButtons"), /identity/, "staff and admin must receive the same inbox actions");
+assert.match(functionSource(inboxSource, "finalizePayment"), /\["staff", "admin"\]\.includes\(identity\?\.role\)/);
+assert.match(inboxHtml, /name="paymentMethod"[^>]*value="card"/);
+assert.match(inboxHtml, /name="paymentMethod"[^>]*value="card_fee7"/);
+assert.match(inboxHtml, /카드 결제 \+ 7%/);
+assert.match(inboxSource, /getPaymentMethod\(\) === "card_fee7"/);
+assert.match(functionSource(inboxSource, "openPayment"), /order\?\.updated_at[\s\S]*?paymentExpectedUpdatedAt = order\.updated_at/);
+assert.match(
+  functionSource(inboxSource, "finalizePayment"),
+  /sb\.rpc\("app_finalize_qr_order_checked", \{[\s\S]*?p_qr_order_id: paymentOrderId,[\s\S]*?p_expected_updated_at: paymentExpectedUpdatedAt/,
+);
+assert.doesNotMatch(functionSource(inboxSource, "finalizePayment"), /sb\.rpc\("app_finalize_qr_order"/);
 assert.match(inboxSource, /setInterval\(\(\) => \{[\s\S]*?orders\.some\(\(order\) => order\.status === "submitted"\)[\s\S]*?ui\.playAlert\(\)[\s\S]*?\}, 9000\)/);
 assert.match(inboxSource, /postgres_changes[\s\S]*?table: "qr_orders"/);
 assert.match(inboxSource, /postgres_changes[\s\S]*?table: "qr_order_items"/);
@@ -454,5 +486,157 @@ assert.deepEqual(cafeImages.sort(), [
 ]);
 await Promise.all(cafeImages.map((file) => access(path.join(projectRoot, file))));
 assert.match(guestSource, /cafe:\s*\{\s*ko:\s*"카페",\s*en:\s*"Cafe",\s*vi:\s*"Cà phê & đồ uống"\s*\}/);
+
+// The additive inbox migration keeps old `card` calls fee-free, introduces an
+// explicit card_fee7 choice, and stores both choices as the existing `card`
+// ledger value. Staff/admin authorization remains app_metadata + auth.uid based.
+assert.match(inboxAccessMigration, /create or replace function private\.app_update_qr_order_status_impl[\s\S]*?security definer[\s\S]*?set search_path = ''/i);
+assert.match(inboxAccessMigration, /create or replace function private\.app_finalize_qr_order_checked_impl[\s\S]*?security definer[\s\S]*?set search_path = ''/i);
+assert.match(inboxAccessMigration, /create or replace function private\.app_finalize_qr_order_checked_impl[\s\S]*?\(select auth\.uid\(\)\) is null[\s\S]*?has_app_role\(array\['staff', 'admin'\]::text\[\]\)/i);
+assert.match(inboxAccessMigration, /v_payment_choice not in \('cash', 'card', 'card_fee7', 'bank'\)/i);
+assert.match(inboxAccessMigration, /when v_payment_choice = 'card_fee7' then 'card'[\s\S]*?else v_payment_choice/i);
+assert.match(inboxAccessMigration, /add column if not exists finalized_payment_choice text/i);
+assert.match(inboxAccessMigration, /finalized_payment_choice in \('cash', 'card', 'card_fee7', 'bank'\)/i);
+assert.match(inboxAccessMigration, /if v_payment_choice = 'card_fee7' then[\s\S]*?round\(v_base_usd::numeric \* 1\.07\)[\s\S]*?round\(\(v_base_vnd::numeric \* 1\.07\) \/ 1000\) \* 1000/i);
+assert.doesNotMatch(inboxAccessMigration, /if v_payment_(?:choice|method) = 'card' then/i, "legacy card must stay fee-free");
+assert.match(inboxAccessMigration, /'fee7',[\s\S]*?'Service fee 7%',[\s\S]*?'Phí dịch vụ 7%'/i);
+assert.match(
+  inboxAccessMigration,
+  /if v_qr_order\.finalized_order_id is not null then[\s\S]*?from public\.orders[\s\S]*?v_existing_choice := v_qr_order\.finalized_payment_choice[\s\S]*?if v_existing_choice is null then[\s\S]*?paid_item\.kind = 'fee7'[\s\S]*?paid_item\.ko_name = 'Service fee 7%'[\s\S]*?v_existing_choice is distinct from v_payment_choice[\s\S]*?v_paid_order\.guide_name is distinct from v_guide_name[\s\S]*?v_paid_order\.team_no is distinct from v_team_no[\s\S]*?errcode = '55000'[\s\S]*?return v_qr_order\.finalized_order_id/i,
+  "finalization retry must return an existing UUID only for the same payment choice and metadata",
+);
+assert.match(
+  inboxAccessMigration,
+  /return v_qr_order\.finalized_order_id;[\s\S]*?end if;\s*if v_qr_order\.updated_at is distinct from p_expected_updated_at then[\s\S]*?errcode = '55000'/i,
+  "same-request finalized retries must resolve before unfinished-row stale checks",
+);
+assert.match(inboxAccessMigration, /update public\.qr_orders[\s\S]*?finalized_order_id = v_paid_order\.id,[\s\S]*?finalized_payment_choice = v_payment_choice/i);
+assert.match(inboxAccessMigration, /sum\(i\.line_usd::bigint\)[\s\S]*?sum\(i\.line_vnd::bigint\)[\s\S]*?v_base_usd <> v_qr_order\.total_usd::bigint[\s\S]*?v_base_vnd <> v_qr_order\.total_vnd::bigint/i);
+assert.match(inboxAccessMigration, /v_paid_order\.total_usd::bigint <> v_paid_usd[\s\S]*?v_paid_order\.total_vnd::bigint <> v_paid_vnd/i);
+assert.match(inboxAccessMigration, /v_order\.status in \('submitted', 'accepted'\)[\s\S]*?v_target = 'cancelled'/i);
+assert.doesNotMatch(inboxAccessMigration, /v_role = 'admin'[\s\S]*?v_target = 'cancelled'/i);
+assert.doesNotMatch(inboxAccessMigration, /public\.app_create_order\(/i, "staff finalization must not widen the admin order-creation RPC");
+assert.doesNotMatch(inboxAccessMigration, /(?:delete from|truncate table|drop table)\s+/i);
+assert.doesNotMatch(inboxAccessMigration, /grant execute[\s\S]*?\bto\s+anon\b/i);
+for (const signature of [
+  "private\\.app_update_qr_order_status_impl\\(uuid, text\\)",
+  "private\\.app_finalize_qr_order_checked_impl\\(uuid, timestamp with time zone, text, text, text\\)",
+  "private\\.app_finalize_qr_order_impl\\(uuid, text, text, text\\)",
+  "public\\.app_update_qr_order_status\\(uuid, text\\)",
+  "public\\.app_finalize_qr_order_checked\\(uuid, timestamp with time zone, text, text, text\\)",
+  "public\\.app_finalize_qr_order\\(uuid, text, text, text\\)",
+]) {
+  assert.match(inboxAccessMigration, new RegExp(`revoke execute on function ${signature}[\\s\\S]*?from public, anon, service_role`, "i"));
+  assert.match(inboxAccessMigration, new RegExp(`grant execute on function ${signature}[\\s\\S]*?to authenticated`, "i"));
+}
+assert.match(
+  inboxAccessMigration,
+  /create or replace function public\.app_finalize_qr_order_checked\([\s\S]*?p_expected_updated_at timestamp with time zone[\s\S]*?select private\.app_finalize_qr_order_checked_impl\([\s\S]*?p_expected_updated_at/i,
+);
+assert.match(
+  inboxAccessMigration,
+  /create or replace function private\.app_finalize_qr_order_impl\([\s\S]*?select qr_order\.updated_at[\s\S]*?return private\.app_finalize_qr_order_checked_impl\([\s\S]*?v_expected_updated_at/i,
+  "legacy RPC must delegate into the checked core during the DB-first compatibility window",
+);
+assert.ok(
+  finalizeCutoverMigrationFile > "20260926172000_qr_inbox_order_edit.sql",
+  "legacy finalize revocation must remain a post-frontend-deploy migration",
+);
+for (const signature of [
+  "public\\.app_finalize_qr_order\\(uuid, text, text, text\\)",
+  "private\\.app_finalize_qr_order_impl\\(uuid, text, text, text\\)",
+]) {
+  assert.match(
+    finalizeCutoverMigration,
+    new RegExp(`revoke execute on function ${signature}[\\s\\S]*?from public, anon, authenticated, service_role`, "i"),
+  );
+}
+assert.doesNotMatch(finalizeCutoverMigration, /grant execute/i);
+
+// A raw table token still travels only through the existing Edge Function.
+// The service-only hash RPC adds a bounded view of immutable snapshots for
+// submitted/accepted orders and excludes finalized/cancelled orders.
+assert.match(
+  guestOpenOrdersMigration,
+  /create or replace function public\.internal_qr_get_menu\(p_token_hash text\)[\s\S]*?security invoker[\s\S]*?set search_path = ''/i,
+);
+assert.match(
+  guestOpenOrdersMigration,
+  /join private\.qr_table_tokens as tokens on tokens\.table_id = t\.id[\s\S]*?tokens\.token_hash = p_token_hash[\s\S]*?t\.is_active = true/i,
+);
+assert.match(
+  guestOpenOrdersMigration,
+  /from public\.qr_orders as qr_order[\s\S]*?qr_order\.table_id = v_table\.id[\s\S]*?qr_order\.status in \('submitted', 'accepted'\)[\s\S]*?qr_order\.finalized_order_id is null[\s\S]*?limit 20/i,
+);
+assert.match(
+  guestOpenOrdersMigration,
+  /from public\.qr_order_items as item[\s\S]*?item\.qr_order_id = open_order\.id[\s\S]*?limit 40/i,
+);
+assert.match(guestOpenOrdersMigration, /'current_orders', v_current_orders[\s\S]*?'current_orders_truncated', v_current_orders_truncated/i);
+for (const forbiddenKey of ["request_hash", "client_request_id", "note", "qr_order_id", "menu_item_id"]) {
+  assert.doesNotMatch(
+    guestOpenOrdersMigration,
+    new RegExp(`'${forbiddenKey}'\\s*,`, "i"),
+    `guest current-order JSON must not expose ${forbiddenKey}`,
+  );
+}
+assert.match(
+  guestOpenOrdersMigration,
+  /revoke execute on function public\.internal_qr_get_menu\(text\)[\s\S]*?from public, anon, authenticated, service_role[\s\S]*?grant execute on function public\.internal_qr_get_menu\(text\)[\s\S]*?to service_role/i,
+);
+assert.doesNotMatch(guestOpenOrdersMigration, /grant execute[\s\S]*?\bto\s+(?:anon|authenticated)\b/i);
+assert.doesNotMatch(guestOpenOrdersMigration, /(?:delete from|truncate table|drop table|update public\.qr_orders|insert into public\.qr_orders)\s+/i);
+
+assert.match(menuHtml, /id="currentOrdersSection"[\s\S]*?id="currentOrdersList"[^>]*aria-live="polite"/i);
+assert.match(guestSource, /const CURRENT_ORDER_POLL_MS = 15000/);
+assert.match(functionSource(guestSource, "requestMenuPayload"), /apiRequest\([\s\S]*?action: "get_menu"[\s\S]*?table_token: state\.token/);
+assert.doesNotMatch(guestSource, /\.from\(["']qr_orders["']\)/, "guest browser must not query QR order tables directly");
+assert.match(functionSource(guestSource, "normalizeCurrentOrders"), /\["submitted", "accepted"\]\.includes\(order\.status\)/);
+assert.match(functionSource(guestSource, "normalizeCurrentOrders"), /slice\(0, MAX_CURRENT_ORDERS\)[\s\S]*?slice\(0, MAX_CURRENT_ORDER_LINES\)/);
+assert.match(functionSource(guestSource, "renderCurrentOrders"), /replaceChildren\(\)[\s\S]*?state\.currentOrders\.forEach/);
+assert.doesNotMatch(functionSource(guestSource, "renderCurrentOrders"), /innerHTML|insertAdjacentHTML/);
+assert.match(functionSource(guestSource, "startCurrentOrderPolling"), /setInterval\([\s\S]*?document\.visibilityState === "visible"[\s\S]*?CURRENT_ORDER_POLL_MS/);
+assert.match(guestSource, /document\.addEventListener\("visibilitychange"[\s\S]*?refreshCurrentOrders\(\)/);
+assert.match(functionSource(guestSource, "submitOrder"), /state\.cart = \[\][\s\S]*?sessionStorage\?\.removeItem[\s\S]*?setTimeout\(refreshCurrentOrders, 0\)/);
+
+const currentOrderContext = {};
+vm.runInNewContext(
+  `const MAX_CURRENT_ORDERS = 20; const MAX_CURRENT_ORDER_LINES = 40; const MAX_QTY = 20;\n${functionSource(guestSource, "nonNegativeInteger")}\n${functionSource(guestSource, "normalizeCurrentOrders")}\nresult = normalizeCurrentOrders([{order_number:"A1",status:"accepted",total_vnd:107000,items:[{ko_name:"김밥",qty:1,line_vnd:107000}]},{order_number:"OLD",status:"cancelled",items:[{ko_name:"김밥",qty:1}]}]);`,
+  currentOrderContext,
+);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(currentOrderContext.result)),
+  [{
+    order_number: "A1",
+    status: "accepted",
+    total_usd: 0,
+    total_vnd: 107000,
+    submitted_at: "",
+    accepted_at: null,
+    items: [{
+      menu_type: "",
+      ko_name: "김밥",
+      vi_name: "",
+      en_name: "",
+      qty: 1,
+      unit_usd: 0,
+      unit_vnd: 0,
+      line_usd: 0,
+      line_vnd: 107000,
+    }],
+  }],
+  "guest normalization must keep only bounded open-order snapshots",
+);
+
+const cardFeeContext = { Math, Number };
+vm.runInNewContext(
+  `${functionSource(inboxSource, "roundVndToThousand")}\n${functionSource(inboxSource, "cardAdjustedTotals")}\nresult = cardAdjustedTotals(100, 100000);`,
+  cardFeeContext,
+);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(cardFeeContext.result)),
+  { totalUsd: 107, totalVnd: 107000 },
+  "inbox card fee must use calc-compatible USD integer and VND 1,000 rounding",
+);
 
 console.log("QR ordering security, pricing, table identity, realtime, and guest payload contracts passed.");

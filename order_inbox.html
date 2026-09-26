@@ -76,7 +76,7 @@
   <div class="qr-modal-back" id="loginModal" hidden>
     <form class="qr-modal" id="loginForm">
       <h2>주문 화면 로그인</h2>
-      <p>직원은 주문을 처리하고, 관리자는 주문 처리와 결제 완료 등록을 할 수 있습니다.</p>
+      <p>직원과 관리자는 주문 확인, 주문 취소, 최종 결제를 동일하게 처리할 수 있습니다.</p>
       <div class="qr-field" style="margin-bottom:10px">
         <label class="qr-label" for="loginRole">접근 권한</label>
         <select class="qr-select" id="loginRole">
@@ -95,15 +95,27 @@
   <div class="qr-modal-back" id="paymentModal" hidden>
     <form class="qr-modal" id="paymentForm">
       <h2>최종 결제</h2>
-      <p>온라인 결제가 아닙니다. 현장에서 결제를 받은 뒤 확정하면 admin 매출에 한 번만 등록됩니다.</p>
-      <div class="qr-field">
-        <label class="qr-label" for="paymentMethod">결제 수단</label>
-        <select class="qr-select" id="paymentMethod" required>
-          <option value="cash">현금</option>
-          <option value="card">카드</option>
-          <option value="bank">계좌이체</option>
-        </select>
+      <p>온라인 결제가 아닙니다. 카드 결제 + 7%를 선택하면 계산 페이지와 같은 방식으로 수수료가 더해지고, 확정 시 admin 매출에 한 번만 등록됩니다.</p>
+      <div class="qr-field" role="radiogroup" aria-labelledby="paymentMethodLabel">
+        <div class="qr-label" id="paymentMethodLabel">결제 수단</div>
+        <label class="qr-checkbox" for="paymentCash">
+          <input id="paymentCash" name="paymentMethod" type="radio" value="cash" checked required />
+          현금
+        </label>
+        <label class="qr-checkbox" for="paymentCard">
+          <input id="paymentCard" name="paymentMethod" type="radio" value="card" required />
+          카드 (추가 수수료 없음)
+        </label>
+        <label class="qr-checkbox" for="paymentCardFee7">
+          <input id="paymentCardFee7" name="paymentMethod" type="radio" value="card_fee7" required />
+          카드 결제 + 7%
+        </label>
+        <label class="qr-checkbox" for="paymentBank">
+          <input id="paymentBank" name="paymentMethod" type="radio" value="bank" required />
+          계좌이체
+        </label>
       </div>
+      <div class="qr-banner" id="paymentTotalPreview" data-tone="ok"></div>
       <div class="qr-field" style="margin-top:10px">
         <label class="qr-label" for="paymentGuide">가이드명 (선택)</label>
         <input class="qr-input" id="paymentGuide" maxlength="80" />
@@ -115,6 +127,45 @@
       <div class="qr-form-actions">
         <button class="qr-btn" id="paymentCancel" type="button">닫기</button>
         <button class="qr-btn qr-btn-ok" id="paymentConfirm" type="submit">최종 결제</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="qr-modal-back" id="editOrderModal" hidden>
+    <form class="qr-modal qr-modal-wide" id="editOrderForm" aria-labelledby="editOrderTitle">
+      <h2 id="editOrderTitle">주문 수정</h2>
+      <p id="editOrderMeta">주문 메뉴와 요청사항을 수정할 수 있습니다.</p>
+
+      <div class="qr-edit-lines" id="editOrderLines" aria-live="polite"></div>
+
+      <fieldset class="qr-edit-add-fieldset">
+        <legend>메뉴 추가</legend>
+        <div class="qr-edit-add-grid">
+          <label class="qr-field qr-field-wide" for="editMenuSearch">
+            <span class="qr-label">메뉴 검색</span>
+            <input class="qr-input" id="editMenuSearch" type="search" placeholder="메뉴 이름 또는 분류" autocomplete="off" />
+          </label>
+          <label class="qr-field" for="editMenuSelect">
+            <span class="qr-label">추가할 메뉴</span>
+            <select class="qr-select" id="editMenuSelect"></select>
+          </label>
+          <label class="qr-field" for="editMenuQty">
+            <span class="qr-label">수량</span>
+            <input class="qr-input" id="editMenuQty" type="number" min="1" max="20" step="1" value="1" inputmode="numeric" />
+          </label>
+          <button class="qr-btn qr-btn-primary qr-field-wide" id="editMenuAdd" type="button">메뉴 추가</button>
+        </div>
+      </fieldset>
+
+      <label class="qr-field" for="editOrderNote">
+        <span class="qr-label">요청사항 (선택)</span>
+        <textarea class="qr-textarea" id="editOrderNote" maxlength="500" placeholder="요청사항을 입력해 주세요."></textarea>
+      </label>
+
+      <div class="qr-banner qr-edit-total" id="editOrderTotal" data-tone="ok"></div>
+      <div class="qr-form-actions">
+        <button class="qr-btn" id="editOrderCancel" type="button">닫기</button>
+        <button class="qr-btn qr-btn-ok" id="editOrderSave" type="submit">저장</button>
       </div>
     </form>
   </div>

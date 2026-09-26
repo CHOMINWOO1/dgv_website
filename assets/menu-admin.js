@@ -106,6 +106,20 @@
     return readTableQrCache().find((entry) => entry.table_id === tableId)?.url || null;
   }
 
+  function removeCachedTableQrUrl(tableId) {
+    if (typeof tableId !== "string" || !TABLE_ID_PATTERN.test(tableId)) return false;
+    const entries = readTableQrCache().filter((entry) => entry.table_id !== tableId);
+    try {
+      global.localStorage.setItem(TABLE_QR_CACHE_KEY, JSON.stringify({
+        version: TABLE_QR_CACHE_VERSION,
+        entries
+      }));
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }
+
   function nullIfBlank(value) {
     const text = String(value ?? "").trim();
     return text || null;
@@ -898,6 +912,7 @@
           <button class="qr-btn qr-btn-small" type="button" data-table-action="view" data-table-id="${table.id}">QR 보기</button>
           <button class="qr-btn qr-btn-small" type="button" data-table-action="toggle" data-table-id="${table.id}" data-next-active="${table.is_active === false}">${table.is_active === false ? "다시 사용" : "사용 중지"}</button>
           <button class="qr-btn qr-btn-small qr-btn-danger" type="button" data-table-action="rotate" data-table-id="${table.id}">QR 교체</button>
+          <button class="qr-btn qr-btn-small qr-btn-danger" type="button" data-table-action="archive" data-table-id="${table.id}">QR 삭제</button>
         </div>
       </article>`).join("");
   }
@@ -905,7 +920,8 @@
   async function loadTables() {
     const { data, error } = await sb
       .from("qr_tables")
-      .select("id,label,is_active,created_at,updated_at")
+      .select("id,label,is_active,archived_at,created_at,updated_at")
+      .is("archived_at", null)
       .order("label", { ascending: true });
     if (error) throw error;
     tables = data || [];
@@ -930,6 +946,7 @@
     currentTokenLabel = String(label || "테이블").trim().slice(0, 80) || "테이블";
     ui.byId("tokenUrl").value = currentTokenUrl;
     ui.byId("tokenTitle").textContent = `${currentTokenLabel} QR 주소`;
+    ui.byId("tokenTableTitle").textContent = currentTokenLabel;
     renderQrCode();
     ui.byId("tokenModal").hidden = false;
     ui.byId("tokenUrl").select();
@@ -985,11 +1002,100 @@
     if (image) image.alt = `${currentTokenLabel} 주문 QR 코드`;
   }
 
-  function qrDataUrl() {
+  async function qrGraphicSource() {
     const target = ui.byId("tokenQr");
     const canvas = target.querySelector("canvas");
-    if (canvas) return canvas.toDataURL("image/png");
-    return target.querySelector("img")?.src || null;
+    if (canvas) return canvas;
+    const image = target.querySelector("img");
+    if (!image) return null;
+    if (image.complete) return image.naturalWidth > 0 ? image : null;
+    return new Promise((resolve) => {
+      image.addEventListener("load", () => resolve(image), { once: true });
+      image.addEventListener("error", () => resolve(null), { once: true });
+    });
+  }
+
+  function drawFittedCenteredText(context, text, options) {
+    const value = String(text || "");
+    let fontSize = options.fontSize;
+    while (fontSize > options.minFontSize) {
+      context.font = `${options.fontWeight} ${fontSize}px ${options.fontFamily}`;
+      if (context.measureText(value).width <= options.maxWidth) break;
+      fontSize -= 2;
+    }
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = options.color;
+    context.fillText(value, options.centerX, options.centerY, options.maxWidth);
+  }
+
+  async function qrCardDataUrl() {
+    const qrSource = await qrGraphicSource();
+    if (!qrSource) return null;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200;
+    canvas.height = 1500;
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+
+    context.fillStyle = "#fffdf7";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.strokeStyle = "#caa24c";
+    context.lineWidth = 14;
+    context.strokeRect(38, 38, canvas.width - 76, canvas.height - 76);
+    context.strokeStyle = "#ead9b7";
+    context.lineWidth = 3;
+    context.strokeRect(62, 62, canvas.width - 124, canvas.height - 124);
+
+    drawFittedCenteredText(context, "HANA RESTAURANT", {
+      centerX: 600,
+      centerY: 150,
+      maxWidth: 980,
+      fontSize: 66,
+      minFontSize: 44,
+      fontWeight: 800,
+      fontFamily: 'Georgia, "Times New Roman", serif',
+      color: "#3a2a1f"
+    });
+    drawFittedCenteredText(context, "ORDER HERE", {
+      centerX: 600,
+      centerY: 285,
+      maxWidth: 980,
+      fontSize: 104,
+      minFontSize: 70,
+      fontWeight: 900,
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+      color: "#7a4f11"
+    });
+    drawFittedCenteredText(context, currentTokenLabel || "테이블", {
+      centerX: 600,
+      centerY: 405,
+      maxWidth: 930,
+      fontSize: 62,
+      minFontSize: 36,
+      fontWeight: 900,
+      fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+      color: "#3a2a1f"
+    });
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(150, 500, 900, 900);
+    context.imageSmoothingEnabled = false;
+    context.drawImage(qrSource, 190, 540, 820, 820);
+    return canvas.toDataURL("image/png");
+  }
+
+  function waitForImageReady(image) {
+    if (image.complete) {
+      return image.naturalWidth > 0
+        ? Promise.resolve()
+        : Promise.reject(new Error("QR print image unavailable"));
+    }
+    return new Promise((resolve, reject) => {
+      image.addEventListener("load", resolve, { once: true });
+      image.addEventListener("error", () => reject(new Error("QR print image unavailable")), { once: true });
+    });
   }
 
   function safeFilePart(value) {
@@ -1001,27 +1107,33 @@
       .slice(0, 60) || "table";
   }
 
-  function downloadQr() {
-    const dataUrl = qrDataUrl();
-    if (!dataUrl) {
+  async function downloadQr() {
+    try {
+      const dataUrl = await qrCardDataUrl();
+      if (!dataUrl) throw new Error("QR card unavailable");
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `hana-${safeFilePart(currentTokenLabel)}-qr.png`;
+      link.click();
+    } catch (error) {
+      console.error(error);
       ui.toast("QR 이미지를 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
-      return;
     }
-    const link = document.createElement("a");
-    link.href = dataUrl;
-    link.download = `hana-${safeFilePart(currentTokenLabel)}-qr.png`;
-    link.click();
   }
 
-  function printQr() {
-    const dataUrl = qrDataUrl();
-    if (!dataUrl) {
-      ui.toast("QR 이미지를 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
-      return;
+  async function printQr() {
+    try {
+      const dataUrl = await qrCardDataUrl();
+      if (!dataUrl) throw new Error("QR card unavailable");
+      const printImage = ui.byId("qrPrintImage");
+      printImage.src = dataUrl;
+      printImage.alt = `HANA RESTAURANT ORDER HERE ${currentTokenLabel || "테이블"} 주문 QR 카드`;
+      await waitForImageReady(printImage);
+      global.print();
+    } catch (error) {
+      console.error(error);
+      ui.toast("QR 인쇄물을 준비하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
     }
-    ui.byId("qrPrintImage").src = dataUrl;
-    ui.byId("qrPrintTitle").textContent = `HANA · ${currentTokenLabel}`;
-    global.print();
   }
 
   function closeToken() {
@@ -1106,6 +1218,34 @@
     }
   }
 
+  async function archiveTable(tableId, button) {
+    const table = tables.find((row) => row.id === tableId);
+    if (!table) {
+      ui.toast("테이블 정보를 찾지 못했습니다. 다시 불러와 주세요.", "error");
+      return;
+    }
+    const confirmed = global.confirm(
+      `${table.label} 테이블 QR을 삭제하시겠습니까?\n` +
+      "기존 주문 이력은 보존되며, 이 테이블의 기존 QR은 즉시 사용할 수 없게 됩니다."
+    );
+    if (!confirmed) return;
+
+    ui.setBusy(button, true, "삭제 중…");
+    try {
+      const { data, error } = await sb.rpc("app_archive_qr_table", { p_table_id: tableId });
+      if (error) throw error;
+      if (data !== true) throw new Error("QR table archive was not confirmed");
+      removeCachedTableQrUrl(tableId);
+      ui.toast("테이블 QR을 삭제했습니다. 기존 주문 이력은 보존됩니다.", "ok");
+      await loadTables();
+    } catch (error) {
+      console.error(error);
+      ui.toast(ui.messageOf(error, "테이블 QR을 삭제하지 못했습니다."), "error");
+    } finally {
+      ui.setBusy(button, false);
+    }
+  }
+
   async function loadAll(options = {}) {
     const button = ui.byId("reloadBtn");
     if (options.manual) ui.setBusy(button, true, "불러오는 중…");
@@ -1151,6 +1291,7 @@
       if (button.dataset.tableAction === "view") viewTableQr(button.dataset.tableId);
       if (button.dataset.tableAction === "toggle") toggleTable(button.dataset.tableId, button.dataset.nextActive === "true", button);
       if (button.dataset.tableAction === "rotate") rotateTable(button.dataset.tableId, button);
+      if (button.dataset.tableAction === "archive") archiveTable(button.dataset.tableId, button);
     });
     ui.byId("copyTokenBtn").addEventListener("click", copyToken);
     ui.byId("downloadQrBtn").addEventListener("click", downloadQr);

@@ -5,6 +5,9 @@
   const endpoint = config?.url ? `${String(config.url).replace(/\/$/, "")}/functions/v1/qr-menu` : "";
   const MAX_QTY = 20;
   const MAX_TOTAL_QTY = 100;
+  const MAX_CURRENT_ORDERS = 20;
+  const MAX_CURRENT_ORDER_LINES = 40;
+  const CURRENT_ORDER_POLL_MS = 15000;
   const COPY = Object.freeze({
     ko: {
       welcomeEyebrow: "WELCOME TO HANA",
@@ -12,6 +15,12 @@
       welcomeBody: "메뉴를 골라 테이블에서 바로 주문해 주세요.",
       payAtCounter: "결제는 직원에게 해주세요.",
       noOnlinePayment: "이 페이지에서는 온라인 결제가 진행되지 않습니다.",
+      currentOrdersEyebrow: "CURRENT TABLE ORDERS",
+      currentOrdersTitle: "현재 주문 내역",
+      currentOrdersHelp: "결제 또는 취소 전 주문이 표시됩니다.",
+      currentOrdersLimited: "최근 주문 일부만 표시됩니다. 전체 내역은 직원에게 문의해 주세요.",
+      statusSubmitted: "주문 확인 대기",
+      statusAccepted: "주문 확인",
       loadingTitle: "메뉴를 준비하고 있습니다",
       loadingBody: "잠시만 기다려 주세요.",
       retry: "다시 시도",
@@ -64,6 +73,12 @@
       welcomeBody: "Choose your dishes and order directly from your table.",
       payAtCounter: "Please pay a member of staff.",
       noOnlinePayment: "No online payment is processed on this page.",
+      currentOrdersEyebrow: "CURRENT TABLE ORDERS",
+      currentOrdersTitle: "Current orders",
+      currentOrdersHelp: "Orders stay here until payment or cancellation.",
+      currentOrdersLimited: "Only the most recent orders are shown. Please ask our staff for the full list.",
+      statusSubmitted: "Awaiting confirmation",
+      statusAccepted: "Order confirmed",
       loadingTitle: "Preparing the menu",
       loadingBody: "Please wait a moment.",
       retry: "Try again",
@@ -116,6 +131,12 @@
       welcomeBody: "Chọn món và gọi món ngay tại bàn.",
       payAtCounter: "Vui lòng thanh toán với nhân viên.",
       noOnlinePayment: "Trang này không thực hiện thanh toán trực tuyến.",
+      currentOrdersEyebrow: "ĐƠN HIỆN TẠI CỦA BÀN",
+      currentOrdersTitle: "Đơn hiện tại",
+      currentOrdersHelp: "Đơn sẽ hiển thị đến khi thanh toán hoặc hủy.",
+      currentOrdersLimited: "Chỉ hiển thị các đơn gần đây. Vui lòng hỏi nhân viên để xem toàn bộ.",
+      statusSubmitted: "Chờ xác nhận",
+      statusAccepted: "Đã xác nhận",
       loadingTitle: "Đang chuẩn bị thực đơn",
       loadingBody: "Vui lòng chờ trong giây lát.",
       retry: "Thử lại",
@@ -170,17 +191,22 @@
     table: null,
     categories: [],
     items: [],
+    currentOrders: [],
+    currentOrdersTruncated: false,
     cart: [],
     selectedItem: null,
     detailQuantity: 1,
     pendingRequestId: null,
     loading: false,
+    refreshingCurrentOrders: false,
+    currentOrderPollTimer: null,
     toastTimer: null
   };
 
   const el = {};
   const ids = [
-    "tableChip", "tableLabel", "loadingPanel", "errorPanel", "errorTitle", "errorMessage", "retryButton",
+    "tableChip", "tableLabel", "currentOrdersSection", "currentOrdersList", "currentOrdersLimit",
+    "loadingPanel", "errorPanel", "errorTitle", "errorMessage", "retryButton",
     "menuApp", "categoryNav", "menuList", "cartButton", "cartCount", "cartTotal", "detailBackdrop",
     "detailSheet", "detailClose", "detailMedia", "detailCategory", "detailName", "detailTranslation",
     "detailDescription", "variantList", "detailNote", "detailMinus", "detailPlus", "detailQuantity",
@@ -298,6 +324,48 @@
     });
   }
 
+  function nonNegativeInteger(value) {
+    const number = Number(value);
+    return Number.isInteger(number) && number >= 0 && number <= 2147483647 ? number : 0;
+  }
+
+  function normalizeCurrentOrders(value) {
+    if (!Array.isArray(value)) return [];
+    return value.slice(0, MAX_CURRENT_ORDERS).flatMap((order) => {
+      if (!order || typeof order !== "object" || !["submitted", "accepted"].includes(order.status)) return [];
+      const orderNumber = String(order.order_number || "").trim().slice(0, 32);
+      const items = (Array.isArray(order.items) ? order.items : [])
+        .slice(0, MAX_CURRENT_ORDER_LINES)
+        .flatMap((item) => {
+          if (!item || typeof item !== "object") return [];
+          const qty = nonNegativeInteger(item.qty);
+          const koName = String(item.ko_name || "").trim().slice(0, 200);
+          if (qty < 1 || qty > MAX_QTY || !koName) return [];
+          return [{
+            menu_type: String(item.menu_type || "").trim().slice(0, 80),
+            ko_name: koName,
+            vi_name: String(item.vi_name || "").trim().slice(0, 200),
+            en_name: String(item.en_name || "").trim().slice(0, 200),
+            qty,
+            unit_usd: nonNegativeInteger(item.unit_usd),
+            unit_vnd: nonNegativeInteger(item.unit_vnd),
+            line_usd: nonNegativeInteger(item.line_usd),
+            line_vnd: nonNegativeInteger(item.line_vnd)
+          }];
+        });
+      if (!orderNumber || !items.length) return [];
+      return [{
+        order_number: orderNumber,
+        status: order.status,
+        total_usd: nonNegativeInteger(order.total_usd),
+        total_vnd: nonNegativeInteger(order.total_vnd),
+        submitted_at: String(order.submitted_at || "").slice(0, 40),
+        accepted_at: order.accepted_at ? String(order.accepted_at).slice(0, 40) : null,
+        items
+      }];
+    });
+  }
+
   function normalizePayload(payload) {
     const rawItems = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload?.menu_items) ? payload.menu_items : [];
     let categories = Array.isArray(payload?.categories) ? payload.categories.slice() : [];
@@ -344,7 +412,9 @@
     return {
       table: payload?.table || (payload?.table_label ? { label: payload.table_label } : null),
       categories,
-      items
+      items,
+      currentOrders: normalizeCurrentOrders(payload?.current_orders),
+      currentOrdersTruncated: payload?.current_orders_truncated === true
     };
   }
 
@@ -406,6 +476,15 @@
     }
   }
 
+  async function requestMenuPayload() {
+    // The raw QR token stays in the page fragment and POST body. Only the Edge
+    // Function receives it; browser roles never query qr_orders directly.
+    return normalizePayload(await apiRequest({
+      method: "POST",
+      body: { action: "get_menu", table_token: state.token }
+    }));
+  }
+
   async function loadMenu() {
     state.loading = true;
     el.loadingPanel.hidden = false;
@@ -419,15 +498,12 @@
     }
 
     try {
-      // The QR token stays in the page fragment and request body so it is not
-      // copied into browser history, referrers, CDN URLs, or query-string logs.
-      const normalized = normalizePayload(await apiRequest({
-        method: "POST",
-        body: { action: "get_menu", table_token: state.token }
-      }));
+      const normalized = await requestMenuPayload();
       state.table = normalized.table;
       state.categories = normalized.categories;
       state.items = normalized.items;
+      state.currentOrders = normalized.currentOrders;
+      state.currentOrdersTruncated = normalized.currentOrdersTruncated;
       if (!state.table || !state.items.length) throw new Error(state.items.length ? "INVALID_TABLE" : "EMPTY_MENU");
       restoreCart();
       el.tableLabel.textContent = tableLabel();
@@ -436,6 +512,8 @@
       el.menuApp.hidden = false;
       renderMenu();
       renderCart();
+      renderCurrentOrders();
+      startCurrentOrderPolling();
     } catch (error) {
       const message = error?.message === "EMPTY_MENU" ? t("emptyMenu") : error?.status === 401 || error?.status === 403 || error?.status === 404 ? t("invalidQr") : t("askStaff");
       showLoadError(message);
@@ -449,6 +527,9 @@
     el.loadingPanel.hidden = true;
     el.menuApp.hidden = true;
     el.cartButton.hidden = true;
+    state.currentOrders = [];
+    state.currentOrdersTruncated = false;
+    renderCurrentOrders();
     el.errorTitle.textContent = t("menuLoadError");
     el.errorMessage.textContent = message;
     el.errorPanel.hidden = false;
@@ -457,6 +538,77 @@
   function tableLabel() {
     const label = nameOf(state.table) || state.table?.label || state.table?.table_label || state.table?.number;
     return label ? `${t("table")} ${label}` : t("tableOrder");
+  }
+
+  function formatOrderTime(value) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "";
+    const locale = state.language === "vi" ? "vi-VN" : state.language === "en" ? "en-US" : "ko-KR";
+    return new Intl.DateTimeFormat(locale, {
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(date);
+  }
+
+  function renderCurrentOrders() {
+    el.currentOrdersList.replaceChildren();
+    el.currentOrdersSection.hidden = state.currentOrders.length === 0;
+    el.currentOrdersLimit.hidden = !state.currentOrdersTruncated;
+    if (!state.currentOrders.length) return;
+
+    state.currentOrders.forEach((order) => {
+      const card = make("article", "current-order-card");
+      const head = make("div", "current-order-head");
+      const identity = make("div");
+      identity.append(
+        make("div", "current-order-number", `${t("orderNumber")} ${order.order_number}`),
+        make("div", "current-order-time", formatOrderTime(order.submitted_at))
+      );
+      const status = make("span", "current-order-status", t(order.status === "accepted" ? "statusAccepted" : "statusSubmitted"));
+      status.dataset.status = order.status;
+      head.append(identity, status);
+      card.append(head);
+
+      order.items.forEach((item) => {
+        const line = make("div", "current-order-line");
+        line.append(
+          make("span", "current-order-line-name", `${nameOf(item)} × ${item.qty}`),
+          make("span", "current-order-line-price", formatVnd(item.line_vnd))
+        );
+        card.append(line);
+      });
+
+      const total = make("div", "current-order-total");
+      total.append(make("span", "", t("total")), make("strong", "", formatVnd(order.total_vnd)));
+      card.append(total);
+      el.currentOrdersList.append(card);
+    });
+  }
+
+  async function refreshCurrentOrders() {
+    if (!state.token || state.loading || state.refreshingCurrentOrders) return;
+    state.refreshingCurrentOrders = true;
+    try {
+      const normalized = await requestMenuPayload();
+      if (!normalized.table) return;
+      state.currentOrders = normalized.currentOrders;
+      state.currentOrdersTruncated = normalized.currentOrdersTruncated;
+      renderCurrentOrders();
+    } catch (_error) {
+      // Keep the last server-confirmed list through a transient reconnect. The
+      // next poll or visibility refresh will reconcile it.
+    } finally {
+      state.refreshingCurrentOrders = false;
+    }
+  }
+
+  function startCurrentOrderPolling() {
+    global.clearInterval(state.currentOrderPollTimer);
+    state.currentOrderPollTimer = global.setInterval(() => {
+      if (document.visibilityState === "visible") refreshCurrentOrders();
+    }, CURRENT_ORDER_POLL_MS);
   }
 
   function renderMenu() {
@@ -891,6 +1043,7 @@
       el.orderNote.value = "";
       global.sessionStorage?.removeItem(cartStorageKey());
       renderCart();
+      global.setTimeout(refreshCurrentOrders, 0);
     } catch (error) {
       const message = error?.code === "TABLE_NOT_FOUND" || error?.status === 401 || error?.status === 403 || error?.status === 404
         ? t("invalidQr")
@@ -944,6 +1097,7 @@
       el.tableLabel.textContent = tableLabel();
       renderMenu();
       renderCart();
+      renderCurrentOrders();
     }
     if (!el.detailSheet.hidden && state.selectedItem) openDetail(state.selectedItem);
   }
@@ -973,6 +1127,9 @@
     el.confirmCancel.addEventListener("click", () => { closeOverlay(el.confirmBackdrop, null); openOverlay(el.cartBackdrop, el.cartSheet, el.cartClose); });
     el.submitOrder.addEventListener("click", submitOrder);
     el.newOrderButton.addEventListener("click", () => closeOverlay(el.successBackdrop, null));
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && state.table) refreshCurrentOrders();
+    });
     document.addEventListener("keydown", (event) => {
       if (event.key !== "Escape" || state.loading) return;
       if (!el.detailSheet.hidden) closeOverlay(el.detailBackdrop, el.detailSheet);

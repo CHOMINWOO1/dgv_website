@@ -211,7 +211,12 @@
     <div class="qr-modal" role="dialog" aria-modal="true" aria-labelledby="tokenTitle">
       <h2 id="tokenTitle">테이블 QR 주소</h2>
       <p>QR을 다운로드하거나 인쇄한 뒤 테이블에 비치해 주세요. 같은 브라우저에서는 ‘QR 보기’로 다시 확인할 수 있습니다.</p>
-      <div class="qr-code-preview" id="tokenQr" aria-label="테이블 주문 QR 코드"></div>
+      <div class="qr-order-card-preview" id="tokenCardPreview">
+        <div class="qr-order-card-brand">HANA RESTAURANT</div>
+        <div class="qr-order-card-callout">ORDER HERE</div>
+        <div class="qr-order-card-table" id="tokenTableTitle">테이블</div>
+        <div class="qr-code-preview" id="tokenQr" aria-label="테이블 주문 QR 코드"></div>
+      </div>
       <textarea class="qr-textarea qr-token-url" id="tokenUrl" readonly></textarea>
       <div class="qr-form-actions">
         <button class="qr-btn" id="openMenuBtn" type="button">메뉴 미리보기</button>
@@ -224,10 +229,7 @@
   </div>
 
   <section class="qr-print-sheet" id="qrPrintSheet" aria-hidden="true">
-    <img id="qrPrintImage" alt="테이블 주문 QR 코드" />
-    <h1 id="qrPrintTitle">HANA TABLE ORDER</h1>
-    <p>카메라로 QR 코드를 스캔하여 주문해 주세요.</p>
-    <p>Scan the QR code to order.</p>
+    <img id="qrPrintImage" alt="HANA RESTAURANT ORDER HERE 테이블 주문 QR 카드" />
   </section>
 
   <div class="qr-toast-stack" id="qrToastStack" aria-live="polite"></div>

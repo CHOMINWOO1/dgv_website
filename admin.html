@@ -1396,7 +1396,7 @@
       footer.className = "lineFooter";
       footer.innerHTML = `
         <button class="btn" data-act="printExpanded" style="padding:8px 12px;">출력</button>
-        ${orderMeta.source === "reservation_confirm" ? "" : `<button class="btn" data-act="editExpanded" style="padding:8px 12px;">수정</button>`}
+        ${["reservation_confirm", "qr_table"].includes(orderMeta.source) ? "" : `<button class="btn" data-act="editExpanded" style="padding:8px 12px;">수정</button>`}
         <button class="btn btnDanger" data-act="deleteExpanded" style="padding:8px 12px;">삭제</button>
       `;
 
