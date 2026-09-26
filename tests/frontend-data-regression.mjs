@@ -344,7 +344,11 @@ for (const page of ["admin.html", "hana_admin_hidden.html"]) {
   assert.doesNotMatch(html, /\.limit\(200\)/);
   assert.match(html, /DGV\.collectSupabasePages\(/);
   assert.match(html, /payment_method(?:,sales_excluded)?,source/);
-  assert.match(html, /orderMeta\.source === "reservation_confirm"/);
+  if (page === "admin.html") {
+    assert.match(html, /\["reservation_confirm", "qr_table"\]\.includes\(orderMeta\.source\)/);
+  } else {
+    assert.match(html, /orderMeta\.source === "reservation_confirm"/);
+  }
   assert.match(html, /querySelector\('button\[data-act="editExpanded"\]'\)\?\.addEventListener/);
   assert.match(
     html,

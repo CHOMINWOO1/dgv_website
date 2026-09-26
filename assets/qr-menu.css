@@ -130,6 +130,30 @@ main { width: min(100%, 1080px); margin: auto; padding-bottom: 112px; }
 .notice-card p { margin: 1px 0 0; color: var(--muted); }
 .notice-icon { flex: 0 0 29px; width: 29px; height: 29px; display: grid; place-items: center; border-radius: 50%; background: var(--brown-800); color: white; font-family: Georgia, serif; font-weight: 800; }
 
+.current-orders {
+  margin: 0 16px 24px;
+  padding: 17px;
+  border: 1px solid #d8c09a;
+  border-radius: 18px;
+  background: rgba(255, 253, 248, .9);
+  box-shadow: 0 8px 24px rgba(73, 47, 30, .08);
+}
+.current-orders-heading { margin-bottom: 12px; }
+.current-orders-heading h2 { margin: 0; font: 700 23px/1.25 Georgia, "Noto Serif KR", serif; }
+.current-orders-heading > div > p:last-child { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+.current-orders-list { display: grid; gap: 10px; }
+.current-order-card { padding: 13px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
+.current-order-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+.current-order-number { font-weight: 900; }
+.current-order-time { margin-top: 2px; color: var(--muted); font-size: 11px; }
+.current-order-status { flex: 0 0 auto; padding: 4px 8px; border: 1px solid #d8c09a; border-radius: 999px; background: #fff8e7; color: var(--brown-700); font-size: 11px; font-weight: 900; }
+.current-order-status[data-status="accepted"] { border-color: #aed0ba; background: #eef8f1; color: var(--success); }
+.current-order-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; padding: 6px 0; border-top: 1px dashed var(--line); font-size: 13px; }
+.current-order-line-name { min-width: 0; font-weight: 800; overflow-wrap: anywhere; }
+.current-order-line-price { white-space: nowrap; color: var(--brown-800); font-family: Georgia, serif; font-weight: 800; }
+.current-order-total { margin-top: 7px; padding-top: 9px; display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); font-weight: 900; }
+.current-orders-limit { margin: 10px 0 0; color: var(--danger); font-size: 11px; font-weight: 800; }
+
 .state-panel { margin: 40px 16px; padding: 38px 20px; text-align: center; border: 1px solid var(--line); border-radius: 20px; background: rgba(255, 253, 248, .72); }
 .state-panel h2 { margin: 15px 0 5px; font: 700 21px Georgia, "Noto Serif KR", serif; }
 .state-panel p { margin: 0; color: var(--muted); }
@@ -296,6 +320,8 @@ textarea { width: 100%; resize: vertical; padding: 11px 12px; border: 1px solid 
 @media (min-width: 680px) {
   .header-inner { padding-inline: 24px; }
   .notice-card { max-width: 680px; margin-inline: auto; }
+  .current-orders { max-width: 680px; margin-inline: auto; }
+  .current-orders-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .menu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .menu-card { grid-template-columns: 146px minmax(0, 1fr); min-height: 150px; }
   .menu-photo { min-height: 150px; }

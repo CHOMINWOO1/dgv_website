@@ -50,6 +50,18 @@
       </div>
     </section>
 
+    <section class="current-orders" id="currentOrdersSection" aria-labelledby="currentOrdersTitle" hidden>
+      <div class="current-orders-heading">
+        <div>
+          <p class="eyebrow" data-copy="currentOrdersEyebrow">CURRENT TABLE ORDERS</p>
+          <h2 id="currentOrdersTitle" data-copy="currentOrdersTitle">현재 주문 내역</h2>
+          <p data-copy="currentOrdersHelp">결제 또는 취소 전 주문이 표시됩니다.</p>
+        </div>
+      </div>
+      <div class="current-orders-list" id="currentOrdersList" aria-live="polite"></div>
+      <p class="current-orders-limit" id="currentOrdersLimit" data-copy="currentOrdersLimited" hidden>최근 주문 일부만 표시됩니다. 전체 내역은 직원에게 문의해 주세요.</p>
+    </section>
+
     <section class="state-panel" id="loadingPanel" aria-live="polite">
       <div class="loader" aria-hidden="true"></div>
       <h2 data-copy="loadingTitle">메뉴를 준비하고 있습니다</h2>

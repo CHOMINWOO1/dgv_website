@@ -16,7 +16,10 @@
     "test:frontend-syntax": "node tests/frontend-syntax.mjs",
     "test:messages": "node tests/polite-messages-regression.mjs",
     "test:ui": "node tests/ui-structure-regression.mjs",
-    "test:qr-ordering": "node tests/qr-ordering-regression.mjs"
+    "test:qr-ordering": "node tests/qr-ordering-regression.mjs",
+    "test:qr-card": "node tests/qr-card-regression.mjs",
+    "test:qr-deletion": "node tests/qr-table-deletion-regression.mjs",
+    "test:qr-edit": "node tests/qr-inbox-order-edit-regression.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.112.2",

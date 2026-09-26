@@ -22,6 +22,14 @@
   let refreshTimer = null;
   let realtimeChannel = null;
   let paymentOrderId = null;
+  let paymentExpectedUpdatedAt = null;
+  let editOrderId = null;
+  let editExpectedUpdatedAt = null;
+  let editLines = [];
+  let editOriginalSnapshots = new Map();
+  let editableMenus = [];
+  let editableMenusLoaded = false;
+  let editableMenusPromise = null;
   const knownOrderIds = new Set();
   const alertedOrderIds = new Set();
   const highlightedOrderIds = new Set();
@@ -37,6 +45,21 @@
 
   function statusMeta(status) {
     return STATUS_META[status] || { label: status || "알 수 없음", tone: "done" };
+  }
+
+  function getPaymentMethod() {
+    return global.document.querySelector('input[name="paymentMethod"]:checked')?.value || "cash";
+  }
+
+  function roundVndToThousand(value) {
+    return Math.round((Number(value) || 0) / 1000) * 1000;
+  }
+
+  function cardAdjustedTotals(baseUsd, baseVnd) {
+    return {
+      totalUsd: Math.round((Number(baseUsd) || 0) * 1.07),
+      totalVnd: roundVndToThousand((Number(baseVnd) || 0) * 1.07)
+    };
   }
 
   function showBanner(message, tone = "error") {
@@ -120,6 +143,31 @@
     }));
   }
 
+  async function attachPaidTotals(orderRows) {
+    const finalizedIds = orderRows
+      .filter((order) => order.finalized_order_id)
+      .map((order) => order.id)
+      .slice(0, 200);
+    if (!finalizedIds.length) return orderRows;
+    const { data, error } = await sb.rpc("app_get_qr_paid_totals", {
+      p_qr_order_ids: finalizedIds
+    });
+    if (error) {
+      console.warn("Final QR paid-total lookup failed; suppressing the potentially different base amount.", error);
+      return orderRows;
+    }
+    const paidByQrOrder = new Map((data || []).map((row) => [row.qr_order_id, row]));
+    return orderRows.map((order) => {
+      const paid = paidByQrOrder.get(order.id);
+      return paid ? {
+        ...order,
+        paid_total_usd: paid.total_usd,
+        paid_total_vnd: paid.total_vnd,
+        paid_payment_method: paid.payment_method
+      } : order;
+    });
+  }
+
   async function fetchOrders() {
     const uniqueOrders = (groups) => [...new Map(groups.flat().map((order) => [order.id, order])).values()];
     try {
@@ -129,7 +177,7 @@
         fetchWithRelations(["accepted"], 80, true),
         fetchWithRelations(["cancelled"], 80)
       ]);
-      return uniqueOrders(groups);
+      return attachPaidTotals(uniqueOrders(groups));
     } catch (embeddedError) {
       console.warn("Embedded QR order query failed; using relationship-cache fallback.", embeddedError);
       const groups = await Promise.all([
@@ -138,7 +186,7 @@
         fetchWithoutRelations(["accepted"], 80, true),
         fetchWithoutRelations(["cancelled"], 80)
       ]);
-      return uniqueOrders(groups);
+      return attachPaidTotals(uniqueOrders(groups));
     }
   }
 
@@ -197,10 +245,11 @@
     if (next) {
       buttons.push(`<button class="qr-btn qr-btn-primary" type="button" data-action="transition" data-order-id="${order.id}" data-status="${next.status}">${next.label}</button>`);
     }
-    if (identity?.role === "admin" && CURRENT_STATUSES.includes(order.status) && !order.finalized_order_id) {
+    if (CURRENT_STATUSES.includes(order.status) && !order.finalized_order_id) {
+      buttons.push(`<button class="qr-btn" type="button" data-action="edit" data-order-id="${order.id}">주문 수정</button>`);
       buttons.push(`<button class="qr-btn qr-btn-danger" type="button" data-action="transition" data-order-id="${order.id}" data-status="cancelled">주문 취소</button>`);
     }
-    if (order.status === "accepted" && !order.finalized_order_id && identity?.role === "admin") {
+    if (order.status === "accepted" && !order.finalized_order_id) {
       buttons.push(`<button class="qr-btn qr-btn-dark" type="button" data-action="payment" data-order-id="${order.id}">최종 결제</button>`);
     }
     if (order.finalized_order_id) {
@@ -218,6 +267,15 @@
       const items = order.items.length
         ? order.items.map(renderItem).join("")
         : '<div class="qr-hint">주문 상세를 불러오지 못했습니다.</div>';
+      const hasPaidTotal = order.finalized_order_id && order.paid_total_vnd != null;
+      const displayTotalVnd = hasPaidTotal ? order.paid_total_vnd : order.total_vnd;
+      const displayTotalUsd = hasPaidTotal ? order.paid_total_usd : order.total_usd;
+      const totalLabel = hasPaidTotal
+        ? `최종 결제금액${order.paid_payment_method === "card_fee7" ? " (카드 + 7%)" : ""}`
+        : (order.finalized_order_id ? "최종 결제금액" : "합계");
+      const totalValue = order.finalized_order_id && !hasPaidTotal
+        ? '<span class="qr-muted">결제 금액을 불러오지 못했습니다.</span>'
+        : `${ui.formatVnd(displayTotalVnd)}${Number(displayTotalUsd || 0) > 0 ? ` · ${ui.formatUsd(displayTotalUsd)}` : ""}`;
       return `
         <article class="qr-card qr-order-card${isNew}" data-status="${global.DGV.escapeHTML(order.status)}">
           <div class="qr-order-head">
@@ -230,7 +288,7 @@
           <div class="qr-order-body">
             ${items}
             ${note ? `<div class="qr-order-note"><strong>요청사항</strong><br>${global.DGV.escapeHTML(note)}</div>` : ""}
-            <div class="qr-order-total"><span>합계</span><span>${ui.formatVnd(order.total_vnd)}${Number(order.total_usd || 0) > 0 ? ` · ${ui.formatUsd(order.total_usd)}` : ""}</span></div>
+            <div class="qr-order-total"><span>${totalLabel}</span><span>${totalValue}</span></div>
           </div>
           ${actionButtons(order)}
         </article>`;
@@ -289,9 +347,265 @@
     refreshTimer = global.setTimeout(() => loadOrders(), delay);
   }
 
+  function menuName(menu) {
+    return menu.ko_name || menu.en_name || menu.vi_name || "메뉴";
+  }
+
+  function lineAmounts(line) {
+    const qty = Number(line.qty) || 0;
+    return {
+      usd: qty * (Number(line.unit_usd) || 0),
+      vnd: qty * (Number(line.unit_vnd) || 0)
+    };
+  }
+
+  async function loadEditableMenus(force = false) {
+    if (!force && editableMenusLoaded) return editableMenus;
+    if (editableMenusPromise) return editableMenusPromise;
+    editableMenusPromise = (async () => {
+      const { data, error } = await sb
+        .from("menu_items")
+        .select("id,type,ko_name,vi_name,en_name,price_usd,price_vnd,sort_order")
+        .eq("is_active", true)
+        .eq("is_orderable", true)
+        .eq("is_sold_out", false)
+        .eq("requires_preorder", false)
+        .is("archived_at", null)
+        .order("sort_order", { ascending: true, nullsFirst: false })
+        .order("ko_name", { ascending: true });
+      if (error) throw error;
+      editableMenus = (data || []).map((menu) => ({
+        ...menu,
+        unit_usd: Number(menu.price_usd) || 0,
+        unit_vnd: Number(menu.price_vnd) || 0
+      }));
+      editableMenusLoaded = true;
+      return editableMenus;
+    })();
+    try {
+      return await editableMenusPromise;
+    } finally {
+      editableMenusPromise = null;
+    }
+  }
+
+  function renderEditMenuChoices() {
+    const select = ui.byId("editMenuSelect");
+    const previous = select.value;
+    const term = ui.byId("editMenuSearch").value.trim().toLocaleLowerCase();
+    const choices = editableMenus.filter((menu) => {
+      if (!term) return true;
+      return [menu.type, menu.ko_name, menu.vi_name, menu.en_name]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase()
+        .includes(term);
+    });
+    select.replaceChildren();
+    choices.forEach((menu) => {
+      const option = global.document.createElement("option");
+      option.value = menu.id;
+      option.textContent = `${menuName(menu)} · ${ui.formatVnd(menu.unit_vnd)}${menu.unit_usd > 0 ? ` · ${ui.formatUsd(menu.unit_usd)}` : ""}`;
+      select.appendChild(option);
+    });
+    if (choices.some((menu) => menu.id === previous)) select.value = previous;
+    select.disabled = choices.length === 0;
+    ui.byId("editMenuAdd").disabled = choices.length === 0;
+  }
+
+  function renderEditTotal() {
+    const preview = ui.byId("editOrderTotal");
+    const totalQty = editLines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0);
+    const totals = editLines.reduce((sum, line) => {
+      const amounts = lineAmounts(line);
+      sum.usd += amounts.usd;
+      sum.vnd += amounts.vnd;
+      return sum;
+    }, { usd: 0, vnd: 0 });
+    const valid = editLines.length >= 1
+      && editLines.length <= 40
+      && totalQty >= 1
+      && totalQty <= 100
+      && editLines.every((line) => Number.isInteger(Number(line.qty)) && Number(line.qty) >= 1 && Number(line.qty) <= 20);
+
+    if (!editLines.length) {
+      preview.textContent = "메뉴를 한 개 이상 남겨 주세요.";
+    } else if (totalQty > 100) {
+      preview.textContent = `전체 수량은 100개까지 가능합니다. (현재 ${totalQty.toLocaleString("ko-KR")}개)`;
+    } else {
+      preview.textContent = `수정 합계: ${ui.formatVnd(totals.vnd)}${totals.usd > 0 ? ` · ${ui.formatUsd(totals.usd)}` : ""} · 총 ${totalQty.toLocaleString("ko-KR")}개`;
+    }
+    preview.dataset.tone = valid ? "ok" : "error";
+    ui.byId("editOrderSave").disabled = !valid;
+    return valid;
+  }
+
+  function renderEditLines() {
+    const container = ui.byId("editOrderLines");
+    if (!editLines.length) {
+      container.innerHTML = '<div class="qr-empty qr-edit-empty">남아 있는 메뉴가 없습니다. 아래에서 메뉴를 추가해 주세요.</div>';
+      renderEditTotal();
+      return;
+    }
+    container.innerHTML = editLines.map((line) => {
+      const name = menuName(line);
+      const sub = [line.en_name, line.vi_name].filter(Boolean).join(" · ");
+      const amounts = lineAmounts(line);
+      return `
+        <div class="qr-edit-line" data-menu-id="${global.DGV.escapeHTML(line.menu_item_id)}">
+          <div class="qr-edit-line-info">
+            <div class="qr-line-name">${global.DGV.escapeHTML(name)}</div>
+            ${sub ? `<div class="qr-line-sub">${global.DGV.escapeHTML(sub)}</div>` : ""}
+            <div class="qr-line-sub">단가 ${ui.formatVnd(line.unit_vnd)}${Number(line.unit_usd || 0) > 0 ? ` · ${ui.formatUsd(line.unit_usd)}` : ""}</div>
+          </div>
+          <label class="qr-edit-qty">
+            <span class="qr-label">수량</span>
+            <input class="qr-input" type="number" min="1" max="20" step="1" inputmode="numeric" value="${Number(line.qty)}" data-edit-qty="${global.DGV.escapeHTML(line.menu_item_id)}" aria-label="${global.DGV.escapeHTML(name)} 수량" />
+          </label>
+          <div class="qr-edit-line-total">${ui.formatVnd(amounts.vnd)}</div>
+          <button class="qr-btn qr-btn-small qr-btn-danger" type="button" data-edit-remove="${global.DGV.escapeHTML(line.menu_item_id)}">삭제</button>
+        </div>`;
+    }).join("");
+    renderEditTotal();
+  }
+
+  async function openEditOrder(orderId, button) {
+    const order = orders.find((row) => row.id === orderId);
+    if (!order
+       || !CURRENT_STATUSES.includes(order.status)
+       || order.finalized_order_id
+       || !["staff", "admin"].includes(identity?.role)) {
+      ui.toast("현재 수정할 수 없는 주문입니다. 최신 상태를 다시 확인해 주세요.", "error");
+      await loadOrders();
+      return;
+    }
+
+    ui.setBusy(button, true, "불러오는 중…");
+    try {
+      await loadEditableMenus(true);
+      const latest = orders.find((row) => row.id === orderId);
+      if (!latest || !CURRENT_STATUSES.includes(latest.status) || latest.finalized_order_id) {
+        throw new Error("현재 수정할 수 없는 주문입니다. 최신 상태를 다시 확인해 주세요.");
+      }
+      editOrderId = latest.id;
+      editExpectedUpdatedAt = latest.updated_at;
+      editLines = latest.items.map((line) => ({
+        menu_item_id: line.menu_item_id,
+        qty: Number(line.qty),
+        menu_type: line.menu_type,
+        ko_name: line.ko_name,
+        vi_name: line.vi_name,
+        en_name: line.en_name,
+        unit_usd: Number(line.unit_usd) || 0,
+        unit_vnd: Number(line.unit_vnd) || 0,
+        snapshot: true
+      }));
+      editOriginalSnapshots = new Map(editLines.map((line) => [line.menu_item_id, { ...line }]));
+      ui.byId("editOrderMeta").textContent = `${latest.table_label} · 주문 #${ui.shortId(latest.id)}`;
+      ui.byId("editOrderNote").value = latest.note || "";
+      ui.byId("editMenuSearch").value = "";
+      ui.byId("editMenuQty").value = "1";
+      renderEditMenuChoices();
+      renderEditLines();
+      ui.byId("editOrderModal").hidden = false;
+      const firstQty = ui.byId("editOrderLines").querySelector("input[data-edit-qty]");
+      (firstQty || ui.byId("editMenuSearch")).focus();
+    } catch (error) {
+      console.error(error);
+      ui.toast(ui.messageOf(error, "주문 수정 화면을 준비하지 못했습니다."), "error");
+    } finally {
+      ui.setBusy(button, false);
+    }
+  }
+
+  function closeEditOrder() {
+    editOrderId = null;
+    editExpectedUpdatedAt = null;
+    editLines = [];
+    editOriginalSnapshots = new Map();
+    ui.byId("editOrderModal").hidden = true;
+  }
+
+  function addEditMenu() {
+    const menuId = ui.byId("editMenuSelect").value;
+    const qty = Number(ui.byId("editMenuQty").value);
+    const menu = editableMenus.find((row) => row.id === menuId);
+    if (!menu || !Number.isInteger(qty) || qty < 1 || qty > 20) {
+      ui.toast("추가할 메뉴와 1~20 사이의 수량을 확인해 주세요.", "error");
+      return;
+    }
+    const existing = editLines.find((line) => line.menu_item_id === menuId);
+    if (existing) {
+      if (Number(existing.qty) + qty > 20) {
+        ui.toast("한 메뉴의 수량은 20개까지 가능합니다.", "error");
+        return;
+      }
+      existing.qty = Number(existing.qty) + qty;
+    } else {
+      if (editLines.length >= 40) {
+        ui.toast("한 주문에는 메뉴를 40종까지 담을 수 있습니다.", "error");
+        return;
+      }
+      const original = editOriginalSnapshots.get(menu.id);
+      editLines.push(original ? {
+        ...original,
+        qty
+      } : {
+        menu_item_id: menu.id,
+        qty,
+        menu_type: menu.type,
+        ko_name: menu.ko_name,
+        vi_name: menu.vi_name,
+        en_name: menu.en_name,
+        unit_usd: menu.unit_usd,
+        unit_vnd: menu.unit_vnd,
+        snapshot: false
+      });
+    }
+    ui.byId("editMenuQty").value = "1";
+    renderEditLines();
+  }
+
+  async function saveEditedOrder(event) {
+    event.preventDefault();
+    if (!editOrderId || !editExpectedUpdatedAt || !["staff", "admin"].includes(identity?.role) || !renderEditTotal()) return;
+    const note = ui.byId("editOrderNote").value;
+    if (note.length > 500 || /[\u0000-\u001f\u007f-\u009f]/.test(note)) {
+      ui.toast("요청사항은 줄바꿈이나 제어 문자 없이 500자 이내로 입력해 주세요.", "error");
+      return;
+    }
+    const orderId = editOrderId;
+    const button = ui.byId("editOrderSave");
+    ui.setBusy(button, true, "저장 중…");
+    try {
+      const { error } = await sb.rpc("app_update_qr_order", {
+        p_order_id: orderId,
+        p_expected_updated_at: editExpectedUpdatedAt,
+        p_note: note.trim() || null,
+        p_items: editLines.map((line) => ({
+          menu_item_id: line.menu_item_id,
+          qty: Number(line.qty)
+        }))
+      });
+      if (error) throw error;
+      closeEditOrder();
+      ui.toast("주문 내용이 수정되었습니다.", "ok");
+      await loadOrders();
+    } catch (error) {
+      console.error(error);
+      ui.toast(ui.messageOf(error, "주문을 수정하지 못했습니다. 최신 상태를 다시 확인해 주세요."), "error");
+      const staleOrClosed = error?.code === "55000";
+      await loadOrders();
+      const latest = orders.find((row) => row.id === orderId);
+      if (staleOrClosed || !latest || !CURRENT_STATUSES.includes(latest.status) || latest.finalized_order_id) closeEditOrder();
+    } finally {
+      ui.setBusy(button, false);
+    }
+  }
+
   async function transitionOrder(orderId, nextStatus, button) {
     const meta = statusMeta(nextStatus);
-    if (nextStatus === "cancelled" && !global.confirm("이 주문을 취소하시겠습니까?\n취소 후에는 직원 화면에서 되돌릴 수 없습니다.")) return;
+    if (nextStatus === "cancelled" && !global.confirm("이 주문을 취소하시겠습니까?\n취소 후에는 주문 화면에서 되돌릴 수 없습니다.")) return;
     ui.setBusy(button, true, "처리 중…");
     try {
       const { error } = await sb.rpc("app_update_qr_order_status", {
@@ -312,28 +626,59 @@
   }
 
   function openPayment(orderId) {
+    const order = orders.find((row) => row.id === orderId);
+    if (!order?.updated_at) {
+      ui.toast("결제할 주문의 최신 상태를 확인하지 못했습니다. 주문 목록을 새로고침해 주세요.", "error");
+      return;
+    }
     paymentOrderId = orderId;
-    ui.byId("paymentMethod").value = "cash";
+    paymentExpectedUpdatedAt = order.updated_at;
+    ui.byId("paymentCash").checked = true;
     ui.byId("paymentGuide").value = "";
     ui.byId("paymentTeam").value = "";
+    updatePaymentPreview();
     ui.byId("paymentModal").hidden = false;
-    ui.byId("paymentMethod").focus();
+    ui.byId("paymentCash").focus();
   }
 
   function closePayment() {
     paymentOrderId = null;
+    paymentExpectedUpdatedAt = null;
     ui.byId("paymentModal").hidden = true;
+  }
+
+  function updatePaymentPreview() {
+    const order = orders.find((row) => row.id === paymentOrderId);
+    const preview = ui.byId("paymentTotalPreview");
+    if (!order) {
+      preview.textContent = "결제할 주문 금액을 확인하지 못했습니다.";
+      preview.dataset.tone = "error";
+      return;
+    }
+
+    const baseUsd = Number(order.total_usd) || 0;
+    const baseVnd = Number(order.total_vnd) || 0;
+    if (getPaymentMethod() === "card_fee7") {
+      const adjusted = cardAdjustedTotals(baseUsd, baseVnd);
+      const feeUsd = adjusted.totalUsd - baseUsd;
+      const feeVnd = adjusted.totalVnd - baseVnd;
+      preview.textContent = `기본 ${ui.formatVnd(baseVnd)}${baseUsd > 0 ? ` · ${ui.formatUsd(baseUsd)}` : ""} + 카드 수수료 7% (${ui.formatVnd(feeVnd)}${feeUsd > 0 ? ` · ${ui.formatUsd(feeUsd)}` : ""}) = ${ui.formatVnd(adjusted.totalVnd)}${adjusted.totalUsd > 0 ? ` · ${ui.formatUsd(adjusted.totalUsd)}` : ""}`;
+    } else {
+      preview.textContent = `최종 결제 금액: ${ui.formatVnd(baseVnd)}${baseUsd > 0 ? ` · ${ui.formatUsd(baseUsd)}` : ""}`;
+    }
+    preview.dataset.tone = "ok";
   }
 
   async function finalizePayment(event) {
     event.preventDefault();
-    if (!paymentOrderId || identity?.role !== "admin") return;
+    if (!paymentOrderId || !paymentExpectedUpdatedAt || !["staff", "admin"].includes(identity?.role)) return;
     const button = ui.byId("paymentConfirm");
     ui.setBusy(button, true, "등록 중…");
     try {
-      const { data, error } = await sb.rpc("app_finalize_qr_order", {
+      const { data, error } = await sb.rpc("app_finalize_qr_order_checked", {
         p_qr_order_id: paymentOrderId,
-        p_payment_method: ui.byId("paymentMethod").value,
+        p_expected_updated_at: paymentExpectedUpdatedAt,
+        p_payment_method: getPaymentMethod(),
         p_guide_name: ui.byId("paymentGuide").value.trim() || null,
         p_team_no: ui.byId("paymentTeam").value.trim() || null
       });
@@ -343,7 +688,13 @@
       await loadOrders();
     } catch (error) {
       console.error(error);
-      ui.toast(ui.messageOf(error, "최종 결제 및 매출 등록에 실패했습니다. 다시 확인해 주세요."), "error");
+      if (error?.code === "55000") {
+        closePayment();
+        ui.toast("주문 또는 결제 정보가 다른 화면에서 변경되었습니다. 최신 주문을 확인한 뒤 다시 결제해 주세요.", "error", 6000);
+        await loadOrders();
+      } else {
+        ui.toast(ui.messageOf(error, "최종 결제 및 매출 등록에 실패했습니다. 다시 확인해 주세요."), "error");
+      }
     } finally {
       ui.setBusy(button, false);
     }
@@ -422,14 +773,45 @@
       if (!button) return;
       if (button.dataset.action === "transition") transitionOrder(button.dataset.orderId, button.dataset.status, button);
       if (button.dataset.action === "payment") openPayment(button.dataset.orderId);
+      if (button.dataset.action === "edit") openEditOrder(button.dataset.orderId, button);
+    });
+    ui.byId("editOrderCancel").addEventListener("click", closeEditOrder);
+    ui.byId("editOrderForm").addEventListener("submit", saveEditedOrder);
+    ui.byId("editMenuSearch").addEventListener("input", renderEditMenuChoices);
+    ui.byId("editMenuAdd").addEventListener("click", addEditMenu);
+    ui.byId("editOrderLines").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-edit-remove]");
+      if (!button) return;
+      editLines = editLines.filter((line) => line.menu_item_id !== button.dataset.editRemove);
+      renderEditLines();
+    });
+    ui.byId("editOrderLines").addEventListener("change", (event) => {
+      const input = event.target.closest("input[data-edit-qty]");
+      if (!input) return;
+      const line = editLines.find((row) => row.menu_item_id === input.dataset.editQty);
+      const qty = Number(input.value);
+      if (!line || !Number.isInteger(qty) || qty < 1 || qty > 20) {
+        ui.toast("수량은 1~20 사이의 정수로 입력해 주세요.", "error");
+        if (line) input.value = String(line.qty);
+        renderEditTotal();
+        return;
+      }
+      line.qty = qty;
+      renderEditLines();
     });
     ui.byId("paymentCancel").addEventListener("click", closePayment);
     ui.byId("paymentForm").addEventListener("submit", finalizePayment);
+    global.document.querySelectorAll('input[name="paymentMethod"]').forEach((input) => {
+      input.addEventListener("change", updatePaymentPreview);
+    });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
         loadOrders();
         if (!realtimeChannel) subscribeRealtime();
       }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !ui.byId("editOrderModal").hidden) closeEditOrder();
     });
     global.addEventListener("online", () => {
       ui.connectionBadge("connecting", "재연결 중");
