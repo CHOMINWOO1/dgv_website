@@ -18,6 +18,7 @@
       currentOrdersEyebrow: "CURRENT TABLE ORDERS",
       currentOrdersTitle: "현재 주문 내역",
       currentOrdersHelp: "결제 또는 취소 전 주문이 표시됩니다.",
+      currentOrdersTotal: "테이블 미결제 합계",
       currentOrdersLimited: "최근 주문 일부만 표시됩니다. 전체 내역은 직원에게 문의해 주세요.",
       statusSubmitted: "주문 확인 대기",
       statusAccepted: "주문 확인",
@@ -76,6 +77,7 @@
       currentOrdersEyebrow: "CURRENT TABLE ORDERS",
       currentOrdersTitle: "Current orders",
       currentOrdersHelp: "Orders stay here until payment or cancellation.",
+      currentOrdersTotal: "Table unpaid total",
       currentOrdersLimited: "Only the most recent orders are shown. Please ask our staff for the full list.",
       statusSubmitted: "Awaiting confirmation",
       statusAccepted: "Order confirmed",
@@ -134,6 +136,7 @@
       currentOrdersEyebrow: "ĐƠN HIỆN TẠI CỦA BÀN",
       currentOrdersTitle: "Đơn hiện tại",
       currentOrdersHelp: "Đơn sẽ hiển thị đến khi thanh toán hoặc hủy.",
+      currentOrdersTotal: "Tổng chưa thanh toán của bàn",
       currentOrdersLimited: "Chỉ hiển thị các đơn gần đây. Vui lòng hỏi nhân viên để xem toàn bộ.",
       statusSubmitted: "Chờ xác nhận",
       statusAccepted: "Đã xác nhận",
@@ -205,7 +208,7 @@
 
   const el = {};
   const ids = [
-    "tableChip", "tableLabel", "currentOrdersSection", "currentOrdersList", "currentOrdersLimit",
+    "tableChip", "tableLabel", "currentOrdersSection", "currentOrdersTotal", "currentOrdersList", "currentOrdersLimit",
     "loadingPanel", "errorPanel", "errorTitle", "errorMessage", "retryButton",
     "menuApp", "categoryNav", "menuList", "cartButton", "cartCount", "cartTotal", "detailBackdrop",
     "detailSheet", "detailClose", "detailMedia", "detailCategory", "detailName", "detailTranslation",
@@ -278,6 +281,11 @@
   function formatVnd(value) {
     const numeric = Number(value);
     return `${new Intl.NumberFormat(state.language === "vi" ? "vi-VN" : state.language === "en" ? "en-US" : "ko-KR").format(Number.isFinite(numeric) ? numeric : 0)} VND`;
+  }
+
+  function formatUsd(value) {
+    const numeric = Number(value);
+    return `${new Intl.NumberFormat(state.language === "vi" ? "vi-VN" : state.language === "en" ? "en-US" : "ko-KR").format(Number.isFinite(numeric) ? numeric : 0)}$`;
   }
 
   function numericPrice(entity) {
@@ -554,9 +562,22 @@
 
   function renderCurrentOrders() {
     el.currentOrdersList.replaceChildren();
-    el.currentOrdersSection.hidden = state.currentOrders.length === 0;
+    el.currentOrdersTotal.replaceChildren();
+    const hasCurrentOrders = state.currentOrders.length > 0;
+    el.currentOrdersSection.hidden = !hasCurrentOrders;
+    el.currentOrdersTotal.hidden = !hasCurrentOrders;
     el.currentOrdersLimit.hidden = !state.currentOrdersTruncated;
-    if (!state.currentOrders.length) return;
+    if (!hasCurrentOrders) return;
+
+    const tableTotals = state.currentOrders.reduce((total, order) => {
+      total.usd += nonNegativeInteger(order.total_usd);
+      total.vnd += nonNegativeInteger(order.total_vnd);
+      return total;
+    }, { usd: 0, vnd: 0 });
+    el.currentOrdersTotal.append(
+      make("span", "", t("currentOrdersTotal")),
+      make("strong", "", `${formatVnd(tableTotals.vnd)} · ${formatUsd(tableTotals.usd)}`)
+    );
 
     state.currentOrders.forEach((order) => {
       const card = make("article", "current-order-card");
@@ -1149,3 +1170,4 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 })(window);
+

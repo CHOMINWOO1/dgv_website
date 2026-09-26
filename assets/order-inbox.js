@@ -21,8 +21,9 @@
   let attentionTimer = null;
   let refreshTimer = null;
   let realtimeChannel = null;
-  let paymentOrderId = null;
-  let paymentExpectedUpdatedAt = null;
+  let paymentTableId = null;
+  let paymentTableLabel = "";
+  let paymentOrders = [];
   let editOrderId = null;
   let editExpectedUpdatedAt = null;
   let editLines = [];
@@ -60,6 +61,46 @@
       totalUsd: Math.round((Number(baseUsd) || 0) * 1.07),
       totalVnd: roundVndToThousand((Number(baseVnd) || 0) * 1.07)
     };
+  }
+
+  function sumOrderTotals(orderRows) {
+    return orderRows.reduce((total, order) => {
+      total.usd += Number(order.total_usd) || 0;
+      total.vnd += Number(order.total_vnd) || 0;
+      return total;
+    }, { usd: 0, vnd: 0 });
+  }
+
+  function openOrdersForTable(tableId) {
+    return orders
+      .filter((order) => order.table_id === tableId
+        && CURRENT_STATUSES.includes(order.status)
+        && !order.finalized_order_id)
+      .sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at));
+  }
+
+  function collapseFinalizedSales(orderRows) {
+    const result = [];
+    const sales = new Map();
+    orderRows.forEach((order) => {
+      if (!order.finalized_order_id) {
+        result.push(order);
+        return;
+      }
+      let sale = sales.get(order.finalized_order_id);
+      if (!sale) {
+        sale = { ...order, checkout_orders: [] };
+        sales.set(order.finalized_order_id, sale);
+        result.push(sale);
+      }
+      sale.checkout_orders.push(order);
+    });
+    sales.forEach((sale) => {
+      sale.checkout_orders.sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at));
+      sale.items = sale.checkout_orders.flatMap((order) => order.items);
+      sale.checkout_order_count = sale.checkout_orders.length;
+    });
+    return result;
   }
 
   function showBanner(message, tone = "error") {
@@ -222,8 +263,8 @@
     const count = (status) => orders.filter((order) => order.status === status).length;
     ui.byId("submittedCount").textContent = count("submitted").toLocaleString("ko-KR");
     ui.byId("acceptedCount").textContent = orders.filter((order) => order.status === "accepted" && !order.finalized_order_id).length.toLocaleString("ko-KR");
-    ui.byId("finalizedCount").textContent = orders.filter((order) => order.finalized_order_id).length.toLocaleString("ko-KR");
-    ui.byId("visibleCount").textContent = filteredOrders().length.toLocaleString("ko-KR");
+    ui.byId("finalizedCount").textContent = new Set(orders.filter((order) => order.finalized_order_id).map((order) => order.finalized_order_id)).size.toLocaleString("ko-KR");
+    ui.byId("visibleCount").textContent = collapseFinalizedSales(filteredOrders()).length.toLocaleString("ko-KR");
   }
 
   function renderItem(item) {
@@ -249,9 +290,6 @@
       buttons.push(`<button class="qr-btn" type="button" data-action="edit" data-order-id="${order.id}">주문 수정</button>`);
       buttons.push(`<button class="qr-btn qr-btn-danger" type="button" data-action="transition" data-order-id="${order.id}" data-status="cancelled">주문 취소</button>`);
     }
-    if (order.status === "accepted" && !order.finalized_order_id) {
-      buttons.push(`<button class="qr-btn qr-btn-dark" type="button" data-action="payment" data-order-id="${order.id}">최종 결제</button>`);
-    }
     if (order.finalized_order_id) {
       buttons.push(`<span class="qr-status" data-tone="ready">매출 등록 완료</span>`);
     }
@@ -263,10 +301,25 @@
       const isNew = order.status === "submitted"
         ? (highlightedOrderIds.has(order.id) ? " is-new needs-attention" : " needs-attention")
         : "";
+      const checkoutOrders = order.checkout_orders || [order];
+      const bundledSale = Boolean(order.finalized_order_id && checkoutOrders.length > 1);
       const note = String(order.note || "").trim();
-      const items = order.items.length
-        ? order.items.map(renderItem).join("")
-        : '<div class="qr-hint">주문 상세를 불러오지 못했습니다.</div>';
+      const items = bundledSale
+        ? checkoutOrders.map((checkoutOrder, index) => {
+            const checkoutItems = checkoutOrder.items.length
+              ? checkoutOrder.items.map(renderItem).join("")
+              : '<div class="qr-hint">주문 상세를 불러오지 못했습니다.</div>';
+            const checkoutNote = String(checkoutOrder.note || "").trim();
+            return `
+              <section class="qr-sale-order-detail">
+                <div class="qr-sale-order-title">주문 ${index + 1} · ${ui.formatTime(checkoutOrder.submitted_at)} · #${ui.shortId(checkoutOrder.id)}</div>
+                ${checkoutItems}
+                ${checkoutNote ? `<div class="qr-order-note"><strong>요청사항</strong><br>${global.DGV.escapeHTML(checkoutNote)}</div>` : ""}
+              </section>`;
+          }).join("")
+        : (order.items.length
+            ? order.items.map(renderItem).join("")
+            : '<div class="qr-hint">주문 상세를 불러오지 못했습니다.</div>');
       const hasPaidTotal = order.finalized_order_id && order.paid_total_vnd != null;
       const displayTotalVnd = hasPaidTotal ? order.paid_total_vnd : order.total_vnd;
       const displayTotalUsd = hasPaidTotal ? order.paid_total_usd : order.total_usd;
@@ -281,22 +334,44 @@
           <div class="qr-order-head">
             <div>
               <div class="qr-table-no">${global.DGV.escapeHTML(order.table_label)}</div>
-              <div class="qr-order-time">${ui.formatTime(order.submitted_at)} · #${ui.shortId(order.id)}</div>
+              <div class="qr-order-time">${bundledSale
+                ? `통합 결제 ${ui.formatTime(order.finalized_at)} · 매출 #${ui.shortId(order.finalized_order_id)}`
+                : `${ui.formatTime(order.submitted_at)} · #${ui.shortId(order.id)}`}</div>
             </div>
             <span class="qr-status" data-tone="${status.tone}">${status.label}</span>
           </div>
           <div class="qr-order-body">
             ${items}
-            ${note ? `<div class="qr-order-note"><strong>요청사항</strong><br>${global.DGV.escapeHTML(note)}</div>` : ""}
+            ${!bundledSale && note ? `<div class="qr-order-note"><strong>요청사항</strong><br>${global.DGV.escapeHTML(note)}</div>` : ""}
             <div class="qr-order-total"><span>${totalLabel}</span><span>${totalValue}</span></div>
           </div>
           ${actionButtons(order)}
         </article>`;
   }
 
+  function renderTableCheckout(group) {
+    if (!group.tableId || ui.byId("statusFilter").value === "cancelled") return "";
+    const openOrders = openOrdersForTable(group.tableId);
+    if (!openOrders.length) return "";
+    const submittedCount = openOrders.filter((order) => order.status === "submitted").length;
+    const acceptedCount = openOrders.filter((order) => order.status === "accepted").length;
+    const totals = sumOrderTotals(openOrders);
+    const statusText = submittedCount
+      ? `신규 ${submittedCount.toLocaleString("ko-KR")}건 · 확인 ${acceptedCount.toLocaleString("ko-KR")}건`
+      : `확인 완료 ${acceptedCount.toLocaleString("ko-KR")}건`;
+    return `
+      <div class="qr-table-checkout">
+        <div>
+          <div class="qr-table-checkout-total">미결제 합계 ${ui.formatVnd(totals.vnd)}${totals.usd > 0 ? ` · ${ui.formatUsd(totals.usd)}` : ""}</div>
+          <div class="qr-hint">${statusText} · 테이블의 모든 주문을 한 번에 결제합니다.</div>
+        </div>
+        <button class="qr-btn qr-btn-dark" type="button" data-action="table-payment" data-table-id="${global.DGV.escapeHTML(group.tableId)}">테이블 전체 결제</button>
+      </div>`;
+  }
+
   function renderOrders() {
     const grid = ui.byId("ordersGrid");
-    const rows = filteredOrders();
+    const rows = collapseFinalizedSales(filteredOrders());
     renderSummary();
     if (!rows.length) {
       grid.innerHTML = '<div class="qr-empty">선택한 상태의 주문이 없습니다.</div>';
@@ -305,15 +380,16 @@
     const groups = new Map();
     rows.forEach((order) => {
       const key = order.table_id || order.table_label;
-      if (!groups.has(key)) groups.set(key, { label: order.table_label, orders: [] });
+      if (!groups.has(key)) groups.set(key, { tableId: order.table_id, label: order.table_label, orders: [] });
       groups.get(key).orders.push(order);
     });
     grid.innerHTML = [...groups.values()].map((group) => `
       <section class="qr-table-order-group">
         <div class="qr-table-order-group-title">
           <h3>${global.DGV.escapeHTML(group.label)}</h3>
-          <span class="qr-pill">주문 ${group.orders.length.toLocaleString("ko-KR")}건</span>
+          <span class="qr-pill">표시 ${group.orders.length.toLocaleString("ko-KR")}건</span>
         </div>
+        ${renderTableCheckout(group)}
         <div class="qr-table-order-cards">
           ${group.orders.map(renderOrderCard).join("")}
         </div>
@@ -625,39 +701,74 @@
     }
   }
 
-  function openPayment(orderId) {
-    const order = orders.find((row) => row.id === orderId);
-    if (!order?.updated_at) {
-      ui.toast("결제할 주문의 최신 상태를 확인하지 못했습니다. 주문 목록을 새로고침해 주세요.", "error");
+  function renderPaymentOrderSummary() {
+    const container = ui.byId("paymentOrderSummary");
+    const totals = sumOrderTotals(paymentOrders);
+    container.innerHTML = `
+      <div class="qr-payment-summary-head">
+        <strong>${global.DGV.escapeHTML(paymentTableLabel)} · 주문 ${paymentOrders.length.toLocaleString("ko-KR")}건</strong>
+        <span>${ui.formatVnd(totals.vnd)}${totals.usd > 0 ? ` · ${ui.formatUsd(totals.usd)}` : ""}</span>
+      </div>
+      <div class="qr-payment-orders">
+        ${paymentOrders.map((order, index) => `
+          <section class="qr-payment-order">
+            <div class="qr-payment-order-title">
+              <strong>주문 ${index + 1}</strong>
+              <span>${ui.formatTime(order.submitted_at)} · #${ui.shortId(order.id)} · ${ui.formatVnd(order.total_vnd)}${Number(order.total_usd || 0) > 0 ? ` · ${ui.formatUsd(order.total_usd)}` : ""}</span>
+            </div>
+            ${order.items.map(renderItem).join("") || '<div class="qr-hint">주문 상세를 불러오지 못했습니다.</div>'}
+            ${String(order.note || "").trim() ? `<div class="qr-order-note"><strong>요청사항</strong><br>${global.DGV.escapeHTML(String(order.note).trim())}</div>` : ""}
+          </section>`).join("")}
+      </div>`;
+  }
+
+  function openPayment(tableId) {
+    const tableOrders = openOrdersForTable(tableId);
+    const submitted = tableOrders.filter((order) => order.status === "submitted");
+    if (submitted.length) {
+      ui.toast(`신규 주문 ${submitted.length.toLocaleString("ko-KR")}건을 먼저 주문 확인해 주세요. 미확인 주문이 있으면 테이블 전체 결제를 진행할 수 없습니다.`, "error", 6500);
       return;
     }
-    paymentOrderId = orderId;
-    paymentExpectedUpdatedAt = order.updated_at;
+    const accepted = tableOrders.filter((order) => order.status === "accepted");
+    if (!accepted.length || accepted.some((order) => !order.updated_at)) {
+      ui.toast("결제할 테이블 주문의 최신 상태를 확인하지 못했습니다. 주문 목록을 새로고침해 주세요.", "error");
+      return;
+    }
+    paymentTableId = tableId;
+    paymentTableLabel = accepted[0].table_label;
+    paymentOrders = accepted.map((order) => ({
+      ...order,
+      items: order.items.map((item) => ({ ...item }))
+    }));
     ui.byId("paymentCash").checked = true;
     ui.byId("paymentGuide").value = "";
     ui.byId("paymentTeam").value = "";
+    ui.byId("paymentTitle").textContent = `${paymentTableLabel} 테이블 전체 결제`;
+    renderPaymentOrderSummary();
     updatePaymentPreview();
     ui.byId("paymentModal").hidden = false;
     ui.byId("paymentCash").focus();
   }
 
   function closePayment() {
-    paymentOrderId = null;
-    paymentExpectedUpdatedAt = null;
+    paymentTableId = null;
+    paymentTableLabel = "";
+    paymentOrders = [];
+    ui.byId("paymentOrderSummary").replaceChildren();
     ui.byId("paymentModal").hidden = true;
   }
 
   function updatePaymentPreview() {
-    const order = orders.find((row) => row.id === paymentOrderId);
     const preview = ui.byId("paymentTotalPreview");
-    if (!order) {
-      preview.textContent = "결제할 주문 금액을 확인하지 못했습니다.";
+    if (!paymentOrders.length) {
+      preview.textContent = "결제할 테이블 주문 금액을 확인하지 못했습니다.";
       preview.dataset.tone = "error";
       return;
     }
 
-    const baseUsd = Number(order.total_usd) || 0;
-    const baseVnd = Number(order.total_vnd) || 0;
+    const totals = sumOrderTotals(paymentOrders);
+    const baseUsd = totals.usd;
+    const baseVnd = totals.vnd;
     if (getPaymentMethod() === "card_fee7") {
       const adjusted = cardAdjustedTotals(baseUsd, baseVnd);
       const feeUsd = adjusted.totalUsd - baseUsd;
@@ -669,28 +780,68 @@
     preview.dataset.tone = "ok";
   }
 
+  async function finalizeTableOrders({ tableId, expectedOrders, paymentMethod, guideName, teamNo }) {
+    return sb.rpc("app_finalize_qr_table_orders_checked", {
+      p_table_id: tableId,
+      p_expected_orders: expectedOrders,
+      p_payment_method: paymentMethod,
+      p_guide_name: guideName,
+      p_team_no: teamNo
+    });
+  }
+
+  function markTableCheckoutComplete(paidOrderId, paymentMethod) {
+    const finalizedIds = new Set(paymentOrders.map((order) => order.id));
+    const finalizedAt = new Date().toISOString();
+    const baseTotals = sumOrderTotals(paymentOrders);
+    const paidTotals = paymentMethod === "card_fee7"
+      ? cardAdjustedTotals(baseTotals.usd, baseTotals.vnd)
+      : { totalUsd: baseTotals.usd, totalVnd: baseTotals.vnd };
+    orders = orders.map((order) => finalizedIds.has(order.id) ? {
+      ...order,
+      finalized_at: finalizedAt,
+      finalized_order_id: paidOrderId,
+      finalized_payment_choice: paymentMethod,
+      paid_total_usd: paidTotals.totalUsd,
+      paid_total_vnd: paidTotals.totalVnd,
+      paid_payment_method: paymentMethod,
+      updated_at: finalizedAt
+    } : order);
+    renderOrders();
+  }
+
   async function finalizePayment(event) {
     event.preventDefault();
-    if (!paymentOrderId || !paymentExpectedUpdatedAt || !["staff", "admin"].includes(identity?.role)) return;
+    if (!paymentTableId || !paymentOrders.length || !["staff", "admin"].includes(identity?.role)) return;
+    const latestSubmitted = openOrdersForTable(paymentTableId).filter((order) => order.status === "submitted");
+    if (latestSubmitted.length) {
+      ui.toast(`신규 주문 ${latestSubmitted.length.toLocaleString("ko-KR")}건을 먼저 주문 확인해 주세요. 미확인 주문이 있으면 테이블 전체 결제를 진행할 수 없습니다.`, "error", 6500);
+      return;
+    }
     const button = ui.byId("paymentConfirm");
     ui.setBusy(button, true, "등록 중…");
     try {
-      const { data, error } = await sb.rpc("app_finalize_qr_order_checked", {
-        p_qr_order_id: paymentOrderId,
-        p_expected_updated_at: paymentExpectedUpdatedAt,
-        p_payment_method: getPaymentMethod(),
-        p_guide_name: ui.byId("paymentGuide").value.trim() || null,
-        p_team_no: ui.byId("paymentTeam").value.trim() || null
+      const paymentMethod = getPaymentMethod();
+      const { data, error } = await finalizeTableOrders({
+        tableId: paymentTableId,
+        expectedOrders: paymentOrders.map((order) => ({
+          id: order.id,
+          updated_at: order.updated_at
+        })),
+        paymentMethod,
+        guideName: ui.byId("paymentGuide").value.trim() || null,
+        teamNo: ui.byId("paymentTeam").value.trim() || null
       });
       if (error) throw error;
+      markTableCheckoutComplete(data, paymentMethod);
       closePayment();
-      ui.toast(`최종 결제가 완료되어 admin 매출에 등록되었습니다. (매출 주문 #${ui.shortId(data)})`, "ok", 5500);
+      ui.toast(`테이블 전체 결제가 완료되어 admin 매출에 한 건으로 등록되었습니다. (매출 주문 #${ui.shortId(data)})`, "ok", 5500);
       await loadOrders();
     } catch (error) {
       console.error(error);
       if (error?.code === "55000") {
         closePayment();
-        ui.toast("주문 또는 결제 정보가 다른 화면에서 변경되었습니다. 최신 주문을 확인한 뒤 다시 결제해 주세요.", "error", 6000);
+        ui.toast("새 주문이 들어왔거나 주문 정보가 다른 화면에서 변경되었습니다. 모든 신규 주문을 확인한 뒤 테이블 전체 결제를 다시 진행해 주세요.", "error", 6500);
         await loadOrders();
       } else {
         ui.toast(ui.messageOf(error, "최종 결제 및 매출 등록에 실패했습니다. 다시 확인해 주세요."), "error");
@@ -772,7 +923,7 @@
       const button = event.target.closest("button[data-action]");
       if (!button) return;
       if (button.dataset.action === "transition") transitionOrder(button.dataset.orderId, button.dataset.status, button);
-      if (button.dataset.action === "payment") openPayment(button.dataset.orderId);
+      if (button.dataset.action === "table-payment") openPayment(button.dataset.tableId);
       if (button.dataset.action === "edit") openEditOrder(button.dataset.orderId, button);
     });
     ui.byId("editOrderCancel").addEventListener("click", closeEditOrder);
@@ -844,3 +995,4 @@
 
   boot();
 })(window);
+

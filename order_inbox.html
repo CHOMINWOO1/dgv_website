@@ -7,7 +7,7 @@
   <meta name="referrer" content="no-referrer" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" />
   <title>HANA 주문 접수</title>
-  <link rel="stylesheet" href="assets/qr-staff.css" />
+  <link rel="stylesheet" href="assets/qr-staff.css?v=20260926-table-checkout" />
 </head>
 <body>
   <main class="qr-shell">
@@ -93,9 +93,10 @@
   </div>
 
   <div class="qr-modal-back" id="paymentModal" hidden>
-    <form class="qr-modal" id="paymentForm">
-      <h2>최종 결제</h2>
-      <p>온라인 결제가 아닙니다. 카드 결제 + 7%를 선택하면 계산 페이지와 같은 방식으로 수수료가 더해지고, 확정 시 admin 매출에 한 번만 등록됩니다.</p>
+    <form class="qr-modal qr-modal-wide" id="paymentForm">
+      <h2 id="paymentTitle">테이블 전체 결제</h2>
+      <p>해당 테이블의 주문 확인된 미결제 주문을 모두 합쳐 한 번만 결제합니다. 신규 주문이 남아 있으면 결제할 수 없습니다.</p>
+      <div class="qr-payment-summary" id="paymentOrderSummary" aria-live="polite"></div>
       <div class="qr-field" role="radiogroup" aria-labelledby="paymentMethodLabel">
         <div class="qr-label" id="paymentMethodLabel">결제 수단</div>
         <label class="qr-checkbox" for="paymentCash">
@@ -177,6 +178,7 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/order-inbox.js"></script>
+  <script src="assets/order-inbox.js?v=20260926-table-checkout"></script>
 </body>
 </html>
+

@@ -9,7 +9,7 @@
   <title>HANA Table Order</title>
   <meta name="description" content="HANA Restaurant table order menu">
   <link rel="icon" href="image/logo.png">
-  <link rel="stylesheet" href="assets/qr-menu.css">
+  <link rel="stylesheet" href="assets/qr-menu.css?v=20260926-table-checkout">
 </head>
 <body>
   <a class="skip-link" href="#menuList">메뉴로 바로 이동</a>
@@ -58,6 +58,7 @@
           <p data-copy="currentOrdersHelp">결제 또는 취소 전 주문이 표시됩니다.</p>
         </div>
       </div>
+      <div class="current-orders-grand-total" id="currentOrdersTotal" hidden></div>
       <div class="current-orders-list" id="currentOrdersList" aria-live="polite"></div>
       <p class="current-orders-limit" id="currentOrdersLimit" data-copy="currentOrdersLimited" hidden>최근 주문 일부만 표시됩니다. 전체 내역은 직원에게 문의해 주세요.</p>
     </section>
@@ -188,6 +189,7 @@
   </noscript>
 
   <script src="assets/supabase-config.js"></script>
-  <script src="assets/qr-menu.js"></script>
+  <script src="assets/qr-menu.js?v=20260926-table-checkout"></script>
 </body>
 </html>
+
