@@ -15,10 +15,12 @@
     "test:xlsx": "node tests/xlsx-export-regression.mjs",
     "test:frontend-syntax": "node tests/frontend-syntax.mjs",
     "test:messages": "node tests/polite-messages-regression.mjs",
-    "test:ui": "node tests/ui-structure-regression.mjs"
+    "test:ui": "node tests/ui-structure-regression.mjs",
+    "test:qr-ordering": "node tests/qr-ordering-regression.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.112.2"
+    "@supabase/supabase-js": "2.112.2",
+    "qrcodejs": "1.0.0"
   },
   "devDependencies": {
     "supabase": "2.112.0"

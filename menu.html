@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#3b261b">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.supabase.co; img-src 'self' data: blob: https:; style-src 'self'; script-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
+  <title>HANA Table Order</title>
+  <meta name="description" content="HANA Restaurant table order menu">
+  <link rel="icon" href="image/logo.png">
+  <link rel="stylesheet" href="assets/qr-menu.css">
+</head>
+<body>
+  <a class="skip-link" href="#menuList">메뉴로 바로 이동</a>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand-block">
+        <img class="brand-logo" src="image/logo.png" alt="HANA Restaurant">
+        <div>
+          <p class="brand-kicker">KOREAN RESTAURANT · ĐÀ LẠT</p>
+          <h1>HANA</h1>
+        </div>
+      </div>
+      <div class="language-switch" role="group" aria-label="Language">
+        <button type="button" data-language="ko" aria-pressed="true">한국어</button>
+        <button type="button" data-language="en" aria-pressed="false">EN</button>
+        <button type="button" data-language="vi" aria-pressed="false">VI</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="welcome" aria-labelledby="welcomeTitle">
+      <p class="eyebrow" data-copy="welcomeEyebrow">WELCOME TO HANA</p>
+      <h2 id="welcomeTitle" data-copy="welcomeTitle">정성으로 준비한 하나식당 메뉴</h2>
+      <p class="welcome-copy" data-copy="welcomeBody">메뉴를 골라 테이블에서 바로 주문해 주세요.</p>
+      <div class="table-chip" id="tableChip" hidden>
+        <span aria-hidden="true">●</span>
+        <strong id="tableLabel"></strong>
+      </div>
+    </section>
+
+    <section class="notice-card" aria-label="Ordering information">
+      <div class="notice-icon" aria-hidden="true">i</div>
+      <div>
+        <strong data-copy="payAtCounter">결제는 직원에게 해주세요.</strong>
+        <p data-copy="noOnlinePayment">이 페이지에서는 온라인 결제가 진행되지 않습니다.</p>
+      </div>
+    </section>
+
+    <section class="state-panel" id="loadingPanel" aria-live="polite">
+      <div class="loader" aria-hidden="true"></div>
+      <h2 data-copy="loadingTitle">메뉴를 준비하고 있습니다</h2>
+      <p data-copy="loadingBody">잠시만 기다려 주세요.</p>
+    </section>
+
+    <section class="state-panel state-panel-error" id="errorPanel" hidden aria-live="assertive">
+      <div class="state-symbol" aria-hidden="true">!</div>
+      <h2 id="errorTitle">메뉴를 불러오지 못했습니다</h2>
+      <p id="errorMessage">직원에게 문의해 주세요.</p>
+      <button class="secondary-button" id="retryButton" type="button" data-copy="retry">다시 시도</button>
+    </section>
+
+    <div id="menuApp" hidden>
+      <nav class="category-nav" aria-label="Menu categories">
+        <div class="category-scroll" id="categoryNav"></div>
+      </nav>
+
+      <section class="menu-content" id="menuList" aria-label="Menu"></section>
+
+      <p class="menu-footnote" data-copy="priceNotice">표시된 가격은 부가세 포함 가격이며, 주문 시점의 매장 가격이 적용됩니다.</p>
+    </div>
+  </main>
+
+  <button class="cart-bar" id="cartButton" type="button" hidden aria-controls="cartSheet">
+    <span class="cart-count" id="cartCount">0</span>
+    <strong data-copy="viewCart">주문서 보기</strong>
+    <span id="cartTotal">0 VND</span>
+  </button>
+
+  <div class="sheet-backdrop" id="detailBackdrop" hidden></div>
+  <section class="bottom-sheet detail-sheet" id="detailSheet" role="dialog" aria-modal="true" aria-labelledby="detailName" hidden>
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <button class="close-button" id="detailClose" type="button" aria-label="닫기">×</button>
+    <div class="detail-media" id="detailMedia"></div>
+    <div class="sheet-body">
+      <p class="item-category" id="detailCategory"></p>
+      <h2 id="detailName"></h2>
+      <p class="item-translation" id="detailTranslation"></p>
+      <p class="item-description" id="detailDescription"></p>
+      <fieldset class="variant-list" id="variantList" hidden>
+        <legend data-copy="chooseOption">옵션을 선택해 주세요</legend>
+      </fieldset>
+      <label class="field-label" for="detailNote" data-copy="itemRequest">메뉴 요청사항</label>
+      <textarea id="detailNote" maxlength="120" rows="2" data-placeholder="itemRequestPlaceholder" placeholder="예: 덜 맵게 해주세요."></textarea>
+      <div class="detail-action">
+        <div class="quantity-control" aria-label="Quantity">
+          <button type="button" id="detailMinus" aria-label="수량 줄이기">−</button>
+          <output id="detailQuantity">1</output>
+          <button type="button" id="detailPlus" aria-label="수량 늘리기">+</button>
+        </div>
+        <button class="primary-button add-button" id="detailAdd" type="button"></button>
+      </div>
+    </div>
+  </section>
+
+  <div class="sheet-backdrop" id="cartBackdrop" hidden></div>
+  <section class="bottom-sheet cart-sheet" id="cartSheet" role="dialog" aria-modal="true" aria-labelledby="cartTitle" hidden>
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-heading">
+      <div>
+        <p class="eyebrow" data-copy="yourOrder">YOUR ORDER</p>
+        <h2 id="cartTitle" data-copy="cartTitle">주문서</h2>
+      </div>
+      <button class="close-button static-close" id="cartClose" type="button" aria-label="닫기">×</button>
+    </div>
+    <div class="cart-body">
+      <div id="cartLines"></div>
+      <div class="empty-cart" id="emptyCart" hidden>
+        <div aria-hidden="true">○</div>
+        <p data-copy="emptyCart">담긴 메뉴가 없습니다.</p>
+      </div>
+
+      <label class="field-label" for="orderNote" data-copy="orderRequest">전체 요청사항</label>
+      <textarea id="orderNote" maxlength="300" rows="3" data-placeholder="orderRequestPlaceholder" placeholder="직원에게 전달할 요청사항을 입력해 주세요."></textarea>
+      <div class="note-meta">
+        <span class="field-error" id="noteError" hidden></span>
+        <span id="noteCounter">0 / 500</span>
+      </div>
+
+      <div class="total-row">
+        <span data-copy="total">합계</span>
+        <strong id="sheetTotal">0 VND</strong>
+      </div>
+      <p class="payment-note" data-copy="paymentNote">주문 접수 후 직원에게 현금 또는 카드로 결제해 주세요.</p>
+      <button class="primary-button order-button" id="reviewButton" type="button" data-copy="reviewOrder">주문 확인</button>
+    </div>
+  </section>
+
+  <div class="modal-backdrop" id="confirmBackdrop" hidden>
+    <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div class="confirm-icon" aria-hidden="true">✓</div>
+      <h2 id="confirmTitle" data-copy="confirmTitle">주문을 접수할까요?</h2>
+      <p id="confirmTable"></p>
+      <div class="confirm-lines" id="confirmLines"></div>
+      <div class="total-row confirm-total">
+        <span data-copy="total">합계</span>
+        <strong id="confirmTotal">0 VND</strong>
+      </div>
+      <p class="payment-note" data-copy="confirmNotice">접수 후 변경이 필요하면 직원에게 말씀해 주세요.</p>
+      <div class="dialog-actions">
+        <button class="secondary-button" id="confirmCancel" type="button" data-copy="goBack">돌아가기</button>
+        <button class="primary-button" id="submitOrder" type="button" data-copy="submitOrder">주문하기</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="successBackdrop" hidden>
+    <section class="confirm-dialog success-dialog" role="dialog" aria-modal="true" aria-labelledby="successTitle">
+      <div class="success-mark" aria-hidden="true">✓</div>
+      <p class="eyebrow" data-copy="orderComplete">ORDER RECEIVED</p>
+      <h2 id="successTitle" data-copy="successTitle">주문이 접수되었습니다</h2>
+      <p class="success-number" id="successNumber"></p>
+      <p data-copy="successBody">직원이 주문을 확인한 뒤 준비해 드리겠습니다.</p>
+      <div class="success-summary" id="successSummary"></div>
+      <button class="primary-button" id="newOrderButton" type="button" data-copy="newOrder">메뉴 더 보기</button>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <noscript>
+    <div class="noscript">메뉴를 보려면 브라우저에서 JavaScript를 켜주세요.</div>
+  </noscript>
+
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/qr-menu.js"></script>
+</body>
+</html>

@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#faf6ee" />
+  <meta name="referrer" content="no-referrer" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" />
+  <title>HANA 메뉴 관리</title>
+  <link rel="stylesheet" href="assets/qr-staff.css" />
+</head>
+<body>
+  <main class="qr-shell">
+    <header class="qr-header">
+      <div>
+        <h1 class="qr-brand-title">HANA MENU</h1>
+        <p class="qr-brand-subtitle">Menu &amp; table QR settings</p>
+      </div>
+      <div class="qr-header-actions">
+        <span class="qr-pill"><span class="qr-dot is-online"></span>관리자</span>
+        <a class="qr-btn qr-btn-primary" href="order_inbox.html">주문 접수</a>
+        <button class="qr-btn" id="reloadBtn" type="button">새로고침</button>
+        <button class="qr-btn" id="signOutBtn" type="button">로그아웃</button>
+      </div>
+    </header>
+
+    <div class="qr-banner" id="adminBanner" hidden></div>
+
+    <section class="qr-summary" aria-label="메뉴 현황">
+      <article class="qr-card qr-summary-card">
+        <div class="qr-summary-label">전체 메뉴</div>
+        <div class="qr-summary-value" id="menuCount">0</div>
+      </article>
+      <article class="qr-card qr-summary-card">
+        <div class="qr-summary-label">QR 주문 가능</div>
+        <div class="qr-summary-value" id="orderableCount">0</div>
+      </article>
+      <article class="qr-card qr-summary-card">
+        <div class="qr-summary-label">품절</div>
+        <div class="qr-summary-value" id="soldOutCount">0</div>
+      </article>
+      <article class="qr-card qr-summary-card">
+        <div class="qr-summary-label">활성 테이블</div>
+        <div class="qr-summary-value" id="activeTableCount">0</div>
+      </article>
+    </section>
+
+    <section class="qr-editor-layout" aria-label="메뉴 편집">
+      <div class="qr-card qr-card-pad">
+        <div class="qr-section-head">
+          <div>
+            <h2 class="qr-section-title" id="menuListTitle">메뉴 목록</h2>
+            <div class="qr-hint" id="menuListHint">Supabase에 저장된 현재 가격입니다.</div>
+          </div>
+          <div class="qr-button-row">
+            <button class="qr-btn qr-btn-small" id="archivedMenuToggleBtn" type="button" aria-pressed="false">삭제 메뉴 보기</button>
+            <button class="qr-btn qr-btn-primary qr-btn-small" id="newMenuBtn" type="button">새 메뉴</button>
+          </div>
+        </div>
+        <div class="qr-filter-row" style="margin-bottom:8px">
+          <input class="qr-input" id="menuSearch" type="search" placeholder="메뉴명 검색" />
+          <select class="qr-select" id="menuTypeFilter">
+            <option value="">모든 분류</option>
+          </select>
+        </div>
+        <div class="qr-menu-list" id="menuList">
+          <div class="qr-empty">메뉴를 불러오는 중입니다…</div>
+        </div>
+      </div>
+
+      <div class="qr-card">
+        <form class="qr-form" id="menuForm">
+          <div class="qr-section-head">
+            <div>
+              <h2 class="qr-section-title" id="editorTitle">메뉴를 선택해 주세요</h2>
+              <div class="qr-hint" id="editorHint">목록에서 수정할 메뉴를 선택할 수 있습니다.</div>
+            </div>
+            <span class="qr-status" id="editorState" data-tone="done">선택 안 됨</span>
+          </div>
+
+          <div class="qr-form-grid">
+            <div class="qr-field">
+              <label class="qr-label" for="menuType">분류</label>
+              <input class="qr-input" id="menuType" list="menuTypeOptions" maxlength="40" required />
+              <datalist id="menuTypeOptions">
+                <option value="drink"></option>
+                <option value="side"></option>
+                <option value="other"></option>
+              </datalist>
+            </div>
+            <div class="qr-field">
+              <label class="qr-label" for="qrCategory">QR 메뉴판 분류</label>
+              <select class="qr-select" id="qrCategory" required>
+                <option value="single">1인 메뉴</option>
+                <option value="shared">2인 이상 메뉴</option>
+                <option value="snack">안주·사이드</option>
+                <option value="preorder">사전 주문</option>
+                <option value="drink">주류·음료</option>
+                <option value="cafe">커피·카페</option>
+              </select>
+            </div>
+            <div class="qr-field">
+              <label class="qr-label" for="sortOrder">표시 순서</label>
+              <input class="qr-input" id="sortOrder" type="number" min="0" max="99999" step="1" required />
+            </div>
+
+            <div class="qr-field">
+              <label class="qr-label" for="koName">한국어 이름</label>
+              <input class="qr-input" id="koName" maxlength="120" required />
+            </div>
+            <div class="qr-field">
+              <label class="qr-label" for="viName">베트남어 이름</label>
+              <input class="qr-input" id="viName" maxlength="120" />
+            </div>
+            <div class="qr-field qr-field-wide">
+              <label class="qr-label" for="enName">영어 이름</label>
+              <input class="qr-input" id="enName" maxlength="120" />
+            </div>
+
+            <div class="qr-field">
+              <label class="qr-label" for="priceVnd">가격 (VND)</label>
+              <input class="qr-input" id="priceVnd" type="number" min="0" max="1000000000" step="1000" inputmode="numeric" required />
+            </div>
+            <div class="qr-field">
+              <label class="qr-label" for="priceUsd">가격 (USD)</label>
+              <input class="qr-input" id="priceUsd" type="number" min="0" max="1000000" step="1" inputmode="numeric" required />
+            </div>
+
+            <div class="qr-field qr-field-wide">
+              <label class="qr-label" for="imageUrl">메뉴 이미지 경로 또는 URL</label>
+              <input class="qr-input" id="imageUrl" type="text" maxlength="500" placeholder="image/restaurant/menu/1.webp" />
+            </div>
+
+            <div class="qr-field qr-field-wide">
+              <label class="qr-label" for="menuImageFile">메뉴 사진 업로드</label>
+              <div class="qr-image-upload">
+                <div class="qr-image-preview" id="imagePreview">
+                  <img id="menuImagePreview" alt="선택한 메뉴 사진 미리보기" hidden />
+                  <span id="menuImageEmpty">등록된 사진이 없습니다.</span>
+                </div>
+                <div class="qr-image-upload-controls">
+                  <input class="qr-input qr-file-input" id="menuImageFile" type="file" accept="image/jpeg,image/png,image/webp" />
+                  <div class="qr-hint">JPG, PNG, WebP 사진만 선택할 수 있습니다. 사진을 선택한 뒤 메뉴 저장을 누르면 최대 1,600px WebP로 줄여 자동 업로드합니다.</div>
+                  <div class="qr-button-row">
+                    <button class="qr-btn qr-btn-small" id="clearImageBtn" type="button">이미지 경로 비우기</button>
+                  </div>
+                  <div class="qr-upload-status" id="imageUploadStatus" aria-live="polite">사진을 선택하면 메뉴 저장 시 자동 업로드합니다.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="qr-field">
+              <label class="qr-label" for="descriptionKo">한국어 설명</label>
+              <textarea class="qr-textarea" id="descriptionKo" maxlength="1000"></textarea>
+            </div>
+            <div class="qr-field">
+              <label class="qr-label" for="descriptionVi">베트남어 설명</label>
+              <textarea class="qr-textarea" id="descriptionVi" maxlength="1000"></textarea>
+            </div>
+            <div class="qr-field qr-field-wide">
+              <label class="qr-label" for="descriptionEn">영어 설명</label>
+              <textarea class="qr-textarea" id="descriptionEn" maxlength="1000"></textarea>
+            </div>
+
+            <label class="qr-checkbox"><input id="isActive" type="checkbox" /> 기존 직원 메뉴에 표시</label>
+            <label class="qr-checkbox"><input id="isOrderable" type="checkbox" /> QR 주문 가능</label>
+            <label class="qr-checkbox"><input id="isSoldOut" type="checkbox" /> 품절 표시</label>
+            <label class="qr-checkbox"><input id="requiresPreorder" type="checkbox" /> 사전 주문 필요</label>
+          </div>
+
+          <div class="qr-form-actions">
+            <button class="qr-btn qr-btn-danger" id="archiveMenuBtn" type="button" hidden>메뉴 삭제</button>
+            <button class="qr-btn qr-btn-ok" id="restoreMenuBtn" type="button" hidden>메뉴 복구</button>
+            <button class="qr-btn" id="resetMenuBtn" type="button">변경 취소</button>
+            <button class="qr-btn qr-btn-primary" id="saveMenuBtn" type="submit" disabled>저장</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="qr-card qr-card-pad" style="margin-top:14px" aria-label="테이블 QR 관리">
+      <div class="qr-section-head">
+        <div>
+          <h2 class="qr-section-title">테이블 QR 관리</h2>
+          <div class="qr-hint">새로 만들거나 교체한 QR은 이 브라우저에 보관되어 ‘QR 보기’로 다시 확인할 수 있습니다.</div>
+        </div>
+        <form class="qr-filter-row" id="createTableForm">
+          <input class="qr-input" id="newTableLabel" maxlength="60" placeholder="예: 테이블 1" required />
+          <button class="qr-btn qr-btn-primary" id="createTableBtn" type="submit">테이블 추가</button>
+        </form>
+      </div>
+      <div class="qr-table-list" id="tableList">
+        <div class="qr-empty">테이블을 불러오는 중입니다…</div>
+      </div>
+    </section>
+  </main>
+
+  <div class="qr-modal-back" id="loginModal" hidden>
+    <form class="qr-modal" id="loginForm">
+      <h2>관리자 로그인</h2>
+      <p>관리자 비밀번호를 입력하면 메뉴와 테이블 QR을 관리할 수 있습니다.</p>
+      <input class="qr-input" id="loginPassword" type="password" placeholder="관리자 비밀번호" autocomplete="current-password" required />
+      <div class="qr-form-actions">
+        <button class="qr-btn qr-btn-primary" id="loginConfirm" type="submit">입장</button>
+      </div>
+      <div class="qr-hint">브라우저 탭을 닫으면 로그인이 해제됩니다.</div>
+    </form>
+  </div>
+
+  <div class="qr-modal-back" id="tokenModal" hidden>
+    <div class="qr-modal" role="dialog" aria-modal="true" aria-labelledby="tokenTitle">
+      <h2 id="tokenTitle">테이블 QR 주소</h2>
+      <p>QR을 다운로드하거나 인쇄한 뒤 테이블에 비치해 주세요. 같은 브라우저에서는 ‘QR 보기’로 다시 확인할 수 있습니다.</p>
+      <div class="qr-code-preview" id="tokenQr" aria-label="테이블 주문 QR 코드"></div>
+      <textarea class="qr-textarea qr-token-url" id="tokenUrl" readonly></textarea>
+      <div class="qr-form-actions">
+        <button class="qr-btn" id="openMenuBtn" type="button">메뉴 미리보기</button>
+        <button class="qr-btn qr-btn-primary" id="copyTokenBtn" type="button">주소 복사</button>
+        <button class="qr-btn" id="downloadQrBtn" type="button">QR 다운로드</button>
+        <button class="qr-btn" id="printQrBtn" type="button">QR 인쇄</button>
+        <button class="qr-btn" id="closeTokenBtn" type="button">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <section class="qr-print-sheet" id="qrPrintSheet" aria-hidden="true">
+    <img id="qrPrintImage" alt="테이블 주문 QR 코드" />
+    <h1 id="qrPrintTitle">HANA TABLE ORDER</h1>
+    <p>카메라로 QR 코드를 스캔하여 주문해 주세요.</p>
+    <p>Scan the QR code to order.</p>
+  </section>
+
+  <div class="qr-toast-stack" id="qrToastStack" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/dgv-data.js"></script>
+  <script src="assets/supabase-client.js"></script>
+  <script src="assets/qr-staff.js"></script>
+  <script src="assets/vendor/qrcode.min.js"></script>
+  <script src="assets/menu-admin.js"></script>
+</body>
+</html>

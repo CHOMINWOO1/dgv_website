@@ -14,6 +14,17 @@ const files = [
   "reserv_check.html",
   "reserv_admin.html",
   "report.html",
+  "menu.html",
+  "order_inbox.html",
+  "menu_admin.html",
+];
+
+const externalScripts = [
+  "assets/qr-menu.js",
+  "assets/qr-staff.js",
+  "assets/order-inbox.js",
+  "assets/menu-admin.js",
+  "assets/vendor/qrcode.min.js",
 ];
 
 let scriptsChecked = 0;
@@ -34,4 +45,10 @@ for (const file of files) {
   }
 }
 
-console.log(`Parsed ${scriptsChecked} inline scripts across ${files.length} pages.`);
+for (const file of externalScripts) {
+  const source = await readFile(path.join(projectRoot, file), "utf8");
+  new vm.Script(source, { filename: file });
+  scriptsChecked += 1;
+}
+
+console.log(`Parsed ${scriptsChecked} browser scripts across ${files.length} pages.`);

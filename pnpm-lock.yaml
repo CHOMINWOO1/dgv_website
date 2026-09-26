@@ -11,6 +11,9 @@ importers:
       '@supabase/supabase-js':
         specifier: 2.112.2
         version: 2.112.2
+      qrcodejs:
+        specifier: 1.0.0
+        version: 1.0.0
     devDependencies:
       supabase:
         specifier: 2.112.0
@@ -123,6 +126,9 @@ packages:
   jose@6.2.8:
     resolution: {integrity: sha512-Bsdjwm3Qsd/P0jR+BHDe3LytDfY7WBq2HmCCLIwuVRHMuEC9ae7/R474GIUdF1NgCyZjzVo/A9DOiOBtXq8ZoQ==}
 
+  qrcodejs@1.0.0:
+    resolution: {integrity: sha512-67rj3mMBhSBepaD57qENnltO+r8rSYlqM7HGThks/BiyDAkc86sLvkKqjkqPS5v13f7tvnt6dbEf3qt7zq+BCg==}
+
   supabase@2.112.0:
     resolution: {integrity: sha512-JZRbKpHSR1FLyWOaDrNfjI02a4s6NuLjk9H9bCmuuWKKj1ks3utQ15c8um6k96g8LKWQKy4EKD2C3VnJ5b2TBw==}
     hasBin: true
@@ -210,6 +216,8 @@ snapshots:
   iceberg-js@0.8.1: {}
 
   jose@6.2.8: {}
+
+  qrcodejs@1.0.0: {}
 
   supabase@2.112.0:
     dependencies:
