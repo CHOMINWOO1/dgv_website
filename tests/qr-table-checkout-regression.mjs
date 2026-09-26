@@ -60,7 +60,7 @@ assert.match(functionSource(inboxSource, "markTableCheckoutComplete"), /finalize
 assert.match(inboxHtml, /id="paymentTitle">테이블 전체 결제/);
 assert.match(inboxHtml, /id="paymentOrderSummary"/);
 assert.match(inboxHtml, /신규 주문이 남아 있으면 결제할 수 없습니다/);
-assert.match(inboxHtml, /assets\/order-inbox\.js\?v=20260926-table-checkout/);
+assert.match(inboxHtml, /assets\/order-inbox\.js\?v=20260926-realtime-fallback/);
 
 // Card +7% uses the same aggregate rounding helpers as calc: whole USD and
 // nearest 1,000 VND, applied once to the table total rather than per QR order.

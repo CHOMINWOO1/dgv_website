@@ -20,7 +20,12 @@
   let pollTimer = null;
   let attentionTimer = null;
   let refreshTimer = null;
+  let reconnectTimer = null;
   let realtimeChannel = null;
+  let realtimeStatus = "disconnected";
+  let refreshAfterLoad = false;
+  let lastLoadFailed = false;
+  let lastSyncedAt = null;
   let paymentTableId = null;
   let paymentTableLabel = "";
   let paymentOrders = [];
@@ -397,7 +402,11 @@
   }
 
   async function loadOrders(options = {}) {
-    if (isLoading) return;
+    if (isLoading) {
+      refreshAfterLoad = true;
+      return;
+    }
+    const loadStartedWithRealtime = realtimeStatus === "connected";
     isLoading = true;
     if (options.manual) ui.setBusy(ui.byId("refreshBtn"), true, "불러오는 중…");
     try {
@@ -407,20 +416,65 @@
       orders = nextOrders;
       renderOrders();
       hideBanner();
-      ui.byId("lastSyncText").textContent = `${new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 동기화 · 15초마다 자동 확인`;
+      lastLoadFailed = false;
+      lastSyncedAt = new Date();
+      if (loadStartedWithRealtime && realtimeStatus === "connected") stopFallbackPolling();
+      updateLastSyncText();
     } catch (error) {
       console.error(error);
+      lastLoadFailed = true;
+      startFallbackPolling();
+      updateLastSyncText();
       showBanner("QR 주문 데이터를 불러오지 못했습니다. DB 배포 상태와 네트워크를 확인해 주세요.");
       ui.connectionBadge(global.navigator.onLine ? "connecting" : "offline", global.navigator.onLine ? "재연결 중" : "오프라인");
     } finally {
       isLoading = false;
       if (options.manual) ui.setBusy(ui.byId("refreshBtn"), false);
+      if (refreshAfterLoad) {
+        refreshAfterLoad = false;
+        scheduleRefresh(0);
+      }
     }
   }
 
   function scheduleRefresh(delay = 250) {
+    if (document.visibilityState !== "visible" || !global.navigator.onLine) return;
     global.clearTimeout(refreshTimer);
     refreshTimer = global.setTimeout(() => loadOrders(), delay);
+  }
+
+  function updateLastSyncText() {
+    const synced = lastSyncedAt
+      ? `${lastSyncedAt.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 동기화`
+      : "아직 동기화되지 않았습니다.";
+    let mode = "연결 복구 중 · 15초마다 자동 확인";
+    if (!global.navigator.onLine || realtimeStatus === "offline") mode = "오프라인 · 연결되면 즉시 동기화";
+    else if (realtimeStatus === "connected" && !lastLoadFailed && !pollTimer) mode = "실시간 연결";
+    ui.byId("lastSyncText").textContent = `${synced} · ${mode}`;
+  }
+
+  function stopFallbackPolling() {
+    global.clearInterval(pollTimer);
+    pollTimer = null;
+    updateLastSyncText();
+  }
+
+  function startFallbackPolling() {
+    if (pollTimer) return;
+    pollTimer = global.setInterval(() => {
+      if (document.visibilityState === "visible" && global.navigator.onLine) loadOrders();
+    }, 15000);
+    updateLastSyncText();
+  }
+
+  function queueRealtimeReconnect(delay = 3000) {
+    if (reconnectTimer || !global.navigator.onLine || document.visibilityState !== "visible") return;
+    reconnectTimer = global.setTimeout(() => {
+      reconnectTimer = null;
+      if (realtimeStatus !== "connected" && global.navigator.onLine && document.visibilityState === "visible") {
+        subscribeRealtime();
+      }
+    }, delay);
   }
 
   function menuName(menu) {
@@ -852,11 +906,26 @@
   }
 
   function subscribeRealtime() {
-    if (realtimeChannel) sb.removeChannel(realtimeChannel);
-    ui.connectionBadge(global.navigator.onLine ? "connecting" : "offline", global.navigator.onLine ? "실시간 연결 중" : "오프라인");
-    realtimeChannel = sb
+    global.clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    if (!global.navigator.onLine) {
+      realtimeStatus = "offline";
+      startFallbackPolling();
+      updateLastSyncText();
+      ui.connectionBadge("offline", "오프라인");
+      return;
+    }
+    const previousChannel = realtimeChannel;
+    realtimeChannel = null;
+    if (previousChannel) sb.removeChannel(previousChannel);
+    realtimeStatus = "connecting";
+    startFallbackPolling();
+    updateLastSyncText();
+    ui.connectionBadge("connecting", "실시간 연결 중");
+    let channel = sb
       .channel("qr-order-inbox")
       .on("postgres_changes", { event: "*", schema: "public", table: "qr_orders" }, (payload) => {
+        if (realtimeChannel !== channel) return;
         if (payload.eventType === "INSERT" && payload.new?.status === "submitted" && !alertedOrderIds.has(payload.new.id)) {
           alertedOrderIds.add(payload.new.id);
           highlightedOrderIds.add(payload.new.id);
@@ -865,19 +934,35 @@
         }
         scheduleRefresh();
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "qr_order_items" }, () => scheduleRefresh(350))
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") ui.connectionBadge("online", "실시간 연결됨");
-        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") ui.connectionBadge("connecting", "자동 재연결 중");
-        else if (status === "CLOSED") ui.connectionBadge(global.navigator.onLine ? "connecting" : "offline", global.navigator.onLine ? "연결 끊김" : "오프라인");
+      .on("postgres_changes", { event: "*", schema: "public", table: "qr_order_items" }, () => {
+        if (realtimeChannel === channel) scheduleRefresh(350);
       });
-  }
-
-  function startPolling() {
-    global.clearInterval(pollTimer);
-    pollTimer = global.setInterval(() => {
-      if (document.visibilityState === "visible" && global.navigator.onLine) loadOrders();
-    }, 15000);
+    realtimeChannel = channel;
+    channel.subscribe((status, error) => {
+      if (realtimeChannel !== channel) return;
+      if (status === "SUBSCRIBED") {
+        realtimeStatus = "connected";
+        global.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+        ui.connectionBadge("online", "실시간 연결됨");
+        updateLastSyncText();
+        scheduleRefresh(0);
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        realtimeStatus = "reconnecting";
+        startFallbackPolling();
+        updateLastSyncText();
+        ui.connectionBadge("connecting", "자동 재연결 중");
+        if (error) console.error("QR 주문 실시간 연결 오류", error);
+        queueRealtimeReconnect();
+      } else if (status === "CLOSED") {
+        realtimeChannel = null;
+        realtimeStatus = global.navigator.onLine ? "disconnected" : "offline";
+        startFallbackPolling();
+        updateLastSyncText();
+        ui.connectionBadge(global.navigator.onLine ? "connecting" : "offline", global.navigator.onLine ? "연결 끊김" : "오프라인");
+        queueRealtimeReconnect(1000);
+      }
+    });
   }
 
   function startAttentionLoop() {
@@ -958,22 +1043,43 @@
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible") {
         loadOrders();
-        if (!realtimeChannel) subscribeRealtime();
+        if (!realtimeChannel || realtimeStatus !== "connected") subscribeRealtime();
+      } else {
+        global.clearTimeout(refreshTimer);
+        refreshTimer = null;
       }
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !ui.byId("editOrderModal").hidden) closeEditOrder();
     });
     global.addEventListener("online", () => {
+      realtimeStatus = "connecting";
+      startFallbackPolling();
       ui.connectionBadge("connecting", "재연결 중");
       subscribeRealtime();
       loadOrders();
     });
-    global.addEventListener("offline", () => ui.connectionBadge("offline", "오프라인"));
+    global.addEventListener("offline", () => {
+      const offlineChannel = realtimeChannel;
+      realtimeChannel = null;
+      if (offlineChannel) sb.removeChannel(offlineChannel);
+      realtimeStatus = "offline";
+      global.clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+      global.clearTimeout(refreshTimer);
+      refreshTimer = null;
+      startFallbackPolling();
+      updateLastSyncText();
+      ui.connectionBadge("offline", "오프라인");
+    });
     global.addEventListener("beforeunload", () => {
-      if (realtimeChannel) sb.removeChannel(realtimeChannel);
-      global.clearInterval(pollTimer);
+      const closingChannel = realtimeChannel;
+      realtimeChannel = null;
+      if (closingChannel) sb.removeChannel(closingChannel);
+      stopFallbackPolling();
       global.clearInterval(attentionTimer);
+      global.clearTimeout(refreshTimer);
+      global.clearTimeout(reconnectTimer);
     });
   }
 
@@ -984,7 +1090,6 @@
       bindEvents();
       armPreferredSound();
       subscribeRealtime();
-      startPolling();
       startAttentionLoop();
       await loadOrders();
     } catch (error) {
@@ -995,4 +1100,3 @@
 
   boot();
 })(window);
-
