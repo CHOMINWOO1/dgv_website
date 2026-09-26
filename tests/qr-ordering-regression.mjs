@@ -205,12 +205,12 @@ assert.match(inboxHtml, /name="paymentMethod"[^>]*value="card"/);
 assert.match(inboxHtml, /name="paymentMethod"[^>]*value="card_fee7"/);
 assert.match(inboxHtml, /카드 결제 \+ 7%/);
 assert.match(inboxSource, /getPaymentMethod\(\) === "card_fee7"/);
-assert.match(functionSource(inboxSource, "openPayment"), /order\?\.updated_at[\s\S]*?paymentExpectedUpdatedAt = order\.updated_at/);
+assert.match(functionSource(inboxSource, "openPayment"), /openOrdersForTable\(tableId\)[\s\S]*?order\.status === "submitted"[\s\S]*?먼저 주문 확인해 주세요[\s\S]*?order\.status === "accepted"[\s\S]*?paymentOrders = accepted\.map/);
 assert.match(
-  functionSource(inboxSource, "finalizePayment"),
-  /sb\.rpc\("app_finalize_qr_order_checked", \{[\s\S]*?p_qr_order_id: paymentOrderId,[\s\S]*?p_expected_updated_at: paymentExpectedUpdatedAt/,
+  functionSource(inboxSource, "finalizeTableOrders"),
+  /sb\.rpc\("app_finalize_qr_table_orders_checked", \{[\s\S]*?p_table_id: tableId,[\s\S]*?p_expected_orders: expectedOrders/,
 );
-assert.doesNotMatch(functionSource(inboxSource, "finalizePayment"), /sb\.rpc\("app_finalize_qr_order"/);
+assert.doesNotMatch(functionSource(inboxSource, "finalizePayment"), /app_finalize_qr_order/);
 assert.match(inboxSource, /setInterval\(\(\) => \{[\s\S]*?orders\.some\(\(order\) => order\.status === "submitted"\)[\s\S]*?ui\.playAlert\(\)[\s\S]*?\}, 9000\)/);
 assert.match(inboxSource, /postgres_changes[\s\S]*?table: "qr_orders"/);
 assert.match(inboxSource, /postgres_changes[\s\S]*?table: "qr_order_items"/);
@@ -640,3 +640,4 @@ assert.deepEqual(
 );
 
 console.log("QR ordering security, pricing, table identity, realtime, and guest payload contracts passed.");
+

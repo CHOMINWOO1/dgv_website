@@ -19,7 +19,10 @@
     "test:qr-ordering": "node tests/qr-ordering-regression.mjs",
     "test:qr-card": "node tests/qr-card-regression.mjs",
     "test:qr-deletion": "node tests/qr-table-deletion-regression.mjs",
-    "test:qr-edit": "node tests/qr-inbox-order-edit-regression.mjs"
+    "test:qr-edit": "node tests/qr-inbox-order-edit-regression.mjs",
+    "test:qr-table-checkout": "node tests/qr-table-checkout-regression.mjs",
+    "test:qr-table-checkout-db": "node tests/qr-table-checkout-db-regression.mjs",
+    "test:qr-table-checkout:db": "supabase test db --local supabase/tests/qr_table_checkout.sql"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.112.2",
@@ -29,3 +32,4 @@
     "supabase": "2.112.0"
   }
 }
+

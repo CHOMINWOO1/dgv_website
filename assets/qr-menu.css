@@ -141,6 +141,20 @@ main { width: min(100%, 1080px); margin: auto; padding-bottom: 112px; }
 .current-orders-heading { margin-bottom: 12px; }
 .current-orders-heading h2 { margin: 0; font: 700 23px/1.25 Georgia, "Noto Serif KR", serif; }
 .current-orders-heading > div > p:last-child { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+.current-orders-grand-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 12px 13px;
+  border: 1px solid #d8c09a;
+  border-radius: 13px;
+  background: #fff8e7;
+  color: var(--brown-800);
+  font-weight: 900;
+}
+.current-orders-grand-total strong { text-align: right; white-space: nowrap; }
 .current-orders-list { display: grid; gap: 10px; }
 .current-order-card { padding: 13px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); }
 .current-order-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
@@ -338,3 +352,4 @@ textarea { width: 100%; resize: vertical; padding: 11px 12px; border: 1px solid 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
