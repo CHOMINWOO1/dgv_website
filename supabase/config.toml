@@ -46,3 +46,6 @@ verify_jwt = true
 
 [functions.admin-credential-settings]
 verify_jwt = true
+
+[functions.qr-menu]
+verify_jwt = false
