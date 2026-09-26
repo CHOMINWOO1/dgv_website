@@ -196,6 +196,7 @@
     items: [],
     currentOrders: [],
     currentOrdersTruncated: false,
+    currentTotals: { usd: 0, vnd: 0 },
     cart: [],
     selectedItem: null,
     detailQuantity: 1,
@@ -337,6 +338,10 @@
     return Number.isInteger(number) && number >= 0 && number <= 2147483647 ? number : 0;
   }
 
+  function nonNegativeSafeInteger(value) {
+    return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+  }
+
   function normalizeCurrentOrders(value) {
     if (!Array.isArray(value)) return [];
     return value.slice(0, MAX_CURRENT_ORDERS).flatMap((order) => {
@@ -374,9 +379,27 @@
     });
   }
 
+  function normalizeCurrentTotals(payload, currentOrders) {
+    const serverUsd = nonNegativeSafeInteger(payload?.current_total_usd);
+    const serverVnd = nonNegativeSafeInteger(payload?.current_total_vnd);
+    if (serverUsd !== null && serverVnd !== null) {
+      return { usd: serverUsd, vnd: serverVnd };
+    }
+
+    // Compatibility with a cached/older Edge payload that predates the exact
+    // server totals. This preserves the former visible-list sum until every
+    // environment serves current_total_usd/current_total_vnd.
+    return currentOrders.reduce((total, order) => {
+      total.usd += nonNegativeInteger(order.total_usd);
+      total.vnd += nonNegativeInteger(order.total_vnd);
+      return total;
+    }, { usd: 0, vnd: 0 });
+  }
+
   function normalizePayload(payload) {
     const rawItems = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload?.menu_items) ? payload.menu_items : [];
     let categories = Array.isArray(payload?.categories) ? payload.categories.slice() : [];
+    const currentOrders = normalizeCurrentOrders(payload?.current_orders);
 
     if (!categories.length) {
       const seen = new Map();
@@ -421,8 +444,9 @@
       table: payload?.table || (payload?.table_label ? { label: payload.table_label } : null),
       categories,
       items,
-      currentOrders: normalizeCurrentOrders(payload?.current_orders),
-      currentOrdersTruncated: payload?.current_orders_truncated === true
+      currentOrders,
+      currentOrdersTruncated: payload?.current_orders_truncated === true,
+      currentTotals: normalizeCurrentTotals(payload, currentOrders)
     };
   }
 
@@ -512,6 +536,7 @@
       state.items = normalized.items;
       state.currentOrders = normalized.currentOrders;
       state.currentOrdersTruncated = normalized.currentOrdersTruncated;
+      state.currentTotals = normalized.currentTotals;
       if (!state.table || !state.items.length) throw new Error(state.items.length ? "INVALID_TABLE" : "EMPTY_MENU");
       restoreCart();
       el.tableLabel.textContent = tableLabel();
@@ -537,6 +562,7 @@
     el.cartButton.hidden = true;
     state.currentOrders = [];
     state.currentOrdersTruncated = false;
+    state.currentTotals = { usd: 0, vnd: 0 };
     renderCurrentOrders();
     el.errorTitle.textContent = t("menuLoadError");
     el.errorMessage.textContent = message;
@@ -569,14 +595,9 @@
     el.currentOrdersLimit.hidden = !state.currentOrdersTruncated;
     if (!hasCurrentOrders) return;
 
-    const tableTotals = state.currentOrders.reduce((total, order) => {
-      total.usd += nonNegativeInteger(order.total_usd);
-      total.vnd += nonNegativeInteger(order.total_vnd);
-      return total;
-    }, { usd: 0, vnd: 0 });
     el.currentOrdersTotal.append(
       make("span", "", t("currentOrdersTotal")),
-      make("strong", "", `${formatVnd(tableTotals.vnd)} · ${formatUsd(tableTotals.usd)}`)
+      make("strong", "", `${formatVnd(state.currentTotals.vnd)} · ${formatUsd(state.currentTotals.usd)}`)
     );
 
     state.currentOrders.forEach((order) => {
@@ -616,6 +637,7 @@
       if (!normalized.table) return;
       state.currentOrders = normalized.currentOrders;
       state.currentOrdersTruncated = normalized.currentOrdersTruncated;
+      state.currentTotals = normalized.currentTotals;
       renderCurrentOrders();
     } catch (_error) {
       // Keep the last server-confirmed list through a transient reconnect. The
@@ -1170,4 +1192,3 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 })(window);
-

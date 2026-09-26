@@ -7,7 +7,7 @@ set local search_path = public, extensions, pg_catalog;
 set local time zone 'UTC';
 set local request.jwt.claims = '{"sub":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","role":"authenticated","app_metadata":{"role":"admin"}}';
 
-select plan(21);
+select plan(22);
 
 select has_function(
   'public',
@@ -264,13 +264,20 @@ select is(
 );
 
 select is(
-  pg_catalog.jsonb_array_length(
-    public.internal_qr_get_menu(
-      'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
-    ) -> 'current_orders'
+  (
+    select pg_catalog.jsonb_build_object(
+      'order_count', pg_catalog.jsonb_array_length(guest_menu.payload -> 'current_orders'),
+      'total_usd', guest_menu.payload -> 'current_total_usd',
+      'total_vnd', guest_menu.payload -> 'current_total_vnd'
+    )
+    from (
+      select public.internal_qr_get_menu(
+        'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+      ) as payload
+    ) as guest_menu
   ),
-  0,
-  'guest current_orders is empty immediately after successful table payment'
+  '{"order_count": 0, "total_usd": 0, "total_vnd": 0}'::jsonb,
+  'guest current orders and whole-table totals clear immediately after payment'
 );
 
 select is(
@@ -429,6 +436,90 @@ select is(
   'single-order compatibility still records its paid ledger link'
 );
 
+-- The response list is intentionally bounded, but its totals must cover every
+-- current row and exclude cancelled or already-finalized rows.
+insert into public.qr_tables (id, label, is_active, created_at, updated_at)
+values (
+  '82000000-0000-4000-8000-000000000003',
+  '[TEST] guest whole-table total',
+  true,
+  now(),
+  now()
+);
+
+insert into private.qr_table_tokens (table_id, token_hash, rotated_at)
+values (
+  '82000000-0000-4000-8000-000000000003',
+  'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+  now()
+);
+
+insert into public.qr_orders (
+  id, table_id, client_request_id, request_hash, status,
+  total_usd, total_vnd, submitted_at, updated_at, accepted_at
+)
+select
+  ('86000000-0000-4000-8000-' || pg_catalog.lpad(series.value::text, 12, '0'))::uuid,
+  '82000000-0000-4000-8000-000000000003'::uuid,
+  ('87000000-0000-4000-8000-' || pg_catalog.lpad(series.value::text, 12, '0'))::uuid,
+  pg_catalog.repeat(pg_catalog.lpad(pg_catalog.to_hex(series.value), 2, '0'), 32),
+  case when series.value % 2 = 0 then 'submitted' else 'accepted' end,
+  series.value,
+  series.value * 1000,
+  '2099-02-01 00:00:00+00'::timestamp with time zone
+    + series.value * interval '1 minute',
+  '2099-02-01 00:00:00+00'::timestamp with time zone
+    + series.value * interval '1 minute',
+  case when series.value % 2 = 1 then
+    '2099-02-01 00:00:00+00'::timestamp with time zone
+      + series.value * interval '1 minute'
+  end
+from pg_catalog.generate_series(1, 21) as series(value);
+
+insert into public.qr_orders (
+  id, table_id, client_request_id, request_hash, status,
+  total_usd, total_vnd, submitted_at, updated_at, accepted_at,
+  cancelled_at, finalized_at, finalized_order_id
+)
+values
+  (
+    '86000000-0000-4000-8000-000000000022',
+    '82000000-0000-4000-8000-000000000003',
+    '87000000-0000-4000-8000-000000000022',
+    pg_catalog.repeat('16', 32),
+    'cancelled', 999999, 999999000,
+    '2099-02-01 00:22:00+00', '2099-02-01 00:22:00+00', null,
+    '2099-02-01 00:22:00+00', null, null
+  ),
+  (
+    '86000000-0000-4000-8000-000000000023',
+    '82000000-0000-4000-8000-000000000003',
+    '87000000-0000-4000-8000-000000000023',
+    pg_catalog.repeat('17', 32),
+    'accepted', 888888, 888888000,
+    '2099-02-01 00:23:00+00', '2099-02-01 00:23:00+00',
+    '2099-02-01 00:23:00+00', null,
+    '2099-02-01 00:23:00+00',
+    (select paid_order_id from single_checkout_result)
+  );
+
+select is(
+  (
+    select pg_catalog.jsonb_build_object(
+      'order_count', pg_catalog.jsonb_array_length(guest_menu.payload -> 'current_orders'),
+      'truncated', guest_menu.payload -> 'current_orders_truncated',
+      'total_usd', guest_menu.payload -> 'current_total_usd',
+      'total_vnd', guest_menu.payload -> 'current_total_vnd'
+    )
+    from (
+      select public.internal_qr_get_menu(
+        'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+      ) as payload
+    ) as guest_menu
+  ),
+  '{"order_count": 20, "truncated": true, "total_usd": 231, "total_vnd": 231000}'::jsonb,
+  'guest totals include all 21 unpaid rows while the list stays capped at 20'
+);
+
 select * from finish();
 rollback;
-
