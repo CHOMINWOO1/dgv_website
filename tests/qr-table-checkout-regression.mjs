@@ -6,11 +6,12 @@ import vm from "node:vm";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(projectRoot, file), "utf8");
-const [inboxSource, inboxHtml, guestSource, guestOpenOrdersMigration] = await Promise.all([
+const [inboxSource, inboxHtml, guestSource, guestOpenOrdersMigration, guestTotalsMigration] = await Promise.all([
   read("assets/order-inbox.js"),
   read("order_inbox.html"),
   read("assets/qr-menu.js"),
   read("supabase/migrations/20260926171000_qr_guest_open_orders.sql"),
+  read("supabase/migrations/20260926182000_qr_guest_table_total.sql"),
 ]);
 
 function functionSource(source, name) {
@@ -74,13 +75,65 @@ assert.match(guestOpenOrdersMigration, /qr_order\.finalized_order_id is null/i);
 assert.match(functionSource(guestSource, "normalizeCurrentOrders"), /\["submitted", "accepted"\]\.includes\(order\.status\)/);
 const guestHtml = await read("menu.html");
 assert.match(guestHtml, /id="currentOrdersTotal"[^>]*hidden/);
-assert.match(guestHtml, /assets\/qr-menu\.js\?v=20260926-table-checkout/);
+assert.match(guestHtml, /assets\/qr-menu\.js\?v=20260926-table-total/);
+const normalizeCurrentTotals = functionSource(guestSource, "normalizeCurrentTotals");
+assert.match(functionSource(guestSource, "nonNegativeSafeInteger"), /Number\.isSafeInteger\(value\)[\s\S]*?value >= 0/);
+assert.match(normalizeCurrentTotals, /payload\?\.current_total_usd/);
+assert.match(normalizeCurrentTotals, /payload\?\.current_total_vnd/);
+assert.match(normalizeCurrentTotals, /serverUsd !== null && serverVnd !== null/);
+assert.match(normalizeCurrentTotals, /currentOrders\.reduce/);
+assert.match(normalizeCurrentTotals, /total\.usd \+= nonNegativeInteger\(order\.total_usd\)/);
+assert.match(normalizeCurrentTotals, /total\.vnd \+= nonNegativeInteger\(order\.total_vnd\)/);
 const renderCurrentOrders = functionSource(guestSource, "renderCurrentOrders");
-assert.match(renderCurrentOrders, /state\.currentOrders\.reduce/);
-assert.match(renderCurrentOrders, /total\.usd \+= nonNegativeInteger\(order\.total_usd\)/);
-assert.match(renderCurrentOrders, /total\.vnd \+= nonNegativeInteger\(order\.total_vnd\)/);
-assert.match(renderCurrentOrders, /formatVnd\(tableTotals\.vnd\)[\s\S]*?formatUsd\(tableTotals\.usd\)/);
+assert.match(renderCurrentOrders, /formatVnd\(state\.currentTotals\.vnd\)[\s\S]*?formatUsd\(state\.currentTotals\.usd\)/);
 assert.match(renderCurrentOrders, /currentOrdersTotal\.replaceChildren\(\)[\s\S]*?currentOrdersTotal\.hidden = !hasCurrentOrders[\s\S]*?if \(!hasCurrentOrders\) return/);
+
+const guestNormalizationContext = vm.createContext({ result: null });
+vm.runInContext(`
+  ${functionSource(guestSource, "nonNegativeInteger")}
+  ${functionSource(guestSource, "nonNegativeSafeInteger")}
+  ${normalizeCurrentTotals}
+  const visibleOrders = [
+    { total_vnd: 125000, total_usd: 5 },
+    { total_vnd: 75000, total_usd: 3 }
+  ];
+  result = {
+    server: normalizeCurrentTotals({ current_total_vnd: 425000, current_total_usd: 17 }, visibleOrders),
+    legacy: normalizeCurrentTotals({}, visibleOrders),
+    rejectedNegativePair: normalizeCurrentTotals({ current_total_vnd: -1, current_total_usd: 17 }, visibleOrders),
+    rejectedUnsafePair: normalizeCurrentTotals({ current_total_vnd: Number.MAX_SAFE_INTEGER + 1, current_total_usd: 17 }, visibleOrders)
+  };
+`, guestNormalizationContext);
+assert.deepEqual(JSON.parse(JSON.stringify(guestNormalizationContext.result)), {
+  server: { usd: 17, vnd: 425000 },
+  legacy: { usd: 8, vnd: 200000 },
+  rejectedNegativePair: { usd: 8, vnd: 200000 },
+  rejectedUnsafePair: { usd: 8, vnd: 200000 },
+});
+
+const guestMenuFunction = guestTotalsMigration.match(
+  /create or replace function public\.internal_qr_get_menu\(p_token_hash text\)[\s\S]*?\n\$\$;/i,
+)?.[0];
+assert.ok(guestMenuFunction, "whole-table guest total menu replacement is missing");
+assert.match(guestMenuFunction, /security invoker[\s\S]*?set search_path = ''/i);
+assert.match(guestMenuFunction, /internal_qr_take_rate_limit\([\s\S]*?'get_menu:table:'[\s\S]*?300,[\s\S]*?60/i);
+assert.match(guestMenuFunction, /current_orders[\s\S]*?order by qr_order\.submitted_at desc, qr_order\.id desc[\s\S]*?limit 20/i);
+assert.match(
+  guestMenuFunction,
+  /sum\(qr_order\.total_usd::bigint\)[\s\S]*?sum\(qr_order\.total_vnd::bigint\)[\s\S]*?where qr_order\.table_id = v_table\.id[\s\S]*?status in \('submitted', 'accepted'\)[\s\S]*?finalized_order_id is null/i,
+  "guest totals must aggregate every unpaid current order independently of the 20-row list cap",
+);
+assert.match(guestMenuFunction, /'current_total_usd', v_current_total_usd[\s\S]*?'current_total_vnd', v_current_total_vnd/i);
+assert.match(
+  guestTotalsMigration,
+  /revoke execute on function public\.internal_qr_get_menu\(text\)[\s\S]*?from public, anon, authenticated, service_role[\s\S]*?grant execute on function public\.internal_qr_get_menu\(text\)[\s\S]*?to service_role/i,
+);
+const guestTotalsTopLevelDdl = guestTotalsMigration.replace(/\$\$[\s\S]*?\$\$/g, "$$FUNCTION_BODY$$");
+assert.doesNotMatch(
+  guestTotalsTopLevelDdl,
+  /(?:^|;)\s*(?:insert|update|delete|truncate|merge)\b/im,
+  "deploying the guest-total migration itself must not mutate business rows",
+);
 
 const guestTotalsContext = vm.createContext({ result: null });
 vm.runInContext(`
@@ -93,6 +146,7 @@ vm.runInContext(`
   };
   const state = {
     currentOrdersTruncated: false,
+    currentTotals: { usd: 12, vnd: 300000 },
     currentOrders: [
       { order_number: "A1", status: "submitted", total_vnd: 125000, total_usd: 5, submitted_at: "", items: [] },
       { order_number: "A2", status: "accepted", total_vnd: 75000, total_usd: 3, submitted_at: "", items: [] }
@@ -124,11 +178,10 @@ vm.runInContext(`
 assert.deepEqual(JSON.parse(JSON.stringify(guestTotalsContext.result.populated)), {
   sectionHidden: false,
   totalHidden: false,
-  totalText: ["TABLE TOTAL", "200000 VND · 8$"],
+  totalText: ["TABLE TOTAL", "300000 VND · 12$"],
 });
 assert.equal(guestTotalsContext.result.emptySectionHidden, true);
 assert.equal(guestTotalsContext.result.emptyTotalHidden, true);
 assert.equal(guestTotalsContext.result.emptyTotalChildren, 0);
 
 console.log("QR table-wide checkout UI, stale-set, aggregate-fee, and guest-clear contracts passed.");
-
