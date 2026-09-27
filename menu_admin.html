@@ -99,6 +99,17 @@
                 <option value="cafe">커피·카페</option>
               </select>
             </div>
+            <div class="qr-field" id="qrSubcategoryField">
+              <label class="qr-label" for="qrSubcategory">1인 메뉴 소분류</label>
+              <select class="qr-select" id="qrSubcategory">
+                <option value="">소분류를 선택해 주세요</option>
+                <option value="noodle">면</option>
+                <option value="stew_rice">찌개·덮밥</option>
+                <option value="soup">국밥</option>
+                <option value="grill">구이</option>
+              </select>
+              <div class="qr-hint">각 소분류 안에서는 VND 가격이 낮은 메뉴부터 표시됩니다.</div>
+            </div>
             <div class="qr-field">
               <label class="qr-label" for="sortOrder">표시 순서</label>
               <input class="qr-input" id="sortOrder" type="number" min="0" max="99999" step="1" required />
@@ -140,7 +151,7 @@
                 </div>
                 <div class="qr-image-upload-controls">
                   <input class="qr-input qr-file-input" id="menuImageFile" type="file" accept="image/jpeg,image/png,image/webp" />
-                  <div class="qr-hint">JPG, PNG, WebP 사진만 선택할 수 있습니다. 사진을 선택한 뒤 메뉴 저장을 누르면 최대 1,600px WebP로 줄여 자동 업로드합니다.</div>
+                  <div class="qr-hint">JPG, PNG, WebP 사진만 선택할 수 있습니다. 사진을 선택한 뒤 메뉴 저장을 누르면 원본 비율을 유지해 긴 변 최대 1,600px WebP로 자동 업로드합니다. 사진은 전체가 잘리지 않게 표시됩니다.</div>
                   <div class="qr-button-row">
                     <button class="qr-btn qr-btn-small" id="clearImageBtn" type="button">이미지 경로 비우기</button>
                   </div>

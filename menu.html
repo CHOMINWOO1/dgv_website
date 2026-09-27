@@ -106,10 +106,10 @@
       <fieldset class="variant-list" id="variantList" hidden>
         <legend data-copy="chooseOption">옵션을 선택해 주세요</legend>
       </fieldset>
-      <label class="field-label" for="detailNote" data-copy="itemRequest">메뉴 요청사항</label>
+      <label class="field-label" id="detailNoteLabel" for="detailNote" data-copy="itemRequest">메뉴 요청사항</label>
       <textarea id="detailNote" maxlength="120" rows="2" data-placeholder="itemRequestPlaceholder" placeholder="예: 덜 맵게 해주세요."></textarea>
       <div class="detail-action">
-        <div class="quantity-control" aria-label="Quantity">
+        <div class="quantity-control" id="detailQuantityControl" aria-label="Quantity">
           <button type="button" id="detailMinus" aria-label="수량 줄이기">−</button>
           <output id="detailQuantity">1</output>
           <button type="button" id="detailPlus" aria-label="수량 늘리기">+</button>
