@@ -8,6 +8,13 @@
   const MAX_CURRENT_ORDERS = 20;
   const MAX_CURRENT_ORDER_LINES = 40;
   const CURRENT_ORDER_POLL_MS = 15000;
+  const DEFAULT_SINGLE_SUBCATEGORIES = Object.freeze([
+    { id: "noodle", name_ko: "면", name_en: "Noodles", name_vi: "Mì", sort_order: 10 },
+    { id: "stew_rice", name_ko: "찌개·덮밥", name_en: "Stews & rice bowls", name_vi: "Món hầm & cơm", sort_order: 20 },
+    { id: "soup", name_ko: "국밥", name_en: "Soups with rice", name_vi: "Canh ăn với cơm", sort_order: 30 },
+    { id: "grill", name_ko: "구이", name_en: "Grilled dishes", name_vi: "Món nướng", sort_order: 40 },
+    { id: "other", name_ko: "기타", name_en: "Other", name_vi: "Khác", sort_order: 90 }
+  ]);
   const COPY = Object.freeze({
     ko: {
       welcomeEyebrow: "WELCOME TO HANA",
@@ -54,6 +61,7 @@
       emptyMenu: "현재 주문 가능한 메뉴가 없습니다.",
       soldOut: "품절",
       preorder: "사전 예약 메뉴",
+      preorderDetailsOnly: "사전 예약이 필요한 메뉴입니다",
       from: "부터",
       remove: "삭제",
       quantity: "수량",
@@ -113,6 +121,7 @@
       emptyMenu: "There are no items available to order right now.",
       soldOut: "Sold out",
       preorder: "Pre-order item",
+      preorderDetailsOnly: "Pre-order required",
       from: "from",
       remove: "Remove",
       quantity: "Quantity",
@@ -172,6 +181,7 @@
       emptyMenu: "Hiện không có món nào để gọi.",
       soldOut: "Hết món",
       preorder: "Món cần đặt trước",
+      preorderDetailsOnly: "Món này cần đặt trước",
       from: "từ",
       remove: "Xóa",
       quantity: "Số lượng",
@@ -193,6 +203,7 @@
     language: normalizeLanguage(global.localStorage?.getItem("hana-menu-language")),
     table: null,
     categories: [],
+    subcategories: [],
     items: [],
     currentOrders: [],
     currentOrdersTruncated: false,
@@ -213,7 +224,7 @@
     "loadingPanel", "errorPanel", "errorTitle", "errorMessage", "retryButton",
     "menuApp", "categoryNav", "menuList", "cartButton", "cartCount", "cartTotal", "detailBackdrop",
     "detailSheet", "detailClose", "detailMedia", "detailCategory", "detailName", "detailTranslation",
-    "detailDescription", "variantList", "detailNote", "detailMinus", "detailPlus", "detailQuantity",
+    "detailDescription", "variantList", "detailNoteLabel", "detailNote", "detailQuantityControl", "detailMinus", "detailPlus", "detailQuantity",
     "detailAdd", "cartBackdrop", "cartSheet", "cartClose", "cartLines", "emptyCart", "orderNote",
     "sheetTotal", "noteError", "noteCounter", "reviewButton", "confirmBackdrop", "confirmTable", "confirmLines", "confirmTotal",
     "confirmCancel", "submitOrder", "successBackdrop", "successNumber", "successSummary", "newOrderButton", "toast"
@@ -396,9 +407,54 @@
     }, { usd: 0, vnd: 0 });
   }
 
+  function subcategorySortOrder(value, subcategories = DEFAULT_SINGLE_SUBCATEGORIES) {
+    const id = String(value || "other");
+    const match = subcategories.find((subcategory) => String(subcategory.id) === id);
+    return Number(match?.sort_order ?? (id === "other" ? 90 : 80));
+  }
+
+  function normalizedSubcategories(payload) {
+    const supplied = Array.isArray(payload?.subcategories) ? payload.subcategories : [];
+    const source = supplied.length ? supplied : DEFAULT_SINGLE_SUBCATEGORIES;
+    const seen = new Set();
+    const result = source.reduce((rows, subcategory) => {
+      const id = String(subcategory?.id || "").trim();
+      if (!id || seen.has(id)) return rows;
+      seen.add(id);
+      rows.push({
+        id,
+        name_ko: subcategory.name_ko || DEFAULT_SINGLE_SUBCATEGORIES.find((row) => row.id === id)?.name_ko || id,
+        name_en: subcategory.name_en || DEFAULT_SINGLE_SUBCATEGORIES.find((row) => row.id === id)?.name_en || id,
+        name_vi: subcategory.name_vi || DEFAULT_SINGLE_SUBCATEGORIES.find((row) => row.id === id)?.name_vi || id,
+        sort_order: Number(subcategory.sort_order ?? subcategorySortOrder(id))
+      });
+      return rows;
+    }, []);
+    if (!seen.has("other")) result.push({ ...DEFAULT_SINGLE_SUBCATEGORIES.find((row) => row.id === "other") });
+    return result.sort((left, right) => Number(left.sort_order) - Number(right.sort_order));
+  }
+
+  function compareMenuItems(left, right, subcategories) {
+    const categoryDifference = categorySortOrder(left.category_id) - categorySortOrder(right.category_id);
+    if (categoryDifference) return categoryDifference;
+    if (left.category_id === "single") {
+      const subcategoryDifference = subcategorySortOrder(left.subcategory_id, subcategories)
+        - subcategorySortOrder(right.subcategory_id, subcategories);
+      if (subcategoryDifference) return subcategoryDifference;
+    }
+    const priceDifference = minPrice(left) - minPrice(right);
+    if (priceDifference) return priceDifference;
+    const sortDifference = Number(left.sort_order || 0) - Number(right.sort_order || 0);
+    if (sortDifference) return sortDifference;
+    const nameDifference = String(left.ko_name || left.en_name || left.vi_name || "")
+      .localeCompare(String(right.ko_name || right.en_name || right.vi_name || ""), "ko");
+    return nameDifference || String(left.id || "").localeCompare(String(right.id || ""));
+  }
+
   function normalizePayload(payload) {
     const rawItems = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload?.menu_items) ? payload.menu_items : [];
     let categories = Array.isArray(payload?.categories) ? payload.categories.slice() : [];
+    const subcategories = normalizedSubcategories(payload);
     const currentOrders = normalizeCurrentOrders(payload?.current_orders);
 
     if (!categories.length) {
@@ -428,10 +484,11 @@
       .map((item) => ({
         ...item,
         category_id: String(item.category_id || item.qr_category || item.type || categories[0]?.id || "menu"),
+        subcategory_id: String(item.qr_subcategory || item.subcategory_id || "other"),
         variants: Array.isArray(item.variants) ? item.variants.filter((variant) => variant?.is_available !== false && variant?.is_active !== false) : []
       }))
-      .filter((item) => item.is_active !== false && item.is_orderable !== false)
-      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+      .filter((item) => item.is_active !== false && (item.is_orderable !== false || item.requires_preorder === true))
+      .sort((left, right) => compareMenuItems(left, right, subcategories));
 
     items.forEach((item) => {
       if (!categoryIds.has(item.category_id)) {
@@ -443,6 +500,7 @@
     return {
       table: payload?.table || (payload?.table_label ? { label: payload.table_label } : null),
       categories,
+      subcategories,
       items,
       currentOrders,
       currentOrdersTruncated: payload?.current_orders_truncated === true,
@@ -533,6 +591,7 @@
       const normalized = await requestMenuPayload();
       state.table = normalized.table;
       state.categories = normalized.categories;
+      state.subcategories = normalized.subcategories;
       state.items = normalized.items;
       state.currentOrders = normalized.currentOrders;
       state.currentOrdersTruncated = normalized.currentOrdersTruncated;
@@ -676,9 +735,25 @@
       const title = make("h2", "", nameOf(category));
       const subtitle = make("p", "", translationsOf(category));
       heading.append(title, subtitle);
-      const grid = make("div", "menu-grid");
-      state.items.filter((item) => item.category_id === String(category.id)).forEach((item) => grid.append(menuCard(item)));
-      section.append(heading, grid);
+      section.append(heading);
+      const categoryItems = state.items.filter((item) => item.category_id === String(category.id));
+      if (String(category.id) === "single") {
+        state.subcategories.forEach((subcategory) => {
+          const rows = categoryItems.filter((item) => item.subcategory_id === String(subcategory.id));
+          if (!rows.length) return;
+          const subsection = make("div", "menu-subsection");
+          const subheading = make("div", "menu-subheading");
+          subheading.append(make("h3", "", nameOf(subcategory)), make("p", "", translationsOf(subcategory)));
+          const grid = make("div", "menu-grid");
+          rows.forEach((item) => grid.append(menuCard(item)));
+          subsection.append(subheading, grid);
+          section.append(subsection);
+        });
+      } else {
+        const grid = make("div", "menu-grid");
+        categoryItems.forEach((item) => grid.append(menuCard(item)));
+        section.append(grid);
+      }
       el.menuList.append(section);
     });
     observeCategories();
@@ -689,12 +764,12 @@
     const preorderOnly = item.requires_preorder === true;
     const card = make("button", "menu-card");
     card.type = "button";
-    card.disabled = !available;
+    card.disabled = !available && !preorderOnly;
     card.setAttribute(
       "aria-label",
       `${nameOf(item)}, ${formatVnd(minPrice(item))}${available ? "" : `, ${t(preorderOnly ? "preorder" : "soldOut")}`}`
     );
-    if (available) card.addEventListener("click", () => openDetail(item));
+    if (available || preorderOnly) card.addEventListener("click", () => openDetail(item));
 
     const media = make("div", "menu-photo");
     appendImage(media, item);
@@ -754,18 +829,26 @@
   }
 
   function openDetail(item) {
+    const preorderOnly = item.requires_preorder === true;
     state.selectedItem = item;
     state.detailQuantity = 1;
     el.detailMedia.replaceChildren();
     appendImage(el.detailMedia, item);
     const category = state.categories.find((candidate) => String(candidate.id) === item.category_id);
-    el.detailCategory.textContent = nameOf(category);
+    const subcategory = item.category_id === "single"
+      ? state.subcategories.find((candidate) => String(candidate.id) === item.subcategory_id)
+      : null;
+    el.detailCategory.textContent = [nameOf(category), subcategory ? nameOf(subcategory) : null].filter(Boolean).join(" · ");
     el.detailName.textContent = nameOf(item);
     el.detailTranslation.textContent = translationsOf(item);
     el.detailTranslation.hidden = !el.detailTranslation.textContent;
     el.detailDescription.textContent = descriptionOf(item);
     el.detailDescription.hidden = !el.detailDescription.textContent;
     el.detailNote.value = "";
+    el.detailNote.disabled = preorderOnly;
+    el.detailNote.hidden = preorderOnly;
+    el.detailNoteLabel.hidden = preorderOnly;
+    el.detailQuantityControl.hidden = preorderOnly;
     el.detailQuantity.textContent = "1";
     renderVariants(item);
     updateDetailAdd();
@@ -797,7 +880,13 @@
   function updateDetailAdd() {
     const item = state.selectedItem;
     if (!item) return;
+    if (item.requires_preorder === true) {
+      el.detailAdd.disabled = true;
+      el.detailAdd.textContent = t("preorderDetailsOnly");
+      return;
+    }
     const price = numericPrice(selectedVariant() || item);
+    el.detailAdd.disabled = !isAvailable(item);
     el.detailAdd.textContent = `${t("addToCart")} · ${formatVnd(price * state.detailQuantity)}`;
   }
 

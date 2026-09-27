@@ -23,6 +23,7 @@
     "test:qr-realtime-fallback": "node tests/qr-inbox-realtime-fallback-regression.mjs",
     "test:qr-table-checkout": "node tests/qr-table-checkout-regression.mjs",
     "test:qr-table-checkout-db": "node tests/qr-table-checkout-db-regression.mjs",
+    "test:qr-menu-categories": "node tests/qr-menu-categories-regression.mjs",
     "test:qr-table-checkout:db": "supabase test db --local supabase/tests/qr_table_checkout.sql"
   },
   "dependencies": {

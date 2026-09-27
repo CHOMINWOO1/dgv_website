@@ -4,7 +4,7 @@
   const sb = global.DGV.supabase;
   const ui = global.QRStaff;
   const MENU_KEYS = Object.freeze([
-    "type", "qr_category", "ko_name", "vi_name", "en_name",
+    "type", "qr_category", "qr_subcategory", "ko_name", "vi_name", "en_name",
     "description_ko", "description_en", "description_vi",
     "price_usd", "price_vnd", "image_url",
     "is_active", "is_orderable", "is_sold_out", "requires_preorder", "sort_order"
@@ -29,6 +29,14 @@
   const MAX_TABLE_QR_CACHE_BYTES = 100_000;
   const TABLE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const TABLE_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
+  const QR_CATEGORY_ORDER = Object.freeze({ single: 10, shared: 20, snack: 30, preorder: 40, drink: 50, cafe: 60 });
+  const SINGLE_SUBCATEGORIES = Object.freeze({
+    noodle: { label: "면", sortOrder: 10 },
+    stew_rice: { label: "찌개·덮밥", sortOrder: 20 },
+    soup: { label: "국밥", sortOrder: 30 },
+    grill: { label: "구이", sortOrder: 40 },
+    other: { label: "기타", sortOrder: 90 }
+  });
 
   let menus = [];
   let tables = [];
@@ -421,11 +429,16 @@
   }
 
   function normalizedItem(item) {
+    const qrCategory = ["single", "shared", "snack", "preorder", "drink", "cafe"].includes(item?.qr_category)
+      ? item.qr_category
+      : (item?.type === "drink" ? "drink" : "single");
+    const requestedSubcategory = String(item?.qr_subcategory || "");
     return {
       type: String(item?.type || "other").trim(),
-      qr_category: ["single", "shared", "snack", "preorder", "drink", "cafe"].includes(item?.qr_category)
-        ? item.qr_category
-        : (item?.type === "drink" ? "drink" : "single"),
+      qr_category: qrCategory,
+      qr_subcategory: qrCategory === "single"
+        ? (SINGLE_SUBCATEGORIES[requestedSubcategory] ? requestedSubcategory : null)
+        : null,
       ko_name: nullIfBlank(item?.ko_name),
       vi_name: nullIfBlank(item?.vi_name),
       en_name: nullIfBlank(item?.en_name),
@@ -441,6 +454,46 @@
       requires_preorder: item?.requires_preorder === true,
       sort_order: Math.max(0, Math.round(Number(item?.sort_order) || 0))
     };
+  }
+
+  function subcategoryLabel(value) {
+    return SINGLE_SUBCATEGORIES[String(value || "other")]?.label || SINGLE_SUBCATEGORIES.other.label;
+  }
+
+  function compareMenus(left, right) {
+    const categoryDifference = (QR_CATEGORY_ORDER[left.qr_category] ?? 900) - (QR_CATEGORY_ORDER[right.qr_category] ?? 900);
+    if (categoryDifference) return categoryDifference;
+    if (left.qr_category === "single") {
+      const subcategoryDifference = (SINGLE_SUBCATEGORIES[left.qr_subcategory]?.sortOrder ?? 90)
+        - (SINGLE_SUBCATEGORIES[right.qr_subcategory]?.sortOrder ?? 90);
+      if (subcategoryDifference) return subcategoryDifference;
+    }
+    const priceDifference = (Number(left.price_vnd) || 0) - (Number(right.price_vnd) || 0);
+    if (priceDifference) return priceDifference;
+    const sortDifference = (Number(left.sort_order) || 0) - (Number(right.sort_order) || 0);
+    if (sortDifference) return sortDifference;
+    const nameDifference = String(left.ko_name || left.en_name || left.vi_name || "")
+      .localeCompare(String(right.ko_name || right.en_name || right.vi_name || ""), "ko");
+    return nameDifference || String(left.id || "").localeCompare(String(right.id || ""));
+  }
+
+  function nextSortOrder(qrCategory, qrSubcategory) {
+    const comparableSubcategory = qrCategory === "single" ? qrSubcategory : null;
+    return menus.reduce((max, item) => {
+      if (item.qr_category !== qrCategory) return max;
+      if (qrCategory === "single" && (item.qr_subcategory || "other") !== comparableSubcategory) return max;
+      return Math.max(max, Number(item.sort_order) || 0);
+    }, 0) + 10;
+  }
+
+  function updateSubcategoryField() {
+    const category = ui.byId("qrCategory").value;
+    const field = ui.byId("qrSubcategoryField");
+    const select = ui.byId("qrSubcategory");
+    const isSingle = category === "single";
+    field.hidden = !isSingle;
+    select.disabled = !isSingle;
+    select.required = isSingle;
   }
 
   function showBanner(message, tone = "error") {
@@ -488,7 +541,7 @@
     return menus.filter((item) => {
       if (type && item.type !== type) return false;
       if (!keyword) return true;
-      return [item.ko_name, item.en_name, item.vi_name, item.type]
+      return [item.ko_name, item.en_name, item.vi_name, item.type, item.qr_category, subcategoryLabel(item.qr_subcategory)]
         .some((value) => String(value || "").toLocaleLowerCase().includes(keyword));
     });
   }
@@ -507,11 +560,12 @@
       if (item.is_active === false) statuses.push("직원 메뉴 숨김");
       if (item.is_orderable === false) statuses.push("QR 주문 불가");
       if (item.is_sold_out === true) statuses.push("품절");
+      if (item.requires_preorder === true) statuses.push("사전예약 · 상세만 표시");
       return `
         <button class="qr-menu-row${selected}" type="button" data-menu-id="${item.id}">
           <span>
             <span class="qr-menu-row-name">${global.DGV.escapeHTML(item.ko_name || item.en_name || item.vi_name || "이름 없음")}</span>
-            <span class="qr-menu-row-sub">${global.DGV.escapeHTML([item.type, item.qr_category, item.en_name, item.vi_name, ...statuses].filter(Boolean).join(" · "))}</span>
+            <span class="qr-menu-row-sub">${global.DGV.escapeHTML([item.type, item.qr_category, item.qr_category === "single" ? subcategoryLabel(item.qr_subcategory) : null, item.en_name, item.vi_name, ...statuses].filter(Boolean).join(" · "))}</span>
           </span>
           <span class="qr-menu-row-price">${ui.formatVnd(item.price_vnd)}<br><span class="qr-hint">${ui.formatUsd(item.price_usd)}</span></span>
         </button>`;
@@ -523,6 +577,8 @@
     clearSelectedImageFile();
     ui.byId("menuType").value = value.type;
     ui.byId("qrCategory").value = value.qr_category;
+    ui.byId("qrSubcategory").value = value.qr_subcategory || "";
+    updateSubcategoryField();
     ui.byId("sortOrder").value = value.sort_order;
     ui.byId("koName").value = value.ko_name || "";
     ui.byId("viName").value = value.vi_name || "";
@@ -547,6 +603,7 @@
     return normalizedItem({
       type: ui.byId("menuType").value,
       qr_category: ui.byId("qrCategory").value,
+      qr_subcategory: ui.byId("qrSubcategory").value,
       sort_order: ui.byId("sortOrder").value,
       ko_name: ui.byId("koName").value,
       vi_name: ui.byId("viName").value,
@@ -566,6 +623,7 @@
 
   function validateMenu(item) {
     if (!item.type) return "분류를 입력해 주세요.";
+    if (item.qr_category === "single" && !SINGLE_SUBCATEGORIES[item.qr_subcategory]) return "1인 메뉴 소분류를 선택해 주세요.";
     if (!item.ko_name) return "한국어 메뉴명을 입력해 주세요.";
     if (item.price_vnd < 0 || item.price_usd < 0) return "가격은 0 이상이어야 합니다.";
     if (item.is_sold_out && !item.is_orderable) return null;
@@ -603,11 +661,11 @@
     }
     selectedId = null;
     creatingMenu = true;
-    const maxSort = menus.reduce((max, item) => Math.max(max, Number(item.sort_order) || 0), 0);
     setFormValues({
       type: "other",
       qr_category: "single",
-      sort_order: maxSort + 10,
+      qr_subcategory: null,
+      sort_order: nextSortOrder("single", null),
       price_vnd: 0,
       price_usd: 0,
       is_active: true,
@@ -653,6 +711,7 @@
   function diffPatch(original, next) {
     const before = normalizedItem(original);
     if (original?.qr_category == null) before.qr_category = null;
+    if (original?.qr_subcategory == null) before.qr_subcategory = null;
     return Object.fromEntries(MENU_KEYS
       .filter((key) => before[key] !== next[key])
       .map((key) => [key, next[key]]));
@@ -879,11 +938,14 @@
       .order("sort_order", { ascending: true })
       .order("id", { ascending: true });
     if (error) throw error;
-    menus = data || [];
+    menus = (data || []).sort(compareMenus);
     if (!showArchivedMenus) {
       activeMenuSummary = {
         count: menus.length,
-        orderable: menus.filter((item) => item.is_active !== false && item.is_orderable !== false && item.is_sold_out !== true).length,
+        orderable: menus.filter((item) => item.is_active !== false
+          && item.is_orderable !== false
+          && item.is_sold_out !== true
+          && item.requires_preorder !== true).length,
         soldOut: menus.filter((item) => item.is_sold_out === true).length
       };
     }
@@ -1279,6 +1341,19 @@
     ui.byId("restoreMenuBtn").addEventListener("click", restoreMenu);
     ui.byId("resetMenuBtn").addEventListener("click", resetMenu);
     ui.byId("menuForm").addEventListener("submit", saveMenu);
+    ui.byId("qrCategory").addEventListener("change", () => {
+      updateSubcategoryField();
+      if (creatingMenu) {
+        const category = ui.byId("qrCategory").value;
+        const subcategory = category === "single" ? ui.byId("qrSubcategory").value : null;
+        ui.byId("sortOrder").value = nextSortOrder(category, subcategory);
+      }
+    });
+    ui.byId("qrSubcategory").addEventListener("change", () => {
+      if (creatingMenu && ui.byId("qrCategory").value === "single") {
+        ui.byId("sortOrder").value = nextSortOrder("single", ui.byId("qrSubcategory").value);
+      }
+    });
     ui.byId("menuImageFile").addEventListener("change", chooseImage);
     ui.byId("clearImageBtn").addEventListener("click", clearImageUrl);
     ui.byId("imageUrl").addEventListener("change", () => {
