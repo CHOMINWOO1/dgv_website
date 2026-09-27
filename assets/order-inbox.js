@@ -4,6 +4,9 @@
   const sb = global.DGV.supabase;
   const ui = global.QRStaff;
   const CURRENT_STATUSES = Object.freeze(["submitted", "accepted"]);
+  const BUSINESS_TIME_ZONE = "Asia/Ho_Chi_Minh";
+  const BUSINESS_UTC_OFFSET_MINUTES = 7 * 60;
+  const HISTORY_RANGES = Object.freeze(["today", "yesterday", "week", "date"]);
   const STATUS_META = Object.freeze({
     submitted: { label: "신규 주문", tone: "new" },
     accepted: { label: "주문 확인", tone: "ready" },
@@ -21,10 +24,14 @@
   let attentionTimer = null;
   let refreshTimer = null;
   let reconnectTimer = null;
+  let historyDayTimer = null;
   let realtimeChannel = null;
   let realtimeStatus = "disconnected";
   let refreshAfterLoad = false;
+  let refreshAfterLoadHistory = false;
+  let scheduledRefreshIncludesHistory = false;
   let lastLoadFailed = false;
+  let historyLoadFailed = false;
   let lastSyncedAt = null;
   let paymentTableId = null;
   let paymentTableLabel = "";
@@ -36,9 +43,109 @@
   let editableMenus = [];
   let editableMenusLoaded = false;
   let editableMenusPromise = null;
+  let historyRange = "today";
+  let historyCustomDate = "";
   const knownOrderIds = new Set();
   const alertedOrderIds = new Set();
   const highlightedOrderIds = new Set();
+
+  function businessDateKey(value = new Date()) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return global.DGV.formatYmdInTimeZone(date, BUSINESS_TIME_ZONE);
+  }
+
+  function shiftBusinessDateKey(dateKey, days) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ""));
+    if (!match) return "";
+    const shifted = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days));
+    return shifted.toISOString().slice(0, 10);
+  }
+
+  function businessDayStartIso(dateKey) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateKey || ""));
+    if (!match) return "";
+    const utcMidnight = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    return new Date(utcMidnight - BUSINESS_UTC_OFFSET_MINUTES * 60 * 1000).toISOString();
+  }
+
+  function historyWindowFor(range, customDate, now = new Date()) {
+    const todayKey = businessDateKey(now);
+    let startKey = todayKey;
+    let endKey = shiftBusinessDateKey(todayKey, 1);
+    if (range === "yesterday") {
+      startKey = shiftBusinessDateKey(todayKey, -1);
+      endKey = todayKey;
+    } else if (range === "week") {
+      startKey = shiftBusinessDateKey(todayKey, -6);
+    } else if (range === "date" && /^\d{4}-\d{2}-\d{2}$/.test(customDate || "")) {
+      startKey = customDate;
+      endKey = shiftBusinessDateKey(customDate, 1);
+    }
+    return {
+      range,
+      startKey,
+      endKey,
+      startIso: businessDayStartIso(startKey),
+      endIso: businessDayStartIso(endKey)
+    };
+  }
+
+  function millisecondsUntilBusinessTomorrow(now = new Date()) {
+    const tomorrowKey = shiftBusinessDateKey(businessDateKey(now), 1);
+    const tomorrowStart = new Date(businessDayStartIso(tomorrowKey)).getTime();
+    return Math.max(1000, tomorrowStart - now.getTime() + 1000);
+  }
+
+  function selectedHistoryWindow() {
+    return historyWindowFor(historyRange, historyCustomDate);
+  }
+
+  function historyWindowKey(window) {
+    return `${window.startIso}|${window.endIso}`;
+  }
+
+  function historyTimestamp(order) {
+    if (order.finalized_order_id) return order.finalized_at || order.updated_at || order.submitted_at;
+    if (order.status === "cancelled") return order.cancelled_at || order.updated_at || order.submitted_at;
+    return "";
+  }
+
+  function isHistoricalOrder(order) {
+    return Boolean(order.finalized_order_id || order.status === "cancelled");
+  }
+
+  function isInSelectedHistoryWindow(order) {
+    if (!isHistoricalOrder(order)) return true;
+    const timestamp = new Date(historyTimestamp(order)).getTime();
+    const window = selectedHistoryWindow();
+    return Number.isFinite(timestamp)
+      && timestamp >= new Date(window.startIso).getTime()
+      && timestamp < new Date(window.endIso).getTime();
+  }
+
+  function historyDateLabel(dateKey) {
+    const todayKey = businessDateKey();
+    const yesterdayKey = shiftBusinessDateKey(todayKey, -1);
+    const reference = new Date(new Date(businessDayStartIso(dateKey)).getTime() + 12 * 60 * 60 * 1000);
+    const formatted = new Intl.DateTimeFormat("ko-KR", {
+      timeZone: BUSINESS_TIME_ZONE,
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      weekday: "short"
+    }).format(reference);
+    if (dateKey === todayKey) return `오늘 · ${formatted}`;
+    if (dateKey === yesterdayKey) return `어제 · ${formatted}`;
+    return formatted;
+  }
+
+  function historyRangeLabel() {
+    if (historyRange === "today") return "오늘 기록";
+    if (historyRange === "yesterday") return "어제 기록";
+    if (historyRange === "week") return "최근 7일 기록";
+    return `${historyDateLabel(historyCustomDate).replace(/^(오늘|어제) · /, "")} 기록`;
+  }
 
   function relationOne(value) {
     return Array.isArray(value) ? value[0] || null : value || null;
@@ -47,6 +154,20 @@
   function relationMany(value) {
     if (!value) return [];
     return Array.isArray(value) ? value : [value];
+  }
+
+  async function mapWithConcurrency(items, concurrency, worker) {
+    const results = new Array(items.length);
+    let cursor = 0;
+    const run = async () => {
+      while (cursor < items.length) {
+        const index = cursor;
+        cursor += 1;
+        results[index] = await worker(items[index], index);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, run));
+    return results;
   }
 
   function statusMeta(status) {
@@ -131,46 +252,66 @@
     };
   }
 
-  async function fetchWithRelations(statuses, limit, finalized = null) {
-    let query = sb
-      .from("qr_orders")
-      .select("id,table_id,client_request_id,status,note,total_usd,total_vnd,submitted_at,updated_at,accepted_at,cancelled_at,finalized_at,finalized_order_id,qr_tables(label),qr_order_items(id,qr_order_id,menu_item_id,qty,menu_type,ko_name,vi_name,en_name,unit_usd,unit_vnd,line_usd,line_vnd,created_at)")
-      .in("status", statuses)
-      .order("submitted_at", { ascending: false });
-    if (finalized === true) query = query.not("finalized_order_id", "is", null);
-    if (finalized === false) query = query.is("finalized_order_id", null);
-    if (limit) query = query.limit(limit);
-    const { data, error } = await query;
-    if (error) throw error;
-    return (data || []).map(normalizeOrder);
+  async function fetchWithRelations(statuses, options = {}) {
+    const { finalized = null, dateColumn = "", historyWindow = null } = options;
+    const orderColumn = dateColumn || "submitted_at";
+    const rows = await global.DGV.collectSupabasePages(() => {
+      let query = sb
+        .from("qr_orders")
+        .select("id,table_id,client_request_id,status,note,total_usd,total_vnd,submitted_at,updated_at,accepted_at,cancelled_at,finalized_at,finalized_order_id,qr_tables(label),qr_order_items(id,qr_order_id,menu_item_id,qty,menu_type,ko_name,vi_name,en_name,unit_usd,unit_vnd,line_usd,line_vnd,created_at)")
+        .in("status", statuses);
+      if (finalized === true) query = query.not("finalized_order_id", "is", null);
+      if (finalized === false) query = query.is("finalized_order_id", null);
+      if (dateColumn && historyWindow) {
+        query = query.gte(dateColumn, historyWindow.startIso).lt(dateColumn, historyWindow.endIso);
+      }
+      return query;
+    }, {
+      order: [
+        { column: orderColumn, ascending: false },
+        { column: "id", ascending: false }
+      ]
+    });
+    return rows.map(normalizeOrder);
   }
 
-  async function fetchWithoutRelations(statuses, limit, finalized = null) {
-    let orderQuery = sb
-      .from("qr_orders")
-      .select("id,table_id,client_request_id,status,note,total_usd,total_vnd,submitted_at,updated_at,accepted_at,cancelled_at,finalized_at,finalized_order_id")
-      .in("status", statuses)
-      .order("submitted_at", { ascending: false });
-    if (finalized === true) orderQuery = orderQuery.not("finalized_order_id", "is", null);
-    if (finalized === false) orderQuery = orderQuery.is("finalized_order_id", null);
-    if (limit) orderQuery = orderQuery.limit(limit);
-    const { data: orderRows, error: orderError } = await orderQuery;
-    if (orderError) throw orderError;
+  async function fetchWithoutRelations(statuses, options = {}) {
+    const { finalized = null, dateColumn = "", historyWindow = null } = options;
+    const orderColumn = dateColumn || "submitted_at";
+    const orderRows = await global.DGV.collectSupabasePages(() => {
+      let orderQuery = sb
+        .from("qr_orders")
+        .select("id,table_id,client_request_id,status,note,total_usd,total_vnd,submitted_at,updated_at,accepted_at,cancelled_at,finalized_at,finalized_order_id")
+        .in("status", statuses);
+      if (finalized === true) orderQuery = orderQuery.not("finalized_order_id", "is", null);
+      if (finalized === false) orderQuery = orderQuery.is("finalized_order_id", null);
+      if (dateColumn && historyWindow) {
+        orderQuery = orderQuery.gte(dateColumn, historyWindow.startIso).lt(dateColumn, historyWindow.endIso);
+      }
+      return orderQuery;
+    }, {
+      order: [
+        { column: orderColumn, ascending: false },
+        { column: "id", ascending: false }
+      ]
+    });
 
-    const ids = (orderRows || []).map((row) => row.id);
-    const tableIds = [...new Set((orderRows || []).map((row) => row.table_id).filter(Boolean))];
-    const [tableResult, ...itemResults] = await Promise.all([
+    const ids = orderRows.map((row) => row.id);
+    const tableIds = [...new Set(orderRows.map((row) => row.table_id).filter(Boolean))];
+    const itemChunks = Array.from({ length: Math.ceil(ids.length / 40) }, (_, index) => (
+      ids.slice(index * 40, (index + 1) * 40)
+    ));
+    const [tableResult, itemResults] = await Promise.all([
       tableIds.length
         ? sb.from("qr_tables").select("id,label").in("id", tableIds)
         : Promise.resolve({ data: [], error: null }),
-      ...Array.from({ length: Math.ceil(ids.length / 40) }, (_, index) => {
-        const chunk = ids.slice(index * 40, (index + 1) * 40);
-        return sb
+      mapWithConcurrency(itemChunks, 4, (chunk) => (
+        sb
           .from("qr_order_items")
           .select("id,qr_order_id,menu_item_id,qty,menu_type,ko_name,vi_name,en_name,unit_usd,unit_vnd,line_usd,line_vnd,created_at")
           .in("qr_order_id", chunk)
-          .order("created_at", { ascending: true });
-      })
+          .order("created_at", { ascending: true })
+      ))
     ]);
     if (tableResult.error) throw tableResult.error;
     const failedItems = itemResults.find((result) => result.error);
@@ -182,7 +323,7 @@
       if (!itemsByOrder.has(item.qr_order_id)) itemsByOrder.set(item.qr_order_id, []);
       itemsByOrder.get(item.qr_order_id).push(item);
     });
-    return (orderRows || []).map((row) => normalizeOrder({
+    return orderRows.map((row) => normalizeOrder({
       ...row,
       qr_tables: tables.get(row.table_id) || null,
       qr_order_items: itemsByOrder.get(row.id) || []
@@ -190,50 +331,87 @@
   }
 
   async function attachPaidTotals(orderRows) {
-    const finalizedIds = orderRows
+    const finalizedIds = [...new Set(orderRows
       .filter((order) => order.finalized_order_id)
-      .map((order) => order.id)
-      .slice(0, 200);
-    if (!finalizedIds.length) return orderRows;
-    const { data, error } = await sb.rpc("app_get_qr_paid_totals", {
-      p_qr_order_ids: finalizedIds
-    });
-    if (error) {
-      console.warn("Final QR paid-total lookup failed; suppressing the potentially different base amount.", error);
-      return orderRows;
+      .map((order) => order.id))];
+    if (!finalizedIds.length) return { rows: orderRows, error: null };
+    const batches = Array.from({ length: Math.ceil(finalizedIds.length / 200) }, (_, index) => (
+      finalizedIds.slice(index * 200, (index + 1) * 200)
+    ));
+    const results = await mapWithConcurrency(batches, 4, (ids) => sb.rpc("app_get_qr_paid_totals", {
+      p_qr_order_ids: ids
+    }));
+    const failed = results.find((result) => result.error);
+    if (failed?.error) {
+      console.warn("Final QR paid-total lookup failed; suppressing the potentially different base amount.", failed.error);
+      return { rows: orderRows, error: failed.error };
     }
-    const paidByQrOrder = new Map((data || []).map((row) => [row.qr_order_id, row]));
-    return orderRows.map((order) => {
-      const paid = paidByQrOrder.get(order.id);
-      return paid ? {
-        ...order,
-        paid_total_usd: paid.total_usd,
-        paid_total_vnd: paid.total_vnd,
-        paid_payment_method: paid.payment_method
-      } : order;
-    });
+    const paidByQrOrder = new Map(results.flatMap((result) => result.data || []).map((row) => [row.qr_order_id, row]));
+    return {
+      rows: orderRows.map((order) => {
+        const paid = paidByQrOrder.get(order.id);
+        return paid ? {
+          ...order,
+          paid_total_usd: paid.total_usd,
+          paid_total_vnd: paid.total_vnd,
+          paid_payment_method: paid.payment_method
+        } : order;
+      }),
+      error: null
+    };
   }
 
-  async function fetchOrders() {
-    const uniqueOrders = (groups) => [...new Map(groups.flat().map((order) => [order.id, order])).values()];
+  async function fetchActiveOrders() {
     try {
-      const groups = await Promise.all([
+      return await Promise.all([
         fetchWithRelations(["submitted"]),
-        fetchWithRelations(["accepted"], null, false),
-        fetchWithRelations(["accepted"], 80, true),
-        fetchWithRelations(["cancelled"], 80)
+        fetchWithRelations(["accepted"], { finalized: false })
       ]);
-      return attachPaidTotals(uniqueOrders(groups));
     } catch (embeddedError) {
-      console.warn("Embedded QR order query failed; using relationship-cache fallback.", embeddedError);
-      const groups = await Promise.all([
+      console.warn("Embedded active QR order query failed; using relationship-cache fallback.", embeddedError);
+      return Promise.all([
         fetchWithoutRelations(["submitted"]),
-        fetchWithoutRelations(["accepted"], null, false),
-        fetchWithoutRelations(["accepted"], 80, true),
-        fetchWithoutRelations(["cancelled"], 80)
+        fetchWithoutRelations(["accepted"], { finalized: false })
       ]);
-      return attachPaidTotals(uniqueOrders(groups));
     }
+  }
+
+  async function fetchHistoryOrders(historyWindow) {
+    try {
+      return await Promise.all([
+        fetchWithRelations(["accepted"], { finalized: true, dateColumn: "finalized_at", historyWindow }),
+        fetchWithRelations(["cancelled"], { dateColumn: "cancelled_at", historyWindow })
+      ]);
+    } catch (embeddedError) {
+      console.warn("Embedded QR order history query failed; using relationship-cache fallback.", embeddedError);
+      return Promise.all([
+        fetchWithoutRelations(["accepted"], { finalized: true, dateColumn: "finalized_at", historyWindow }),
+        fetchWithoutRelations(["cancelled"], { dateColumn: "cancelled_at", historyWindow })
+      ]);
+    }
+  }
+
+  async function fetchOrders(historyWindow = selectedHistoryWindow(), includeHistory = true) {
+    const uniqueOrders = (groups) => [...new Map(groups.flat().map((order) => [order.id, order])).values()];
+    if (!includeHistory) {
+      const activeGroups = await fetchActiveOrders();
+      const activeRows = uniqueOrders(activeGroups);
+      const cachedHistoryRows = orders.filter(isHistoricalOrder);
+      return { rows: [...activeRows, ...cachedHistoryRows], historyError: null, historySkipped: true };
+    }
+    const [activeResult, historyResult] = await Promise.allSettled([
+      fetchActiveOrders(),
+      fetchHistoryOrders(historyWindow)
+    ]);
+    if (activeResult.status === "rejected") throw activeResult.reason;
+    const historyGroups = historyResult.status === "fulfilled" ? historyResult.value : [];
+    const rows = uniqueOrders([...activeResult.value, ...historyGroups]);
+    const paidTotals = await attachPaidTotals(rows);
+    return {
+      rows: paidTotals.rows,
+      historyError: historyResult.status === "rejected" ? historyResult.reason : paidTotals.error,
+      historySkipped: false
+    };
   }
 
   function announceNewOrders(nextOrders) {
@@ -260,8 +438,8 @@
     if (filter === "current") {
       return orders.filter((order) => order.status === "submitted" || (order.status === "accepted" && !order.finalized_order_id));
     }
-    if (filter === "all") return orders;
-    return orders.filter((order) => order.status === filter);
+    const statusRows = filter === "all" ? orders : orders.filter((order) => order.status === filter);
+    return statusRows.filter(isInSelectedHistoryWindow);
   }
 
   function renderSummary() {
@@ -317,7 +495,7 @@
             const checkoutNote = String(checkoutOrder.note || "").trim();
             return `
               <section class="qr-sale-order-detail">
-                <div class="qr-sale-order-title">주문 ${index + 1} · ${ui.formatTime(checkoutOrder.submitted_at)} · #${ui.shortId(checkoutOrder.id)}</div>
+                <div class="qr-sale-order-title">주문 ${index + 1} · ${ui.formatTime(checkoutOrder.submitted_at, { timeZone: BUSINESS_TIME_ZONE })} · #${ui.shortId(checkoutOrder.id)}</div>
                 ${checkoutItems}
                 ${checkoutNote ? `<div class="qr-order-note"><strong>요청사항</strong><br>${global.DGV.escapeHTML(checkoutNote)}</div>` : ""}
               </section>`;
@@ -334,14 +512,18 @@
       const totalValue = order.finalized_order_id && !hasPaidTotal
         ? '<span class="qr-muted">결제 금액을 불러오지 못했습니다.</span>'
         : `${ui.formatVnd(displayTotalVnd)}${Number(displayTotalUsd || 0) > 0 ? ` · ${ui.formatUsd(displayTotalUsd)}` : ""}`;
+      const submittedTime = ui.formatTime(order.submitted_at, { timeZone: BUSINESS_TIME_ZONE });
+      const orderTimeText = order.finalized_order_id
+        ? `${bundledSale ? "통합 결제" : "결제"} ${ui.formatTime(order.finalized_at, { timeZone: BUSINESS_TIME_ZONE })} · 매출 #${ui.shortId(order.finalized_order_id)}`
+        : order.status === "cancelled"
+          ? `취소 ${ui.formatTime(order.cancelled_at, { timeZone: BUSINESS_TIME_ZONE })} · 주문 ${submittedTime} · #${ui.shortId(order.id)}`
+          : `${submittedTime} · #${ui.shortId(order.id)}`;
       return `
         <article class="qr-card qr-order-card${isNew}" data-status="${global.DGV.escapeHTML(order.status)}">
           <div class="qr-order-head">
             <div>
               <div class="qr-table-no">${global.DGV.escapeHTML(order.table_label)}</div>
-              <div class="qr-order-time">${bundledSale
-                ? `통합 결제 ${ui.formatTime(order.finalized_at)} · 매출 #${ui.shortId(order.finalized_order_id)}`
-                : `${ui.formatTime(order.submitted_at)} · #${ui.shortId(order.id)}`}</div>
+              <div class="qr-order-time">${orderTimeText}</div>
             </div>
             <span class="qr-status" data-tone="${status.tone}">${status.label}</span>
           </div>
@@ -374,51 +556,124 @@
       </div>`;
   }
 
-  function renderOrders() {
-    const grid = ui.byId("ordersGrid");
-    const rows = collapseFinalizedSales(filteredOrders());
-    renderSummary();
-    if (!rows.length) {
-      grid.innerHTML = '<div class="qr-empty">선택한 상태의 주문이 없습니다.</div>';
-      return;
-    }
+  function renderTableGroups(rows, includeCheckout = true) {
     const groups = new Map();
     rows.forEach((order) => {
       const key = order.table_id || order.table_label;
       if (!groups.has(key)) groups.set(key, { tableId: order.table_id, label: order.table_label, orders: [] });
       groups.get(key).orders.push(order);
     });
-    grid.innerHTML = [...groups.values()].map((group) => `
+    return [...groups.values()].map((group) => `
       <section class="qr-table-order-group">
         <div class="qr-table-order-group-title">
           <h3>${global.DGV.escapeHTML(group.label)}</h3>
           <span class="qr-pill">표시 ${group.orders.length.toLocaleString("ko-KR")}건</span>
         </div>
-        ${renderTableCheckout(group)}
+        ${includeCheckout ? renderTableCheckout(group) : ""}
         <div class="qr-table-order-cards">
           ${group.orders.map(renderOrderCard).join("")}
         </div>
       </section>`).join("");
   }
 
+  function renderHistoryDays(rows) {
+    const days = new Map();
+    rows
+      .slice()
+      .sort((a, b) => new Date(historyTimestamp(b)) - new Date(historyTimestamp(a)))
+      .forEach((order) => {
+        const key = businessDateKey(historyTimestamp(order));
+        if (!key) return;
+        if (!days.has(key)) days.set(key, []);
+        days.get(key).push(order);
+      });
+    return [...days.entries()]
+      .sort(([left], [right]) => right.localeCompare(left))
+      .map(([dateKey, dayRows]) => `
+        <section class="qr-history-day" data-history-date="${dateKey}">
+          <div class="qr-history-day-title">
+            <h3>${historyDateLabel(dateKey)}</h3>
+            <span class="qr-pill">${dayRows.length.toLocaleString("ko-KR")}건</span>
+          </div>
+          <div class="qr-history-day-orders">
+            ${renderTableGroups(dayRows, false)}
+          </div>
+        </section>`).join("");
+  }
+
+  function renderOrders() {
+    const grid = ui.byId("ordersGrid");
+    const rows = collapseFinalizedSales(filteredOrders());
+    const currentRows = rows.filter((order) => !isHistoricalOrder(order));
+    const historyRows = rows.filter(isHistoricalOrder);
+    const filter = ui.byId("statusFilter").value;
+    const showHistory = ["accepted", "cancelled", "all"].includes(filter);
+    renderSummary();
+    if (!rows.length && !showHistory) {
+      grid.innerHTML = '<div class="qr-empty">선택한 상태의 주문이 없습니다.</div>';
+      return;
+    }
+    const sections = [];
+    if (currentRows.length) {
+      sections.push(`
+        <section class="qr-order-section">
+          <div class="qr-order-section-title">
+            <h2>현재 주문</h2>
+            <span class="qr-pill">${currentRows.length.toLocaleString("ko-KR")}건</span>
+          </div>
+          <div class="qr-order-section-grid">${renderTableGroups(currentRows)}</div>
+        </section>`);
+    }
+    if (showHistory) {
+      sections.push(`
+        <section class="qr-order-section qr-history-section">
+          <div class="qr-order-section-title">
+            <h2>${historyRangeLabel()}</h2>
+            <span class="qr-pill">${historyRows.length.toLocaleString("ko-KR")}건</span>
+          </div>
+          ${historyRows.length
+            ? `<div class="qr-history-days">${renderHistoryDays(historyRows)}</div>`
+            : `<div class="qr-empty qr-empty-compact">선택한 기간의 주문 기록이 없습니다.</div>`}
+        </section>`);
+    }
+    grid.innerHTML = sections.join("") || '<div class="qr-empty">선택한 상태의 주문이 없습니다.</div>';
+  }
+
   async function loadOrders(options = {}) {
+    const includeHistory = options.includeHistory !== false;
     if (isLoading) {
       refreshAfterLoad = true;
+      refreshAfterLoadHistory = refreshAfterLoadHistory || includeHistory;
       return;
     }
     const loadStartedWithRealtime = realtimeStatus === "connected";
+    const requestedHistoryWindow = selectedHistoryWindow();
     isLoading = true;
     if (options.manual) ui.setBusy(ui.byId("refreshBtn"), true, "불러오는 중…");
     try {
-      const nextOrders = await fetchOrders();
+      const result = await fetchOrders(requestedHistoryWindow, includeHistory);
+      if (historyWindowKey(requestedHistoryWindow) !== historyWindowKey(selectedHistoryWindow())) {
+        refreshAfterLoad = true;
+        return;
+      }
+      const nextOrders = result.rows;
       nextOrders.sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at));
       announceNewOrders(nextOrders);
       orders = nextOrders;
       renderOrders();
-      hideBanner();
-      lastLoadFailed = false;
       lastSyncedAt = new Date();
-      if (loadStartedWithRealtime && realtimeStatus === "connected") stopFallbackPolling();
+      if (result.historyError) {
+        console.warn("QR order history could not be refreshed; active orders remain available.", result.historyError);
+        historyLoadFailed = true;
+        lastLoadFailed = true;
+        startFallbackPolling();
+        showBanner("현재 주문은 정상적으로 불러왔지만 선택한 기간의 주문 기록을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.");
+      } else if (!result.historySkipped || !historyLoadFailed) {
+        if (!result.historySkipped) historyLoadFailed = false;
+        hideBanner();
+        lastLoadFailed = false;
+        if (loadStartedWithRealtime && realtimeStatus === "connected") stopFallbackPolling();
+      }
       updateLastSyncText();
     } catch (error) {
       console.error(error);
@@ -431,16 +686,24 @@
       isLoading = false;
       if (options.manual) ui.setBusy(ui.byId("refreshBtn"), false);
       if (refreshAfterLoad) {
+        const includeQueuedHistory = refreshAfterLoadHistory;
         refreshAfterLoad = false;
-        scheduleRefresh(0);
+        refreshAfterLoadHistory = false;
+        scheduleRefresh(0, { includeHistory: includeQueuedHistory });
       }
     }
   }
 
-  function scheduleRefresh(delay = 250) {
+  function scheduleRefresh(delay = 250, options = {}) {
     if (document.visibilityState !== "visible" || !global.navigator.onLine) return;
+    scheduledRefreshIncludesHistory = scheduledRefreshIncludesHistory || options.includeHistory === true;
     global.clearTimeout(refreshTimer);
-    refreshTimer = global.setTimeout(() => loadOrders(), delay);
+    refreshTimer = global.setTimeout(() => {
+      refreshTimer = null;
+      const includeHistory = scheduledRefreshIncludesHistory;
+      scheduledRefreshIncludesHistory = false;
+      loadOrders({ includeHistory });
+    }, delay);
   }
 
   function updateLastSyncText() {
@@ -768,7 +1031,7 @@
           <section class="qr-payment-order">
             <div class="qr-payment-order-title">
               <strong>주문 ${index + 1}</strong>
-              <span>${ui.formatTime(order.submitted_at)} · #${ui.shortId(order.id)} · ${ui.formatVnd(order.total_vnd)}${Number(order.total_usd || 0) > 0 ? ` · ${ui.formatUsd(order.total_usd)}` : ""}</span>
+              <span>${ui.formatTime(order.submitted_at, { timeZone: BUSINESS_TIME_ZONE })} · #${ui.shortId(order.id)} · ${ui.formatVnd(order.total_vnd)}${Number(order.total_usd || 0) > 0 ? ` · ${ui.formatUsd(order.total_usd)}` : ""}</span>
             </div>
             ${order.items.map(renderItem).join("") || '<div class="qr-hint">주문 상세를 불러오지 못했습니다.</div>'}
             ${String(order.note || "").trim() ? `<div class="qr-order-note"><strong>요청사항</strong><br>${global.DGV.escapeHTML(String(order.note).trim())}</div>` : ""}
@@ -932,10 +1195,15 @@
           ui.playAlert();
           ui.toast("새 테이블 주문이 들어왔습니다.", "ok", 6500);
         }
-        scheduleRefresh();
+        const historyChanged = payload.eventType === "DELETE"
+          || payload.new?.status === "cancelled"
+          || Boolean(payload.new?.finalized_order_id)
+          || payload.old?.status === "cancelled"
+          || Boolean(payload.old?.finalized_order_id);
+        scheduleRefresh(250, { includeHistory: historyChanged });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "qr_order_items" }, () => {
-        if (realtimeChannel === channel) scheduleRefresh(350);
+        if (realtimeChannel === channel) scheduleRefresh(350, { includeHistory: false });
       });
     realtimeChannel = channel;
     channel.subscribe((status, error) => {
@@ -946,7 +1214,7 @@
         reconnectTimer = null;
         ui.connectionBadge("online", "실시간 연결됨");
         updateLastSyncText();
-        scheduleRefresh(0);
+        scheduleRefresh(0, { includeHistory: true });
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
         realtimeStatus = "reconnecting";
         startFallbackPolling();
@@ -993,10 +1261,71 @@
     ui.byId("soundBtn").textContent = "🔔 알림음 준비됨";
   }
 
+  function updateHistoryFilterControls() {
+    global.document.querySelectorAll("[data-history-range]").forEach((button) => {
+      const active = button.dataset.historyRange === historyRange;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    ui.byId("historyDate").value = historyCustomDate;
+  }
+
+  function initializeHistoryFilter() {
+    const todayKey = businessDateKey();
+    historyCustomDate = todayKey;
+    const input = ui.byId("historyDate");
+    input.value = todayKey;
+    input.max = todayKey;
+    updateHistoryFilterControls();
+  }
+
+  function scheduleBusinessDayRollover() {
+    global.clearTimeout(historyDayTimer);
+    historyDayTimer = global.setTimeout(() => {
+      historyDayTimer = null;
+      const todayKey = businessDateKey();
+      const input = ui.byId("historyDate");
+      input.max = todayKey;
+      if (historyRange !== "date") {
+        historyCustomDate = todayKey;
+        input.value = todayKey;
+      }
+      if (document.visibilityState === "visible" && global.navigator.onLine) loadOrders();
+      scheduleBusinessDayRollover();
+    }, millisecondsUntilBusinessTomorrow());
+  }
+
+  function selectHistoryRange(range) {
+    if (!HISTORY_RANGES.includes(range) || range === "date") return;
+    historyRange = range;
+    ui.byId("statusFilter").value = "all";
+    updateHistoryFilterControls();
+    loadOrders();
+  }
+
+  function searchHistoryDate(event) {
+    event.preventDefault();
+    const selectedDate = ui.byId("historyDate").value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+      ui.toast("조회할 날짜를 선택해 주세요.", "error");
+      return;
+    }
+    historyRange = "date";
+    historyCustomDate = selectedDate;
+    ui.byId("statusFilter").value = "all";
+    updateHistoryFilterControls();
+    loadOrders();
+  }
+
   function bindEvents() {
     ui.byId("refreshBtn").addEventListener("click", () => loadOrders({ manual: true }));
     ui.byId("signOutBtn").addEventListener("click", () => ui.signOut());
     ui.byId("statusFilter").addEventListener("change", renderOrders);
+    ui.byId("historyQuickFilters").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-history-range]");
+      if (button) selectHistoryRange(button.dataset.historyRange);
+    });
+    ui.byId("historyDateForm").addEventListener("submit", searchHistoryDate);
     ui.byId("soundBtn").addEventListener("click", async (event) => {
       const enabled = await ui.enableSound();
       if (enabled) {
@@ -1047,6 +1376,7 @@
       } else {
         global.clearTimeout(refreshTimer);
         refreshTimer = null;
+        scheduledRefreshIncludesHistory = false;
       }
     });
     document.addEventListener("keydown", (event) => {
@@ -1068,6 +1398,7 @@
       reconnectTimer = null;
       global.clearTimeout(refreshTimer);
       refreshTimer = null;
+      scheduledRefreshIncludesHistory = false;
       startFallbackPolling();
       updateLastSyncText();
       ui.connectionBadge("offline", "오프라인");
@@ -1079,7 +1410,9 @@
       stopFallbackPolling();
       global.clearInterval(attentionTimer);
       global.clearTimeout(refreshTimer);
+      scheduledRefreshIncludesHistory = false;
       global.clearTimeout(reconnectTimer);
+      global.clearTimeout(historyDayTimer);
     });
   }
 
@@ -1087,6 +1420,8 @@
     try {
       identity = await ui.requireLogin({ roles: ["staff", "admin"], preferredRole: "staff" });
       if (identity.role === "admin") ui.byId("menuAdminLink").hidden = false;
+      initializeHistoryFilter();
+      scheduleBusinessDayRollover();
       bindEvents();
       armPreferredSound();
       subscribeRealtime();
