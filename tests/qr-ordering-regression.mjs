@@ -195,9 +195,10 @@ assert.match(inboxSource, /const CURRENT_STATUSES = Object\.freeze\(\["submitted
 assert.doesNotMatch(inboxSource, /(?:status|value):?\s*["'](?:preparing|ready|served)["']/);
 assert.doesNotMatch(inboxHtml, /<option value="(?:preparing|ready|served)"/);
 assert.match(inboxSource, /fetchWithRelations\(\["submitted"\]\)/);
-assert.match(inboxSource, /fetchWithRelations\(\["accepted"\], null, false\)/, "all unfinalized accepted orders must stay visible");
-assert.match(inboxSource, /fetchWithRelations\(\["accepted"\], 80, true\)/, "finalized history must be bounded");
-assert.match(inboxSource, /fetchWithRelations\(\["cancelled"\], 80\)/, "cancelled history must be bounded");
+assert.match(inboxSource, /fetchWithRelations\(\["accepted"\], \{ finalized: false \}\)/, "all unfinalized accepted orders must stay visible");
+assert.match(inboxSource, /fetchWithRelations\(\["accepted"\], \{ finalized: true, dateColumn: "finalized_at", historyWindow \}\)/, "finalized history must use the selected payment-date window");
+assert.match(inboxSource, /fetchWithRelations\(\["cancelled"\], \{ dateColumn: "cancelled_at", historyWindow \}\)/, "cancelled history must use the selected cancellation-date window");
+assert.match(inboxSource, /collectSupabasePages\([\s\S]*?column: orderColumn, ascending: false[\s\S]*?column: "id", ascending: false/, "date-window queries must collect every stable page");
 assert.match(inboxSource, /new Map\(groups\.flat\(\)\.map\(\(order\) => \[order\.id, order\]\)\)/, "overlapping order groups must be deduplicated");
 assert.doesNotMatch(functionSource(inboxSource, "actionButtons"), /identity/, "staff and admin must receive the same inbox actions");
 assert.match(functionSource(inboxSource, "finalizePayment"), /\["staff", "admin"\]\.includes\(identity\?\.role\)/);
