@@ -40,14 +40,14 @@ assert.match(loadOrders, /if \(isLoading\) \{[\s\S]*?refreshAfterLoad = true/);
 assert.match(loadOrders, /loadStartedWithRealtime = realtimeStatus === "connected"/);
 assert.match(loadOrders, /loadStartedWithRealtime && realtimeStatus === "connected"[\s\S]*?stopFallbackPolling\(\)/);
 assert.match(loadOrders, /catch \(error\) \{[\s\S]*?lastLoadFailed = true[\s\S]*?startFallbackPolling\(\)/);
-assert.match(loadOrders, /if \(refreshAfterLoad\) \{[\s\S]*?refreshAfterLoad = false[\s\S]*?scheduleRefresh\(0\)/);
+assert.match(loadOrders, /if \(refreshAfterLoad\) \{[\s\S]*?refreshAfterLoad = false[\s\S]*?scheduleRefresh\(0, \{ includeHistory: includeQueuedHistory \}\)/);
 
 // Realtime events are wake-up signals only while the page is visible and
 // online. A fresh subscription always reconciles once before polling stops.
 assert.match(scheduleRefresh, /visibilityState !== "visible" \|\| !global\.navigator\.onLine[\s\S]*?return/);
 assert.match(subscribeRealtime, /const previousChannel = realtimeChannel;[\s\S]*?realtimeChannel = null;[\s\S]*?removeChannel\(previousChannel\)/);
 assert.match(subscribeRealtime, /if \(realtimeChannel !== channel\) return/);
-assert.match(subscribeRealtime, /status === "SUBSCRIBED"[\s\S]*?realtimeStatus = "connected"[\s\S]*?scheduleRefresh\(0\)/);
+assert.match(subscribeRealtime, /status === "SUBSCRIBED"[\s\S]*?realtimeStatus = "connected"[\s\S]*?scheduleRefresh\(0, \{ includeHistory: true \}\)/);
 assert.doesNotMatch(subscribeRealtime.match(/status === "SUBSCRIBED"[\s\S]*?else if/)[0], /stopFallbackPolling/);
 assert.match(subscribeRealtime, /status === "CHANNEL_ERROR" \|\| status === "TIMED_OUT"[\s\S]*?startFallbackPolling\(\)[\s\S]*?queueRealtimeReconnect\(\)/);
 assert.match(subscribeRealtime, /status === "CLOSED"[\s\S]*?realtimeChannel = null[\s\S]*?startFallbackPolling\(\)[\s\S]*?queueRealtimeReconnect\(1000\)/);
@@ -62,6 +62,6 @@ assert.match(bindEvents, /addEventListener\("beforeunload"[\s\S]*?realtimeChanne
 assert.match(source, /실시간 연결/);
 assert.match(source, /연결 복구 중 · 15초마다 자동 확인/);
 assert.match(source, /오프라인 · 연결되면 즉시 동기화/);
-assert.match(html, /assets\/order-inbox\.js\?v=20260926-realtime-fallback/);
+assert.match(html, /assets\/order-inbox\.js\?v=20260927-history-filter/);
 
 console.log("QR inbox Realtime fallback regression checks passed.");
