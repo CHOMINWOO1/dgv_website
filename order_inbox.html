@@ -7,7 +7,7 @@
   <meta name="referrer" content="no-referrer" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" />
   <title>HANA 주문 접수</title>
-  <link rel="stylesheet" href="assets/qr-staff.css?v=20260926-table-checkout" />
+  <link rel="stylesheet" href="assets/qr-staff.css?v=20260927-history-filter" />
 </head>
 <body>
   <main class="qr-shell">
@@ -62,9 +62,23 @@
             <option value="submitted">신규 주문</option>
             <option value="accepted">주문 확인</option>
             <option value="cancelled">취소</option>
-            <option value="all">최근 주문 전체</option>
+            <option value="all" selected>현재 + 주문 기록</option>
           </select>
         </div>
+      </div>
+
+      <div class="qr-history-toolbar" aria-label="주문 기록 기간">
+        <div class="qr-history-quick" id="historyQuickFilters" role="group" aria-label="빠른 기간 선택">
+          <span class="qr-hint">기록 기간</span>
+          <button class="qr-btn qr-btn-small qr-period-btn is-active" type="button" data-history-range="today" aria-pressed="true">오늘</button>
+          <button class="qr-btn qr-btn-small qr-period-btn" type="button" data-history-range="yesterday" aria-pressed="false">어제</button>
+          <button class="qr-btn qr-btn-small qr-period-btn" type="button" data-history-range="week" aria-pressed="false">최근 7일</button>
+        </div>
+        <form class="qr-history-date-form" id="historyDateForm">
+          <label class="qr-hint" for="historyDate">날짜별 검색</label>
+          <input class="qr-input" id="historyDate" type="date" required />
+          <button class="qr-btn qr-btn-small qr-period-btn" type="submit" data-history-range="date" aria-pressed="false">조회</button>
+        </form>
       </div>
 
       <div class="qr-orders" id="ordersGrid" aria-live="polite">
@@ -178,6 +192,6 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/order-inbox.js?v=20260926-realtime-fallback"></script>
+  <script src="assets/order-inbox.js?v=20260927-history-filter"></script>
 </body>
 </html>
