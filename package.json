@@ -18,13 +18,14 @@
     "test:ui": "node tests/ui-structure-regression.mjs",
     "test:qr-ordering": "node tests/qr-ordering-regression.mjs",
     "test:qr-card": "node tests/qr-card-regression.mjs",
-    "test:qr-deletion": "node tests/qr-table-deletion-regression.mjs",
+    "test:qr-deletion": "noe tests/qr-table-deletion-regression.mjs",
     "test:qr-edit": "node tests/qr-inbox-order-edit-regression.mjs",
     "test:qr-realtime-fallback": "node tests/qr-inbox-realtime-fallback-regression.mjs",
     "test:qr-table-checkout": "node tests/qr-table-checkout-regression.mjs",
     "test:qr-table-checkout-db": "node tests/qr-table-checkout-db-regression.mjs",
     "test:qr-menu-categories": "node tests/qr-menu-categories-regression.mjs",
     "test:qr-inbox-history": "node tests/qr-inbox-history-filter-regression.mjs",
+    "test:managed-qr": "node tests/managed-qr-regression.mjs",
     "test:qr-table-checkout:db": "supabase test db --local supabase/tests/qr_table_checkout.sql"
   },
   "dependencies": {

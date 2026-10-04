@@ -189,19 +189,35 @@
       </div>
     </section>
 
-    <section class="qr-card qr-card-pad" style="margin-top:14px" aria-label="테이블 QR 관리">
+    <section class="qr-card qr-card-pad" style="margin-top:14px" aria-label="식당 테이블 QR 관리">
       <div class="qr-section-head">
         <div>
-          <h2 class="qr-section-title">테이블 QR 관리</h2>
-          <div class="qr-hint">새로 만들거나 교체한 QR은 이 브라우저에 보관되어 ‘QR 보기’로 다시 확인할 수 있습니다.</div>
+          <h2 class="qr-section-title">식당 테이블 QR 관리</h2>
+          <div class="qr-hint">새로 만들거나 교체한 QR은 서버에 안전하게 보관되어 어느 관리자 브라우저에서도 다시 확인할 수 있습니다. 기존 QR은 그대로 유지됩니다.</div>
         </div>
         <form class="qr-filter-row" id="createTableForm">
           <input class="qr-input" id="newTableLabel" maxlength="60" placeholder="예: 테이블 1" required />
-          <button class="qr-btn qr-btn-primary" id="createTableBtn" type="submit">테이블 추가</button>
+          <button class="qr-btn qr-btn-primary" id="createTableBtn" type="submit" disabled>테이블 추가</button>
         </form>
       </div>
       <div class="qr-table-list" id="tableList">
         <div class="qr-empty">테이블을 불러오는 중입니다…</div>
+      </div>
+    </section>
+
+    <section class="qr-card qr-card-pad" style="margin-top:14px" aria-label="호텔 객실 QR 관리">
+      <div class="qr-section-head">
+        <div>
+          <h2 class="qr-section-title">호텔 객실 QR 관리</h2>
+          <div class="qr-hint">호텔 객실용 QR을 식당 테이블과 따로 관리합니다. 서버에 보관되므로 다른 관리자 PC에서도 조회하고 다시 인쇄할 수 있습니다.</div>
+        </div>
+        <form class="qr-filter-row" id="createHotelQrForm">
+          <input class="qr-input" id="newHotelQrLabel" maxlength="60" placeholder="예: 객실 101호" required />
+          <button class="qr-btn qr-btn-primary" id="createHotelQrBtn" type="submit" disabled>객실 QR 추가</button>
+        </form>
+      </div>
+      <div class="qr-table-list" id="hotelQrList">
+        <div class="qr-empty">호텔 객실 QR을 불러오는 중입니다…</div>
       </div>
     </section>
   </main>
@@ -209,7 +225,7 @@
   <div class="qr-modal-back" id="loginModal" hidden>
     <form class="qr-modal" id="loginForm">
       <h2>관리자 로그인</h2>
-      <p>관리자 비밀번호를 입력하면 메뉴와 테이블 QR을 관리할 수 있습니다.</p>
+      <p>관리자 비밀번호를 입력하면 메뉴와 식당·호텔 QR을 관리할 수 있습니다.</p>
       <input class="qr-input" id="loginPassword" type="password" placeholder="관리자 비밀번호" autocomplete="current-password" required />
       <div class="qr-form-actions">
         <button class="qr-btn qr-btn-primary" id="loginConfirm" type="submit">입장</button>
@@ -220,8 +236,8 @@
 
   <div class="qr-modal-back" id="tokenModal" hidden>
     <div class="qr-modal" role="dialog" aria-modal="true" aria-labelledby="tokenTitle">
-      <h2 id="tokenTitle">테이블 QR 주소</h2>
-      <p>QR을 다운로드하거나 인쇄한 뒤 테이블에 비치해 주세요. 같은 브라우저에서는 ‘QR 보기’로 다시 확인할 수 있습니다.</p>
+      <h2 id="tokenTitle">QR 주소</h2>
+      <p>QR을 다운로드하거나 인쇄해 비치해 주세요. 서버에 보관된 QR은 어느 관리자 브라우저에서도 다시 확인할 수 있습니다.</p>
       <div class="qr-order-card-preview" id="tokenCardPreview">
         <div class="qr-order-card-brand">HANA RESTAURANT</div>
         <div class="qr-order-card-callout">ORDER HERE</div>
@@ -232,6 +248,7 @@
       <div class="qr-form-actions">
         <button class="qr-btn" id="openMenuBtn" type="button">메뉴 미리보기</button>
         <button class="qr-btn qr-btn-primary" id="copyTokenBtn" type="button">주소 복사</button>
+        <button class="qr-btn" id="storeTokenBtn" type="button" hidden>서버에 보관</button>
         <button class="qr-btn" id="downloadQrBtn" type="button">QR 다운로드</button>
         <button class="qr-btn" id="printQrBtn" type="button">QR 인쇄</button>
         <button class="qr-btn" id="closeTokenBtn" type="button">닫기</button>

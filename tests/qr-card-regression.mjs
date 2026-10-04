@@ -35,7 +35,7 @@ assert.match(menuAdminSource, /printImage\.src = dataUrl[\s\S]*?await waitForIma
 assert.doesNotMatch(menuAdminSource, /qrPrintTitle/);
 
 assert.match(menuAdminSource, /data-table-action="archive"[^>]*>QR 삭제<\/button>/);
-assert.match(menuAdminSource, /\.select\("id,label,is_active,archived_at,created_at,updated_at"\)[\s\S]*?\.is\("archived_at", null\)/);
+assert.match(menuAdminSource, /\.select\("id,label,qr_kind,is_active,archived_at,created_at,updated_at"\)[\s\S]*?\.is\("archived_at", null\)/);
 assert.match(menuAdminSource, /async function archiveTable\(tableId, button\)[\s\S]*?테이블 QR을 삭제하시겠습니까[\s\S]*?기존 주문 이력은 보존되며[\s\S]*?기존 QR은 즉시 사용할 수 없게 됩니다/);
 assert.match(menuAdminSource, /sb\.rpc\("app_archive_qr_table", \{ p_table_id: tableId \}\)/);
 assert.match(menuAdminSource, /function removeCachedTableQrUrl[\s\S]*?const entries = readTableQrCache\(\)\.filter/);
