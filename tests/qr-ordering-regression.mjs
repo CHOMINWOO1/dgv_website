@@ -233,17 +233,16 @@ assert.match(menuAdminSource, /link\.download = `hana-\$\{safeFilePart\(currentT
 assert.match(menuAdminSource, /const TABLE_QR_CACHE_KEY = "dgv\.table-qr-cache\.v1"/);
 assert.match(menuAdminSource, /const MAX_TABLE_QR_CACHE_ENTRIES = 100/);
 assert.match(menuAdminSource, /data-table-action="view"[^>]*>QR 보기</);
-assert.match(menuAdminSource, /function showToken[\s\S]*?cacheTableQrUrl\(tableId, url\)[\s\S]*?openTokenModal\(url, result\.label\)/);
-assert.match(menuAdminSource, /function viewTableQr[\s\S]*?cachedTableQrUrl\(tableId\)[\s\S]*?이 브라우저에 원본 QR이 없어 QR 교체가 필요합니다/);
-assert.doesNotMatch(functionSource(menuAdminSource, "viewTableQr"), /\.rpc\(|rotateTable\(/, "viewing a missing cached QR must never rotate it automatically");
-assert.match(menuAdminHtml, /같은 브라우저에서는 ‘QR 보기’로 다시 확인/);
+assert.match(menuAdminSource, /function showToken[\s\S]*?removeCachedTableQrUrl\(tableId\)[\s\S]*?openTokenModal\(url, result\.label, \{ tableId, canStore: false \}\)/);
+assert.match(menuAdminSource, /async function viewTableQr[\s\S]*?managedQrResult\(tableId\)[\s\S]*?cachedTableQrUrl\(tableId\)[\s\S]*?서버와 이 브라우저에 원본 QR이 없어 QR 교체가 필요합니다/);
+assert.doesNotMatch(functionSource(menuAdminSource, "viewTableQr"), /app_register_existing_qr_token|rotateTable\(/, "viewing a missing QR must never register or rotate it automatically");
+assert.match(menuAdminHtml, /어느 관리자 브라우저에서도 다시 확인/);
 assert.doesNotMatch(`${menuAdminHtml}\n${menuAdminSource}`, /api\.qrserver|chart\.googleapis|quickchart|qrcode\.monkey/i);
 await access(path.join(projectRoot, "assets/vendor/qrcode.min.js"));
 await access(path.join(projectRoot, "assets/vendor/qrcode.LICENSE.txt"));
 
-// Raw table tokens remain hash-only in Supabase. The one recoverable copy is a
-// bounded, versioned cache on the browser that generated/rotated the QR. Every
-// cached URL must be the exact same-origin menu.html fragment form.
+// The legacy browser cache remains a bounded fallback for existing QR codes.
+// Every cached URL must retain the exact same-origin menu.html fragment form.
 const cacheStorage = new Map();
 const qrCacheContext = {
   URL,
