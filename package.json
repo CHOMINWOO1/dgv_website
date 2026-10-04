@@ -18,7 +18,7 @@
     "test:ui": "node tests/ui-structure-regression.mjs",
     "test:qr-ordering": "node tests/qr-ordering-regression.mjs",
     "test:qr-card": "node tests/qr-card-regression.mjs",
-    "test:qr-deletion": "noe tests/qr-table-deletion-regression.mjs",
+    "test:qr-deletion": "node tests/qr-table-deletion-regression.mjs",
     "test:qr-edit": "node tests/qr-inbox-order-edit-regression.mjs",
     "test:qr-realtime-fallback": "node tests/qr-inbox-realtime-fallback-regression.mjs",
     "test:qr-table-checkout": "node tests/qr-table-checkout-regression.mjs",
