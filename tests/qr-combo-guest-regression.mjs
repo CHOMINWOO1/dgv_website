@@ -22,16 +22,28 @@ function functionSource(source, name) {
 
 assert.match(functionSource(guestSource, "categorySortOrder"), /combo:\s*0[\s\S]*?single:\s*10/);
 assert.match(functionSource(guestSource, "categoryLabel"), /combo:\s*\{\s*ko:\s*"콤보 메뉴"/);
-assert.match(functionSource(guestSource, "renderMenu"), /state\.activeCategoryId[\s\S]*?usableCategories\[0\][\s\S]*?usableCategories\.find[\s\S]*?appendCategoryItems/);
-assert.match(functionSource(guestSource, "renderMenu"), /state\.searchTerm[\s\S]*?state\.items\.filter\(\(item\) => matchesMenuSearch/);
+assert.match(functionSource(guestSource, "renderMenu"), /const hasSearchTerm = Boolean\(normalizeSearchText\(state\.searchTerm\)\)[\s\S]*?const visibleItems = hasSearchTerm[\s\S]*?matchesMenuSearch[\s\S]*?usableCategories\.forEach[\s\S]*?appendCategoryItems\([^\n]*visibleItems\.filter/);
+assert.doesNotMatch(functionSource(guestSource, "renderMenu"), /usableCategories\.find\(\(row\)[\s\S]*?appendCategoryItems/);
+assert.match(functionSource(guestSource, "renderMenu"), /section\.dataset\.category = categoryId[\s\S]*?observeCategories\(\)/);
 assert.match(functionSource(guestSource, "appendCategoryItems"), /String\(category\?\.id\) === "single"[\s\S]*?state\.subcategories\.forEach/);
 assert.doesNotMatch(guestHtml, /id="(?:category|subcategory)[^"]*"[^>]*<select/i);
 
 for (const id of ["menuSearch", "menuSearchClear", "detailComboPricing", "detailComboSection", "detailComboComponents"]) {
   assert.match(guestHtml, new RegExp(`id=["']${id}["']`));
 }
-assert.match(guestHtml, /assets\/qr-menu\.css\?v=20261005-combo-menu/);
-assert.match(guestHtml, /assets\/qr-menu\.js\?v=20261005-combo-menu/);
+assert.match(guestHtml, /id="menuToolbar"[\s\S]*?id="menuSearch"[\s\S]*?id="categoryNav"/);
+assert.match(guestHtml, /assets\/qr-menu\.css\?v=20261005-all-menu/);
+assert.match(guestHtml, /assets\/qr-menu\.js\?v=20261005-all-menu/);
+assert.match(guestCss, /\.menu-toolbar\s*\{[\s\S]*?position:\s*sticky[\s\S]*?top:\s*0/);
+assert.match(guestCss, /\.menu-section\s*\{[\s\S]*?scroll-margin-top:\s*calc\(var\(--menu-toolbar-height\) \+ 10px\)/);
+assert.match(functionSource(guestSource, "scrollToCategory"), /setActiveCategory\(normalized,[^\n]*\)[\s\S]*?scrollIntoView\(\{ behavior: preferredScrollBehavior\(\), block: "start" \}\)/);
+assert.doesNotMatch(functionSource(guestSource, "scrollToCategory"), /renderMenu\(/);
+assert.match(functionSource(guestSource, "setActiveCategory"), /aria-current[\s\S]*?categoryNav\.scrollTo/);
+assert.match(functionSource(guestSource, "preferredScrollBehavior"), /prefers-reduced-motion: reduce[\s\S]*?"auto" : "smooth"/);
+assert.match(functionSource(guestSource, "observeCategories"), /menu-section\[data-category\][\s\S]*?IntersectionObserver\(scheduleCategoryUpdate[\s\S]*?scheduleCategoryUpdate\(\)/);
+assert.match(functionSource(guestSource, "updateActiveCategoryFromScroll"), /stickyOffset[\s\S]*?active = section[\s\S]*?sections\[sections\.length - 1\][\s\S]*?setActiveCategory/);
+assert.match(functionSource(guestSource, "bindEvents"), /state\.searchTerm = el\.menuSearch\.value;[\s\S]*?renderMenu\(\)/);
+assert.doesNotMatch(functionSource(guestSource, "bindEvents"), /menuSearch\.value\.trim\(/);
 assert.match(guestCss, /\.combo-regular-price[\s\S]*?text-decoration:\s*line-through/);
 assert.match(guestCss, /\.combo-saving-badge/);
 assert.match(guestCss, /\.combo-service-badge/);

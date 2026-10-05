@@ -75,7 +75,7 @@ assert.match(guestOpenOrdersMigration, /qr_order\.finalized_order_id is null/i);
 assert.match(functionSource(guestSource, "normalizeCurrentOrders"), /\["submitted", "accepted"\]\.includes\(order\.status\)/);
 const guestHtml = await read("menu.html");
 assert.match(guestHtml, /id="currentOrdersTotal"[^>]*hidden/);
-assert.match(guestHtml, /assets\/qr-menu\.js\?v=20261005-combo-menu/);
+assert.match(guestHtml, /assets\/qr-menu\.js\?v=20261005-all-menu/);
 const normalizeCurrentTotals = functionSource(guestSource, "normalizeCurrentTotals");
 assert.match(functionSource(guestSource, "nonNegativeSafeInteger"), /Number\.isSafeInteger\(value\)[\s\S]*?value >= 0/);
 assert.match(normalizeCurrentTotals, /payload\?\.current_total_usd/);

@@ -9,7 +9,7 @@
   <title>HANA Table Order</title>
   <meta name="description" content="HANA Restaurant table order menu">
   <link rel="icon" href="image/logo.png">
-  <link rel="stylesheet" href="assets/qr-menu.css?v=20261005-combo-menu">
+  <link rel="stylesheet" href="assets/qr-menu.css?v=20261005-all-menu">
 </head>
 <body>
   <a class="skip-link" href="#menuList">메뉴로 바로 이동</a>
@@ -77,17 +77,19 @@
     </section>
 
     <div id="menuApp" hidden>
-      <div class="menu-search-wrap">
-        <label class="menu-search" for="menuSearch">
-          <span aria-hidden="true">⌕</span>
-          <span class="visually-hidden" data-copy="searchLabel">메뉴 검색</span>
-          <input id="menuSearch" type="search" autocomplete="off" data-placeholder="searchPlaceholder" placeholder="메뉴 이름이나 설명을 검색해 주세요.">
-        </label>
-        <button class="menu-search-clear" id="menuSearchClear" type="button" data-copy="clearSearch" hidden>지우기</button>
+      <div class="menu-toolbar" id="menuToolbar">
+        <div class="menu-search-wrap">
+          <label class="menu-search" for="menuSearch">
+            <span aria-hidden="true">⌕</span>
+            <span class="visually-hidden" data-copy="searchLabel">메뉴 검색</span>
+            <input id="menuSearch" type="search" autocomplete="off" data-placeholder="searchPlaceholder" placeholder="메뉴 이름이나 설명을 검색해 주세요.">
+          </label>
+          <button class="menu-search-clear" id="menuSearchClear" type="button" data-copy="clearSearch" hidden>지우기</button>
+        </div>
+        <nav class="category-nav" aria-label="Menu categories">
+          <div class="category-scroll" id="categoryNav"></div>
+        </nav>
       </div>
-      <nav class="category-nav" aria-label="Menu categories">
-        <div class="category-scroll" id="categoryNav"></div>
-      </nav>
 
       <section class="menu-content" id="menuList" aria-label="Menu"></section>
 
@@ -202,6 +204,6 @@
   </noscript>
 
   <script src="assets/supabase-config.js"></script>
-  <script src="assets/qr-menu.js?v=20261005-combo-menu"></script>
+  <script src="assets/qr-menu.js?v=20261005-all-menu"></script>
 </body>
 </html>
