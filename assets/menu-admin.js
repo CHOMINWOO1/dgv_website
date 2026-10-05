@@ -29,6 +29,13 @@
   const MAX_TABLE_QR_CACHE_BYTES = 100_000;
   const TABLE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
   const TABLE_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
+  const HOTEL_ROOM_NUMBER_PATTERN = /^\d{1,6}$/;
+  const HOTEL_NAME = "Western Hill";
+  const HOTEL_QR_CONTACT_LINES = Object.freeze([
+    "KR : 0985892542",
+    "VN : 0399271874",
+    "09:00 - 21:30"
+  ]);
   const QR_CATEGORY_ORDER = Object.freeze({ single: 10, shared: 20, snack: 30, preorder: 40, drink: 50, cafe: 60 });
   const SINGLE_SUBCATEGORIES = Object.freeze({
     noodle: { label: "면", sortOrder: 10 },
@@ -45,6 +52,7 @@
   let creatingMenu = false;
   let currentTokenUrl = null;
   let currentTokenLabel = null;
+  let currentTokenQrKind = "restaurant";
   let currentTokenTableId = null;
   let currentTokenCanStore = false;
   let managedQrStorageAvailable = null;
@@ -1003,7 +1011,7 @@
       <article class="qr-card qr-table-card">
         <div class="qr-table-card-head">
           <div>
-            <div class="qr-table-card-name">${global.DGV.escapeHTML(hotelQr.label)}</div>
+            <div class="qr-table-card-name">${global.DGV.escapeHTML(hotelQrDisplayLabel(hotelQr.label))}</div>
             <div class="qr-hint">#${ui.shortId(hotelQr.id)}</div>
           </div>
           <span class="qr-status" data-tone="${hotelQr.is_active === false ? "cancelled" : "ready"}">${hotelQr.is_active === false ? "사용 중지" : "사용 중"}</span>
@@ -1070,6 +1078,35 @@
     return normalizedTableQrUrl(url.toString());
   }
 
+  function normalizedHotelRoomNumber(value) {
+    const roomNumber = String(value || "").normalize("NFKC").trim();
+    return HOTEL_ROOM_NUMBER_PATTERN.test(roomNumber) ? roomNumber : null;
+  }
+
+  function hotelRoomNumberFromLabel(value) {
+    const label = String(value || "").trim();
+    if (!label) return null;
+    return label.match(/^\d{1,6}$/)?.[0]
+      || label.match(/^Western Hill\s+(\d{1,6})$/i)?.[1]
+      || label.match(/^객실\s*(\d{1,6})\s*호?$/)?.[1]
+      || label.match(/^Room\s*(\d{1,6})$/i)?.[1]
+      || label.match(/(\d{1,6})\s*호/)?.[1]
+      || null;
+  }
+
+  function hotelQrDisplayLabel(value) {
+    const label = String(value || "").trim();
+    if (!label) return HOTEL_NAME;
+    const roomNumber = hotelRoomNumberFromLabel(label);
+    return roomNumber ? `${HOTEL_NAME} ${roomNumber}` : label;
+  }
+
+  function currentTokenDisplayLabel() {
+    return currentTokenQrKind === "hotel"
+      ? hotelQrDisplayLabel(currentTokenLabel)
+      : (currentTokenLabel || "테이블");
+  }
+
   function openTokenModal(url, label, options = {}) {
     const normalizedUrl = normalizedTableQrUrl(url);
     if (!normalizedUrl) {
@@ -1077,14 +1114,18 @@
       return false;
     }
     currentTokenUrl = normalizedUrl;
-    currentTokenLabel = String(label || "테이블").trim().slice(0, 80) || "테이블";
+    currentTokenQrKind = options.qrKind === "hotel" ? "hotel" : "restaurant";
+    const fallbackLabel = currentTokenQrKind === "hotel" ? "객실" : "테이블";
+    currentTokenLabel = String(label || fallbackLabel).trim().slice(0, 80) || fallbackLabel;
     currentTokenTableId = typeof options.tableId === "string" && TABLE_ID_PATTERN.test(options.tableId)
       ? options.tableId
       : null;
     currentTokenCanStore = options.canStore === true && currentTokenTableId !== null;
     ui.byId("tokenUrl").value = currentTokenUrl;
-    ui.byId("tokenTitle").textContent = `${currentTokenLabel} QR 주소`;
-    ui.byId("tokenTableTitle").textContent = currentTokenLabel;
+    const displayLabel = currentTokenDisplayLabel();
+    ui.byId("tokenTitle").textContent = `${displayLabel} QR 주소`;
+    ui.byId("tokenTableTitle").textContent = displayLabel;
+    ui.byId("tokenHotelDetails").hidden = currentTokenQrKind !== "hotel";
     ui.byId("storeTokenBtn").hidden = !currentTokenCanStore;
     renderQrCode();
     ui.byId("tokenModal").hidden = false;
@@ -1092,7 +1133,7 @@
     return true;
   }
 
-  function showToken(result) {
+  function showToken(result, qrKind = "restaurant") {
     const token = result?.table_token;
     const tableId = result?.table_id;
     const url = tokenToUrl(token);
@@ -1110,7 +1151,7 @@
       // copies evict legacy tokens from the bounded browser cache.
       removeCachedTableQrUrl(tableId);
     }
-    return openTokenModal(url, result.label, { tableId, canStore: false });
+    return openTokenModal(url, result.label, { tableId, canStore: false, qrKind });
   }
 
   async function managedQrResult(tableId) {
@@ -1134,7 +1175,7 @@
       try {
         const managed = await managedQrResult(tableId);
         removeCachedTableQrUrl(tableId);
-        openTokenModal(managed.url, managed.data.label || table.label, { tableId, canStore: false });
+        openTokenModal(managed.url, managed.data.label || table.label, { tableId, canStore: false, qrKind: "restaurant" });
         return;
       } catch (serverError) {
         if (!isManagedQrMissing(serverError)) {
@@ -1149,7 +1190,7 @@
         ui.toast("서버와 이 브라우저에 원본 QR이 없어 QR 교체가 필요합니다.", "error");
         return;
       }
-      openTokenModal(url, table.label, { tableId, canStore: true });
+      openTokenModal(url, table.label, { tableId, canStore: true, qrKind: "restaurant" });
       ui.toast("이 브라우저에 저장된 기존 QR입니다. ‘서버에 보관’을 누르면 현재 QR인지 확인한 뒤 안전하게 저장합니다.");
     } finally {
       if (button) ui.setBusy(button, false);
@@ -1168,7 +1209,7 @@
       try {
         const managed = await managedQrResult(tableId);
         removeCachedTableQrUrl(tableId);
-        openTokenModal(managed.url, managed.data.label || hotelQr.label, { tableId, canStore: false });
+        openTokenModal(managed.url, managed.data.label || hotelQr.label, { tableId, canStore: false, qrKind: "hotel" });
         return;
       } catch (serverError) {
         if (!isManagedQrMissing(serverError)) {
@@ -1180,7 +1221,7 @@
 
       const fallbackUrl = cachedTableQrUrl(tableId);
       if (fallbackUrl) {
-        openTokenModal(fallbackUrl, hotelQr.label, { tableId, canStore: true });
+        openTokenModal(fallbackUrl, hotelQr.label, { tableId, canStore: true, qrKind: "hotel" });
         ui.toast("서버 조회에 실패해 이 브라우저의 QR을 표시했습니다. ‘서버에 보관’을 눌러 다시 저장할 수 있습니다.");
         return;
       }
@@ -1241,9 +1282,10 @@
     const qrSource = await qrGraphicSource();
     if (!qrSource) return null;
 
+    const isHotelQr = currentTokenQrKind === "hotel";
     const canvas = document.createElement("canvas");
     canvas.width = 1200;
-    canvas.height = 1500;
+    canvas.height = isHotelQr ? 1800 : 1500;
     const context = canvas.getContext("2d");
     if (!context) return null;
 
@@ -1276,7 +1318,7 @@
       fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
       color: "#7a4f11"
     });
-    drawFittedCenteredText(context, currentTokenLabel || "테이블", {
+    drawFittedCenteredText(context, currentTokenDisplayLabel(), {
       centerX: 600,
       centerY: 405,
       maxWidth: 930,
@@ -1287,10 +1329,27 @@
       color: "#3a2a1f"
     });
 
+    if (isHotelQr) {
+      HOTEL_QR_CONTACT_LINES.forEach((line, index) => {
+        drawFittedCenteredText(context, line, {
+          centerX: 600,
+          centerY: 500 + (index * 64),
+          maxWidth: 900,
+          fontSize: 38,
+          minFontSize: 30,
+          fontWeight: 700,
+          fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+          color: "#3a2a1f"
+        });
+      });
+    }
+
+    const qrBoxY = isHotelQr ? 740 : 500;
+    const qrImageY = isHotelQr ? 780 : 540;
     context.fillStyle = "#ffffff";
-    context.fillRect(150, 500, 900, 900);
+    context.fillRect(150, qrBoxY, 900, 900);
     context.imageSmoothingEnabled = false;
-    context.drawImage(qrSource, 190, 540, 820, 820);
+    context.drawImage(qrSource, 190, qrImageY, 820, 820);
     return canvas.toDataURL("image/png");
   }
 
@@ -1353,6 +1412,8 @@
     ui.byId("storeTokenBtn").hidden = true;
     currentTokenUrl = null;
     currentTokenLabel = null;
+    currentTokenQrKind = "restaurant";
+    ui.byId("tokenHotelDetails").hidden = true;
     currentTokenTableId = null;
     currentTokenCanStore = false;
   }
@@ -1432,16 +1493,33 @@
 
   async function createHotelQr(event) {
     event.preventDefault();
-    const label = ui.byId("newHotelQrLabel").value.trim();
-    if (!label) return;
+    const input = ui.byId("newHotelQrLabel");
+    const roomNumber = normalizedHotelRoomNumber(input.value);
+    if (!roomNumber) {
+      ui.toast("객실번호는 숫자만 입력해 주세요.", "error");
+      input.focus();
+      return;
+    }
+    const existingHotelQr = hotelQrs.find((hotelQr) => hotelRoomNumberFromLabel(hotelQr.label) === roomNumber);
+    if (existingHotelQr) {
+      ui.toast(`${HOTEL_NAME} ${roomNumber} QR이 이미 등록되어 있습니다. 기존 QR의 ‘QR 보기’를 이용해 주세요.`, "error");
+      input.focus();
+      return;
+    }
+    const conflictingRestaurantTable = tables.find((table) => String(table.label || "").trim() === roomNumber);
+    if (conflictingRestaurantTable) {
+      ui.toast(`식당 테이블에 같은 번호 ${roomNumber}이 이미 사용 중이어서 객실 QR을 추가할 수 없습니다.`, "error");
+      input.focus();
+      return;
+    }
     const button = ui.byId("createHotelQrBtn");
     ui.setBusy(button, true, "추가 중…");
     try {
-      const { data, error } = await sb.rpc("app_create_hotel_qr", { p_label: label });
+      const { data, error } = await sb.rpc("app_create_hotel_qr", { p_label: roomNumber });
       if (error) throw error;
       ui.byId("newHotelQrLabel").value = "";
       await loadHotelQrs();
-      showToken(data);
+      showToken(data, "hotel");
     } catch (error) {
       console.error(error);
       ui.toast(ui.messageOf(error, "호텔 객실 QR을 추가하지 못했습니다."), "error");
@@ -1514,7 +1592,7 @@
     try {
       const { data, error } = await sb.rpc("app_rotate_qr_table_token", { p_table_id: tableId });
       if (error) throw error;
-      showToken(data);
+      showToken(data, "hotel");
       ui.toast("새 호텔 객실 QR 주소가 발급되었습니다.", "ok");
     } catch (error) {
       console.error(error);

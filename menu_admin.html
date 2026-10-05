@@ -209,10 +209,10 @@
       <div class="qr-section-head">
         <div>
           <h2 class="qr-section-title">호텔 객실 QR 관리</h2>
-          <div class="qr-hint">호텔 객실용 QR을 식당 테이블과 따로 관리합니다. 서버에 보관되므로 다른 관리자 PC에서도 조회하고 다시 인쇄할 수 있습니다.</div>
+          <div class="qr-hint">객실번호만 입력해 주세요(예: 101). 인쇄물에는 Western Hill과 연락처·운영시간이 자동으로 표시됩니다.</div>
         </div>
         <form class="qr-filter-row" id="createHotelQrForm">
-          <input class="qr-input" id="newHotelQrLabel" maxlength="60" placeholder="예: 객실 101호" required />
+          <input class="qr-input" id="newHotelQrLabel" type="text" inputmode="numeric" pattern="[0-9]+" maxlength="6" placeholder="예: 101" aria-label="호텔 객실번호" autocomplete="off" required />
           <button class="qr-btn qr-btn-primary" id="createHotelQrBtn" type="submit" disabled>객실 QR 추가</button>
         </form>
       </div>
@@ -242,6 +242,11 @@
         <div class="qr-order-card-brand">HANA RESTAURANT</div>
         <div class="qr-order-card-callout">ORDER HERE</div>
         <div class="qr-order-card-table" id="tokenTableTitle">테이블</div>
+        <div class="qr-order-card-hotel-details" id="tokenHotelDetails" hidden>
+          <div>KR : 0985892542</div>
+          <div>VN : 0399271874</div>
+          <div>09:00 - 21:30</div>
+        </div>
         <div class="qr-code-preview" id="tokenQr" aria-label="테이블 주문 QR 코드"></div>
       </div>
       <textarea class="qr-textarea qr-token-url" id="tokenUrl" readonly></textarea>

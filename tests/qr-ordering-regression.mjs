@@ -233,7 +233,7 @@ assert.match(menuAdminSource, /link\.download = `hana-\$\{safeFilePart\(currentT
 assert.match(menuAdminSource, /const TABLE_QR_CACHE_KEY = "dgv\.table-qr-cache\.v1"/);
 assert.match(menuAdminSource, /const MAX_TABLE_QR_CACHE_ENTRIES = 100/);
 assert.match(menuAdminSource, /data-table-action="view"[^>]*>QR 보기</);
-assert.match(menuAdminSource, /function showToken[\s\S]*?removeCachedTableQrUrl\(tableId\)[\s\S]*?openTokenModal\(url, result\.label, \{ tableId, canStore: false \}\)/);
+assert.match(menuAdminSource, /function showToken\(result, qrKind = "restaurant"\)[\s\S]*?removeCachedTableQrUrl\(tableId\)[\s\S]*?openTokenModal\(url, result\.label, \{ tableId, canStore: false, qrKind \}\)/);
 assert.match(menuAdminSource, /async function viewTableQr[\s\S]*?managedQrResult\(tableId\)[\s\S]*?cachedTableQrUrl\(tableId\)[\s\S]*?서버와 이 브라우저에 원본 QR이 없어 QR 교체가 필요합니다/);
 assert.doesNotMatch(functionSource(menuAdminSource, "viewTableQr"), /app_register_existing_qr_token|rotateTable\(/, "viewing a missing QR must never register or rotate it automatically");
 assert.match(menuAdminHtml, /어느 관리자 브라우저에서도 다시 확인/);
