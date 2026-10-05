@@ -17,6 +17,7 @@
   --success: #2f7047;
   --shadow: 0 18px 50px rgba(62, 39, 25, .15);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --menu-toolbar-height: 116px;
 }
 
 * { box-sizing: border-box; }
@@ -183,7 +184,16 @@ main { width: min(100%, 1080px); margin: auto; padding-bottom: 112px; }
 .loader { width: 38px; height: 38px; margin: auto; border: 4px solid var(--gold-soft); border-top-color: var(--brown-700); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.menu-search-wrap { margin: 0 16px 4px; display: flex; align-items: center; gap: 8px; }
+.menu-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  padding-top: 10px;
+  background: rgba(247, 240, 227, .97);
+  box-shadow: 0 8px 18px rgba(62, 39, 25, .08);
+  backdrop-filter: blur(8px);
+}
+.menu-search-wrap { margin: 0 16px 2px; display: flex; align-items: center; gap: 8px; }
 .menu-search { min-width: 0; flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid #d9c6aa; border-radius: 13px; background: var(--paper); box-shadow: 0 5px 16px rgba(73, 47, 30, .05); color: var(--brown-500); }
 .menu-search input { width: 100%; min-height: 45px; padding: 9px 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; }
 .menu-search input::placeholder { color: #9a887b; }
@@ -191,11 +201,7 @@ main { width: min(100%, 1080px); margin: auto; padding-bottom: 112px; }
 .menu-search-clear { flex: 0 0 auto; min-height: 39px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--brown-700); font-weight: 800; cursor: pointer; }
 
 .category-nav {
-  position: sticky;
-  top: 0;
-  z-index: 15;
-  padding: 10px 0;
-  background: linear-gradient(var(--cream) 75%, rgba(247, 240, 227, 0));
+  padding: 8px 0 2px;
 }
 
 .category-scroll { display: flex; gap: 8px; overflow-x: auto; padding: 0 16px 8px; scrollbar-width: none; scroll-padding-left: 16px; }
@@ -205,7 +211,7 @@ main { width: min(100%, 1080px); margin: auto; padding-bottom: 112px; }
 
 .menu-content { padding: 5px 16px 28px; }
 .menu-empty-results { padding: 34px 18px; border: 1px dashed #d8c4a3; border-radius: 15px; background: rgba(255, 253, 248, .65); color: var(--muted); text-align: center; }
-.menu-section { scroll-margin-top: 70px; }
+.menu-section { scroll-margin-top: calc(var(--menu-toolbar-height) + 10px); }
 .menu-section + .menu-section { margin-top: 36px; }
 .section-heading { margin-bottom: 13px; display: flex; align-items: end; justify-content: space-between; gap: 12px; border-bottom: 1px solid #d8c4a3; }
 .section-heading h2 { margin: 0 0 8px; font: 700 25px/1.2 Georgia, "Noto Serif KR", serif; }

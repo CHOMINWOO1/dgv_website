@@ -250,11 +250,13 @@
     toastTimer: null
   };
 
+  let categoryObserver = null;
+  let categoryScrollFrame = 0;
   const el = {};
   const ids = [
     "tableChip", "tableLabel", "currentOrdersSection", "currentOrdersTotal", "currentOrdersList", "currentOrdersLimit",
     "loadingPanel", "errorPanel", "errorTitle", "errorMessage", "retryButton",
-    "menuApp", "menuSearch", "menuSearchClear", "categoryNav", "menuList", "cartButton", "cartCount", "cartTotal", "detailBackdrop",
+    "menuApp", "menuToolbar", "menuSearch", "menuSearchClear", "categoryNav", "menuList", "cartButton", "cartCount", "cartTotal", "detailBackdrop",
     "detailSheet", "detailClose", "detailMedia", "detailCategory", "detailName", "detailTranslation",
     "detailDescription", "detailComboPricing", "detailComboSection", "detailComboComponents", "variantList", "detailNoteLabel", "detailNote", "detailQuantityControl", "detailMinus", "detailPlus", "detailQuantity",
     "detailAdd", "cartBackdrop", "cartSheet", "cartClose", "cartLines", "emptyCart", "orderNote",
@@ -930,11 +932,55 @@
     section.append(grid);
   }
 
+  function updateMenuToolbarHeight() {
+    const height = Math.ceil(el.menuToolbar?.getBoundingClientRect().height || 0);
+    if (height > 0) document.documentElement.style.setProperty("--menu-toolbar-height", `${height}px`);
+    return height;
+  }
+
+  function preferredScrollBehavior() {
+    return global.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth";
+  }
+
+  function setActiveCategory(categoryId, options = {}) {
+    const normalized = String(categoryId || "");
+    if (!normalized) return;
+    const changed = state.activeCategoryId !== normalized;
+    state.activeCategoryId = normalized;
+    let activeButton = null;
+    el.categoryNav.querySelectorAll(".category-button").forEach((button) => {
+      const isActive = button.dataset.category === normalized;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", String(isActive));
+      button.setAttribute("aria-current", isActive ? "true" : "false");
+      if (isActive) activeButton = button;
+    });
+    if (options.revealButton === false || !activeButton || (!changed && options.revealButton !== true)) return;
+    const left = Math.max(0, activeButton.offsetLeft - ((el.categoryNav.clientWidth - activeButton.offsetWidth) / 2));
+    if (typeof el.categoryNav.scrollTo === "function") {
+      el.categoryNav.scrollTo({ left, behavior: options.instant ? "auto" : preferredScrollBehavior() });
+    }
+  }
+
+  function scrollToCategory(categoryId) {
+    const normalized = String(categoryId || "");
+    if (!normalized) return;
+    setActiveCategory(normalized, { revealButton: true });
+    const section = document.getElementById(`category-${slug(normalized)}`);
+    if (!section) return;
+    updateMenuToolbarHeight();
+    section.scrollIntoView({ behavior: preferredScrollBehavior(), block: "start" });
+  }
+
   function renderMenu() {
     el.categoryNav.replaceChildren();
     el.menuList.replaceChildren();
+    const hasSearchTerm = Boolean(normalizeSearchText(state.searchTerm));
+    const visibleItems = hasSearchTerm
+      ? state.items.filter((item) => matchesMenuSearch(item, state.searchTerm))
+      : state.items;
     const usableCategories = state.categories
-      .filter((category) => state.items.some((item) => item.category_id === String(category.id)))
+      .filter((category) => visibleItems.some((item) => item.category_id === String(category.id)))
       .sort((left, right) => categorySortOrder(left.id) - categorySortOrder(right.id));
     if (!usableCategories.some((category) => String(category.id) === state.activeCategoryId)) {
       state.activeCategoryId = String(usableCategories[0]?.id || "");
@@ -947,46 +993,41 @@
       button.type = "button";
       button.dataset.category = categoryId;
       button.setAttribute("aria-pressed", String(isActive));
-      button.addEventListener("click", () => {
-        state.activeCategoryId = categoryId;
-        renderMenu();
-        el.menuList.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
+      button.setAttribute("aria-current", isActive ? "true" : "false");
+      button.addEventListener("click", () => scrollToCategory(categoryId));
       el.categoryNav.append(button);
     });
 
     el.menuSearchClear.hidden = !state.searchTerm;
     if (el.menuSearch.value !== state.searchTerm) el.menuSearch.value = state.searchTerm;
-    if (state.searchTerm) {
-      const matches = state.items.filter((item) => matchesMenuSearch(item, state.searchTerm));
+    if (!visibleItems.length) {
       const section = make("section", "menu-section menu-search-results");
       const heading = make("div", "section-heading");
       heading.append(
         make("h2", "", t("searchResults")),
-        make("p", "", String(matches.length))
+        make("p", "", "0")
       );
       section.append(heading);
-      if (matches.length) {
-        const grid = make("div", "menu-grid");
-        matches.forEach((item) => grid.append(menuCard(item)));
-        section.append(grid);
-      } else {
-        section.append(make("div", "menu-empty-results", t("noSearchResults")));
-      }
+      section.append(make("div", "menu-empty-results", t("noSearchResults")));
       el.menuList.append(section);
+      if (categoryObserver) categoryObserver.disconnect();
+      updateMenuToolbarHeight();
       return;
     }
 
-    const category = usableCategories.find((row) => String(row.id) === state.activeCategoryId);
-    if (!category) return;
-    const section = make("section", "menu-section");
-    section.id = `category-${slug(String(category.id))}`;
-    section.dataset.category = String(category.id);
-    const heading = make("div", "section-heading");
-    heading.append(make("h2", "", nameOf(category)), make("p", "", translationsOf(category)));
-    section.append(heading);
-    appendCategoryItems(section, category, state.items.filter((item) => item.category_id === String(category.id)));
-    el.menuList.append(section);
+    usableCategories.forEach((category) => {
+      const categoryId = String(category.id);
+      const section = make("section", "menu-section");
+      section.id = `category-${slug(categoryId)}`;
+      section.dataset.category = categoryId;
+      const heading = make("div", "section-heading");
+      heading.append(make("h2", "", nameOf(category)), make("p", "", translationsOf(category)));
+      section.append(heading);
+      appendCategoryItems(section, category, visibleItems.filter((item) => item.category_id === categoryId));
+      el.menuList.append(section);
+    });
+    updateMenuToolbarHeight();
+    observeCategories();
   }
 
   function menuCard(item) {
@@ -1062,15 +1103,44 @@
   }
 
   function observeCategories() {
-    if (!("IntersectionObserver" in global)) return;
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (!visible) return;
-      el.categoryNav.querySelectorAll(".category-button").forEach((button) => {
-        button.classList.toggle("is-active", button.dataset.target === visible.target.id);
+    if (categoryObserver) categoryObserver.disconnect();
+    const sections = [...el.menuList.querySelectorAll(".menu-section[data-category]")];
+    if (!sections.length) return;
+    if ("IntersectionObserver" in global) {
+      const stickyOffset = updateMenuToolbarHeight() + 12;
+      categoryObserver = new global.IntersectionObserver(scheduleCategoryUpdate, {
+        rootMargin: `-${stickyOffset}px 0px -60% 0px`,
+        threshold: 0
       });
-    }, { rootMargin: "-70px 0px -65% 0px", threshold: 0 });
-    document.querySelectorAll(".menu-section").forEach((section) => observer.observe(section));
+      sections.forEach((section) => categoryObserver.observe(section));
+    }
+    global.removeEventListener("scroll", scheduleCategoryUpdate);
+    global.addEventListener("scroll", scheduleCategoryUpdate, { passive: true });
+    scheduleCategoryUpdate();
+  }
+
+  function updateActiveCategoryFromScroll() {
+    categoryScrollFrame = 0;
+    const sections = [...el.menuList.querySelectorAll(".menu-section[data-category]")];
+    if (!sections.length) return;
+    const stickyOffset = updateMenuToolbarHeight() + 12;
+    let active = sections[0];
+    sections.forEach((section) => {
+      if (section.getBoundingClientRect().top <= stickyOffset) active = section;
+    });
+    if (document.documentElement.scrollHeight - (global.scrollY + global.innerHeight) <= 4) {
+      active = sections[sections.length - 1];
+    }
+    setActiveCategory(active.dataset.category);
+  }
+
+  function scheduleCategoryUpdate() {
+    if (categoryScrollFrame) return;
+    if (typeof global.requestAnimationFrame === "function") {
+      categoryScrollFrame = global.requestAnimationFrame(updateActiveCategoryFromScroll);
+    } else {
+      updateActiveCategoryFromScroll();
+    }
   }
 
   function openDetail(item) {
@@ -1530,7 +1600,7 @@
     document.querySelectorAll("[data-language]").forEach((button) => button.addEventListener("click", () => setLanguage(button.dataset.language)));
     el.retryButton.addEventListener("click", loadMenu);
     el.menuSearch.addEventListener("input", () => {
-      state.searchTerm = el.menuSearch.value.trim();
+      state.searchTerm = el.menuSearch.value;
       renderMenu();
     });
     el.menuSearchClear.addEventListener("click", () => {
@@ -1561,6 +1631,10 @@
     el.confirmCancel.addEventListener("click", () => { closeOverlay(el.confirmBackdrop, null); openOverlay(el.cartBackdrop, el.cartSheet, el.cartClose); });
     el.submitOrder.addEventListener("click", submitOrder);
     el.newOrderButton.addEventListener("click", () => closeOverlay(el.successBackdrop, null));
+    global.addEventListener("resize", () => {
+      updateMenuToolbarHeight();
+      observeCategories();
+    }, { passive: true });
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && state.table) refreshCurrentOrders();
     });
