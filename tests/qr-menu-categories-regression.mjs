@@ -73,7 +73,7 @@ assert.match(functionSource(guestSource, "menuCard"), /card\.disabled = !availab
 assert.match(functionSource(guestSource, "menuCard"), /if \(available \|\| preorderOnly\) card\.addEventListener/);
 assert.match(functionSource(guestSource, "updateDetailAdd"), /item\.requires_preorder === true[\s\S]*?detailAdd\.disabled = true[\s\S]*?preorderDetailsOnly/);
 assert.match(functionSource(guestSource, "addSelectedToCart"), /!item \|\| !isAvailable\(item\)/);
-assert.match(functionSource(guestSource, "renderMenu"), /state\.subcategories\.forEach[\s\S]*?item\.subcategory_id[\s\S]*?menu-subsection/);
+assert.match(functionSource(guestSource, "appendCategoryItems"), /state\.subcategories\.forEach[\s\S]*?item\.subcategory_id[\s\S]*?menu-subsection/);
 assert.match(menuHtml, /id="detailNoteLabel"/);
 assert.match(menuHtml, /id="detailQuantityControl"/);
 

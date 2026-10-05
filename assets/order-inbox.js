@@ -15,6 +15,8 @@
   const NEXT_ACTION = Object.freeze({
     submitted: { status: "accepted", label: "주문 확인" }
   });
+  const QR_ORDER_ITEM_COLUMNS = "id,qr_order_id,menu_item_id,qty,menu_type,ko_name,vi_name,en_name,unit_usd,unit_vnd,line_usd,line_vnd,combo_snapshot,created_at";
+  const QR_ORDER_ITEM_LEGACY_COLUMNS = "id,qr_order_id,menu_item_id,qty,menu_type,ko_name,vi_name,en_name,unit_usd,unit_vnd,line_usd,line_vnd,created_at";
 
   let identity = null;
   let orders = [];
@@ -156,6 +158,70 @@
     return Array.isArray(value) ? value : [value];
   }
 
+  function nonNegativeInteger(value) {
+    const number = Number(value);
+    return Number.isInteger(number) && number >= 0 && number <= 2147483647 ? number : 0;
+  }
+
+  function comboSnapshotOf(item) {
+    const snapshot = item?.combo_snapshot;
+    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;
+    const source = Array.isArray(snapshot.combo_components)
+      ? snapshot.combo_components
+      : Array.isArray(snapshot.components) ? snapshot.components : [];
+    const components = source.slice(0, 30).flatMap((component) => {
+      if (!component || typeof component !== "object") return [];
+      const names = {
+        ko_name: String(component.name_ko || component.ko_name || "").trim().slice(0, 200),
+        en_name: String(component.name_en || component.en_name || "").trim().slice(0, 200),
+        vi_name: String(component.name_vi || component.vi_name || "").trim().slice(0, 200)
+      };
+      if (!names.ko_name && !names.en_name && !names.vi_name) return [];
+      return [{
+        ...names,
+        description_ko: String(component.description_ko || component.ko_description || "").trim().slice(0, 2000),
+        description_en: String(component.description_en || component.en_description || "").trim().slice(0, 2000),
+        description_vi: String(component.description_vi || component.vi_description || "").trim().slice(0, 2000),
+        qty: Math.min(20, Math.max(1, nonNegativeInteger(component.qty) || 1)),
+        is_service: component.is_service === true || String(component.kind || "").toLowerCase() === "service"
+      }];
+    });
+    if (!components.length) return null;
+    const regularVnd = nonNegativeInteger(snapshot.regular_price_vnd ?? snapshot.original_price_vnd ?? snapshot.regular_total_vnd);
+    const comboVnd = nonNegativeInteger(snapshot.combo_price_vnd ?? item.unit_vnd);
+    const discountVnd = nonNegativeInteger(snapshot.discount_vnd ?? snapshot.savings_vnd) || Math.max(0, regularVnd - comboVnd);
+    const suppliedPercent = Number(snapshot.discount_percent);
+    const discountPercent = Number.isFinite(suppliedPercent) && suppliedPercent >= 0
+      ? Math.min(100, Math.round(suppliedPercent * 10) / 10)
+      : (regularVnd > 0 ? Math.min(100, Math.round((discountVnd / regularVnd) * 1000) / 10) : 0);
+    return { components, regularVnd, comboVnd, discountVnd, discountPercent };
+  }
+
+  function renderComboSnapshot(item) {
+    const snapshot = comboSnapshotOf(item);
+    if (!snapshot) return "";
+    const saving = snapshot.discountVnd > 0
+      ? ` · ${ui.formatVnd(snapshot.discountVnd)} 할인${snapshot.discountPercent > 0 ? ` (${snapshot.discountPercent}%)` : ""}`
+      : "";
+    const rows = snapshot.components.map((component) => {
+      const name = component.ko_name || component.en_name || component.vi_name || "구성 메뉴";
+      const translation = [component.en_name, component.vi_name].filter(Boolean).join(" · ");
+      const description = component.description_ko || component.description_en || component.description_vi;
+      return `
+        <div class="qr-line-sub">
+          <strong>${global.DGV.escapeHTML(name)} × ${component.qty.toLocaleString("ko-KR")}</strong>
+          ${component.is_service ? '<span class="qr-pill">서비스</span>' : ""}
+          ${translation ? `<div>${global.DGV.escapeHTML(translation)}</div>` : ""}
+          ${description ? `<div>${global.DGV.escapeHTML(description)}</div>` : ""}
+        </div>`;
+    }).join("");
+    return `
+      <div class="qr-order-note">
+        <strong>콤보 구성${saving}</strong>
+        ${rows}
+      </div>`;
+  }
+
   async function mapWithConcurrency(items, concurrency, worker) {
     const results = new Array(items.length);
     let cursor = 0;
@@ -252,13 +318,21 @@
     };
   }
 
+  function isMissingComboSnapshotColumn(error) {
+    const code = String(error?.code || "").toUpperCase();
+    if (code !== "42703" && code !== "PGRST204") return false;
+    return [error?.message, error?.details, error?.hint]
+      .filter(Boolean)
+      .some((value) => /\bcombo_snapshot\b/i.test(String(value)));
+  }
+
   async function fetchWithRelations(statuses, options = {}) {
     const { finalized = null, dateColumn = "", historyWindow = null } = options;
     const orderColumn = dateColumn || "submitted_at";
-    const rows = await global.DGV.collectSupabasePages(() => {
+    const collectRows = (itemColumns) => global.DGV.collectSupabasePages(() => {
       let query = sb
         .from("qr_orders")
-        .select("id,table_id,client_request_id,status,note,total_usd,total_vnd,submitted_at,updated_at,accepted_at,cancelled_at,finalized_at,finalized_order_id,qr_tables(label),qr_order_items(id,qr_order_id,menu_item_id,qty,menu_type,ko_name,vi_name,en_name,unit_usd,unit_vnd,line_usd,line_vnd,created_at)")
+        .select(`id,table_id,client_request_id,status,note,total_usd,total_vnd,submitted_at,updated_at,accepted_at,cancelled_at,finalized_at,finalized_order_id,qr_tables(label),qr_order_items(${itemColumns})`)
         .in("status", statuses);
       if (finalized === true) query = query.not("finalized_order_id", "is", null);
       if (finalized === false) query = query.is("finalized_order_id", null);
@@ -272,6 +346,14 @@
         { column: "id", ascending: false }
       ]
     });
+    let rows;
+    try {
+      rows = await collectRows(QR_ORDER_ITEM_COLUMNS);
+    } catch (error) {
+      if (!isMissingComboSnapshotColumn(error)) throw error;
+      console.warn("Combo snapshot column is not available yet; loading QR orders without combo snapshots.", error);
+      rows = await collectRows(QR_ORDER_ITEM_LEGACY_COLUMNS);
+    }
     return rows.map(normalizeOrder);
   }
 
@@ -301,19 +383,27 @@
     const itemChunks = Array.from({ length: Math.ceil(ids.length / 40) }, (_, index) => (
       ids.slice(index * 40, (index + 1) * 40)
     ));
-    const [tableResult, itemResults] = await Promise.all([
-      tableIds.length
-        ? sb.from("qr_tables").select("id,label").in("id", tableIds)
-        : Promise.resolve({ data: [], error: null }),
-      mapWithConcurrency(itemChunks, 4, (chunk) => (
-        sb
-          .from("qr_order_items")
-          .select("id,qr_order_id,menu_item_id,qty,menu_type,ko_name,vi_name,en_name,unit_usd,unit_vnd,line_usd,line_vnd,created_at")
-          .in("qr_order_id", chunk)
-          .order("created_at", { ascending: true })
-      ))
+    const tablePromise = tableIds.length
+      ? sb.from("qr_tables").select("id,label").in("id", tableIds)
+      : Promise.resolve({ data: [], error: null });
+    const collectItemResults = (itemColumns) => mapWithConcurrency(itemChunks, 4, (chunk) => (
+      sb
+        .from("qr_order_items")
+        .select(itemColumns)
+        .in("qr_order_id", chunk)
+        .order("created_at", { ascending: true })
+    ));
+    const [tableResult, initialItemResults] = await Promise.all([
+      tablePromise,
+      collectItemResults(QR_ORDER_ITEM_COLUMNS)
     ]);
     if (tableResult.error) throw tableResult.error;
+    let itemResults = initialItemResults;
+    const missingComboSnapshot = itemResults.find((result) => isMissingComboSnapshotColumn(result.error));
+    if (missingComboSnapshot) {
+      console.warn("Combo snapshot column is not available yet; loading QR order items without combo snapshots.", missingComboSnapshot.error);
+      itemResults = await collectItemResults(QR_ORDER_ITEM_LEGACY_COLUMNS);
+    }
     const failedItems = itemResults.find((result) => result.error);
     if (failedItems?.error) throw failedItems.error;
 
@@ -453,11 +543,13 @@
   function renderItem(item) {
     const name = item.ko_name || item.en_name || item.vi_name || "메뉴";
     const sub = [item.en_name, item.vi_name].filter(Boolean).join(" · ");
+    const combo = renderComboSnapshot(item);
     return `
       <div class="qr-line-item">
         <div>
           <div class="qr-line-name">${global.DGV.escapeHTML(name)} × ${Number(item.qty || 0).toLocaleString("ko-KR")}</div>
           ${sub ? `<div class="qr-line-sub">${global.DGV.escapeHTML(sub)}</div>` : ""}
+          ${combo}
         </div>
         <div class="qr-line-price">${ui.formatVnd(item.line_vnd)}</div>
       </div>`;
@@ -850,6 +942,7 @@
             <div class="qr-line-name">${global.DGV.escapeHTML(name)}</div>
             ${sub ? `<div class="qr-line-sub">${global.DGV.escapeHTML(sub)}</div>` : ""}
             <div class="qr-line-sub">단가 ${ui.formatVnd(line.unit_vnd)}${Number(line.unit_usd || 0) > 0 ? ` · ${ui.formatUsd(line.unit_usd)}` : ""}</div>
+            ${renderComboSnapshot(line)}
           </div>
           <label class="qr-edit-qty">
             <span class="qr-label">수량</span>
@@ -891,6 +984,7 @@
         en_name: line.en_name,
         unit_usd: Number(line.unit_usd) || 0,
         unit_vnd: Number(line.unit_vnd) || 0,
+        combo_snapshot: line.combo_snapshot || null,
         snapshot: true
       }));
       editOriginalSnapshots = new Map(editLines.map((line) => [line.menu_item_id, { ...line }]));

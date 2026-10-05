@@ -27,7 +27,7 @@ assert.ok(tableIndex < hotelDetailsIndex, "QR preview must place hotel details b
 assert.ok(hotelDetailsIndex < qrIndex, "QR preview must place hotel details above the QR code");
 
 assert.match(menuAdminHtml, /id="newHotelQrLabel"[^>]*inputmode="numeric"[^>]*pattern="\[0-9\]\+"[^>]*placeholder="예: 101"/);
-assert.match(menuAdminHtml, /id="tokenHotelDetails" hidden>[\s\S]*?KR : 0985892542[\s\S]*?VN : 0399271874[\s\S]*?09:00 - 21:30/);
+assert.match(menuAdminHtml, /id="tokenHotelDetails" hidden>[\s\S]*?KR : 0985892542[\s\S]*?VN : 0399271874[\s\S]*?09:00 - 20:30/);
 assert.match(menuAdminSource, /function normalizedHotelRoomNumber\(value\)[\s\S]*?HOTEL_ROOM_NUMBER_PATTERN\.test\(roomNumber\) \? roomNumber : null/);
 assert.match(menuAdminSource, /function hotelRoomNumberFromLabel\(value\)[\s\S]*?label\.match\(\/\^\\d\{1,6\}\$\/[\s\S]*?label\.match\(\/\(\\d\{1,6\}\)\\s\*호\/[\s\S]*?\|\| null/);
 assert.match(menuAdminSource, /function hotelQrDisplayLabel\(value\)[\s\S]*?hotelRoomNumberFromLabel\(label\)[\s\S]*?return roomNumber \? `\$\{HOTEL_NAME\} \$\{roomNumber\}` : label/);

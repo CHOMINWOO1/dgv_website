@@ -33,6 +33,16 @@
       loadingBody: "잠시만 기다려 주세요.",
       retry: "다시 시도",
       priceNotice: "표시된 가격은 부가세 포함 가격이며, 주문 시점의 매장 가격이 적용됩니다.",
+      searchLabel: "메뉴 검색",
+      searchPlaceholder: "메뉴 이름이나 설명을 검색해 주세요.",
+      clearSearch: "지우기",
+      searchResults: "검색 결과",
+      noSearchResults: "검색 결과가 없습니다.",
+      regularPrice: "정상가",
+      comboPrice: "콤보가",
+      savings: "할인",
+      includedItems: "포함 메뉴",
+      service: "서비스",
       viewCart: "주문서 보기",
       chooseOption: "옵션을 선택해 주세요",
       itemRequest: "메뉴 요청사항",
@@ -93,6 +103,16 @@
       loadingBody: "Please wait a moment.",
       retry: "Try again",
       priceNotice: "Prices shown include tax. The current restaurant price is applied when you order.",
+      searchLabel: "Search menu",
+      searchPlaceholder: "Search names, descriptions, or combo items.",
+      clearSearch: "Clear",
+      searchResults: "Search results",
+      noSearchResults: "No matching menu items.",
+      regularPrice: "Regular",
+      comboPrice: "Combo",
+      savings: "Save",
+      includedItems: "Included items",
+      service: "Complimentary",
       viewCart: "View order",
       chooseOption: "Choose an option",
       itemRequest: "Item request",
@@ -153,6 +173,16 @@
       loadingBody: "Vui lòng chờ trong giây lát.",
       retry: "Thử lại",
       priceNotice: "Giá đã bao gồm thuế. Giá hiện tại của nhà hàng được áp dụng khi gọi món.",
+      searchLabel: "Tìm món",
+      searchPlaceholder: "Tìm tên, mô tả hoặc món trong combo.",
+      clearSearch: "Xóa",
+      searchResults: "Kết quả tìm kiếm",
+      noSearchResults: "Không tìm thấy món phù hợp.",
+      regularPrice: "Giá thường",
+      comboPrice: "Giá combo",
+      savings: "Tiết kiệm",
+      includedItems: "Món trong combo",
+      service: "Tặng kèm",
       viewCart: "Xem đơn",
       chooseOption: "Chọn tùy chọn",
       itemRequest: "Yêu cầu cho món",
@@ -208,6 +238,8 @@
     currentOrders: [],
     currentOrdersTruncated: false,
     currentTotals: { usd: 0, vnd: 0 },
+    activeCategoryId: "",
+    searchTerm: "",
     cart: [],
     selectedItem: null,
     detailQuantity: 1,
@@ -222,9 +254,9 @@
   const ids = [
     "tableChip", "tableLabel", "currentOrdersSection", "currentOrdersTotal", "currentOrdersList", "currentOrdersLimit",
     "loadingPanel", "errorPanel", "errorTitle", "errorMessage", "retryButton",
-    "menuApp", "categoryNav", "menuList", "cartButton", "cartCount", "cartTotal", "detailBackdrop",
+    "menuApp", "menuSearch", "menuSearchClear", "categoryNav", "menuList", "cartButton", "cartCount", "cartTotal", "detailBackdrop",
     "detailSheet", "detailClose", "detailMedia", "detailCategory", "detailName", "detailTranslation",
-    "detailDescription", "variantList", "detailNoteLabel", "detailNote", "detailQuantityControl", "detailMinus", "detailPlus", "detailQuantity",
+    "detailDescription", "detailComboPricing", "detailComboSection", "detailComboComponents", "variantList", "detailNoteLabel", "detailNote", "detailQuantityControl", "detailMinus", "detailPlus", "detailQuantity",
     "detailAdd", "cartBackdrop", "cartSheet", "cartClose", "cartLines", "emptyCart", "orderNote",
     "sheetTotal", "noteError", "noteCounter", "reviewButton", "confirmBackdrop", "confirmTable", "confirmLines", "confirmTotal",
     "confirmCancel", "submitOrder", "successBackdrop", "successNumber", "successSummary", "newOrderButton", "toast"
@@ -353,6 +385,100 @@
     return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
   }
 
+  function optionalMoney(...values) {
+    for (const value of values) {
+      const number = Number(value);
+      if (Number.isInteger(number) && number >= 0 && number <= 2147483647) return number;
+    }
+    return null;
+  }
+
+  function normalizeComboComponent(component) {
+    if (!component || typeof component !== "object") return null;
+    const qty = Math.min(MAX_QTY, Math.max(1, nonNegativeInteger(component.qty) || 1));
+    const isService = component.is_service === true || String(component.kind || "").toLowerCase() === "service";
+    const normalized = {
+      kind: isService ? "service" : "menu",
+      is_service: isService,
+      menu_item_id: component.menu_item_id || component.source_menu_item_id || component.component_menu_item_id || null,
+      source_menu_item_id: component.source_menu_item_id || component.menu_item_id || component.component_menu_item_id || null,
+      qty,
+      name_ko: String(component.name_ko || component.ko_name || "").trim().slice(0, 200),
+      name_en: String(component.name_en || component.en_name || "").trim().slice(0, 200),
+      name_vi: String(component.name_vi || component.vi_name || "").trim().slice(0, 200),
+      description_ko: String(component.description_ko || component.ko_description || "").trim().slice(0, 2000),
+      description_en: String(component.description_en || component.en_description || "").trim().slice(0, 2000),
+      description_vi: String(component.description_vi || component.vi_description || "").trim().slice(0, 2000),
+      image_url: String(component.image_url || component.photo_url || component.image || "").trim().slice(0, 2048),
+      unit_price_usd: optionalMoney(component.unit_price_usd, component.reference_price_usd, component.original_price_usd, component.price_usd) ?? 0,
+      unit_price_vnd: optionalMoney(component.unit_price_vnd, component.reference_price_vnd, component.original_price_vnd, component.price_vnd) ?? 0,
+      reference_price_usd: optionalMoney(component.reference_price_usd, component.unit_price_usd, component.original_price_usd, component.price_usd) ?? 0,
+      reference_price_vnd: optionalMoney(component.reference_price_vnd, component.unit_price_vnd, component.original_price_vnd, component.price_vnd) ?? 0,
+      line_regular_usd: optionalMoney(component.line_regular_usd),
+      line_regular_vnd: optionalMoney(component.line_regular_vnd)
+    };
+    if (!normalized.name_ko && !normalized.name_en && !normalized.name_vi) return null;
+    normalized.line_regular_usd ??= normalized.reference_price_usd * qty;
+    normalized.line_regular_vnd ??= normalized.reference_price_vnd * qty;
+    return normalized;
+  }
+
+  function comboComponentsOf(entity) {
+    const snapshot = entity?.combo_snapshot && typeof entity.combo_snapshot === "object" ? entity.combo_snapshot : null;
+    const source = entity?.combo_components || entity?.components || snapshot?.combo_components || snapshot?.components;
+    if (!Array.isArray(source)) return [];
+    return source.slice(0, 30).map(normalizeComboComponent).filter(Boolean);
+  }
+
+  function comboPricingOf(entity, components = comboComponentsOf(entity)) {
+    const snapshot = entity?.combo_snapshot && typeof entity.combo_snapshot === "object" ? entity.combo_snapshot : null;
+    const regularVnd = optionalMoney(
+      entity?.regular_price_vnd,
+      entity?.original_price_vnd,
+      entity?.regular_total_vnd,
+      snapshot?.regular_price_vnd,
+      snapshot?.original_price_vnd,
+      snapshot?.regular_total_vnd
+    ) ?? components.reduce((sum, component) => sum + (component.line_regular_vnd || 0), 0);
+    const regularUsd = optionalMoney(
+      entity?.regular_price_usd,
+      entity?.original_price_usd,
+      entity?.regular_total_usd,
+      snapshot?.regular_price_usd,
+      snapshot?.original_price_usd,
+      snapshot?.regular_total_usd
+    ) ?? components.reduce((sum, component) => sum + (component.line_regular_usd || 0), 0);
+    const comboVnd = optionalMoney(snapshot?.combo_price_vnd, entity?.combo_price_vnd, entity?.price_vnd, entity?.unit_vnd) ?? 0;
+    const comboUsd = optionalMoney(snapshot?.combo_price_usd, entity?.combo_price_usd, entity?.price_usd, entity?.unit_usd) ?? 0;
+    const discountVnd = optionalMoney(entity?.discount_vnd, entity?.savings_vnd, snapshot?.discount_vnd, snapshot?.savings_vnd)
+      ?? Math.max(0, regularVnd - comboVnd);
+    const discountUsd = optionalMoney(entity?.discount_usd, entity?.savings_usd, snapshot?.discount_usd, snapshot?.savings_usd)
+      ?? Math.max(0, regularUsd - comboUsd);
+    const suppliedPercent = Number(entity?.discount_percent ?? snapshot?.discount_percent);
+    const discountPercent = Number.isFinite(suppliedPercent) && suppliedPercent >= 0
+      ? Math.min(100, Math.round(suppliedPercent * 10) / 10)
+      : (regularVnd > 0 ? Math.min(100, Math.round((discountVnd / regularVnd) * 1000) / 10) : 0);
+    return { regularVnd, regularUsd, comboVnd, comboUsd, discountVnd, discountUsd, discountPercent };
+  }
+
+  function normalizeComboSnapshot(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const combo_components = comboComponentsOf({ combo_snapshot: value });
+    if (!combo_components.length) return null;
+    const pricing = comboPricingOf({ combo_snapshot: value }, combo_components);
+    return {
+      version: nonNegativeInteger(value.version) || 1,
+      combo_components,
+      regular_price_usd: pricing.regularUsd,
+      regular_price_vnd: pricing.regularVnd,
+      combo_price_usd: pricing.comboUsd,
+      combo_price_vnd: pricing.comboVnd,
+      discount_usd: pricing.discountUsd,
+      discount_vnd: pricing.discountVnd,
+      discount_percent: pricing.discountPercent
+    };
+  }
+
   function normalizeCurrentOrders(value) {
     if (!Array.isArray(value)) return [];
     return value.slice(0, MAX_CURRENT_ORDERS).flatMap((order) => {
@@ -365,7 +491,7 @@
           const qty = nonNegativeInteger(item.qty);
           const koName = String(item.ko_name || "").trim().slice(0, 200);
           if (qty < 1 || qty > MAX_QTY || !koName) return [];
-          return [{
+          const normalizedItem = {
             menu_type: String(item.menu_type || "").trim().slice(0, 80),
             ko_name: koName,
             vi_name: String(item.vi_name || "").trim().slice(0, 200),
@@ -375,7 +501,10 @@
             unit_vnd: nonNegativeInteger(item.unit_vnd),
             line_usd: nonNegativeInteger(item.line_usd),
             line_vnd: nonNegativeInteger(item.line_vnd)
-          }];
+          };
+          const comboSnapshot = normalizeComboSnapshot(item.combo_snapshot);
+          if (comboSnapshot) normalizedItem.combo_snapshot = comboSnapshot;
+          return [normalizedItem];
         });
       if (!orderNumber || !items.length) return [];
       return [{
@@ -481,21 +610,34 @@
     });
     const categoryIds = new Set(categories.map((category) => String(category.id)));
     const items = rawItems
-      .map((item) => ({
-        ...item,
-        category_id: String(item.category_id || item.qr_category || item.type || categories[0]?.id || "menu"),
-        subcategory_id: String(item.qr_subcategory || item.subcategory_id || "other"),
-        variants: Array.isArray(item.variants) ? item.variants.filter((variant) => variant?.is_available !== false && variant?.is_active !== false) : []
-      }))
+      .map((item) => {
+        const combo_components = comboComponentsOf(item);
+        const pricing = comboPricingOf(item, combo_components);
+        return {
+          ...item,
+          category_id: String(item.category_id || item.qr_category || item.type || categories[0]?.id || "menu"),
+          subcategory_id: String(item.qr_subcategory || item.subcategory_id || "other"),
+          variants: Array.isArray(item.variants) ? item.variants.filter((variant) => variant?.is_available !== false && variant?.is_active !== false) : [],
+          combo_components,
+          regular_price_usd: pricing.regularUsd,
+          regular_price_vnd: pricing.regularVnd,
+          combo_price_usd: pricing.comboUsd,
+          combo_price_vnd: pricing.comboVnd,
+          discount_usd: pricing.discountUsd,
+          discount_vnd: pricing.discountVnd,
+          discount_percent: pricing.discountPercent
+        };
+      })
       .filter((item) => item.is_active !== false && (item.is_orderable !== false || item.requires_preorder === true))
       .sort((left, right) => compareMenuItems(left, right, subcategories));
 
     items.forEach((item) => {
       if (!categoryIds.has(item.category_id)) {
-        categories.push({ id: item.category_id, name_ko: categoryLabel(item.category_id, "ko"), name_en: categoryLabel(item.category_id, "en"), name_vi: categoryLabel(item.category_id, "vi"), sort_order: 999 });
+        categories.push({ id: item.category_id, name_ko: categoryLabel(item.category_id, "ko"), name_en: categoryLabel(item.category_id, "en"), name_vi: categoryLabel(item.category_id, "vi"), sort_order: categorySortOrder(item.category_id) });
         categoryIds.add(item.category_id);
       }
     });
+    categories.sort((a, b) => Number(a.sort_order ?? categorySortOrder(a.id)) - Number(b.sort_order ?? categorySortOrder(b.id)));
 
     return {
       table: payload?.table || (payload?.table_label ? { label: payload.table_label } : null),
@@ -511,6 +653,7 @@
   function categoryLabel(value, language) {
     const key = String(value || "menu").toLowerCase();
     const labels = {
+      combo: { ko: "콤보 메뉴", en: "Combo menu", vi: "Combo" },
       single: { ko: "1인 메뉴", en: "Single serving", vi: "Món 1 người" },
       shared: { ko: "2인 이상 메뉴", en: "For two or more", vi: "Món cho 2 người trở lên" },
       snack: { ko: "술안주", en: "Dishes for drinks", vi: "Món nhắm" },
@@ -526,7 +669,7 @@
   }
 
   function categorySortOrder(value) {
-    return ({ single: 10, shared: 20, snack: 30, preorder: 40, drink: 50, cafe: 60 })[
+    return ({ combo: 0, single: 10, shared: 20, snack: 30, preorder: 40, drink: 50, cafe: 60 })[
       String(value || "").toLowerCase()
     ] ?? 900;
   }
@@ -645,6 +788,28 @@
     }).format(date);
   }
 
+  function appendCurrentComboSnapshot(line, item) {
+    const components = comboComponentsOf(item);
+    if (!components.length) return;
+    const pricing = comboPricingOf(item, components);
+    const details = make("div", "current-order-combo");
+    const title = make("strong", "", t("includedItems"));
+    if (pricing.regularVnd > 0 && pricing.discountVnd > 0) {
+      title.append(` · ${formatVnd(pricing.discountVnd)} ${t("savings")}`);
+    }
+    details.append(title);
+    components.forEach((component) => {
+      const row = make("div", "current-order-combo-line");
+      const label = make("span", "", `${nameOf(component)} × ${component.qty}`);
+      if (component.is_service) label.append(make("em", "", t("service")));
+      row.append(label);
+      const description = descriptionOf(component);
+      if (description) row.append(make("small", "", description));
+      details.append(row);
+    });
+    line.append(details);
+  }
+
   function renderCurrentOrders() {
     el.currentOrdersList.replaceChildren();
     el.currentOrdersTotal.replaceChildren();
@@ -678,6 +843,7 @@
           make("span", "current-order-line-name", `${nameOf(item)} × ${item.qty}`),
           make("span", "current-order-line-price", formatVnd(item.line_vnd))
         );
+        appendCurrentComboSnapshot(line, item);
         card.append(line);
       });
 
@@ -713,61 +879,128 @@
     }, CURRENT_ORDER_POLL_MS);
   }
 
+  function normalizeSearchText(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function itemSearchText(item) {
+    const values = [
+      item.ko_name, item.en_name, item.vi_name,
+      item.name_ko, item.name_en, item.name_vi,
+      item.description_ko, item.description_en, item.description_vi
+    ];
+    comboComponentsOf(item).forEach((component) => {
+      values.push(
+        component.name_ko, component.name_en, component.name_vi,
+        component.description_ko, component.description_en, component.description_vi
+      );
+    });
+    return normalizeSearchText(values.filter(Boolean).join(" "));
+  }
+
+  function matchesMenuSearch(item, value) {
+    const terms = normalizeSearchText(value).split(" ").filter(Boolean);
+    if (!terms.length) return true;
+    const haystack = itemSearchText(item);
+    return terms.every((term) => haystack.includes(term));
+  }
+
+  function appendCategoryItems(section, category, items) {
+    if (String(category?.id) === "single") {
+      state.subcategories.forEach((subcategory) => {
+        const rows = items.filter((item) => item.subcategory_id === String(subcategory.id));
+        if (!rows.length) return;
+        const subsection = make("div", "menu-subsection");
+        const subheading = make("div", "menu-subheading");
+        subheading.append(make("h3", "", nameOf(subcategory)), make("p", "", translationsOf(subcategory)));
+        const grid = make("div", "menu-grid");
+        rows.forEach((item) => grid.append(menuCard(item)));
+        subsection.append(subheading, grid);
+        section.append(subsection);
+      });
+      return;
+    }
+    const grid = make("div", "menu-grid");
+    items.forEach((item) => grid.append(menuCard(item)));
+    section.append(grid);
+  }
+
   function renderMenu() {
     el.categoryNav.replaceChildren();
     el.menuList.replaceChildren();
-    const usableCategories = state.categories.filter((category) => state.items.some((item) => item.category_id === String(category.id)));
+    const usableCategories = state.categories
+      .filter((category) => state.items.some((item) => item.category_id === String(category.id)))
+      .sort((left, right) => categorySortOrder(left.id) - categorySortOrder(right.id));
+    if (!usableCategories.some((category) => String(category.id) === state.activeCategoryId)) {
+      state.activeCategoryId = String(usableCategories[0]?.id || "");
+    }
 
-    usableCategories.forEach((category, index) => {
-      const categoryId = `category-${slug(String(category.id))}`;
-      const button = make("button", `category-button${index === 0 ? " is-active" : ""}`, nameOf(category));
+    usableCategories.forEach((category) => {
+      const categoryId = String(category.id);
+      const isActive = categoryId === state.activeCategoryId;
+      const button = make("button", `category-button${isActive ? " is-active" : ""}`, nameOf(category));
       button.type = "button";
-      button.dataset.target = categoryId;
+      button.dataset.category = categoryId;
+      button.setAttribute("aria-pressed", String(isActive));
       button.addEventListener("click", () => {
-        document.getElementById(categoryId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        state.activeCategoryId = categoryId;
+        renderMenu();
+        el.menuList.scrollIntoView({ behavior: "smooth", block: "start" });
       });
       el.categoryNav.append(button);
+    });
 
-      const section = make("section", "menu-section");
-      section.id = categoryId;
-      section.dataset.category = String(category.id);
+    el.menuSearchClear.hidden = !state.searchTerm;
+    if (el.menuSearch.value !== state.searchTerm) el.menuSearch.value = state.searchTerm;
+    if (state.searchTerm) {
+      const matches = state.items.filter((item) => matchesMenuSearch(item, state.searchTerm));
+      const section = make("section", "menu-section menu-search-results");
       const heading = make("div", "section-heading");
-      const title = make("h2", "", nameOf(category));
-      const subtitle = make("p", "", translationsOf(category));
-      heading.append(title, subtitle);
+      heading.append(
+        make("h2", "", t("searchResults")),
+        make("p", "", String(matches.length))
+      );
       section.append(heading);
-      const categoryItems = state.items.filter((item) => item.category_id === String(category.id));
-      if (String(category.id) === "single") {
-        state.subcategories.forEach((subcategory) => {
-          const rows = categoryItems.filter((item) => item.subcategory_id === String(subcategory.id));
-          if (!rows.length) return;
-          const subsection = make("div", "menu-subsection");
-          const subheading = make("div", "menu-subheading");
-          subheading.append(make("h3", "", nameOf(subcategory)), make("p", "", translationsOf(subcategory)));
-          const grid = make("div", "menu-grid");
-          rows.forEach((item) => grid.append(menuCard(item)));
-          subsection.append(subheading, grid);
-          section.append(subsection);
-        });
-      } else {
+      if (matches.length) {
         const grid = make("div", "menu-grid");
-        categoryItems.forEach((item) => grid.append(menuCard(item)));
+        matches.forEach((item) => grid.append(menuCard(item)));
         section.append(grid);
+      } else {
+        section.append(make("div", "menu-empty-results", t("noSearchResults")));
       }
       el.menuList.append(section);
-    });
-    observeCategories();
+      return;
+    }
+
+    const category = usableCategories.find((row) => String(row.id) === state.activeCategoryId);
+    if (!category) return;
+    const section = make("section", "menu-section");
+    section.id = `category-${slug(String(category.id))}`;
+    section.dataset.category = String(category.id);
+    const heading = make("div", "section-heading");
+    heading.append(make("h2", "", nameOf(category)), make("p", "", translationsOf(category)));
+    section.append(heading);
+    appendCategoryItems(section, category, state.items.filter((item) => item.category_id === String(category.id)));
+    el.menuList.append(section);
   }
 
   function menuCard(item) {
     const available = isAvailable(item);
     const preorderOnly = item.requires_preorder === true;
+    const comboComponents = comboComponentsOf(item);
+    const comboPricing = comboPricingOf(item, comboComponents);
+    const isCombo = item.category_id === "combo" || comboComponents.length > 0;
     const card = make("button", "menu-card");
     card.type = "button";
     card.disabled = !available && !preorderOnly;
     card.setAttribute(
       "aria-label",
-      `${nameOf(item)}, ${formatVnd(minPrice(item))}${available ? "" : `, ${t(preorderOnly ? "preorder" : "soldOut")}`}`
+      `${nameOf(item)}, ${formatVnd(minPrice(item))}${isCombo && comboPricing.discountVnd > 0 ? `, ${t("savings")} ${formatVnd(comboPricing.discountVnd)}` : ""}${available ? "" : `, ${t(preorderOnly ? "preorder" : "soldOut")}`}`
     );
     if (available || preorderOnly) card.addEventListener("click", () => openDetail(item));
 
@@ -785,7 +1018,19 @@
 
     const price = make("div", "item-price");
     const priceText = item.variants.length > 1 ? `${t("from")} ${formatVnd(minPrice(item))}` : formatVnd(minPrice(item));
-    price.append(make("strong", "", priceText), make("span", "add-circle", available ? "+" : "–"));
+    const priceCopy = make("div", "item-price-copy");
+    if (isCombo && comboPricing.regularVnd > 0) {
+      priceCopy.append(make("span", "combo-regular-price", `${t("regularPrice")} ${formatVnd(comboPricing.regularVnd)}`));
+    }
+    priceCopy.append(make("strong", "", priceText));
+    if (isCombo && comboPricing.discountVnd > 0) {
+      priceCopy.append(make(
+        "span",
+        "combo-saving-badge",
+        `${formatVnd(comboPricing.discountVnd)} ${t("savings")}${comboPricing.discountPercent > 0 ? ` · ${comboPricing.discountPercent}%` : ""}`
+      ));
+    }
+    price.append(priceCopy, make("span", "add-circle", available ? "+" : "–"));
     body.append(price);
     card.append(media, body);
     return card;
@@ -844,6 +1089,7 @@
     el.detailTranslation.hidden = !el.detailTranslation.textContent;
     el.detailDescription.textContent = descriptionOf(item);
     el.detailDescription.hidden = !el.detailDescription.textContent;
+    renderComboDetail(item);
     el.detailNote.value = "";
     el.detailNote.disabled = preorderOnly;
     el.detailNote.hidden = preorderOnly;
@@ -853,6 +1099,52 @@
     renderVariants(item);
     updateDetailAdd();
     openOverlay(el.detailBackdrop, el.detailSheet, el.detailClose);
+  }
+
+  function renderComboDetail(item) {
+    const components = comboComponentsOf(item);
+    const pricing = comboPricingOf(item, components);
+    const isCombo = item.category_id === "combo" || components.length > 0;
+    el.detailComboPricing.replaceChildren();
+    el.detailComboComponents.replaceChildren();
+    el.detailComboPricing.hidden = !isCombo || pricing.regularVnd <= 0;
+    el.detailComboSection.hidden = !components.length;
+
+    if (!el.detailComboPricing.hidden) {
+      const regular = make("div", "combo-price-row");
+      regular.append(make("span", "", t("regularPrice")), make("del", "", formatVnd(pricing.regularVnd)));
+      const combo = make("div", "combo-price-row combo-price-current");
+      combo.append(make("span", "", t("comboPrice")), make("strong", "", formatVnd(pricing.comboVnd)));
+      el.detailComboPricing.append(regular, combo);
+      if (pricing.discountVnd > 0) {
+        const saving = make("div", "combo-detail-saving");
+        saving.append(make("strong", "", `${formatVnd(pricing.discountVnd)} ${t("savings")}`));
+        if (pricing.discountPercent > 0) saving.append(make("span", "", `${pricing.discountPercent}%`));
+        el.detailComboPricing.append(saving);
+      }
+    }
+
+    components.forEach((component) => {
+      const row = make("article", "combo-component");
+      const content = make("div", "combo-component-content");
+      const heading = make("div", "combo-component-heading");
+      heading.append(make("strong", "", `${nameOf(component)} × ${component.qty}`));
+      if (component.is_service) heading.append(make("span", "combo-service-badge", t("service")));
+      content.append(heading);
+      const translation = translationsOf(component);
+      if (translation) content.append(make("p", "item-translation", translation));
+      const description = descriptionOf(component);
+      if (description) content.append(make("p", "combo-component-description", description));
+      if (safeImageUrl(component.image_url)) {
+        row.classList.add("has-image");
+        const media = make("div", "combo-component-media");
+        appendImage(media, component);
+        row.append(media);
+      }
+      row.append(content);
+      if (component.line_regular_vnd > 0) row.append(make("span", "combo-component-price", formatVnd(component.line_regular_vnd)));
+      el.detailComboComponents.append(row);
+    });
   }
 
   function renderVariants(item) {
@@ -1237,6 +1529,16 @@
   function bindEvents() {
     document.querySelectorAll("[data-language]").forEach((button) => button.addEventListener("click", () => setLanguage(button.dataset.language)));
     el.retryButton.addEventListener("click", loadMenu);
+    el.menuSearch.addEventListener("input", () => {
+      state.searchTerm = el.menuSearch.value.trim();
+      renderMenu();
+    });
+    el.menuSearchClear.addEventListener("click", () => {
+      state.searchTerm = "";
+      el.menuSearch.value = "";
+      renderMenu();
+      el.menuSearch.focus();
+    });
     el.detailClose.addEventListener("click", () => closeOverlay(el.detailBackdrop, el.detailSheet));
     el.detailBackdrop.addEventListener("click", () => closeOverlay(el.detailBackdrop, el.detailSheet));
     el.detailMinus.addEventListener("click", () => {

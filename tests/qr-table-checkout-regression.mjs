@@ -60,7 +60,7 @@ assert.match(functionSource(inboxSource, "markTableCheckoutComplete"), /finalize
 assert.match(inboxHtml, /id="paymentTitle">테이블 전체 결제/);
 assert.match(inboxHtml, /id="paymentOrderSummary"/);
 assert.match(inboxHtml, /신규 주문이 남아 있으면 결제할 수 없습니다/);
-assert.match(inboxHtml, /assets\/order-inbox\.js\?v=20260927-history-filter/);
+assert.match(inboxHtml, /assets\/order-inbox\.js\?v=20261005-combo-menu/);
 
 // Card +7% uses the same aggregate rounding helpers as calc: whole USD and
 // nearest 1,000 VND, applied once to the table total rather than per QR order.
@@ -75,7 +75,7 @@ assert.match(guestOpenOrdersMigration, /qr_order\.finalized_order_id is null/i);
 assert.match(functionSource(guestSource, "normalizeCurrentOrders"), /\["submitted", "accepted"\]\.includes\(order\.status\)/);
 const guestHtml = await read("menu.html");
 assert.match(guestHtml, /id="currentOrdersTotal"[^>]*hidden/);
-assert.match(guestHtml, /assets\/qr-menu\.js\?v=20260926-table-total/);
+assert.match(guestHtml, /assets\/qr-menu\.js\?v=20261005-combo-menu/);
 const normalizeCurrentTotals = functionSource(guestSource, "normalizeCurrentTotals");
 assert.match(functionSource(guestSource, "nonNegativeSafeInteger"), /Number\.isSafeInteger\(value\)[\s\S]*?value >= 0/);
 assert.match(normalizeCurrentTotals, /payload\?\.current_total_usd/);
