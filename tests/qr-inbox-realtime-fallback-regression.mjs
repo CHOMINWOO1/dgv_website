@@ -62,6 +62,6 @@ assert.match(bindEvents, /addEventListener\("beforeunload"[\s\S]*?realtimeChanne
 assert.match(source, /실시간 연결/);
 assert.match(source, /연결 복구 중 · 15초마다 자동 확인/);
 assert.match(source, /오프라인 · 연결되면 즉시 동기화/);
-assert.match(html, /assets\/order-inbox\.js\?v=20260927-history-filter/);
+assert.match(html, /assets\/order-inbox\.js\?v=20261005-combo-menu/);
 
 console.log("QR inbox Realtime fallback regression checks passed.");

@@ -7,7 +7,7 @@
   <meta name="referrer" content="no-referrer" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" />
   <title>HANA 메뉴 관리</title>
-  <link rel="stylesheet" href="assets/qr-staff.css" />
+  <link rel="stylesheet" href="assets/qr-staff.css?v=20261005-combo-menu" />
 </head>
 <body>
   <main class="qr-shell">
@@ -91,7 +91,8 @@
             <div class="qr-field">
               <label class="qr-label" for="qrCategory">QR 메뉴판 분류</label>
               <select class="qr-select" id="qrCategory" required>
-                <option value="single">1인 메뉴</option>
+                <option value="combo">콤보 메뉴</option>
+                <option value="single" selected>1인 메뉴</option>
                 <option value="shared">2인 이상 메뉴</option>
                 <option value="snack">안주·사이드</option>
                 <option value="preorder">사전 주문</option>
@@ -136,6 +137,89 @@
               <label class="qr-label" for="priceUsd">가격 (USD)</label>
               <input class="qr-input" id="priceUsd" type="number" min="0" max="1000000" step="1" inputmode="numeric" required />
             </div>
+
+            <fieldset class="qr-combo-editor qr-field-wide" id="comboEditor" hidden>
+              <legend>콤보 구성</legend>
+              <div class="qr-hint">기존 메뉴를 선택하거나, 메뉴판에 없는 서비스 음식을 직접 추가할 수 있습니다. 콤보는 주문·결제 시 상품 1개로 처리됩니다.</div>
+
+              <section class="qr-combo-add-panel" aria-labelledby="comboExistingTitle">
+                <div class="qr-combo-panel-title" id="comboExistingTitle">기존 메뉴 추가</div>
+                <div class="qr-combo-add-grid">
+                  <div class="qr-field qr-combo-menu-search">
+                    <label class="qr-label" for="comboMenuSearch">메뉴 검색</label>
+                    <input class="qr-input" id="comboMenuSearch" type="search" maxlength="120" placeholder="메뉴명 또는 분류 검색" autocomplete="off" />
+                  </div>
+                  <div class="qr-field qr-combo-menu-select">
+                    <label class="qr-label" for="comboMenuSelect">메뉴 선택</label>
+                    <select class="qr-select" id="comboMenuSelect">
+                      <option value="">메뉴를 선택해 주세요</option>
+                    </select>
+                  </div>
+                  <div class="qr-field qr-combo-qty-field">
+                    <label class="qr-label" for="comboExistingQty">수량</label>
+                    <input class="qr-input" id="comboExistingQty" type="number" min="1" max="20" step="1" inputmode="numeric" value="1" />
+                  </div>
+                  <button class="qr-btn qr-btn-primary qr-combo-add-button" id="addComboMenuBtn" type="button">구성에 추가</button>
+                </div>
+              </section>
+
+              <section class="qr-combo-add-panel" aria-labelledby="comboServiceTitle">
+                <div class="qr-combo-panel-title" id="comboServiceTitle">서비스 음식 추가</div>
+                <div class="qr-hint">정상가를 비워 두면 금액 계산에는 포함하지 않고 고객 화면에 ‘서비스’로 표시합니다.</div>
+                <div class="qr-combo-service-grid">
+                  <div class="qr-field">
+                    <label class="qr-label" for="comboServiceKoName">한국어 이름</label>
+                    <input class="qr-input" id="comboServiceKoName" maxlength="120" />
+                  </div>
+                  <div class="qr-field">
+                    <label class="qr-label" for="comboServiceViName">베트남어 이름</label>
+                    <input class="qr-input" id="comboServiceViName" maxlength="120" />
+                  </div>
+                  <div class="qr-field">
+                    <label class="qr-label" for="comboServiceEnName">영어 이름</label>
+                    <input class="qr-input" id="comboServiceEnName" maxlength="120" />
+                  </div>
+                  <div class="qr-field">
+                    <label class="qr-label" for="comboServiceQty">수량</label>
+                    <input class="qr-input" id="comboServiceQty" type="number" min="1" max="20" step="1" inputmode="numeric" value="1" />
+                  </div>
+                  <div class="qr-field">
+                    <label class="qr-label" for="comboServicePriceVnd">서비스 정상가 (VND, 선택)</label>
+                    <input class="qr-input" id="comboServicePriceVnd" type="number" min="0" max="1000000000" step="1000" inputmode="numeric" />
+                  </div>
+                  <div class="qr-field">
+                    <label class="qr-label" for="comboServicePriceUsd">서비스 정상가 (USD, 선택)</label>
+                    <input class="qr-input" id="comboServicePriceUsd" type="number" min="0" max="1000000" step="1" inputmode="numeric" />
+                  </div>
+                  <div class="qr-field">
+                    <label class="qr-label" for="comboServiceDescriptionKo">한국어 설명</label>
+                    <textarea class="qr-textarea" id="comboServiceDescriptionKo" maxlength="1000"></textarea>
+                  </div>
+                  <div class="qr-field">
+                    <label class="qr-label" for="comboServiceDescriptionVi">베트남어 설명</label>
+                    <textarea class="qr-textarea" id="comboServiceDescriptionVi" maxlength="1000"></textarea>
+                  </div>
+                  <div class="qr-field qr-field-wide">
+                    <label class="qr-label" for="comboServiceDescriptionEn">영어 설명</label>
+                    <textarea class="qr-textarea" id="comboServiceDescriptionEn" maxlength="1000"></textarea>
+                  </div>
+                </div>
+                <div class="qr-button-row qr-combo-service-action">
+                  <button class="qr-btn" id="addComboServiceBtn" type="button">서비스 구성에 추가</button>
+                </div>
+              </section>
+
+              <div class="qr-combo-components" id="comboComponentList" aria-live="polite">
+                <div class="qr-empty">구성 음식을 추가해 주세요.</div>
+              </div>
+
+              <div class="qr-combo-summary" id="comboSummary" aria-live="polite">
+                <div><span>원래 가격</span><strong id="comboRegularVnd">0 VND</strong><small id="comboRegularUsd">0$</small></div>
+                <div><span>콤보 가격</span><strong id="comboSaleVnd">0 VND</strong><small id="comboSaleUsd">0$</small></div>
+                <div class="is-saving"><span>할인</span><strong id="comboSavingVnd">0 VND</strong><small id="comboSavingUsd">0$ · 0%</small></div>
+              </div>
+              <div class="qr-upload-status" id="comboEditorStatus" aria-live="polite">구성 음식의 현재 가격을 기준으로 할인 금액을 계산합니다.</div>
+            </fieldset>
 
             <div class="qr-field qr-field-wide">
               <label class="qr-label" for="imageUrl">메뉴 이미지 경로 또는 URL</label>
@@ -245,7 +329,7 @@
         <div class="qr-order-card-hotel-details" id="tokenHotelDetails" hidden>
           <div>KR : 0985892542</div>
           <div>VN : 0399271874</div>
-          <div>09:00 - 21:30</div>
+          <div>09:00 - 20:30</div>
         </div>
         <div class="qr-code-preview" id="tokenQr" aria-label="테이블 주문 QR 코드"></div>
       </div>
@@ -273,6 +357,6 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/vendor/qrcode.min.js"></script>
-  <script src="assets/menu-admin.js"></script>
+  <script src="assets/menu-admin.js?v=20261005-combo-menu"></script>
 </body>
 </html>

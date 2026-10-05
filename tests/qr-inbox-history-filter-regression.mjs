@@ -23,8 +23,8 @@ assert.match(html, /data-history-range="yesterday"[^>]*>어제</);
 assert.match(html, /data-history-range="week"[^>]*>최근 7일</);
 assert.match(html, /id="historyDate"[^>]*type="date"/);
 assert.match(html, /option value="all" selected>현재 \+ 주문 기록/);
-assert.match(html, /assets\/qr-staff\.css\?v=20260927-history-filter/);
-assert.match(html, /assets\/order-inbox\.js\?v=20260927-history-filter/);
+assert.match(html, /assets\/qr-staff\.css\?v=20261005-combo-menu/);
+assert.match(html, /assets\/order-inbox\.js\?v=20261005-combo-menu/);
 assert.match(css, /\.qr-history-toolbar/);
 assert.match(css, /\.qr-history-day/);
 

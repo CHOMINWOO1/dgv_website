@@ -9,7 +9,7 @@
   <title>HANA Table Order</title>
   <meta name="description" content="HANA Restaurant table order menu">
   <link rel="icon" href="image/logo.png">
-  <link rel="stylesheet" href="assets/qr-menu.css?v=20260926-table-checkout">
+  <link rel="stylesheet" href="assets/qr-menu.css?v=20261005-combo-menu">
 </head>
 <body>
   <a class="skip-link" href="#menuList">메뉴로 바로 이동</a>
@@ -77,6 +77,14 @@
     </section>
 
     <div id="menuApp" hidden>
+      <div class="menu-search-wrap">
+        <label class="menu-search" for="menuSearch">
+          <span aria-hidden="true">⌕</span>
+          <span class="visually-hidden" data-copy="searchLabel">메뉴 검색</span>
+          <input id="menuSearch" type="search" autocomplete="off" data-placeholder="searchPlaceholder" placeholder="메뉴 이름이나 설명을 검색해 주세요.">
+        </label>
+        <button class="menu-search-clear" id="menuSearchClear" type="button" data-copy="clearSearch" hidden>지우기</button>
+      </div>
       <nav class="category-nav" aria-label="Menu categories">
         <div class="category-scroll" id="categoryNav"></div>
       </nav>
@@ -103,6 +111,11 @@
       <h2 id="detailName"></h2>
       <p class="item-translation" id="detailTranslation"></p>
       <p class="item-description" id="detailDescription"></p>
+      <div class="combo-detail-pricing" id="detailComboPricing" hidden></div>
+      <section class="combo-detail-section" id="detailComboSection" hidden>
+        <h3 data-copy="includedItems">포함 메뉴</h3>
+        <div class="combo-component-list" id="detailComboComponents"></div>
+      </section>
       <fieldset class="variant-list" id="variantList" hidden>
         <legend data-copy="chooseOption">옵션을 선택해 주세요</legend>
       </fieldset>
@@ -189,6 +202,6 @@
   </noscript>
 
   <script src="assets/supabase-config.js"></script>
-  <script src="assets/qr-menu.js?v=20260926-table-total"></script>
+  <script src="assets/qr-menu.js?v=20261005-combo-menu"></script>
 </body>
 </html>

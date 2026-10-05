@@ -24,6 +24,9 @@
     "test:qr-table-checkout": "node tests/qr-table-checkout-regression.mjs",
     "test:qr-table-checkout-db": "node tests/qr-table-checkout-db-regression.mjs",
     "test:qr-menu-categories": "node tests/qr-menu-categories-regression.mjs",
+    "test:menu-admin-combo": "node tests/menu-admin-combo-regression.mjs",
+    "test:qr-combo": "node tests/qr-combo-guest-regression.mjs",
+    "test:qr-combo-migration": "node tests/qr-combo-migration-regression.mjs",
     "test:qr-inbox-history": "node tests/qr-inbox-history-filter-regression.mjs",
     "test:managed-qr": "node tests/managed-qr-regression.mjs",
     "test:qr-table-checkout:db": "supabase test db --local supabase/tests/qr_table_checkout.sql"

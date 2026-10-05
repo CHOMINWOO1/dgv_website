@@ -601,7 +601,7 @@ assert.match(functionSource(guestSource, "submitOrder"), /state\.cart = \[\][\s\
 
 const currentOrderContext = {};
 vm.runInNewContext(
-  `const MAX_CURRENT_ORDERS = 20; const MAX_CURRENT_ORDER_LINES = 40; const MAX_QTY = 20;\n${functionSource(guestSource, "nonNegativeInteger")}\n${functionSource(guestSource, "normalizeCurrentOrders")}\nresult = normalizeCurrentOrders([{order_number:"A1",status:"accepted",total_vnd:107000,items:[{ko_name:"김밥",qty:1,line_vnd:107000}]},{order_number:"OLD",status:"cancelled",items:[{ko_name:"김밥",qty:1}]}]);`,
+  `const MAX_CURRENT_ORDERS = 20; const MAX_CURRENT_ORDER_LINES = 40; const MAX_QTY = 20;\n${functionSource(guestSource, "nonNegativeInteger")}\n${functionSource(guestSource, "optionalMoney")}\n${functionSource(guestSource, "normalizeComboComponent")}\n${functionSource(guestSource, "comboComponentsOf")}\n${functionSource(guestSource, "comboPricingOf")}\n${functionSource(guestSource, "normalizeComboSnapshot")}\n${functionSource(guestSource, "normalizeCurrentOrders")}\nresult = normalizeCurrentOrders([{order_number:"A1",status:"accepted",total_vnd:107000,items:[{ko_name:"김밥",qty:1,line_vnd:107000}]},{order_number:"OLD",status:"cancelled",items:[{ko_name:"김밥",qty:1}]}]);`,
   currentOrderContext,
 );
 assert.deepEqual(

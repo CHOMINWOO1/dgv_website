@@ -34,9 +34,13 @@
   const HOTEL_QR_CONTACT_LINES = Object.freeze([
     "KR : 0985892542",
     "VN : 0399271874",
-    "09:00 - 21:30"
+    "09:00 - 20:30"
   ]);
-  const QR_CATEGORY_ORDER = Object.freeze({ single: 10, shared: 20, snack: 30, preorder: 40, drink: 50, cafe: 60 });
+  const QR_CATEGORY_ORDER = Object.freeze({ combo: 0, single: 10, shared: 20, snack: 30, preorder: 40, drink: 50, cafe: 60 });
+  const QR_CATEGORIES = Object.freeze(Object.keys(QR_CATEGORY_ORDER));
+  const MAX_COMBO_COMPONENTS = 20;
+  const MAX_COMBO_COMPONENT_QTY = 20;
+  const MAX_COMBO_TOTAL_QTY = 100;
   const SINGLE_SUBCATEGORIES = Object.freeze({
     noodle: { label: "면", sortOrder: 10 },
     stew_rice: { label: "찌개·덮밥", sortOrder: 20 },
@@ -61,6 +65,11 @@
   let menuSaveInProgress = false;
   let showArchivedMenus = false;
   let activeMenuSummary = { count: 0, orderable: 0, soldOut: 0 };
+  let componentMenuChoices = [];
+  let draftComboComponents = [];
+  let comboSelectionVersion = 0;
+  let comboFeatureAvailable = null;
+  let comboFeatureCheckPromise = null;
 
   function normalizedTableQrUrl(value) {
     if (typeof value !== "string" || !value || value !== value.trim()) return null;
@@ -143,6 +152,170 @@
   function nullIfBlank(value) {
     const text = String(value ?? "").trim();
     return text || null;
+  }
+
+  function comboClientId() {
+    if (typeof global.crypto?.randomUUID === "function") return global.crypto.randomUUID();
+    return `combo-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function nonNegativeInteger(value, fallback = 0) {
+    const numeric = Number(value);
+    return Number.isSafeInteger(numeric) && numeric >= 0 ? numeric : fallback;
+  }
+
+  function optionalNonNegativeInteger(value) {
+    if (value == null || String(value).trim() === "") return null;
+    const numeric = Number(value);
+    return Number.isSafeInteger(numeric) && numeric >= 0 ? numeric : null;
+  }
+
+  function comboMenuItemId(component) {
+    return nullIfBlank(
+      component?.menu_item_id
+      || component?.source_menu_item_id
+      || component?.component_menu_item_id
+    );
+  }
+
+  function normalizedComboComponent(component) {
+    const menuItemId = comboMenuItemId(component);
+    const kind = component?.kind === "service" || component?.is_service === true || !menuItemId
+      ? "service"
+      : "menu";
+    const quantity = Number(component?.qty);
+    return {
+      _client_id: nullIfBlank(component?._client_id) || comboClientId(),
+      kind,
+      menu_item_id: kind === "menu" ? menuItemId : null,
+      qty: Number.isSafeInteger(quantity) && quantity >= 1 && quantity <= MAX_COMBO_COMPONENT_QTY ? quantity : 1,
+      ko_name: nullIfBlank(component?.ko_name ?? component?.name_ko),
+      vi_name: nullIfBlank(component?.vi_name ?? component?.name_vi),
+      en_name: nullIfBlank(component?.en_name ?? component?.name_en),
+      description_ko: nullIfBlank(component?.description_ko),
+      description_vi: nullIfBlank(component?.description_vi),
+      description_en: nullIfBlank(component?.description_en),
+      image_url: nullIfBlank(component?.image_url ?? component?.photo_url),
+      original_price_vnd: optionalNonNegativeInteger(
+        component?.original_price_vnd ?? component?.reference_price_vnd
+      ),
+      original_price_usd: optionalNonNegativeInteger(
+        component?.original_price_usd ?? component?.reference_price_usd
+      ),
+      unit_price_vnd: optionalNonNegativeInteger(
+        component?.unit_price_vnd ?? component?.price_vnd
+      ),
+      unit_price_usd: optionalNonNegativeInteger(
+        component?.unit_price_usd ?? component?.price_usd
+      )
+    };
+  }
+
+  function normalizedComboComponents(value) {
+    if (!Array.isArray(value)) return [];
+    return value.slice(0, MAX_COMBO_COMPONENTS).map(normalizedComboComponent);
+  }
+
+  function comboComponentForPayload(component) {
+    const quantity = Number(component?.qty);
+    if (component?.kind === "menu") {
+      return {
+        kind: "menu",
+        menu_item_id: nullIfBlank(component.menu_item_id),
+        qty: quantity
+      };
+    }
+    return {
+      kind: "service",
+      ko_name: nullIfBlank(component?.ko_name),
+      vi_name: nullIfBlank(component?.vi_name),
+      en_name: nullIfBlank(component?.en_name),
+      description_ko: nullIfBlank(component?.description_ko),
+      description_vi: nullIfBlank(component?.description_vi),
+      description_en: nullIfBlank(component?.description_en),
+      qty: quantity,
+      original_price_usd: optionalNonNegativeInteger(component?.original_price_usd),
+      original_price_vnd: optionalNonNegativeInteger(component?.original_price_vnd)
+    };
+  }
+
+  function comboComponentsForPayload(components) {
+    return normalizedComboComponents(components).map(comboComponentForPayload);
+  }
+
+  function canonicalComboComponents(components) {
+    return JSON.stringify(comboComponentsForPayload(components));
+  }
+
+  function comboSourceMenu(component) {
+    if (component?.kind !== "menu" || !component.menu_item_id) return null;
+    return componentMenuChoices.find((item) => item.id === component.menu_item_id)
+      || menus.find((item) => item.id === component.menu_item_id)
+      || null;
+  }
+
+  function comboComponentUnitPrices(component) {
+    if (component?.kind === "menu") {
+      const source = comboSourceMenu(component);
+      return {
+        vnd: nonNegativeInteger(source?.price_vnd, nonNegativeInteger(component?.unit_price_vnd)),
+        usd: nonNegativeInteger(source?.price_usd, nonNegativeInteger(component?.unit_price_usd))
+      };
+    }
+    return {
+      vnd: nonNegativeInteger(component?.original_price_vnd),
+      usd: nonNegativeInteger(component?.original_price_usd)
+    };
+  }
+
+  function calculateComboTotals(components = draftComboComponents, comboPriceVnd, comboPriceUsd) {
+    const regular = components.reduce((total, component) => {
+      const unit = comboComponentUnitPrices(component);
+      const qty = Math.max(0, Math.min(MAX_COMBO_COMPONENT_QTY, nonNegativeInteger(component?.qty)));
+      total.vnd += unit.vnd * qty;
+      total.usd += unit.usd * qty;
+      return total;
+    }, { vnd: 0, usd: 0 });
+    const combo = {
+      vnd: nonNegativeInteger(comboPriceVnd ?? ui.byId("priceVnd")?.value),
+      usd: nonNegativeInteger(comboPriceUsd ?? ui.byId("priceUsd")?.value)
+    };
+    const saving = {
+      vnd: Math.max(0, regular.vnd - combo.vnd),
+      usd: Math.max(0, regular.usd - combo.usd)
+    };
+    const percentBase = regular.vnd > 0 ? regular.vnd : regular.usd;
+    const percentSaving = regular.vnd > 0 ? saving.vnd : saving.usd;
+    return {
+      regular,
+      combo,
+      saving,
+      percent: percentBase > 0 ? Math.round((percentSaving / percentBase) * 1000) / 10 : 0
+    };
+  }
+
+  function isComboFeatureUnavailable(error) {
+    const code = String(error?.code || "").trim().toUpperCase();
+    const message = String(error?.message || "").toLowerCase();
+    return code === "PGRST202" || code === "42883"
+      || (message.includes("app_get_menu_combo_components") && message.includes("not find"));
+  }
+
+  async function checkComboFeatureAvailability() {
+    if (comboFeatureAvailable !== null) return comboFeatureAvailable;
+    if (comboFeatureCheckPromise) return comboFeatureCheckPromise;
+    comboFeatureCheckPromise = (async () => {
+      const { error } = await sb.rpc("app_get_menu_combo_components", {
+        p_combo_item_id: "00000000-0000-0000-0000-000000000000"
+      });
+      comboFeatureAvailable = !isComboFeatureUnavailable(error);
+      return comboFeatureAvailable;
+    })();
+    try {
+      return await comboFeatureCheckPromise;
+    } finally {
+      comboFeatureCheckPromise = null;
+    }
   }
 
   function imageUploadError(message) {
@@ -451,12 +624,12 @@
   }
 
   function normalizedItem(item) {
-    const qrCategory = ["single", "shared", "snack", "preorder", "drink", "cafe"].includes(item?.qr_category)
+    const qrCategory = QR_CATEGORIES.includes(item?.qr_category)
       ? item.qr_category
       : (item?.type === "drink" ? "drink" : "single");
     const requestedSubcategory = String(item?.qr_subcategory || "");
     return {
-      type: String(item?.type || "other").trim(),
+      type: qrCategory === "combo" ? "other" : String(item?.type || "other").trim(),
       qr_category: qrCategory,
       qr_subcategory: qrCategory === "single"
         ? (SINGLE_SUBCATEGORIES[requestedSubcategory] ? requestedSubcategory : null)
@@ -474,7 +647,10 @@
       is_orderable: item?.is_orderable !== false,
       is_sold_out: item?.is_sold_out === true,
       requires_preorder: item?.requires_preorder === true,
-      sort_order: Math.max(0, Math.round(Number(item?.sort_order) || 0))
+      sort_order: Math.max(0, Math.round(Number(item?.sort_order) || 0)),
+      combo_components: qrCategory === "combo"
+        ? normalizedComboComponents(item?.combo_components)
+        : []
     };
   }
 
@@ -513,9 +689,349 @@
     const field = ui.byId("qrSubcategoryField");
     const select = ui.byId("qrSubcategory");
     const isSingle = category === "single";
+    const isCombo = category === "combo";
     field.hidden = !isSingle;
     select.disabled = !isSingle;
     select.required = isSingle;
+    ui.byId("comboEditor").hidden = !isCombo;
+    ui.byId("menuType").readOnly = isCombo;
+    if (isCombo) ui.byId("menuType").value = "other";
+    const vndLabel = document.querySelector('label[for="priceVnd"]');
+    const usdLabel = document.querySelector('label[for="priceUsd"]');
+    if (vndLabel) vndLabel.textContent = isCombo ? "콤보 가격 (VND)" : "가격 (VND)";
+    if (usdLabel) usdLabel.textContent = isCombo ? "콤보 가격 (USD)" : "가격 (USD)";
+    if (isCombo) renderComboEditor();
+  }
+
+  function comboChoiceLabel(item) {
+    const names = [item?.ko_name, item?.en_name, item?.vi_name].filter(Boolean).join(" · ");
+    const statuses = [];
+    if (item?.is_active === false) statuses.push("직원 메뉴 숨김");
+    if (item?.is_orderable === false) statuses.push("QR 주문 불가");
+    if (item?.is_sold_out === true) statuses.push("품절");
+    if (item?.requires_preorder === true) statuses.push("사전예약");
+    return `${names || "이름 없음"} — ${ui.formatVnd(item?.price_vnd)}${statuses.length ? ` (${statuses.join(", ")})` : ""}`;
+  }
+
+  function renderComboMenuOptions() {
+    const select = ui.byId("comboMenuSelect");
+    const previous = select.value;
+    const keyword = ui.byId("comboMenuSearch").value.trim().toLocaleLowerCase();
+    const choices = componentMenuChoices
+      .filter((item) => item.id !== selectedId && item.qr_category !== "combo" && !item.archived_at)
+      .filter((item) => {
+        if (!keyword) return true;
+        return [item.ko_name, item.en_name, item.vi_name, item.type, item.qr_category]
+          .some((value) => String(value || "").toLocaleLowerCase().includes(keyword));
+      })
+      .sort(compareMenus);
+    select.innerHTML = '<option value="">메뉴를 선택해 주세요</option>' + choices
+      .map((item) => `<option value="${global.DGV.escapeHTML(item.id)}">${global.DGV.escapeHTML(comboChoiceLabel(item))}</option>`)
+      .join("");
+    if (choices.some((item) => item.id === previous)) select.value = previous;
+  }
+
+  function comboComponentNames(component) {
+    const source = comboSourceMenu(component);
+    return {
+      ko: nullIfBlank(source?.ko_name ?? component?.ko_name),
+      vi: nullIfBlank(source?.vi_name ?? component?.vi_name),
+      en: nullIfBlank(source?.en_name ?? component?.en_name)
+    };
+  }
+
+  function comboComponentDescription(component, language) {
+    const source = comboSourceMenu(component);
+    return nullIfBlank(source?.[`description_${language}`] ?? component?.[`description_${language}`]);
+  }
+
+  function comboComponentImageUrl(component) {
+    const source = comboSourceMenu(component);
+    return safePreviewUrl(source?.image_url ?? component?.image_url);
+  }
+
+  function comboComponentActions(index) {
+    return `
+      <div class="qr-button-row qr-combo-component-actions">
+        <button class="qr-btn qr-btn-small" type="button" data-combo-action="up" data-combo-index="${index}"${index === 0 ? " disabled" : ""}>위로</button>
+        <button class="qr-btn qr-btn-small" type="button" data-combo-action="down" data-combo-index="${index}"${index === draftComboComponents.length - 1 ? " disabled" : ""}>아래로</button>
+        <button class="qr-btn qr-btn-small qr-btn-danger" type="button" data-combo-action="remove" data-combo-index="${index}">제거</button>
+      </div>`;
+  }
+
+  function renderExistingComboComponent(component, index) {
+    const source = comboSourceMenu(component);
+    const names = comboComponentNames(component);
+    const prices = comboComponentUnitPrices(component);
+    const unavailable = !source || source.archived_at || source.is_active === false
+      || source.is_orderable === false || source.is_sold_out === true || source.requires_preorder === true;
+    const translations = [names.en, names.vi].filter(Boolean).join(" · ");
+    const description = comboComponentDescription(component, "ko")
+      || comboComponentDescription(component, "en")
+      || comboComponentDescription(component, "vi");
+    const imageUrl = comboComponentImageUrl(component);
+    const displayName = names.ko || names.en || names.vi || "메뉴 정보 없음";
+    return `
+      <article class="qr-combo-component${unavailable ? " is-warning" : ""}" data-combo-row="${index}">
+        <div class="qr-combo-component-overview${imageUrl ? " has-image" : ""}">
+          ${imageUrl ? `<img class="qr-combo-component-thumb" src="${global.DGV.escapeHTML(imageUrl)}" alt="${global.DGV.escapeHTML(displayName)}" loading="lazy" decoding="async" />` : ""}
+          <div class="qr-combo-component-copy">
+            <div class="qr-combo-component-head">
+              <div>
+                <span class="qr-combo-kind">기존 메뉴</span>
+                <strong>${global.DGV.escapeHTML(displayName)}</strong>
+                ${translations ? `<small>${global.DGV.escapeHTML(translations)}</small>` : ""}
+              </div>
+              <div class="qr-combo-component-price">${ui.formatVnd(prices.vnd)}<small>${ui.formatUsd(prices.usd)}</small></div>
+            </div>
+            ${description ? `<p class="qr-hint">${global.DGV.escapeHTML(description)}</p>` : ""}
+            ${unavailable ? '<div class="qr-upload-status" data-tone="error">현재 메뉴 상태를 확인해 주세요. 저장 시 서버 검증에서 거부될 수 있습니다.</div>' : ""}
+          </div>
+        </div>
+        <div class="qr-combo-component-footer">
+          <label class="qr-label">수량
+            <input class="qr-input qr-combo-inline-number" type="number" min="1" max="20" step="1" inputmode="numeric" value="${component.qty}" data-combo-index="${index}" data-combo-field="qty" />
+          </label>
+          ${comboComponentActions(index)}
+        </div>
+      </article>`;
+  }
+
+  function renderServiceComboComponent(component, index) {
+    const esc = global.DGV.escapeHTML;
+    const priceVnd = component.original_price_vnd == null ? "" : component.original_price_vnd;
+    const priceUsd = component.original_price_usd == null ? "" : component.original_price_usd;
+    return `
+      <article class="qr-combo-component is-service" data-combo-row="${index}">
+        <div class="qr-combo-component-head">
+          <div><span class="qr-combo-kind">서비스</span><strong>${esc(component.ko_name || "서비스 음식")}</strong></div>
+          ${comboComponentActions(index)}
+        </div>
+        <div class="qr-combo-component-grid">
+          <label class="qr-label">한국어 이름<input class="qr-input" maxlength="120" value="${esc(component.ko_name || "")}" data-combo-index="${index}" data-combo-field="ko_name" /></label>
+          <label class="qr-label">베트남어 이름<input class="qr-input" maxlength="120" value="${esc(component.vi_name || "")}" data-combo-index="${index}" data-combo-field="vi_name" /></label>
+          <label class="qr-label">영어 이름<input class="qr-input" maxlength="120" value="${esc(component.en_name || "")}" data-combo-index="${index}" data-combo-field="en_name" /></label>
+          <label class="qr-label">수량<input class="qr-input" type="number" min="1" max="20" step="1" inputmode="numeric" value="${component.qty}" data-combo-index="${index}" data-combo-field="qty" /></label>
+          <label class="qr-label">정상가 (VND)<input class="qr-input" type="number" min="0" max="1000000000" step="1000" inputmode="numeric" value="${priceVnd}" data-combo-index="${index}" data-combo-field="original_price_vnd" /></label>
+          <label class="qr-label">정상가 (USD)<input class="qr-input" type="number" min="0" max="1000000" step="1" inputmode="numeric" value="${priceUsd}" data-combo-index="${index}" data-combo-field="original_price_usd" /></label>
+          <label class="qr-label">한국어 설명<textarea class="qr-textarea" maxlength="1000" data-combo-index="${index}" data-combo-field="description_ko">${esc(component.description_ko || "")}</textarea></label>
+          <label class="qr-label">베트남어 설명<textarea class="qr-textarea" maxlength="1000" data-combo-index="${index}" data-combo-field="description_vi">${esc(component.description_vi || "")}</textarea></label>
+          <label class="qr-label qr-field-wide">영어 설명<textarea class="qr-textarea" maxlength="1000" data-combo-index="${index}" data-combo-field="description_en">${esc(component.description_en || "")}</textarea></label>
+        </div>
+      </article>`;
+  }
+
+  function renderComboComponentList() {
+    const list = ui.byId("comboComponentList");
+    if (!draftComboComponents.length) {
+      list.innerHTML = '<div class="qr-empty">기존 메뉴 또는 서비스 음식을 구성에 추가해 주세요.</div>';
+      return;
+    }
+    list.innerHTML = draftComboComponents.map((component, index) => (
+      component.kind === "menu"
+        ? renderExistingComboComponent(component, index)
+        : renderServiceComboComponent(component, index)
+    )).join("");
+  }
+
+  function renderComboSummary() {
+    const totals = calculateComboTotals();
+    ui.byId("comboRegularVnd").textContent = ui.formatVnd(totals.regular.vnd);
+    ui.byId("comboRegularUsd").textContent = ui.formatUsd(totals.regular.usd);
+    ui.byId("comboSaleVnd").textContent = ui.formatVnd(totals.combo.vnd);
+    ui.byId("comboSaleUsd").textContent = ui.formatUsd(totals.combo.usd);
+    ui.byId("comboSavingVnd").textContent = ui.formatVnd(totals.saving.vnd);
+    ui.byId("comboSavingUsd").textContent = `${ui.formatUsd(totals.saving.usd)} · ${totals.percent.toLocaleString("ko-KR")}%`;
+    const status = ui.byId("comboEditorStatus");
+    if (!draftComboComponents.length) {
+      status.textContent = "구성 음식을 추가하면 현재 가격 기준으로 할인 금액을 계산합니다.";
+      status.dataset.tone = "info";
+    } else if (totals.regular.vnd > 0 && totals.combo.vnd > totals.regular.vnd) {
+      status.textContent = "콤보 가격이 원래 가격보다 높습니다. 가격을 다시 확인해 주세요.";
+      status.dataset.tone = "error";
+    } else if (totals.saving.vnd > 0 || totals.saving.usd > 0) {
+      status.textContent = `현재 구성 가격보다 ${ui.formatVnd(totals.saving.vnd)} 할인됩니다.`;
+      status.dataset.tone = "ok";
+    } else {
+      status.textContent = "할인 금액은 0이며, 서비스 음식이 있으면 고객 상세 화면에 별도로 표시됩니다.";
+      status.dataset.tone = "info";
+    }
+  }
+
+  function renderComboEditor() {
+    renderComboMenuOptions();
+    renderComboComponentList();
+    renderComboSummary();
+  }
+
+  function comboTotalQuantity(components = draftComboComponents) {
+    return components.reduce((sum, component) => sum + nonNegativeInteger(component?.qty), 0);
+  }
+
+  function validComboQuantity(value) {
+    const numeric = Number(value);
+    return Number.isSafeInteger(numeric) && numeric >= 1 && numeric <= MAX_COMBO_COMPONENT_QTY ? numeric : null;
+  }
+
+  function canAddComboComponent(quantity) {
+    if (draftComboComponents.length >= MAX_COMBO_COMPONENTS) {
+      ui.toast(`콤보 구성은 최대 ${MAX_COMBO_COMPONENTS}개까지 추가할 수 있습니다.`, "error");
+      return false;
+    }
+    if (comboTotalQuantity() + quantity > MAX_COMBO_TOTAL_QTY) {
+      ui.toast(`콤보 구성 수량 합계는 최대 ${MAX_COMBO_TOTAL_QTY}개입니다.`, "error");
+      return false;
+    }
+    return true;
+  }
+
+  function addExistingComboComponent() {
+    const menuId = ui.byId("comboMenuSelect").value;
+    const quantity = validComboQuantity(ui.byId("comboExistingQty").value);
+    const menu = componentMenuChoices.find((item) => item.id === menuId);
+    if (!menu) {
+      ui.toast("콤보에 넣을 기존 메뉴를 선택해 주세요.", "error");
+      return;
+    }
+    if (menu.id === selectedId || menu.qr_category === "combo") {
+      ui.toast("콤보 안에는 다른 콤보 메뉴를 넣을 수 없습니다.", "error");
+      return;
+    }
+    if (!quantity) {
+      ui.toast(`수량은 1개부터 ${MAX_COMBO_COMPONENT_QTY}개까지 입력해 주세요.`, "error");
+      return;
+    }
+    const existing = draftComboComponents.find((component) => component.kind === "menu" && component.menu_item_id === menu.id);
+    if (existing) {
+      const nextQuantity = Number(existing.qty) + quantity;
+      if (nextQuantity > MAX_COMBO_COMPONENT_QTY || comboTotalQuantity() + quantity > MAX_COMBO_TOTAL_QTY) {
+        ui.toast("해당 메뉴 또는 전체 콤보 구성의 최대 수량을 초과합니다.", "error");
+        return;
+      }
+      existing.qty = nextQuantity;
+    } else {
+      if (!canAddComboComponent(quantity)) return;
+      draftComboComponents.push(normalizedComboComponent({
+        kind: "menu",
+        menu_item_id: menu.id,
+        qty: quantity,
+        ko_name: menu.ko_name,
+        vi_name: menu.vi_name,
+        en_name: menu.en_name,
+        description_ko: menu.description_ko,
+        description_vi: menu.description_vi,
+        description_en: menu.description_en,
+        unit_price_vnd: menu.price_vnd,
+        unit_price_usd: menu.price_usd
+      }));
+    }
+    ui.byId("comboExistingQty").value = "1";
+    renderComboEditor();
+  }
+
+  function serviceDraftFromInputs() {
+    return {
+      kind: "service",
+      ko_name: nullIfBlank(ui.byId("comboServiceKoName").value),
+      vi_name: nullIfBlank(ui.byId("comboServiceViName").value),
+      en_name: nullIfBlank(ui.byId("comboServiceEnName").value),
+      description_ko: nullIfBlank(ui.byId("comboServiceDescriptionKo").value),
+      description_vi: nullIfBlank(ui.byId("comboServiceDescriptionVi").value),
+      description_en: nullIfBlank(ui.byId("comboServiceDescriptionEn").value),
+      qty: Number(ui.byId("comboServiceQty").value),
+      original_price_vnd: ui.byId("comboServicePriceVnd").value.trim() === ""
+        ? null : Number(ui.byId("comboServicePriceVnd").value),
+      original_price_usd: ui.byId("comboServicePriceUsd").value.trim() === ""
+        ? null : Number(ui.byId("comboServicePriceUsd").value)
+    };
+  }
+
+  function clearComboServiceInputs() {
+    ["comboServiceKoName", "comboServiceViName", "comboServiceEnName",
+      "comboServiceDescriptionKo", "comboServiceDescriptionVi", "comboServiceDescriptionEn",
+      "comboServicePriceVnd", "comboServicePriceUsd"].forEach((id) => {
+      ui.byId(id).value = "";
+    });
+    ui.byId("comboServiceQty").value = "1";
+  }
+
+  function addServiceComboComponent() {
+    const service = serviceDraftFromInputs();
+    const quantity = validComboQuantity(service.qty);
+    if (!service.ko_name) {
+      ui.toast("서비스 음식의 한국어 이름을 입력해 주세요.", "error");
+      return;
+    }
+    if (!quantity) {
+      ui.toast(`수량은 1개부터 ${MAX_COMBO_COMPONENT_QTY}개까지 입력해 주세요.`, "error");
+      return;
+    }
+    for (const [label, price] of [["VND", service.original_price_vnd], ["USD", service.original_price_usd]]) {
+      if (price != null && (!Number.isSafeInteger(price) || price < 0 || price > 2147483647)) {
+        ui.toast(`서비스 정상가(${label})를 0 이상의 정수로 입력해 주세요.`, "error");
+        return;
+      }
+    }
+    if (!canAddComboComponent(quantity)) return;
+    draftComboComponents.push(normalizedComboComponent(service));
+    clearComboServiceInputs();
+    renderComboEditor();
+  }
+
+  function handleComboComponentAction(event) {
+    const button = event.target.closest("button[data-combo-action]");
+    if (!button) return;
+    const index = Number(button.dataset.comboIndex);
+    if (!Number.isInteger(index) || !draftComboComponents[index]) return;
+    if (button.dataset.comboAction === "remove") draftComboComponents.splice(index, 1);
+    if (button.dataset.comboAction === "up" && index > 0) {
+      [draftComboComponents[index - 1], draftComboComponents[index]] = [draftComboComponents[index], draftComboComponents[index - 1]];
+    }
+    if (button.dataset.comboAction === "down" && index < draftComboComponents.length - 1) {
+      [draftComboComponents[index + 1], draftComboComponents[index]] = [draftComboComponents[index], draftComboComponents[index + 1]];
+    }
+    renderComboEditor();
+  }
+
+  function handleComboComponentInput(event) {
+    const field = event.target.closest("[data-combo-field]");
+    if (!field) return;
+    const index = Number(field.dataset.comboIndex);
+    const component = draftComboComponents[index];
+    if (!Number.isInteger(index) || !component) return;
+    const key = field.dataset.comboField;
+    if (key === "qty") component[key] = Number(field.value);
+    else if (key === "original_price_vnd" || key === "original_price_usd") {
+      component[key] = field.value.trim() === "" ? null : Number(field.value);
+    } else component[key] = field.value;
+    renderComboSummary();
+  }
+
+  function validateComboComponents(components) {
+    if (comboFeatureAvailable === false) return "콤보 메뉴 DB 배포가 아직 완료되지 않았습니다.";
+    if (!Array.isArray(components) || !components.length) return "콤보 구성 음식을 추가해 주세요.";
+    if (components.length > MAX_COMBO_COMPONENTS) return `콤보 구성은 최대 ${MAX_COMBO_COMPONENTS}개까지 추가할 수 있습니다.`;
+    if (comboTotalQuantity(components) < 2) return "콤보 구성 음식의 전체 수량은 2개 이상이어야 합니다.";
+    if (comboTotalQuantity(components) > MAX_COMBO_TOTAL_QTY) return `콤보 구성 수량 합계는 최대 ${MAX_COMBO_TOTAL_QTY}개입니다.`;
+    const menuIds = new Set();
+    for (const component of components) {
+      if (!validComboQuantity(component.qty)) return `각 구성 음식 수량은 1개부터 ${MAX_COMBO_COMPONENT_QTY}개까지 입력해 주세요.`;
+      if (component.kind === "menu") {
+        if (!component.menu_item_id) return "기존 메뉴 구성의 메뉴 정보를 다시 선택해 주세요.";
+        if (component.menu_item_id === selectedId) return "콤보 메뉴에 자기 자신을 넣을 수 없습니다.";
+        if (menuIds.has(component.menu_item_id)) return "같은 기존 메뉴가 중복되어 있습니다. 수량을 하나의 항목에서 조정해 주세요.";
+        menuIds.add(component.menu_item_id);
+        if (comboSourceMenu(component)?.qr_category === "combo") return "콤보 안에는 다른 콤보 메뉴를 넣을 수 없습니다.";
+      } else {
+        if (!nullIfBlank(component.ko_name)) return "서비스 음식의 한국어 이름을 입력해 주세요.";
+        for (const price of [component.original_price_vnd, component.original_price_usd]) {
+          if (price != null && (!Number.isSafeInteger(Number(price)) || Number(price) < 0 || Number(price) > 2147483647)) {
+            return "서비스 음식의 정상가는 0 이상의 정수로 입력해 주세요.";
+          }
+        }
+      }
+    }
+    return null;
   }
 
   function showBanner(message, tone = "error") {
@@ -597,6 +1113,7 @@
   function setFormValues(item) {
     const value = normalizedItem(item);
     clearSelectedImageFile();
+    draftComboComponents = normalizedComboComponents(value.combo_components);
     ui.byId("menuType").value = value.type;
     ui.byId("qrCategory").value = value.qr_category;
     ui.byId("qrSubcategory").value = value.qr_subcategory || "";
@@ -615,6 +1132,10 @@
     ui.byId("isOrderable").checked = value.is_orderable;
     ui.byId("isSoldOut").checked = value.is_sold_out;
     ui.byId("requiresPreorder").checked = value.requires_preorder;
+    ui.byId("comboMenuSearch").value = "";
+    ui.byId("comboExistingQty").value = "1";
+    clearComboServiceInputs();
+    renderComboEditor();
     renderImagePreview(value.image_url || "");
     setImageUploadStatus(value.image_url
       ? "현재 메뉴 사진입니다. 새 사진을 올리면 기존 경로는 메뉴 저장 후 교체됩니다."
@@ -622,7 +1143,7 @@
   }
 
   function formValues() {
-    return normalizedItem({
+    const value = normalizedItem({
       type: ui.byId("menuType").value,
       qr_category: ui.byId("qrCategory").value,
       qr_subcategory: ui.byId("qrSubcategory").value,
@@ -639,8 +1160,13 @@
       is_active: ui.byId("isActive").checked,
       is_orderable: ui.byId("isOrderable").checked,
       is_sold_out: ui.byId("isSoldOut").checked,
-      requires_preorder: ui.byId("requiresPreorder").checked
+      requires_preorder: ui.byId("requiresPreorder").checked,
+      combo_components: draftComboComponents
     });
+    if (value.qr_category === "combo") {
+      value.combo_components = draftComboComponents.map((component) => ({ ...component }));
+    }
+    return value;
   }
 
   function validateMenu(item) {
@@ -648,11 +1174,40 @@
     if (item.qr_category === "single" && !SINGLE_SUBCATEGORIES[item.qr_subcategory]) return "1인 메뉴 소분류를 선택해 주세요.";
     if (!item.ko_name) return "한국어 메뉴명을 입력해 주세요.";
     if (item.price_vnd < 0 || item.price_usd < 0) return "가격은 0 이상이어야 합니다.";
+    if (item.qr_category === "combo") {
+      const comboValidation = validateComboComponents(item.combo_components);
+      if (comboValidation) return comboValidation;
+    }
     if (item.is_sold_out && !item.is_orderable) return null;
     return null;
   }
 
-  function selectMenu(id, options = {}) {
+  async function loadComboDetails(item) {
+    if (!item || item.qr_category !== "combo" || item._combo_components_loaded === true) return item;
+    const { data, error } = await sb.rpc("app_get_menu_combo_components", {
+      p_combo_item_id: item.id
+    });
+    if (error) {
+      if (isComboFeatureUnavailable(error)) {
+        comboFeatureAvailable = false;
+        item._combo_components_loaded = false;
+        item.combo_components = Array.isArray(item.combo_components) ? item.combo_components : [];
+        return item;
+      }
+      throw error;
+    }
+    comboFeatureAvailable = true;
+    item._combo_components_loaded = true;
+    item.combo_components = normalizedComboComponents(data?.combo_components);
+    item.combo_regular_price_usd = nonNegativeInteger(data?.regular_price_usd);
+    item.combo_regular_price_vnd = nonNegativeInteger(data?.regular_price_vnd);
+    item.combo_discount_usd = nonNegativeInteger(data?.discount_usd);
+    item.combo_discount_vnd = nonNegativeInteger(data?.discount_vnd);
+    item.combo_discount_percent = Math.max(0, Number(data?.discount_percent) || 0);
+    return item;
+  }
+
+  async function selectMenu(id, options = {}) {
     if (menuSaveInProgress && options.force !== true) {
       ui.toast("메뉴 처리가 끝난 뒤 다른 메뉴를 선택해 주세요.");
       return;
@@ -660,8 +1215,26 @@
     const item = menus.find((row) => row.id === id);
     if (!item) return;
     const archived = Boolean(item.archived_at);
+    const selectionVersion = ++comboSelectionVersion;
     creatingMenu = false;
     selectedId = item.id;
+    renderMenuList();
+    if (item.qr_category === "combo" && item._combo_components_loaded !== true) {
+      ui.byId("editorTitle").textContent = item.ko_name || "콤보 메뉴 편집";
+      ui.byId("editorHint").textContent = "콤보 구성을 불러오고 있습니다…";
+      ui.byId("editorState").textContent = "불러오는 중";
+      ui.byId("editorState").dataset.tone = "working";
+      ui.byId("saveMenuBtn").disabled = true;
+      try {
+        await loadComboDetails(item);
+      } catch (error) {
+        console.error(error);
+        if (selectionVersion !== comboSelectionVersion || selectedId !== item.id) return;
+        item._combo_components_loaded = false;
+        showBanner("콤보 구성을 불러오지 못했습니다. 기존 메뉴 데이터는 변경되지 않았습니다.");
+      }
+      if (selectionVersion !== comboSelectionVersion || selectedId !== item.id) return;
+    }
     setFormValues(item);
     ui.byId("editorTitle").textContent = item.ko_name || "메뉴 편집";
     ui.byId("editorHint").textContent = archived
@@ -669,10 +1242,18 @@
       : `ID ${ui.shortId(item.id)} · 저장하면 QR 메뉴와 직원 계산 페이지에 반영됩니다.`;
     ui.byId("editorState").textContent = archived ? "삭제됨" : "편집 중";
     ui.byId("editorState").dataset.tone = archived ? "cancelled" : "working";
-    ui.byId("saveMenuBtn").disabled = archived;
+    const comboUnavailable = item.qr_category === "combo" && item._combo_components_loaded !== true;
+    ui.byId("saveMenuBtn").disabled = archived || comboUnavailable;
     ui.byId("archiveMenuBtn").hidden = archived;
     ui.byId("restoreMenuBtn").hidden = !archived;
     ui.byId("resetMenuBtn").disabled = false;
+    if (comboUnavailable) {
+      ui.byId("editorHint").textContent = comboFeatureAvailable === false
+        ? "콤보 메뉴 DB 배포가 완료된 뒤 구성을 편집할 수 있습니다. 기존 메뉴 기능은 계속 사용할 수 있습니다."
+        : "콤보 구성을 확인하지 못해 안전을 위해 저장을 막았습니다. 새로고침해 주세요.";
+      ui.byId("editorState").textContent = "구성 확인 필요";
+      ui.byId("editorState").dataset.tone = "cancelled";
+    }
     renderMenuList();
   }
 
@@ -708,8 +1289,10 @@
   }
 
   function clearMenuEditor(title, hint) {
+    comboSelectionVersion += 1;
     selectedId = null;
     creatingMenu = false;
+    draftComboComponents = [];
     clearSelectedImageFile();
     ui.byId("menuForm").reset();
     renderImagePreview("");
@@ -722,6 +1305,7 @@
     ui.byId("archiveMenuBtn").hidden = true;
     ui.byId("restoreMenuBtn").hidden = true;
     ui.byId("resetMenuBtn").disabled = true;
+    renderComboEditor();
     renderMenuList();
   }
 
@@ -734,9 +1318,20 @@
     const before = normalizedItem(original);
     if (original?.qr_category == null) before.qr_category = null;
     if (original?.qr_subcategory == null) before.qr_subcategory = null;
-    return Object.fromEntries(MENU_KEYS
+    const patch = Object.fromEntries(MENU_KEYS
       .filter((key) => before[key] !== next[key])
       .map((key) => [key, next[key]]));
+    if (next.qr_category === "combo"
+        && canonicalComboComponents(before.combo_components) !== canonicalComboComponents(next.combo_components)) {
+      patch.combo_components = comboComponentsForPayload(next.combo_components);
+    }
+    return patch;
+  }
+
+  function createMenuPayload(item) {
+    const payload = Object.fromEntries(MENU_KEYS.map((key) => [key, item[key]]));
+    if (item.qr_category === "combo") payload.combo_components = comboComponentsForPayload(item.combo_components);
+    return payload;
   }
 
   async function saveMenu(event) {
@@ -746,6 +1341,10 @@
       return;
     }
     const next = formValues();
+    if (next.qr_category === "combo" && !await checkComboFeatureAvailability()) {
+      ui.toast("콤보 메뉴 DB 배포가 아직 완료되지 않았습니다. 기존 메뉴는 계속 저장할 수 있습니다.", "error");
+      return;
+    }
     const validation = validateMenu(next);
     if (validation) {
       ui.toast(validation, "error");
@@ -778,7 +1377,7 @@
       let result;
       if (creatingMenu) {
         dbWriteAttempted = true;
-        const response = await sb.rpc("app_create_menu_item", { p_item: next });
+        const response = await sb.rpc("app_create_menu_item", { p_item: createMenuPayload(next) });
         if (response.error) throw response.error;
         result = response.data;
       } else {
@@ -823,6 +1422,7 @@
       }
     } catch (error) {
       console.error(error);
+      if (next.qr_category === "combo" && isComboFeatureUnavailable(error)) comboFeatureAvailable = false;
       let cleanupDeferred = false;
       if (uploadedObjectPath && !menuSaved) {
         const safeToCompensate = !dbWriteAttempted || isConfirmedDatabaseRejection(error);
@@ -840,7 +1440,10 @@
           ? "메뉴 저장 응답을 확인하지 못해 업로드 사진을 안전하게 보존했습니다. 새로고침으로 저장 여부를 확인해 주세요. 선택한 사진도 유지됩니다."
           : "메뉴 저장에 실패했습니다. 선택한 사진은 유지되므로 문제를 확인한 뒤 다시 저장해 주세요.", "error");
       }
-      ui.toast(ui.messageOf(error, "메뉴를 저장하지 못했습니다. DB 배포 상태와 입력값을 확인해 주세요."), "error");
+      const fallbackMessage = next.qr_category === "combo" && comboFeatureAvailable === false
+        ? "콤보 메뉴 DB 배포가 아직 완료되지 않아 저장할 수 없습니다. 기존 메뉴 기능은 계속 사용할 수 있습니다."
+        : "메뉴를 저장하지 못했습니다. DB 배포 상태와 입력값을 확인해 주세요.";
+      ui.toast(ui.messageOf(error, fallbackMessage), "error");
     } finally {
       menuSaveInProgress = false;
       fileInput.disabled = false;
@@ -960,6 +1563,18 @@
       .order("sort_order", { ascending: true })
       .order("id", { ascending: true });
     if (error) throw error;
+    if (showArchivedMenus) {
+      const { data: activeRows, error: activeError } = await sb
+        .from("menu_items")
+        .select("*")
+        .is("archived_at", null)
+        .order("sort_order", { ascending: true })
+        .order("id", { ascending: true });
+      if (activeError) throw activeError;
+      componentMenuChoices = (activeRows || []).sort(compareMenus);
+    } else {
+      componentMenuChoices = (data || []).slice().sort(compareMenus);
+    }
     menus = (data || []).sort(compareMenus);
     if (!showArchivedMenus) {
       activeMenuSummary = {
@@ -1706,6 +2321,18 @@
         ui.byId("sortOrder").value = nextSortOrder("single", ui.byId("qrSubcategory").value);
       }
     });
+    ui.byId("comboMenuSearch").addEventListener("input", renderComboMenuOptions);
+    ui.byId("comboMenuSearch").addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      addExistingComboComponent();
+    });
+    ui.byId("addComboMenuBtn").addEventListener("click", addExistingComboComponent);
+    ui.byId("addComboServiceBtn").addEventListener("click", addServiceComboComponent);
+    ui.byId("comboComponentList").addEventListener("click", handleComboComponentAction);
+    ui.byId("comboComponentList").addEventListener("input", handleComboComponentInput);
+    ui.byId("priceVnd").addEventListener("input", renderComboSummary);
+    ui.byId("priceUsd").addEventListener("input", renderComboSummary);
     ui.byId("menuImageFile").addEventListener("change", chooseImage);
     ui.byId("clearImageBtn").addEventListener("click", clearImageUrl);
     ui.byId("imageUrl").addEventListener("change", () => {
