@@ -492,6 +492,16 @@ button { touch-action: manipulation; }
   overflow-wrap: anywhere;
 }
 
+.qr-order-card-hotel-details {
+  margin-top: 9px;
+  color: #3a2a1f;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.qr-order-card-hotel-details[hidden] { display: none; }
+
 .qr-code-preview {
   display: grid;
   place-items: center;

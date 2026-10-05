@@ -89,7 +89,7 @@ assert.match(
   /create function public\.app_create_hotel_qr\(p_label text\)[\s\S]*?security invoker[\s\S]*?private\.app_create_hotel_qr_impl\(p_label\)/i,
 );
 assert.match(menuAdminSource, /sb\.rpc\("app_create_qr_table", \{ p_label: label \}\)/);
-assert.match(menuAdminSource, /sb\.rpc\("app_create_hotel_qr", \{ p_label: label \}\)/);
+assert.match(menuAdminSource, /sb\.rpc\("app_create_hotel_qr", \{ p_label: roomNumber \}\)/);
 assert.match(menuAdminSource, /const TABLE_QR_CACHE_KEY = "dgv\.table-qr-cache\.v1"/);
 assert.match(menuAdminSource, /url\.hash = `t=\$\{token\}`/);
 
@@ -140,6 +140,7 @@ assert.doesNotMatch(registerSql, /update\s+private\.qr_table_tokens|token_hash\s
 // through stable pagination, and active table summary remains restaurant-only.
 assert.match(menuAdminHtml, /id="createTableForm"[\s\S]*?id="tableList"/);
 assert.match(menuAdminHtml, /호텔 객실 QR 관리[\s\S]*?id="createHotelQrForm"[\s\S]*?id="hotelQrList"/);
+assert.match(menuAdminHtml, /id="newHotelQrLabel"[^>]*inputmode="numeric"[^>]*pattern="\[0-9\]\+"/);
 assert.match(menuAdminHtml, /id="storeTokenBtn"[^>]*hidden/);
 assert.match(
   menuAdminSource,
@@ -157,7 +158,7 @@ const viewTableSource = functionSource(menuAdminSource, "viewTableQr");
 assert.match(viewTableSource, /managedQrResult\(tableId\)/);
 assert.match(viewTableSource, /isManagedQrMissing\(serverError\)/);
 assert.match(viewTableSource, /cachedTableQrUrl\(tableId\)/);
-assert.match(viewTableSource, /openTokenModal\(url, table\.label, \{ tableId, canStore: true \}\)/);
+assert.match(viewTableSource, /openTokenModal\(url, table\.label, \{ tableId, canStore: true, qrKind: "restaurant" \}\)/);
 assert.doesNotMatch(viewTableSource, /app_register_existing_qr_token|rotateTable\(/);
 assert.doesNotMatch(viewTableSource, /cacheTableQrUrl\(/);
 const storeSource = functionSource(menuAdminSource, "storeCurrentToken");
@@ -168,9 +169,18 @@ assert.doesNotMatch(storeSource, /app_rotate_qr_table_token/);
 const viewHotelSource = functionSource(menuAdminSource, "viewHotelQr");
 assert.match(viewHotelSource, /managedQrResult\(tableId\)/);
 assert.match(viewHotelSource, /isManagedQrMissing\(serverError\)/);
+assert.match(viewHotelSource, /openTokenModal\(managed\.url,[\s\S]*?qrKind: "hotel"/);
+assert.match(viewHotelSource, /openTokenModal\(fallbackUrl,[\s\S]*?qrKind: "hotel"/);
 assert.doesNotMatch(viewHotelSource, /cacheTableQrUrl\(/);
 const showTokenSource = functionSource(menuAdminSource, "showToken");
 assert.match(showTokenSource, /managedQrStorageAvailable === false[\s\S]*?cacheTableQrUrl\(tableId, url\)[\s\S]*?else[\s\S]*?removeCachedTableQrUrl\(tableId\)/);
+assert.match(showTokenSource, /openTokenModal\(url, result\.label, \{ tableId, canStore: false, qrKind \}\)/);
+assert.match(functionSource(menuAdminSource, "createHotelQr"), /const roomNumber = normalizedHotelRoomNumber\(input\.value\)[\s\S]*?app_create_hotel_qr", \{ p_label: roomNumber \}[\s\S]*?showToken\(data, "hotel"\)/);
+assert.match(functionSource(menuAdminSource, "createHotelQr"), /hotelQrs\.find\(\(hotelQr\) => hotelRoomNumberFromLabel\(hotelQr\.label\) === roomNumber\)[\s\S]*?QR이 이미 등록되어 있습니다/);
+assert.match(functionSource(menuAdminSource, "createHotelQr"), /tables\.find\(\(table\) => String\(table\.label \|\| ""\)\.trim\(\) === roomNumber\)[\s\S]*?같은 번호/);
+assert.match(functionSource(menuAdminSource, "rotateHotelQr"), /app_rotate_qr_table_token[\s\S]*?showToken\(data, "hotel"\)/);
+assert.doesNotMatch(functionSource(menuAdminSource, "createTable"), /"hotel"/);
+assert.doesNotMatch(functionSource(menuAdminSource, "rotateTable"), /"hotel"/);
 
 // New rotations acquire the same Vault protection, while archive keeps using
 // the established soft-delete RPC that preserves historic order rows.
