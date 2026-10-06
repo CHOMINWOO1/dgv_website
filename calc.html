@@ -384,6 +384,68 @@
     .row b{font-weight: 1000}
     .print-only{ display:none; }
 
+    .menuSearchPanel{
+      margin: 14px 0 12px;
+      padding: 12px;
+      border: 2px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--card);
+      box-shadow: var(--shadow);
+    }
+    .menuSearchLabel{
+      display:block;
+      margin:0 0 7px;
+      color:var(--sub);
+      font-size:13px;
+      font-weight:1000;
+      letter-spacing:.04em;
+    }
+    .menuSearchRow{
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .menuSearchInput{
+      width:100%;
+      min-width:0;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:12px 13px;
+      background:#fff;
+      color:var(--ink);
+      outline:none;
+      font-size:16px;
+      font-weight:900;
+    }
+    .menuSearchInput:focus{
+      border-color:var(--gold);
+      box-shadow:0 0 0 3px rgba(202,162,76,.18);
+    }
+    .menuSearchClear{
+      flex:0 0 auto;
+      min-height:46px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:10px 12px;
+      background:#fff7e6;
+      color:var(--ink);
+      font-weight:1000;
+      cursor:pointer;
+    }
+    .menuSearchClear:hover{ border-color:var(--gold); }
+    .menuSearchStatus{
+      min-height:18px;
+      margin:7px 2px 0;
+      color:var(--sub);
+      font-size:12px;
+      font-weight:900;
+    }
+    @media (max-width: 560px){
+      .menuSearchPanel{ padding:10px; }
+      .menuSearchRow{ align-items:stretch; }
+      .menuSearchClear{ padding:9px 11px; }
+    }
+
     .specialBox{
       border:2px solid var(--line);
       border-radius: var(--radius);
@@ -660,6 +722,22 @@
         <!-- ✅ 기존 오른쪽에 있던 예약확인 버튼 제거(위 actionBar로 이동) -->
       </div>
     </div>
+    <div class="menuSearchPanel" role="search" aria-label="메뉴 검색">
+      <label class="menuSearchLabel" for="menuSearchInput">메뉴 검색 / Tìm món</label>
+      <div class="menuSearchRow">
+        <input
+          class="menuSearchInput"
+          id="menuSearchInput"
+          type="search"
+          placeholder="메뉴 이름을 입력하세요 / Nhập tên món"
+          autocomplete="off"
+          enterkeyhint="search"
+          spellcheck="false"
+        />
+        <button class="menuSearchClear" id="menuSearchClear" type="button" hidden>지우기 / Xóa</button>
+      </div>
+      <div class="menuSearchStatus" id="menuSearchStatus" aria-live="polite"></div>
+    </div>
     <div class="section">
       <h2>SPECIAL MENU (직접입력)</h2>
       <div class="specialBox">
@@ -696,17 +774,17 @@
 
         <div class="specialList" id="specialList"></div>
       </div>
-    <div class="section">
+    <div class="section" id="drinkMenuSection">
       <h2>DRINK MENU</h2>
       <div class="grid" id="drinkGrid"></div>
     </div>
 
-    <div class="section">
+    <div class="section" id="sideMenuSection">
       <h2>SIDE MENU</h2>
       <div class="grid" id="sideGrid"></div>
     </div>
 
-    <div class="section">
+    <div class="section" id="otherMenuSection">
       <h2>OTHER MENU</h2>
       <div class="grid" id="otherGrid"></div>
     </div>
@@ -803,10 +881,65 @@ async function requireAccessGate(){
     return Math.random().toString(16).slice(2) + Date.now().toString(16);
   }
 
+  function normalizeMenuSearch(value){
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase()
+      .replace(/đ/g, "d")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function matchesMenuSearch(searchText, query){
+    if (!query) return true;
+    return query.split(" ").every(token => searchText.includes(token));
+  }
+
+  function applyMenuSearch(){
+    const input = document.getElementById("menuSearchInput");
+    const clearButton = document.getElementById("menuSearchClear");
+    const status = document.getElementById("menuSearchStatus");
+    const rawQuery = input?.value || "";
+    const query = normalizeMenuSearch(rawQuery);
+    let visibleCount = 0;
+
+    const groups = [
+      { sectionId: "drinkMenuSection", gridId: "drinkGrid" },
+      { sectionId: "sideMenuSection", gridId: "sideGrid" },
+      { sectionId: "otherMenuSection", gridId: "otherGrid" }
+    ];
+
+    groups.forEach(({ sectionId, gridId }) => {
+      const section = document.getElementById(sectionId);
+      const cards = [...document.querySelectorAll(`#${gridId} .card`)];
+      let groupVisibleCount = 0;
+
+      cards.forEach(card => {
+        const matched = matchesMenuSearch(card.dataset.searchText || "", query);
+        card.hidden = !matched;
+        if (matched) groupVisibleCount += 1;
+      });
+
+      if (section) section.hidden = Boolean(query) && groupVisibleCount === 0;
+      visibleCount += groupVisibleCount;
+    });
+
+    if (clearButton) clearButton.hidden = rawQuery.length === 0;
+    if (status) {
+      status.textContent = !query
+        ? ""
+        : visibleCount > 0
+          ? `검색 결과 ${visibleCount}개 · ${visibleCount} món`
+          : "일치하는 메뉴가 없습니다. / Không tìm thấy món phù hợp.";
+    }
+  }
+
   function makeCard(m){
     const card = document.createElement("div");
     card.className = "card";
     card.dataset.id = m.id;
+    card.dataset.searchText = normalizeMenuSearch([m.ko_name, m.vi_name, m.type].filter(Boolean).join(" "));
 
     card.innerHTML = `
       <div class="name">
@@ -887,6 +1020,7 @@ async function requireAccessGate(){
     sideMenu.forEach(m => sideGrid.appendChild(makeCard(m)));
     otherMenu.forEach(m => otherGrid.appendChild(makeCard(m)));
 
+    applyMenuSearch();
     updateAll();
   }
 
@@ -1166,6 +1300,10 @@ function syncSpecialFromUsd(){
 
     const noneRadio = document.querySelector('input[name="cardFeeMode"][value="none"]');
     warningSilentSet(noneRadio, true);
+
+    const menuSearchInput = document.getElementById("menuSearchInput");
+    if (menuSearchInput) menuSearchInput.value = "";
+    applyMenuSearch();
 
     updateAll();
   }
@@ -1601,6 +1739,19 @@ function syncSpecialFromUsd(){
 
   document.getElementById("printBtn").addEventListener("click", () => { setPrintTime(); window.print(); });
   document.getElementById("resetBtn").addEventListener("click", resetAll);
+  document.getElementById("menuSearchInput")?.addEventListener("input", applyMenuSearch);
+  document.getElementById("menuSearchInput")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    event.currentTarget.value = "";
+    applyMenuSearch();
+  });
+  document.getElementById("menuSearchClear")?.addEventListener("click", () => {
+    const input = document.getElementById("menuSearchInput");
+    if (!input) return;
+    input.value = "";
+    applyMenuSearch();
+    input.focus();
+  });
 
   document.getElementById("saveBtn").addEventListener("click", async () => {
     if (isEditMode) await saveEditOrder();

@@ -10,7 +10,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 // approved admin-style password modal; all other user-visible structure remains
 // locked against accidental redesign.
 const expected = new Map([
-  ["calc.html", "4dfa556c02b5bf9de602899fd1254d70cfa9a8b1bfda2d2ded0a4c35f24c19a7"],
+  ["calc.html", "9a3617907d2b31200ce8e0512883f269c7cc0a23543347604c3e0833b66dd134"],
   ["admin.html", "a011d0101d671572855333eac20fdf341ce23355e99326d3b2a833a2cfb75c89"],
   ["hana_admin_hidden.html", "c3249bd30e455feea2ad4240e8297bbacf331dc5e3d072a6721771756dd26a1b"],
   ["code_admin.html", "53374bb648ee17383abe97ac2fb148e38f298d32aaad3ae6be6d52b5939cd22a"],
