@@ -9,6 +9,14 @@ const migration = await readFile(
   "utf8",
 );
 
+const permissionHotfix = await readFile(
+  path.join(
+    projectRoot,
+    "supabase/migrations/20261006132655_fix_qr_order_lock_permission.sql",
+  ),
+  "utf8",
+);
+
 const schemaPrefix = migration.split("create function private.menu_combo_summary", 1)[0];
 assert.doesNotMatch(
   schemaPrefix,
@@ -22,6 +30,15 @@ assert.match(migration, /alter table public\.menu_combo_components enable row le
 assert.match(migration, /create policy menu_combo_components_no_direct_client_access[\s\S]*?to anon, authenticated[\s\S]*?using \(false\)[\s\S]*?with check \(false\)/);
 assert.match(migration, /revoke all on table public\.menu_combo_components[\s\S]*?from public, anon, authenticated, service_role/);
 assert.match(migration, /grant select on table public\.menu_combo_components to service_role/);
+assert.match(
+  permissionHotfix,
+  /grant\s+update\s*\(\s*updated_at\s*\)\s+on\s+table\s+public\.menu_combo_components\s+to\s+service_role\s*;/i,
+);
+assert.doesNotMatch(
+  permissionHotfix,
+  /\bto\s+(?:public|anon|authenticated)\b/i,
+  "the row-lock permission must remain server-only",
+);
 
 assert.match(migration, /add column if not exists combo_snapshot jsonb/g);
 assert.match(migration, /source\.image_url as image_url/);
