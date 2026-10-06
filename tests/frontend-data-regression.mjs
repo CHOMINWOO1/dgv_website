@@ -133,6 +133,44 @@ assert.match(safeStatusPrint, /&lt;IMG/i);
 const calc = await readFile(path.join(projectRoot, "calc.html"), "utf8");
 assert.match(calc, /DGV\.escapeHTML\(p\.ko \|\| "-"\)/);
 assert.match(calc, /DGV\.escapeHTML\(p\.vi \|\| ""\)/);
+const searchMarkupIndex = calc.indexOf('id="menuSearchInput"');
+const specialMenuIndex = calc.indexOf("SPECIAL MENU (직접입력)");
+const drinkMenuIndex = calc.indexOf('id="drinkMenuSection"');
+assert.ok(searchMarkupIndex > -1 && searchMarkupIndex < specialMenuIndex, "menu search must appear above SPECIAL MENU");
+assert.ok(specialMenuIndex < drinkMenuIndex, "existing SPECIAL and regular menu order must remain intact");
+assert.match(calc, /id="menuSearchInput"[\s\S]*?type="search"[\s\S]*?autocomplete="off"/);
+assert.match(calc, /for="menuSearchInput">메뉴 검색 \/ Tìm món<\/label>/);
+assert.match(calc, /id="menuSearchStatus"[^>]*aria-live="polite"/);
+assert.match(calc, /id="menuSearchClear"[^>]*type="button"[^>]*hidden>지우기 \/ Xóa<\/button>/);
+
+const searchHelpers = calc.slice(
+  calc.indexOf("function normalizeMenuSearch"),
+  calc.indexOf("function makeCard"),
+);
+const searchContext = {};
+vm.runInNewContext(`${searchHelpers}\nsearchResults = {
+  accent: normalizeMenuSearch("  Cà phê Đá  "),
+  korean: matchesMenuSearch(normalizeMenuSearch("김치찌개 Canh kim chi"), normalizeMenuSearch("김치 canh")),
+  vietnamese: matchesMenuSearch(normalizeMenuSearch("Bò nướng"), normalizeMenuSearch("bo nuong")),
+  miss: matchesMenuSearch(normalizeMenuSearch("Bò nướng"), normalizeMenuSearch("ga"))
+};`, searchContext);
+assert.equal(searchContext.searchResults.accent, "ca phe da");
+assert.equal(searchContext.searchResults.korean, true);
+assert.equal(searchContext.searchResults.vietnamese, true);
+assert.equal(searchContext.searchResults.miss, false);
+
+const applyMenuSearchBlock = calc.slice(
+  calc.indexOf("function applyMenuSearch"),
+  calc.indexOf("function makeCard"),
+);
+assert.match(applyMenuSearchBlock, /card\.hidden = !matched/);
+assert.match(applyMenuSearchBlock, /section\.hidden = Boolean\(query\) && groupVisibleCount === 0/);
+assert.doesNotMatch(applyMenuSearchBlock, /\b(?:qty|allMenu|specialLines)\s*(?:\[|\.|=)/, "search must not mutate order state");
+assert.doesNotMatch(applyMenuSearchBlock, /\bsb\.|mountMenus\(|updateAll\(/, "typing must not query Supabase or rebuild totals");
+assert.match(calc, /card\.dataset\.searchText = normalizeMenuSearch\(\[m\.ko_name, m\.vi_name, m\.type\]/);
+assert.match(calc, /otherMenu\.forEach[\s\S]*?applyMenuSearch\(\);[\s\S]*?updateAll\(\);/);
+assert.match(calc, /getElementById\("menuSearchInput"\)\?\.addEventListener\("input", applyMenuSearch\)/);
+assert.match(calc, /getElementById\("menuSearchClear"\)\?\.addEventListener\("click"[\s\S]*?input\.value = "";[\s\S]*?applyMenuSearch\(\);[\s\S]*?input\.focus\(\)/);
 assert.match(calc, /let loadedEditOrderState = null;/);
 assert.match(
   calc,
