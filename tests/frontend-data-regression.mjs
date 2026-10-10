@@ -370,7 +370,7 @@ assert.ok(
 );
 assert.match(initBlock, /if \(!ok\) \{[\s\S]*?location\.href = "\/";[\s\S]*?return;/);
 
-for (const page of ["reserv_check.html", "reserv_admin.html"]) {
+for (const page of ["reserv_check.html", "reserv_admin.html", "hana_reserv_admin_hidden.html"]) {
   const html = await readFile(path.join(projectRoot, page), "utf8");
   assert.match(html, /function ymd\(d\)\{ return DGV\.formatLocalYmd\(d\); \}/);
   assert.doesNotMatch(html, /function ymd\(d\)\{ return d\.toISOString\(\)\.slice\(0,10\); \}/);
@@ -399,7 +399,7 @@ for (const page of ["notice.html", "calc.html"]) {
   const html = await readFile(path.join(projectRoot, page), "utf8");
   assert.match(html, /DGV\.collectSupabasePages\(/);
 }
-for (const page of ["report.html", "reserv_check.html", "reserv_admin.html"]) {
+for (const page of ["report.html", "reserv_check.html", "reserv_admin.html", "hana_reserv_admin_hidden.html"]) {
   const html = await readFile(path.join(projectRoot, page), "utf8");
   assert.match(html, /DGV\.collectRestPages\(/);
   assert.match(html, /column: "id", ascending: true/);
