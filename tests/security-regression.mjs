@@ -15,6 +15,7 @@ const protectedPages = [
   "notice.html",
   "reservation.html",
   "reserv_check.html",
+  "hana_reserv_check_hidden.html",
   "reserv_admin.html",
   "hana_reserv_admin_hidden.html",
   "report.html",

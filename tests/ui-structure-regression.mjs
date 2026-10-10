@@ -17,6 +17,7 @@ const expected = new Map([
   ["notice.html", "958870fcedd4ddee38249825f3cf254352e6f31cb9733c0b6951f79547e2f348"],
   ["reservation.html", "1d2914bef800450be5e80e17e9daf684825ae922b8d262139c7506ebb3e2f570"],
   ["reserv_check.html", "b09af6e5d747acc9829b1a917d54a32e70d1f410ec47b6d6c760856671e28a06"],
+  ["hana_reserv_check_hidden.html", "cc2057fd898dbbaa0456fcbf6ece211f3f3f38d8d5172adf9467effc5dec4b51"],
   ["reserv_admin.html", "fdc55c54449b4d338da5639fa637c752c63937f7e4acc8badf7fc0e4f8a4139b"],
   ["report.html", "9f285e2cf8bfb25470d3a6d07ab494952c51b2b23a813c18edc55e10f19e60aa"],
 ]);
