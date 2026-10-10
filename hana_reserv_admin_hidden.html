@@ -616,6 +616,7 @@
     let ROWS = [];
     let LOAD_REQUEST_ID = 0;
     let APP_READY = false;
+    let EDITOR_DIRTY = false;
     let VISIBLE_REFRESH_TIMER = null;
 
     function canEditReservation(){
@@ -665,6 +666,7 @@
     function clearSelection(){
   SELECTED_ID = null;
   SELECTED_ROW = null;
+  EDITOR_DIRTY = false;
 
   ["e_id","e_date","e_time_raw","e_guests","e_price","e_menu_ko","e_menu_vi","e_optional_info","e_note","e_guide"]
     .forEach(id => { if($(id)) $(id).value = ""; });
@@ -688,6 +690,7 @@
     function fillEditor(r){
       SELECTED_ID = r.id;
       SELECTED_ROW = r;
+      EDITOR_DIRTY = false;
       $("e_id").value = r.id ?? "";
       setEditorBranchFromValue(r.branch ?? "");
 
@@ -1193,8 +1196,17 @@ function setEditorBranchFromValue(branch){
     $("btnConfirm").addEventListener("click", confirmToOrders);
     $("btnUnconfirm").addEventListener("click", unconfirmReservation);
 
+    document.querySelectorAll(".editor input, .editor select, .editor textarea")
+      .forEach((control) => {
+        const markDirty = () => {
+          if(!ORIGINAL_VIEW && SELECTED_ID !== null) EDITOR_DIRTY = true;
+        };
+        control.addEventListener("input", markDirty);
+        control.addEventListener("change", markDirty);
+      });
+
     function scheduleVisibleRefresh(){
-      if(!APP_READY || document.visibilityState !== "visible") return;
+      if(!APP_READY || EDITOR_DIRTY || document.visibilityState !== "visible") return;
       clearTimeout(VISIBLE_REFRESH_TIMER);
       VISIBLE_REFRESH_TIMER = setTimeout(() => {
         loadList({ preserveSelected:true });
