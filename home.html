@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>HANA Pages</title>
+  <link rel="stylesheet" href="assets/qr-staff.css" />
   <style>
     :root{
       --bg:#faf6ee;
@@ -91,6 +92,7 @@
       box-shadow: 0 6px 16px rgba(0,0,0,.06);
       cursor:pointer;
       text-align:left;
+      text-decoration:none;
       -webkit-tap-highlight-color: transparent;
       transition: transform .05s ease, filter .15s ease, border-color .15s ease;
     }
@@ -122,9 +124,21 @@
       font-weight:800;
       margin-top:2px;
     }
+    .locked .wrap{
+      pointer-events:none;
+      user-select:none;
+    }
+    .locked .wrap:after{
+      content:"";
+      position:fixed;
+      inset:0;
+      z-index:9998;
+      background:rgba(250,246,238,.66);
+    }
+    .qr-modal-back{z-index:10000;}
   </style>
 </head>
-<body>
+<body class="locked">
   <div class="wrap">
     <div class="hanaHeader">
       <div class="h1">H A N A</div>
@@ -135,56 +149,53 @@
       <div class="title">Quick Links</div>
 
       <div class="grid">
-        <button class="btn" data-href="calc.html" type="button">
+        <a class="btn" href="calc.html">
           <div class="name">식당 메뉴 추가</div>
           <div class="desc">Thêm thực đơn nhà hàng</div>
-        </button>
+        </a>
 
-        <button class="btn" data-href="admin.html" type="button">
-          <div class="name">매출 현황 관리</div>
-          <div class="desc">Quản lý đặt chỗ nhà hàng</div>
-        </button>
-
-        <button class="btn" data-href="menu_admin.html" type="button">
-          <div class="name">메뉴 어드민</div>
-          <div class="desc">Quản lý thực đơn QR</div>
-        </button>
-
-        <button class="btn" data-href="order_inbox.html" type="button">
+        <a class="btn" href="order_inbox.html">
           <div class="name">인박스 오더</div>
           <div class="desc">Nhận đơn gọi món</div>
-        </button>
+        </a>
 
-        <button class="btn" data-href="reserv_check.html" type="button">
+        <a class="btn" href="reserv_check.html">
           <div class="name">식당 예약 현황(직원용)</div>
           <div class="desc">Xác nhận đặt chỗ theo nhóm (Dành cho nhân viên)</div>
-        </button>
-
-        <button class="btn" data-href="reservation.html" type="button">
-          <div class="name">단체 예약 추가</div>
-          <div class="desc">
-Thêm đặt chỗ theo nhóm</div>
-        </button>
-
-        <button class="btn" data-href="reserv_admin.html" type="button">
-          <div class="name">예약 변경 / 삭제</div>
-          <div class="desc">Quản lý đặt phòng nhóm</div>
-        </button>
-
-
+        </a>
       </div>
-
       <div class="hint">
       </div>
     </div>
   </div>
 
+  <div class="qr-modal-back" id="loginModal" hidden>
+    <form class="qr-modal" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="loginTitle" aria-describedby="loginDescription">
+      <h2 id="loginTitle">직원 로그인</h2>
+      <p id="loginDescription">직원 비밀번호를 입력하면 직원용 홈에 입장합니다.</p>
+      <label class="qr-label" for="loginPassword">직원 비밀번호</label>
+      <input class="qr-input" id="loginPassword" type="password" placeholder="직원 비밀번호" autocomplete="current-password" required />
+      <div class="qr-button-row" style="margin-top:12px;justify-content:flex-end;">
+        <button class="qr-btn qr-btn-primary" id="loginConfirm" type="submit">입장</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/dgv-data.js"></script>
+  <script src="assets/supabase-client.js"></script>
+  <script src="assets/qr-staff.js"></script>
   <script>
-    document.querySelectorAll("[data-href]").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        location.href = btn.dataset.href; // 같은 폴더
-      });
-    });
+    (async function initStaffHome(){
+      try{
+        await QRStaff.requireLogin({ roles:["staff", "admin"], preferredRole:"staff" });
+        document.body.classList.remove("locked");
+      } catch(error){
+        console.error(error);
+        QRStaff.toast("로그인 화면을 불러오지 못했습니다. 페이지를 새로고침해 주세요.", "error");
+      }
+    })();
   </script>
 </body>
 </html>
