@@ -399,12 +399,14 @@
   <script src="assets/supabase-config.js"></script>
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
+  <script src="assets/reservation-visibility.js"></script>
   <script>
     /***********************
      * ✅ 너 프로젝트
      ***********************/
     const SUPABASE_URL = DGV.config.url;
     const sb = DGV.supabase;
+    const ORIGINAL_VIEW = document.body.dataset.reservationView === "original";
 
     /***********************
      * ✅ 입장 비밀번호(세션)
@@ -716,6 +718,7 @@
                 <span class="pill">👥 ${escapeHtml(String(r.guests_count ?? ""))}</span>
                 ${r.price ? `<span class="pill">${escapeHtml(formatVND(r.price))}</span>` : ``}
                 ${isConfirmed ? `<span class="pill pill-confirmed">✅ CONFIRMED</span>` : ``}
+                ${r.sales_excluded ? `<span class="pill" style="color:var(--bad);border-color:#f4c7c3;background:#fff1f0;">매출 제외됨</span>` : ``}
               </div>
               <div class="muted" style="margin-top:6px">
                 <span class="pill">GUIDE: ${escapeHtml(r.guide_name || "")}</span>
@@ -753,6 +756,19 @@
       from.setDate(from.getDate() - 30);
       $("q_from").value = ymd(from);
       $("q_to").value = ymd(today);
+    }
+
+    async function loadSalesExcludedOrderIds(){
+      const excludedOrders = await DGV.collectSupabasePages(
+        () => sb
+          .from("orders")
+          .select("id")
+          .eq("sales_excluded", true),
+        {
+          order: [{ column: "id", ascending: true }]
+        }
+      );
+      return DGV_RESERVATION_VISIBILITY.buildExcludedOrderIdSet(excludedOrders);
     }
 
     async function loadList(opts){
@@ -799,15 +815,22 @@
         if(branch) url += `&branch=eq.${encodeURIComponent(branch)}`;
         url += `&order=res_date.asc,res_time.asc`;
 
-        const rows = await DGV.collectRestPages(url, {
-          headers: () => DGV.authHeaders(),
-          order: [
-            { column: "res_date", ascending: true },
-            { column: "res_time", ascending: true },
-            { column: "id", ascending: true }
-          ]
-        });
-        ROWS = Array.isArray(rows) ? rows : [];
+        const [rows, excludedOrderIds] = await Promise.all([
+          DGV.collectRestPages(url, {
+            headers: () => DGV.authHeaders(),
+            order: [
+              { column: "res_date", ascending: true },
+              { column: "res_time", ascending: true },
+              { column: "id", ascending: true }
+            ]
+          }),
+          loadSalesExcludedOrderIds()
+        ]);
+        ROWS = DGV_RESERVATION_VISIBILITY.applySalesExcludedVisibility(
+          rows,
+          excludedOrderIds,
+          ORIGINAL_VIEW
+        );
 
         if(preserveSelected && prevId !== null && prevId !== undefined){
           const rr = ROWS.find(x => String(x.id) === String(prevId));
@@ -1153,6 +1176,15 @@ function setEditorBranchFromValue(branch){
     (async function init(){
       const ok = await requireAdminPassword();
       if(!ok) return;
+
+      if(ORIGINAL_VIEW){
+        const editor = document.querySelector(".editor");
+        const grid = document.querySelector(".grid");
+        if(editor) editor.hidden = true;
+        if(grid) grid.style.gridTemplateColumns = "1fr";
+        document.querySelectorAll(".editor input, .editor select, .editor textarea, .editor button")
+          .forEach((control) => { control.disabled = true; });
+      }
 
       buildBranch();
       buildEditorBranchSelect();
