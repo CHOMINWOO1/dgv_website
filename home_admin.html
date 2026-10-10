@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HANA Admin Pages</title>
+  <link rel="stylesheet" href="assets/qr-staff.css" />
+  <style>
+    :root{
+      --bg:#faf6ee;
+      --card:#fffdf7;
+      --ink:#3a2a1f;
+      --sub:#6b5444;
+      --line:#e7d7b8;
+      --gold:#caa24c;
+      --shadow:0 10px 24px rgba(0,0,0,.10);
+      --radius:16px;
+    }
+    *{box-sizing:border-box}
+    html{-webkit-text-size-adjust:100%;}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans KR",sans-serif;
+      background:radial-gradient(1400px 700px at 50% -200px,#fff 0%,var(--bg) 60%);
+      color:var(--ink);
+    }
+    .wrap{max-width:1040px;margin:22px auto 60px;padding:0 14px;}
+    .hanaHeader{
+      width:100%;
+      text-align:center;
+      padding:10px 10px 8px;
+      margin:0 0 16px;
+      border-bottom:1px solid #e4d1bf;
+    }
+    .hanaHeader .h1{margin:0;font-size:34px;font-weight:900;letter-spacing:.28em;color:#3f2a1d;}
+    .hanaHeader .h2{margin:6px 0 10px;font-size:14px;font-weight:700;letter-spacing:.26em;color:#6a4c3a;}
+    .section{
+      margin-bottom:14px;
+      padding:14px;
+      overflow:hidden;
+      position:relative;
+      border:2px solid var(--line);
+      border-radius:var(--radius);
+      background:var(--card);
+      box-shadow:var(--shadow);
+    }
+    .section:before{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:linear-gradient(135deg,rgba(202,162,76,.10),rgba(255,255,255,0) 60%);
+    }
+    .title{
+      position:relative;
+      margin-bottom:10px;
+      color:var(--sub);
+      font-size:14px;
+      font-weight:1000;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+    }
+    .grid{position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+    .btn{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      align-items:flex-start;
+      width:100%;
+      padding:14px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background:#fff;
+      box-shadow:0 6px 16px rgba(0,0,0,.06);
+      color:var(--ink);
+      text-align:left;
+      text-decoration:none;
+      transition:transform .05s ease,filter .15s ease,border-color .15s ease;
+    }
+    .btn:hover{border-color:var(--gold);filter:brightness(.99);}
+    .btn:active{transform:translateY(1px);}
+    .btn:focus-visible{outline:3px solid rgba(202,162,76,.28);outline-offset:2px;}
+    .btn .name{font-size:18px;font-weight:1000;letter-spacing:.02em;}
+    .btn .desc{color:var(--sub);font-size:13px;font-weight:900;line-height:1.35;}
+    .btn.hiddenView{border-color:#d8b76e;background:#fffaf0;}
+    .locked .wrap{pointer-events:none;user-select:none;}
+    .locked .wrap:after{
+      content:"";
+      position:fixed;
+      inset:0;
+      z-index:9998;
+      background:rgba(250,246,238,.66);
+    }
+    .qr-modal-back{z-index:10000;}
+    @media (max-width:560px){
+      .grid{grid-template-columns:1fr;}
+      .hanaHeader .h1{font-size:29px;}
+    }
+  </style>
+</head>
+<body class="locked">
+  <main class="wrap">
+    <header class="hanaHeader">
+      <div class="h1">H A N A</div>
+      <div class="h2">A D M I N &nbsp; P A G E S</div>
+    </header>
+
+    <section class="section" aria-labelledby="dailyTitle">
+      <div class="title" id="dailyTitle">Daily Operations</div>
+      <div class="grid">
+        <a class="btn" href="home.html">
+          <span class="name">직원용 홈</span>
+          <span class="desc">직원용 주요 기능 3개</span>
+        </a>
+        <a class="btn" href="calc.html">
+          <span class="name">식당 메뉴 추가</span>
+          <span class="desc">주문 및 계산 입력</span>
+        </a>
+        <a class="btn" href="order_inbox.html">
+          <span class="name">인박스 오더</span>
+          <span class="desc">QR 주문 접수·수정·결제</span>
+        </a>
+        <a class="btn" href="menu_admin.html">
+          <span class="name">메뉴 어드민</span>
+          <span class="desc">메뉴 및 식당·호텔 QR 관리</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="salesTitle">
+      <div class="title" id="salesTitle">Sales &amp; Reports</div>
+      <div class="grid">
+        <a class="btn" href="admin.html">
+          <span class="name">매출 현황 관리</span>
+          <span class="desc">매출 제외 항목이 숨겨진 일반 관리자 화면</span>
+        </a>
+        <a class="btn hiddenView" href="hana_admin_hidden.html">
+          <span class="name">매출 원본 조회 · Hidden</span>
+          <span class="desc">제외 항목을 포함한 원본 조회 및 복구</span>
+        </a>
+        <a class="btn" href="report.html">
+          <span class="name">월간 정산</span>
+          <span class="desc">월별 매출 및 예약 정산</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="reservationTitle">
+      <div class="title" id="reservationTitle">Reservations</div>
+      <div class="grid">
+        <a class="btn" href="reserv_check.html">
+          <span class="name">식당 예약 현황(직원용)</span>
+          <span class="desc">매출 제외 예약은 표시하지 않음</span>
+        </a>
+        <a class="btn hiddenView" href="hana_reserv_check_hidden.html">
+          <span class="name">식당 예약 원본 조회 · Hidden</span>
+          <span class="desc">매출 제외 예약을 포함한 원본 현황</span>
+        </a>
+        <a class="btn" href="reservation.html">
+          <span class="name">단체 예약 추가</span>
+          <span class="desc">새 단체 예약 등록</span>
+        </a>
+        <a class="btn" href="reserv_admin.html">
+          <span class="name">예약 변경 / 삭제</span>
+          <span class="desc">매출 제외 예약이 숨겨진 관리 화면</span>
+        </a>
+        <a class="btn hiddenView" href="hana_reserv_admin_hidden.html">
+          <span class="name">예약 관리 원본 · Hidden</span>
+          <span class="desc">매출 제외 예약을 포함한 원본 관리 화면</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="settingsTitle">
+      <div class="title" id="settingsTitle">Settings</div>
+      <div class="grid">
+        <a class="btn" href="notice.html">
+          <span class="name">공지 관리</span>
+          <span class="desc">식당 공지 등록 및 관리</span>
+        </a>
+        <a class="btn" href="code_admin.html">
+          <span class="name">접근 비밀번호 관리</span>
+          <span class="desc">직원 코드 및 관리자 비밀번호 변경</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="publicTitle">
+      <div class="title" id="publicTitle">Public Website</div>
+      <div class="grid">
+        <a class="btn" href="index.html"><span class="name">DGV 메인</span><span class="desc">공개 홈페이지</span></a>
+        <a class="btn" href="restaurant.html"><span class="name">레스토랑</span><span class="desc">공개 식당 안내 페이지</span></a>
+        <a class="btn" href="golf.html"><span class="name">골프 예약</span><span class="desc">공개 골프 예약 페이지</span></a>
+        <a class="btn" href="hotel.html"><span class="name">호텔 예약</span><span class="desc">공개 호텔 예약 페이지</span></a>
+        <a class="btn" href="car.html"><span class="name">차량 예약</span><span class="desc">공개 차량 예약 페이지</span></a>
+        <a class="btn" href="package.html"><span class="name">골프·호텔 패키지</span><span class="desc">공개 패키지 페이지</span></a>
+      </div>
+    </section>
+  </main>
+
+  <div class="qr-modal-back" id="loginModal" hidden>
+    <form class="qr-modal" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="loginTitle" aria-describedby="loginDescription">
+      <h2 id="loginTitle">관리자 로그인</h2>
+      <p id="loginDescription">관리자 비밀번호를 입력하면 전체 관리 페이지를 볼 수 있습니다.</p>
+      <label class="qr-label" for="loginPassword">관리자 비밀번호</label>
+      <input class="qr-input" id="loginPassword" type="password" placeholder="관리자 비밀번호" autocomplete="current-password" required />
+      <div class="qr-button-row" style="margin-top:12px;justify-content:flex-end;">
+        <button class="qr-btn qr-btn-primary" id="loginConfirm" type="submit">입장</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/dgv-data.js"></script>
+  <script src="assets/supabase-client.js"></script>
+  <script src="assets/qr-staff.js"></script>
+  <script>
+    (async function initAdminHome(){
+      try{
+        await QRStaff.requireLogin({ roles:["admin"], preferredRole:"admin" });
+        document.body.classList.remove("locked");
+      } catch(error){
+        console.error(error);
+        QRStaff.toast("관리자 로그인 화면을 불러오지 못했습니다. 페이지를 새로고침해 주세요.", "error");
+      }
+    })();
+  </script>
+</body>
+</html>
+
