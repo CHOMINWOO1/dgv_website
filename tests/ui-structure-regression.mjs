@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -12,7 +13,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const expected = new Map([
   ["calc.html", "9a3617907d2b31200ce8e0512883f269c7cc0a23543347604c3e0833b66dd134"],
   ["admin.html", "a011d0101d671572855333eac20fdf341ce23355e99326d3b2a833a2cfb75c89"],
-  ["hana_admin_hidden.html", "c3249bd30e455feea2ad4240e8297bbacf331dc5e3d072a6721771756dd26a1b"],
+  ["hana_admin_hidden.html", "6b00e8afc8654875d18303a3f5753b35d6e5e3e8ba56879acb341808fb65d4f6"],
   ["code_admin.html", "53374bb648ee17383abe97ac2fb148e38f298d32aaad3ae6be6d52b5939cd22a"],
   ["notice.html", "958870fcedd4ddee38249825f3cf254352e6f31cb9733c0b6951f79547e2f348"],
   ["reservation.html", "1d2914bef800450be5e80e17e9daf684825ae922b8d262139c7506ebb3e2f570"],
@@ -31,6 +32,13 @@ function visibleStructure(html) {
     .trim();
 }
 
+const hiddenAdminHtml = await readFile(path.join(projectRoot, "hana_admin_hidden.html"), "utf8");
+assert.match(
+  hiddenAdminHtml,
+  /<a\b(?=[^>]*\bclass="btn")(?=[^>]*\bid="reservOriginalBtn")(?=[^>]*\bhref="hana_reserv_check_hidden\.html")[^>]*>예약 원본 조회<\/a>/,
+  "hidden sales admin must link to the administrator reservation original view",
+);
+
 let failed = false;
 for (const [file, expectedHash] of expected) {
   const html = await readFile(path.join(projectRoot, file), "utf8");
@@ -46,3 +54,4 @@ for (const [file, expectedHash] of expected) {
 
 if (failed) process.exitCode = 1;
 else console.log(`UI structure unchanged across ${expected.size} protected pages.`);
+
