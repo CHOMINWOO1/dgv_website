@@ -616,6 +616,7 @@
     let LOAD_REQUEST_ID = 0;
     let APP_READY = false;
     let EDITOR_DIRTY = false;
+    let EDITOR_REVISION = 0;
     let VISIBLE_REFRESH_TIMER = null;
 
     function canEditReservation(){
@@ -665,6 +666,7 @@
     function clearSelection(){
   SELECTED_ID = null;
   SELECTED_ROW = null;
+  EDITOR_REVISION += 1;
   EDITOR_DIRTY = false;
 
   ["e_id","e_date","e_time_raw","e_guests","e_price","e_menu_ko","e_menu_vi","e_optional_info","e_note","e_guide"]
@@ -689,6 +691,7 @@
     function fillEditor(r){
       SELECTED_ID = r.id;
       SELECTED_ROW = r;
+      EDITOR_REVISION += 1;
       EDITOR_DIRTY = false;
       $("e_id").value = r.id ?? "";
       setEditorBranchFromValue(r.branch ?? "");
@@ -788,6 +791,8 @@
 
     async function loadList(opts){
       const requestId = ++LOAD_REQUEST_ID;
+      const automatic = !!(opts && opts.automatic);
+      const editorRevision = EDITOR_REVISION;
       try{
         const preserveSelected = !!(opts && opts.preserveSelected);
         const prevId = preserveSelected ? SELECTED_ID : null;
@@ -843,6 +848,7 @@
           loadSalesExcludedOrderIds()
         ]);
         if(requestId !== LOAD_REQUEST_ID) return;
+        if(automatic && (EDITOR_DIRTY || editorRevision !== EDITOR_REVISION)) return;
 
         ROWS = DGV_RESERVATION_VISIBILITY.applySalesExcludedVisibility(
           rows,
@@ -866,6 +872,7 @@
         setConfirmButtons();
       }catch(e){
         if(requestId !== LOAD_REQUEST_ID) return;
+        if(automatic && (EDITOR_DIRTY || editorRevision !== EDITOR_REVISION)) return;
         console.error(e);
         $("rows").innerHTML = `<div class="muted" style="padding:12px;">예약 목록을 불러오지 못했습니다.</div>`;
       }
@@ -1198,7 +1205,10 @@ function setEditorBranchFromValue(branch){
     document.querySelectorAll(".editor input, .editor select, .editor textarea")
       .forEach((control) => {
         const markDirty = () => {
-          if(!ORIGINAL_VIEW && SELECTED_ID !== null) EDITOR_DIRTY = true;
+          if(!ORIGINAL_VIEW && SELECTED_ID !== null){
+            EDITOR_DIRTY = true;
+            EDITOR_REVISION += 1;
+          }
         };
         control.addEventListener("input", markDirty);
         control.addEventListener("change", markDirty);
@@ -1208,7 +1218,8 @@ function setEditorBranchFromValue(branch){
       if(!APP_READY || EDITOR_DIRTY || document.visibilityState !== "visible") return;
       clearTimeout(VISIBLE_REFRESH_TIMER);
       VISIBLE_REFRESH_TIMER = setTimeout(() => {
-        loadList({ preserveSelected:true });
+        if(!APP_READY || EDITOR_DIRTY || document.visibilityState !== "visible") return;
+        loadList({ preserveSelected:true, automatic:true });
       }, 120);
     }
 
