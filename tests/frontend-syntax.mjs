@@ -13,6 +13,7 @@ const files = [
   "reservation.html",
   "reserv_check.html",
   "reserv_admin.html",
+  "hana_reserv_admin_hidden.html",
   "report.html",
   "menu.html",
   "order_inbox.html",
@@ -24,6 +25,7 @@ const externalScripts = [
   "assets/qr-staff.js",
   "assets/order-inbox.js",
   "assets/menu-admin.js",
+  "assets/reservation-visibility.js",
   "assets/vendor/qrcode.min.js",
 ];
 
