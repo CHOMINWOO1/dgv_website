@@ -77,6 +77,7 @@ for (const [file, html] of [
   assert.match(html, /document\.addEventListener\("visibilitychange", scheduleVisibleRefresh\)/);
   assert.match(html, /window\.addEventListener\("focus", scheduleVisibleRefresh\)/);
   assert.match(html, /let EDITOR_DIRTY = false/);
+  assert.match(html, /let EDITOR_REVISION = 0/);
   assert.match(
     html,
     /if\(!APP_READY \|\| EDITOR_DIRTY \|\| document\.visibilityState !== "visible"\) return/,
@@ -84,6 +85,17 @@ for (const [file, html] of [
   );
   assert.match(html, /control\.addEventListener\("input", markDirty\)/);
   assert.match(html, /control\.addEventListener\("change", markDirty\)/);
+  assert.match(html, /const automatic = !!\(opts && opts\.automatic\)/);
+  assert.match(
+    html,
+    /if\(automatic && \(EDITOR_DIRTY \|\| editorRevision !== EDITOR_REVISION\)\) return;[\s\S]*?ROWS = DGV_RESERVATION_VISIBILITY/,
+    `${file} must discard an automatic response when editing starts in flight`,
+  );
+  assert.match(
+    html,
+    /VISIBLE_REFRESH_TIMER = setTimeout\(\(\) => \{\s*if\(!APP_READY \|\| EDITOR_DIRTY \|\| document\.visibilityState !== "visible"\) return;\s*loadList\(\{ preserveSelected:true, automatic:true \}\)/,
+    `${file} must recheck dirty state immediately before automatic refresh`,
+  );
 }
 
 assert.doesNotMatch(normalHtml, /<body[^>]*data-reservation-view="original"/);
