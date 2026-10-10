@@ -13,6 +13,7 @@ const files = [
   "reservation.html",
   "reserv_check.html",
   "reserv_admin.html",
+  "hana_reserv_admin_hidden.html",
   "report.html",
 ];
 
