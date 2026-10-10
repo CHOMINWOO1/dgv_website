@@ -235,26 +235,30 @@
   <script src="assets/supabase-config.js"></script>
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
+  <script src="assets/reservation-visibility.js"></script>
   <script>
+    const SUPABASE_URL = DGV.config.url;
+    const sb = DGV.supabase;
+    const ORIGINAL_VIEW = document.body.dataset.reservationView === "original";
+
     // ===== Access Gate =====
 async function requireAccessGate(){
   const identity = await DGV.getIdentity();
-  if (["staff", "admin"].includes(identity.role)) return true;
+  const allowedRoles = ORIGINAL_VIEW ? ["admin"] : ["staff", "admin"];
+  if (allowedRoles.includes(identity.role)) return true;
 
   while(true){
-    const code = prompt("보안코드를 입력하세요.");
+    const code = prompt(ORIGINAL_VIEW ? "관리자 보안코드를 입력하세요." : "보안코드를 입력하세요.");
     if (!code) return false;
 
     try{
-      await DGV.signInAs("staff", code.trim());
+      await DGV.signInAs(ORIGINAL_VIEW ? "admin" : "staff", code.trim());
       return true;
     }catch(error){
       alert("보안코드가 올바르지 않습니다.");
     }
   }
 }
-
-    const SUPABASE_URL = DGV.config.url;
 
     const BRANCH_PRESETS = ["KT","ANT","AST","엠투어","기쁨","JM","TOT","투어패밀리","빅트래블","실크로드","HANA","OTHER"];
 
@@ -279,6 +283,9 @@ async function requireAccessGate(){
 
     // mode: today | fromToday | tomorrow | range
     let MODE = "today";
+    let LOAD_REQUEST_ID = 0;
+    let APP_READY = false;
+    let VISIBLE_REFRESH_TIMER = null;
 
    function setMode(mode){
   MODE = mode;
@@ -312,63 +319,99 @@ async function requireAccessGate(){
 
 
 
+    async function loadSalesExcludedOrderIds(rows){
+      const linkedOrderIds = Array.from(new Set(
+        (Array.isArray(rows) ? rows : [])
+          .map((row) => String(row?.confirmed_order_id ?? "").trim())
+          .filter(Boolean)
+      ));
+      const excludedOrders = [];
+
+      for(let start = 0; start < linkedOrderIds.length; start += 500){
+        const chunk = linkedOrderIds.slice(start, start + 500);
+        const { data, error } = await sb.rpc("app_get_reservation_sales_excluded_ids", {
+          p_order_ids: chunk
+        });
+        if(error) throw error;
+        for(const row of (Array.isArray(data) ? data : [])){
+          excludedOrders.push({ id: row.order_id });
+        }
+      }
+
+      return DGV_RESERVATION_VISIBILITY.buildExcludedOrderIdSet(excludedOrders);
+    }
+
+    function renderLoadError(){
+      $("stats").style.display = "none";
+      $("stats").innerHTML = "";
+      $("tbody").innerHTML = `<tr><td colspan="8" class="muted">예약 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</td></tr>`;
+      $("cards").innerHTML = `<div class="muted" style="padding:6px 2px;">예약 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</div>`;
+    }
+
     async function load(){
-  const now = new Date();
+      const requestId = ++LOAD_REQUEST_ID;
 
-  const today = ymd(now);
+      try{
+        const now = new Date();
+        const today = ymd(now);
 
-  // ✅ 내일 계산 (로컬 기준)
-  const tmr = new Date(now);
-  tmr.setDate(tmr.getDate() + 1);
-  const tomorrow = ymd(tmr);
+        // ✅ 내일 계산 (로컬 기준)
+        const tmr = new Date(now);
+        tmr.setDate(tmr.getDate() + 1);
+        const tomorrow = ymd(tmr);
+        const branch = $("q_branch").value;
 
-  const branch = $("q_branch").value;
+        let url =
+          `${SUPABASE_URL}/rest/v1/resv_groups` +
+          `?select=id,res_date,res_time,guests_count,price,menu_ko,menu_vi,note,branch,guide_name,confirmed_order_id`;
 
-  let url =
-    `${SUPABASE_URL}/rest/v1/resv_groups` +
-    `?select=id,res_date,res_time,guests_count,price,menu_ko,menu_vi,note,branch,guide_name`;
+        if(MODE === "today"){
+          url += `&res_date=eq.${today}`;
+        }else if(MODE === "tomorrow"){
+          url += `&res_date=eq.${tomorrow}`;
+        }else if(MODE === "range"){
+          const from = $("q_from").value;
+          const to = $("q_to").value;
+          const f = from || today;
+          const t = to || from || today;
+          const f2 = (f <= t) ? f : t;
+          const t2 = (f <= t) ? t : f;
+          url += `&res_date=gte.${f2}&res_date=lte.${t2}`;
+        }else{
+          url += `&res_date=gte.${today}`;
+        }
 
-  // ✅ MODE별 날짜 필터
-    // ✅ MODE별 날짜 필터
-  if(MODE === "today"){
-    url += `&res_date=eq.${today}`;
-  }else if(MODE === "tomorrow"){
-    url += `&res_date=eq.${tomorrow}`;
-  }else if(MODE === "range"){
-    const from = $("q_from").value;
-    const to   = $("q_to").value;
+        if(branch){
+          url += `&branch=eq.${encodeURIComponent(branch)}`;
+        }
+        url += `&order=res_date.asc,res_time.asc`;
 
-    // 값이 없으면 today 기준으로 안전하게 동작
-    const f = from || today;
-    const t = to || from || today;
+        const rows = await DGV.collectRestPages(url, {
+          headers: () => DGV.authHeaders(),
+          order: [
+            { column: "res_date", ascending: true },
+            { column: "res_time", ascending: true },
+            { column: "id", ascending: true }
+          ]
+        });
+        if(requestId !== LOAD_REQUEST_ID) return;
 
-    // from > to 방지
-    const f2 = (f <= t) ? f : t;
-    const t2 = (f <= t) ? t : f;
+        const sourceRows = Array.isArray(rows) ? rows : [];
+        const excludedOrderIds = await loadSalesExcludedOrderIds(sourceRows);
+        if(requestId !== LOAD_REQUEST_ID) return;
 
-    // Supabase filter: gte / lte
-    url += `&res_date=gte.${f2}&res_date=lte.${t2}`;
-  }else{
-    url += `&res_date=gte.${today}`;
-  }
-
-
-  if(branch){
-    url += `&branch=eq.${encodeURIComponent(branch)}`;
-  }
-
-  url += `&order=res_date.asc,res_time.asc`;
-
-  const rows = await DGV.collectRestPages(url, {
-    headers: () => DGV.authHeaders(),
-    order: [
-      { column: "res_date", ascending: true },
-      { column: "res_time", ascending: true },
-      { column: "id", ascending: true }
-    ]
-  });
-  renderAll(Array.isArray(rows) ? rows : []);
-}
+        const visibleRows = DGV_RESERVATION_VISIBILITY.applySalesExcludedVisibility(
+          sourceRows,
+          excludedOrderIds,
+          ORIGINAL_VIEW
+        );
+        renderAll(visibleRows);
+      }catch(error){
+        if(requestId !== LOAD_REQUEST_ID) return;
+        console.error(error);
+        renderLoadError();
+      }
+    }
 
 
     function renderStats(rows){
@@ -393,7 +436,10 @@ async function requireAccessGate(){
         <tr>
           <td>${escapeHtml(r.res_date || "")}</td>
           <td>${escapeHtml((r.res_time || "").slice(0,5))}</td>
-          <td>${escapeHtml(r.branch || "")}</td>
+          <td>
+            ${escapeHtml(r.branch || "")}
+            ${r.sales_excluded ? `<div class="muted" style="color:var(--bad);font-weight:900;">매출 제외됨</div>` : ``}
+          </td>
           <td>${escapeHtml(String(r.guests_count ?? ""))}</td>
           <td>${escapeHtml(formatVND(r.price))}</td>
           <td>
@@ -424,6 +470,7 @@ async function requireAccessGate(){
                 <span class="badge">${escapeHtml(r.res_date || "")}</span>
                 <span class="badge sub">${escapeHtml((r.res_time || "").slice(0,5) || "")}</span>
                 <span class="badge sub">${escapeHtml(r.branch || "")}</span>
+                ${r.sales_excluded ? `<span class="badge" style="background:#fff1f0;border-color:#f4c7c3;color:var(--bad);">매출 제외됨</span>` : ``}
               </div>
               <span class="badge">👥 ${escapeHtml(String(r.guests_count ?? ""))}</span>
             </div>
@@ -486,6 +533,17 @@ async function requireAccessGate(){
 $("q_from").addEventListener("change", () => { setMode("range"); load(); });
 $("q_to").addEventListener("change", () => { setMode("range"); load(); });
 
+    function scheduleVisibleRefresh(){
+      if(!APP_READY || document.visibilityState !== "visible") return;
+      clearTimeout(VISIBLE_REFRESH_TIMER);
+      VISIBLE_REFRESH_TIMER = setTimeout(() => {
+        if(!APP_READY || document.visibilityState !== "visible") return;
+        load();
+      }, 120);
+    }
+
+    document.addEventListener("visibilitychange", scheduleVisibleRefresh);
+    window.addEventListener("focus", scheduleVisibleRefresh);
 
 
     // init
@@ -498,6 +556,7 @@ $("q_to").addEventListener("change", () => { setMode("range"); load(); });
 
   buildBranch();
   setMode("today");
+  APP_READY = true;
   load();
 })();
 
