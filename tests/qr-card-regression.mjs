@@ -6,16 +6,16 @@ import path from "node:path";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(projectRoot, file), "utf8");
 
-const [homeHtml, menuAdminHtml, menuAdminSource, staffCss] = await Promise.all([
+const [homeHtml, homeAdminHtml, menuAdminHtml, menuAdminSource, staffCss] = await Promise.all([
   read("home.html"),
+  read("home_admin.html"),
   read("menu_admin.html"),
   read("assets/menu-admin.js"),
   read("assets/qr-staff.css"),
 ]);
 
-assert.match(homeHtml, /data-href="menu_admin\.html"[\s\S]*?<div class="name">메뉴 어드민<\/div>/);
-assert.match(homeHtml, /data-href="order_inbox\.html"[\s\S]*?<div class="name">인박스 오더<\/div>/);
-
+assert.match(homeHtml, /href="order_inbox\.html"[\s\S]*?<div class="name">인박스 오더<\/div>/);
+assert.match(homeAdminHtml, /href="menu_admin\.html"[\s\S]*?<span class="name">메뉴 어드민<\/span>/);
 const brandIndex = menuAdminHtml.indexOf("HANA RESTAURANT");
 const calloutIndex = menuAdminHtml.indexOf("ORDER HERE", brandIndex);
 const tableIndex = menuAdminHtml.indexOf('id="tokenTableTitle"', calloutIndex);

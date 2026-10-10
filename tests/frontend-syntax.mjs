@@ -5,6 +5,8 @@ import vm from "node:vm";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const files = [
+  "home.html",
+  "home_admin.html",
   "calc.html",
   "admin.html",
   "hana_admin_hidden.html",

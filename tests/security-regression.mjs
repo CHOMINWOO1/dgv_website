@@ -8,6 +8,8 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const finalRef = "fbbecxtxsaplrmanjunw";
 const productionRef = "qzuynzreamdkpmakvefm";
 const protectedPages = [
+  "home.html",
+  "home_admin.html",
   "calc.html",
   "admin.html",
   "hana_admin_hidden.html",
