@@ -68,6 +68,14 @@ for (const [file, html] of [
   assert.match(html, /applySalesExcludedVisibility\([\s\S]*?excludedOrderIds[\s\S]*?ORIGINAL_VIEW/);
   assert.match(html, /const ORIGINAL_VIEW = document\.body\.dataset\.reservationView === "original"/);
   assert.match(html, /await Promise\.all\(\[/);
+  assert.match(html, /const requestId = \+\+LOAD_REQUEST_ID/);
+  assert.match(
+    html,
+    /if\(requestId !== LOAD_REQUEST_ID\) return;[\s\S]*?ROWS = DGV_RESERVATION_VISIBILITY/,
+    `${file} must ignore stale list responses`,
+  );
+  assert.match(html, /document\.addEventListener\("visibilitychange", scheduleVisibleRefresh\)/);
+  assert.match(html, /window\.addEventListener\("focus", scheduleVisibleRefresh\)/);
 }
 
 assert.doesNotMatch(normalHtml, /<body[^>]*data-reservation-view="original"/);
@@ -80,5 +88,22 @@ assert.match(
   /\.forEach\(\(control\) => \{ control\.disabled = true; \}\)/,
   "original reservation page must expose no editable controls",
 );
+assert.match(
+  originalHtml,
+  /async function rpc\(fn, body\)\{[\s\S]*?if\(ORIGINAL_VIEW\)[\s\S]*?throw new Error\("원본 조회 화면에서는 예약 데이터를 변경할 수 없습니다\."\)/,
+  "original reservation page must block every RPC mutation in code",
+);
+for (const mutation of [
+  "confirmToOrders",
+  "unconfirmReservation",
+  "saveUpdate",
+  "deleteSelected",
+]) {
+  assert.match(
+    originalHtml,
+    new RegExp(`async function ${mutation}\\(\\)\\{\\s*if\\(!canEditReservation\\(\\)\\) return;`),
+    `${mutation} must stop immediately in original view`,
+  );
+}
 
 console.log("Reservation sales-exclusion visibility contracts passed.");
