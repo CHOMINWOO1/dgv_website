@@ -76,6 +76,14 @@ for (const [file, html] of [
   );
   assert.match(html, /document\.addEventListener\("visibilitychange", scheduleVisibleRefresh\)/);
   assert.match(html, /window\.addEventListener\("focus", scheduleVisibleRefresh\)/);
+  assert.match(html, /let EDITOR_DIRTY = false/);
+  assert.match(
+    html,
+    /if\(!APP_READY \|\| EDITOR_DIRTY \|\| document\.visibilityState !== "visible"\) return/,
+    `${file} must not overwrite unsaved editor changes during automatic refresh`,
+  );
+  assert.match(html, /control\.addEventListener\("input", markDirty\)/);
+  assert.match(html, /control\.addEventListener\("change", markDirty\)/);
 }
 
 assert.doesNotMatch(normalHtml, /<body[^>]*data-reservation-view="original"/);
