@@ -54,4 +54,3 @@ for (const [file, expectedHash] of expected) {
 
 if (failed) process.exitCode = 1;
 else console.log(`UI structure unchanged across ${expected.size} protected pages.`);
-
