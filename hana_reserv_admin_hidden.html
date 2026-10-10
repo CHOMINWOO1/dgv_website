@@ -529,6 +529,9 @@
      * RPC / Fetch Helpers
      ***********************/
     async function rpc(fn, body){
+      if(ORIGINAL_VIEW){
+        throw new Error("원본 조회 화면에서는 예약 데이터를 변경할 수 없습니다.");
+      }
       const { data, error } = await sb.rpc(fn, body || {});
       if (error) throw error;
       return data;
@@ -611,6 +614,15 @@
     let SELECTED_ID = null;
     let SELECTED_ROW = null;
     let ROWS = [];
+    let LOAD_REQUEST_ID = 0;
+    let APP_READY = false;
+    let VISIBLE_REFRESH_TIMER = null;
+
+    function canEditReservation(){
+      if(!ORIGINAL_VIEW) return true;
+      setMsg("bad", "원본 조회 화면에서는 예약 데이터를 변경할 수 없습니다.");
+      return false;
+    }
 
     function setConfirmButtons(){
       const isConfirmed = !!(SELECTED_ROW && SELECTED_ROW.confirmed);
@@ -773,6 +785,7 @@
     }
 
     async function loadList(opts){
+      const requestId = ++LOAD_REQUEST_ID;
       try{
         const preserveSelected = !!(opts && opts.preserveSelected);
         const prevId = preserveSelected ? SELECTED_ID : null;
@@ -827,6 +840,8 @@
           }),
           loadSalesExcludedOrderIds()
         ]);
+        if(requestId !== LOAD_REQUEST_ID) return;
+
         ROWS = DGV_RESERVATION_VISIBILITY.applySalesExcludedVisibility(
           rows,
           excludedOrderIds,
@@ -848,12 +863,14 @@
         renderList(ROWS);
         setConfirmButtons();
       }catch(e){
+        if(requestId !== LOAD_REQUEST_ID) return;
         console.error(e);
         $("rows").innerHTML = `<div class="muted" style="padding:12px;">예약 목록을 불러오지 못했습니다.</div>`;
       }
     }
 
     async function confirmToOrders(){
+      if(!canEditReservation()) return;
       try{
         setMsg("", "");
         if(!SELECTED_ID || !SELECTED_ROW){
@@ -936,6 +953,7 @@
     }
 
     async function unconfirmReservation(){
+      if(!canEditReservation()) return;
       try{
         setMsg("", "");
         if(!SELECTED_ID || !SELECTED_ROW){
@@ -967,6 +985,7 @@
     }
 
     async function saveUpdate(){
+      if(!canEditReservation()) return;
       try{
         setMsg("", "");
         if(!SELECTED_ID){
@@ -1037,6 +1056,7 @@
     }
 
     async function deleteSelected(){
+      if(!canEditReservation()) return;
       try{
         setMsg("", "");
         if(!SELECTED_ID){
@@ -1173,6 +1193,17 @@ function setEditorBranchFromValue(branch){
     $("btnConfirm").addEventListener("click", confirmToOrders);
     $("btnUnconfirm").addEventListener("click", unconfirmReservation);
 
+    function scheduleVisibleRefresh(){
+      if(!APP_READY || document.visibilityState !== "visible") return;
+      clearTimeout(VISIBLE_REFRESH_TIMER);
+      VISIBLE_REFRESH_TIMER = setTimeout(() => {
+        loadList({ preserveSelected:true });
+      }, 120);
+    }
+
+    document.addEventListener("visibilitychange", scheduleVisibleRefresh);
+    window.addEventListener("focus", scheduleVisibleRefresh);
+
     // ✅ init
     (async function init(){
       const ok = await requireAdminPassword();
@@ -1194,6 +1225,7 @@ function setEditorBranchFromValue(branch){
       setDefaultRange();
       $("btnUnconfirm").disabled = true;
       $("btnUnconfirm").style.opacity = ".45";
+      APP_READY = true;
       loadList();
     })();
   </script>
