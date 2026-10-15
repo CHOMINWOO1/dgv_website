@@ -205,5 +205,16 @@ assert.match(page, /id="adminAuthPassword"[^>]*type="password"[^>]*autocomplete=
 assert.match(page, /requestAdminPassword\(\)/i);
 assert.doesNotMatch(page, /id="login(?:Modal|Form|Password|Role|Confirm)"/i);
 assert.doesNotMatch(page, /getElementById\("expenseHistory"\)\.hidden = true/i);
+assert.match(page, /id="expenseSearch"[^>]*type="search"[^>]*placeholder="내역·비고·날짜·금액 검색"/i);
+assert.match(page, /전체 기록 검색 \(이전 달 포함\)/i);
+assert.match(page, /searchForm\.addEventListener\("submit", searchAllExpenses\)/i);
+assert.match(page, /function searchableExpenseText\(row\)[\s\S]*?row\.expense_date[\s\S]*?typeLabel\(row\.expense_type\)[\s\S]*?row\.description[\s\S]*?row\.note[\s\S]*?amount\.toLocaleString/i);
+assert.match(page, /terms\.every\(\(term\) => haystack\.includes\(term\)\)/i);
+assert.match(page, /function searchAllExpenses\(event\)[\s\S]*?DGV\.collectSupabasePages\([\s\S]*?\.from\("restaurant_expenses"\)[\s\S]*?\.select\("id,expense_date,expense_type,description,amount_vnd,note,created_at"\)(?![\s\S]*?\.gte\("expense_date")/i);
+assert.match(page, /전체 기록 \$\{allRows\.length[\s\S]*?검색 결과 \$\{rows\.length/i);
+assert.match(page, /clearSearchBtn\.addEventListener\("click", clearSearch\)/i);
+assert.match(page, /async function loadMonth\(\)\{\s*if \(refreshBtn\.disabled\) return;/i);
+assert.match(page, /async function searchAllExpenses\(event\)\{[\s\S]*?if \(searchBtn\.disabled\) return;/i);
+assert.match(page, /finally\{\s*QRStaff\.setBusy\(searchBtn, false\);\s*\}/i);
 
 console.log("Restaurant expense schema, RLS, ACL, and import-safety contracts passed.");
