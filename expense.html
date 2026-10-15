@@ -9,7 +9,6 @@
     .locked .qr-shell{pointer-events:none;user-select:none;}
     .locked .qr-shell:after{content:"";position:fixed;inset:0;z-index:9998;background:rgba(250,246,238,.66);}
     .expense-layout{display:grid;grid-template-columns:minmax(320px,420px) minmax(0,1fr);gap:14px;align-items:start;}
-    .expense-layout.entry-only{grid-template-columns:minmax(320px,520px);justify-content:center;}
     .expense-form{padding:16px;}
     .expense-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
     .expense-field{display:flex;flex-direction:column;gap:6px;min-width:0;}
@@ -19,7 +18,8 @@
     .expense-type-option:has(input:checked){border-color:var(--qr-gold);background:var(--qr-gold-soft);box-shadow:0 0 0 2px rgba(202,162,76,.12);}
     .expense-type-option input{position:absolute;opacity:0;pointer-events:none;}
     .expense-type-option:focus-within{outline:3px solid rgba(202,162,76,.28);outline-offset:2px;}
-    .expense-save{width:100%;min-height:50px;margin-top:14px;font-size:16px;}
+    .expense-form-actions{display:flex;gap:8px;margin-top:14px;}
+    .expense-save{flex:1;min-height:50px;font-size:16px;}
     .expense-history{min-width:0;padding:14px;}
     .expense-history-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
     .expense-month-control{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;}
@@ -34,6 +34,9 @@
     .expense-table tbody tr:last-child td{border-bottom:0;}
     .expense-table .amount{text-align:right;white-space:nowrap;font-weight:1000;}
     .expense-table .note{max-width:260px;color:var(--qr-sub);white-space:pre-wrap;overflow-wrap:anywhere;}
+    .expense-actions{display:flex;gap:6px;white-space:nowrap;}
+    .expense-actions .qr-btn{min-height:34px;padding:7px 10px;font-size:12px;}
+    .expense-actions .danger{border-color:#d9a7a7;color:#9b2424;}
     .expense-kind{display:inline-flex;padding:4px 8px;border-radius:999px;background:#f3eee6;color:var(--qr-sub);font-size:11px;font-weight:1000;white-space:nowrap;}
     .expense-kind[data-type="invoice"]{background:#fff0c9;color:#75510c;}
     .expense-status{min-height:20px;margin:10px 2px 0;color:var(--qr-sub);font-size:12px;font-weight:850;}
@@ -60,8 +63,7 @@
         <p class="qr-brand-subtitle">HANA RESTAURANT EXPENSES</p>
       </div>
       <div class="qr-header-actions">
-        <a class="qr-btn" id="homeLink" href="home.html">홈</a>
-        <button class="qr-btn" id="signOutBtn" type="button">로그아웃</button>
+        <a class="qr-btn" href="home_admin.html">관리자 홈</a>
       </div>
     </header>
 
@@ -100,8 +102,10 @@
               <textarea class="qr-textarea" id="note" name="note" maxlength="2000" placeholder="필요한 내용을 적어 주세요."></textarea>
             </div>
           </div>
-          <button class="qr-btn qr-btn-primary expense-save" id="saveBtn" type="submit">지출 저장</button>
-          <div class="qr-hint" id="staffPrivacyHint" hidden style="margin-top:10px">월별 전체 내역은 관리자 계정에서 확인할 수 있습니다.</div>
+          <div class="expense-form-actions">
+            <button class="qr-btn qr-btn-primary expense-save" id="saveBtn" type="submit">지출 저장</button>
+            <button class="qr-btn" id="editCancelBtn" type="button" hidden>수정 취소</button>
+          </div>
         </form>
       </section>
 
@@ -129,7 +133,7 @@
 
         <div class="expense-table-wrap" id="tableWrap" hidden>
           <table class="expense-table">
-            <thead><tr><th>날짜</th><th>구분</th><th>내역</th><th>비고</th><th style="text-align:right">금액</th></tr></thead>
+            <thead><tr><th>날짜</th><th>구분</th><th>내역</th><th>비고</th><th style="text-align:right">금액</th><th>관리</th></tr></thead>
             <tbody id="expenseRows"></tbody>
           </table>
         </div>
@@ -139,23 +143,16 @@
     </div>
   </main>
 
-  <div class="qr-modal-back" id="loginModal" hidden>
-    <form class="qr-modal" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="loginTitle" aria-describedby="loginDescription">
-      <h2 id="loginTitle">지출 관리 로그인</h2>
-      <p id="loginDescription">직원 또는 관리자 비밀번호를 입력해 주세요.</p>
-      <div class="qr-field" style="margin-bottom:10px">
-        <label class="qr-label" for="loginRole">접근 권한</label>
-        <select class="qr-select" id="loginRole">
-          <option value="staff">직원</option>
-          <option value="admin">관리자</option>
-        </select>
-      </div>
-      <label class="qr-label" for="loginPassword">비밀번호</label>
-      <input class="qr-input" id="loginPassword" type="password" placeholder="비밀번호" autocomplete="current-password" required />
+  <div class="qr-modal-back" id="adminAuthModal" hidden>
+    <form class="qr-modal" id="adminAuthForm" role="dialog" aria-modal="true" aria-labelledby="adminAuthTitle" aria-describedby="adminAuthDescription">
+      <h2 id="adminAuthTitle">수정·삭제 확인</h2>
+      <p id="adminAuthDescription">수정 또는 삭제하려면 관리자 비밀번호를 입력해 주세요.</p>
+      <label class="qr-label" for="adminAuthPassword">관리자 비밀번호</label>
+      <input class="qr-input" id="adminAuthPassword" type="password" placeholder="관리자 비밀번호" autocomplete="current-password" required />
       <div class="qr-form-actions">
-        <button class="qr-btn qr-btn-primary" id="loginConfirm" type="submit">입장</button>
+        <button class="qr-btn" id="adminAuthCancel" type="button">취소</button>
+        <button class="qr-btn qr-btn-primary" id="adminAuthConfirm" type="submit">확인</button>
       </div>
-      <div class="qr-hint">브라우저 탭을 닫으면 로그인이 해제됩니다.</div>
     </form>
   </div>
 
@@ -176,6 +173,7 @@
     const descriptionInput = document.getElementById("description");
     const noteInput = document.getElementById("note");
     const saveBtn = document.getElementById("saveBtn");
+    const editCancelBtn = document.getElementById("editCancelBtn");
     const monthForm = document.getElementById("monthForm");
     const monthPicker = document.getElementById("monthPicker");
     const refreshBtn = document.getElementById("refreshBtn");
@@ -183,8 +181,15 @@
     const tableWrap = document.getElementById("tableWrap");
     const emptyState = document.getElementById("emptyState");
     const loadStatus = document.getElementById("loadStatus");
+    const adminAuthModal = document.getElementById("adminAuthModal");
+    const adminAuthForm = document.getElementById("adminAuthForm");
+    const adminAuthPassword = document.getElementById("adminAuthPassword");
+    const adminAuthConfirm = document.getElementById("adminAuthConfirm");
     const escapeHtml = DGV.escapeHTML;
     let loadSequence = 0;
+    let currentRows = new Map();
+    let editingId = null;
+    let adminAuthResolve = null;
 
     function businessToday(){
       return DGV.formatYmdInTimeZone(new Date(), BUSINESS_TIME_ZONE);
@@ -222,6 +227,48 @@
       return value === "invoice" ? "계산서 지출" : "일반 지출";
     }
 
+    function finishAdminAuth(authorized){
+      adminAuthModal.hidden = true;
+      document.body.style.overflow = "";
+      adminAuthPassword.value = "";
+      const resolve = adminAuthResolve;
+      adminAuthResolve = null;
+      if (resolve) resolve(authorized);
+    }
+
+    function requestAdminPassword(){
+      if (adminAuthResolve) return Promise.resolve(false);
+      adminAuthModal.hidden = false;
+      document.body.style.overflow = "hidden";
+      adminAuthPassword.value = "";
+      globalThis.setTimeout(() => adminAuthPassword.focus(), 40);
+      return new Promise((resolve) => { adminAuthResolve = resolve; });
+    }
+
+    function resetEntryForm(){
+      editingId = null;
+      dateInput.value = businessToday();
+      form.elements.expenseType.value = "general";
+      amountInput.value = "";
+      descriptionInput.value = "";
+      noteInput.value = "";
+      saveBtn.textContent = "지출 저장";
+      editCancelBtn.hidden = true;
+    }
+
+    function beginEdit(row){
+      editingId = String(row.id);
+      dateInput.value = String(row.expense_date || "");
+      form.elements.expenseType.value = row.expense_type === "invoice" ? "invoice" : "general";
+      amountInput.value = Number(row.amount_vnd || 0).toLocaleString("ko-KR");
+      descriptionInput.value = String(row.description || "");
+      noteInput.value = String(row.note || "");
+      saveBtn.textContent = "수정 저장";
+      editCancelBtn.hidden = false;
+      form.scrollIntoView({ behavior:"smooth", block:"start" });
+      descriptionInput.focus({ preventScroll:true });
+    }
+
     function updateSummary(rows){
       const totals = rows.reduce((sum, row) => {
         const amount = Math.max(0, Number(row.amount_vnd) || 0);
@@ -236,20 +283,53 @@
     }
 
     function renderRows(rows){
+      currentRows = new Map(rows.map((row) => [String(row.id), row]));
       rowsEl.innerHTML = rows.map((row) => {
         const type = row.expense_type === "invoice" ? "invoice" : "general";
         const note = String(row.note || "").trim();
+        const rowId = escapeHtml(String(row.id || ""));
         return `<tr>
           <td data-label="날짜">${escapeHtml(String(row.expense_date || ""))}</td>
           <td data-label="구분"><span class="expense-kind" data-type="${type}">${typeLabel(type)}</span></td>
           <td data-label="내역">${escapeHtml(String(row.description || ""))}</td>
           <td class="note" data-label="비고">${note ? escapeHtml(note) : "—"}</td>
           <td class="amount" data-label="금액">${escapeHtml(formatVnd(row.amount_vnd))}</td>
+          <td data-label="관리"><div class="expense-actions">
+            <button class="qr-btn" type="button" data-expense-action="edit" data-expense-id="${rowId}">수정</button>
+            <button class="qr-btn danger" type="button" data-expense-action="delete" data-expense-id="${rowId}">삭제</button>
+          </div></td>
         </tr>`;
       }).join("");
       tableWrap.hidden = rows.length === 0;
       emptyState.hidden = rows.length !== 0;
       updateSummary(rows);
+    }
+
+    async function verifyAdminSession(){
+      const identity = await DGV.getIdentity();
+      if (identity.user && identity.role === "admin") return true;
+      return requestAdminPassword();
+    }
+
+    async function deleteExpense(row){
+      const description = String(row.description || "지출 내역");
+      if (!globalThis.confirm(`${description} 항목을 삭제하시겠습니까?\n\n삭제한 내역은 되돌릴 수 없습니다.`)) return;
+      if (!await requestAdminPassword()) return;
+      try{
+        const { error } = await sb
+          .from("restaurant_expenses")
+          .delete()
+          .eq("id", row.id)
+          .select("id")
+          .single();
+        if (error) throw error;
+        if (editingId === String(row.id)) resetEntryForm();
+        QRStaff.toast("지출 내역이 삭제되었습니다.", "ok");
+        await loadMonth();
+      }catch(error){
+        console.error(error);
+        QRStaff.toast("지출 내역을 삭제하지 못했습니다. 관리자 비밀번호를 확인해 주세요.", "error");
+      }
     }
 
     async function loadMonth(){
@@ -318,27 +398,35 @@
         return;
       }
 
-      QRStaff.setBusy(saveBtn, true, "저장 중…");
+      const payload = {
+        expense_date:expenseDate,
+        expense_type:selectedType(),
+        description,
+        amount_vnd:amountVnd,
+        note:note || null
+      };
+      const updateId = editingId;
+      if (updateId && !await verifyAdminSession()) return;
+
+      QRStaff.setBusy(saveBtn, true, updateId ? "수정 중…" : "저장 중…");
       try{
-        const { error } = await sb.from("restaurant_expenses").insert([{
-          expense_date:expenseDate,
-          expense_type:selectedType(),
-          description,
-          amount_vnd:amountVnd,
-          note:note || null
-        }]);
+        const request = updateId
+          ? sb.from("restaurant_expenses").update(payload).eq("id", updateId).select("id").single()
+          : sb.from("restaurant_expenses").insert([payload]);
+        const { error } = await request;
         if (error) throw error;
-        amountInput.value = "";
-        descriptionInput.value = "";
-        noteInput.value = "";
-        QRStaff.toast("지출 내역이 저장되었습니다.", "ok");
-        if (monthPicker.value === expenseDate.slice(0, 7)) await loadMonth();
+        resetEntryForm();
+        QRStaff.toast(updateId ? "지출 내역이 수정되었습니다." : "지출 내역이 저장되었습니다.", "ok");
+        await loadMonth();
         descriptionInput.focus();
       }catch(error){
         console.error(error);
-        QRStaff.toast("지출 내역을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
+        QRStaff.toast(updateId
+          ? "지출 내역을 수정하지 못했습니다. 관리자 비밀번호를 확인해 주세요."
+          : "지출 내역을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
       }finally{
         QRStaff.setBusy(saveBtn, false);
+        saveBtn.textContent = editingId ? "수정 저장" : "지출 저장";
       }
     }
 
@@ -347,28 +435,51 @@
       amountInput.value = digits ? Number(digits).toLocaleString("ko-KR") : "";
     });
     form.addEventListener("submit", saveExpense);
+    editCancelBtn.addEventListener("click", () => {
+      resetEntryForm();
+      descriptionInput.focus();
+    });
     monthForm.addEventListener("submit", (event) => { event.preventDefault(); loadMonth(); });
-    document.getElementById("signOutBtn").addEventListener("click", () => QRStaff.signOut());
-
+    rowsEl.addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-expense-action]");
+      if (!button) return;
+      const row = currentRows.get(String(button.dataset.expenseId || ""));
+      if (!row) return;
+      if (button.dataset.expenseAction === "edit") {
+        if (!await requestAdminPassword()) return;
+        beginEdit(row);
+        return;
+      }
+      if (button.dataset.expenseAction === "delete") await deleteExpense(row);
+    });
+    adminAuthForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const password = adminAuthPassword.value.trim();
+      if (!password) {
+        QRStaff.toast("관리자 비밀번호를 입력해 주세요.", "error");
+        adminAuthPassword.focus();
+        return;
+      }
+      QRStaff.setBusy(adminAuthConfirm, true, "확인 중…");
+      try{
+        const identity = await DGV.signInAs("admin", password);
+        if (identity.role !== "admin") throw new Error("ADMIN_REQUIRED");
+        finishAdminAuth(true);
+      }catch(error){
+        console.error(error);
+        QRStaff.toast("관리자 비밀번호가 올바르지 않습니다.", "error");
+        adminAuthPassword.select();
+      }finally{
+        QRStaff.setBusy(adminAuthConfirm, false);
+      }
+    });
+    document.getElementById("adminAuthCancel").addEventListener("click", () => finishAdminAuth(false));
     (async function start(){
       const today = businessToday();
       dateInput.value = today;
       monthPicker.value = today.slice(0, 7);
-      try{
-        const identity = await QRStaff.requireLogin({ roles:["staff", "admin"], preferredRole:"staff" });
-        if (identity.role === "admin") document.getElementById("homeLink").href = "home_admin.html";
-        document.body.classList.remove("locked");
-        if (identity.role === "admin") {
-          await loadMonth();
-        } else {
-          document.getElementById("expenseHistory").hidden = true;
-          document.querySelector(".expense-layout").classList.add("entry-only");
-          document.getElementById("staffPrivacyHint").hidden = false;
-        }
-      }catch(error){
-        console.error(error);
-        QRStaff.toast("로그인 화면을 불러오지 못했습니다. 페이지를 새로고침해 주세요.", "error");
-      }
+      document.body.classList.remove("locked");
+      await loadMonth();
     })();
   })();
   </script>

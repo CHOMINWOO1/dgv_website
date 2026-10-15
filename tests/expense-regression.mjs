@@ -8,6 +8,10 @@ const migration = await readFile(
   path.join(projectRoot, "supabase/migrations/20261015113201_restaurant_expenses.sql"),
   "utf8",
 );
+const publicAccessMigration = await readFile(
+  path.join(projectRoot, "supabase/migrations/20261015115438_allow_public_restaurant_expense_entry.sql"),
+  "utf8",
+);
 const page = await readFile(path.join(projectRoot, "expense.html"), "utf8");
 
 // The ledger is a new, isolated table and deployment itself never mutates any
@@ -58,8 +62,9 @@ assert.match(
   /create unique index restaurant_expenses_import_key_unique_idx[\s\S]*?\(import_key\)[\s\S]*?where import_key is not null/i,
 );
 
-// Exposed public-schema data is protected by app_metadata-backed RLS. Staff
-// and admin may append; only admin may read; no browser update/delete exists.
+// The original deployment was role-protected. A later, data-preserving policy
+// migration intentionally allows passwordless reads and appends, while UPDATE
+// and DELETE require an app_metadata-backed administrator session.
 assert.match(migration, /alter table public\.restaurant_expenses enable row level security/i);
 assert.match(
   migration,
@@ -74,6 +79,59 @@ assert.doesNotMatch(
   /create policy\s+\S+[\s\S]*?on public\.restaurant_expenses[\s\S]*?for (?:update|delete)\b/i,
 );
 assert.doesNotMatch(migration, /user_metadata/i);
+assert.match(
+  publicAccessMigration,
+  /drop policy if exists restaurant_expenses_admin_read[\s\S]*?drop policy if exists restaurant_expenses_staff_insert/i,
+);
+assert.match(
+  publicAccessMigration,
+  /create policy restaurant_expenses_public_read[\s\S]*?for select[\s\S]*?to anon, authenticated[\s\S]*?using \(true\)/i,
+);
+assert.match(
+  publicAccessMigration,
+  /create policy restaurant_expenses_anon_insert[\s\S]*?for insert[\s\S]*?to anon[\s\S]*?source = 'web'[\s\S]*?import_key is null[\s\S]*?created_by is null/i,
+);
+assert.match(
+  publicAccessMigration,
+  /create policy restaurant_expenses_authenticated_insert[\s\S]*?for insert[\s\S]*?to authenticated[\s\S]*?auth\.uid\(\)[\s\S]*?source = 'web'[\s\S]*?import_key is null[\s\S]*?created_by = \(select auth\.uid\(\)\)/i,
+);
+assert.doesNotMatch(
+  publicAccessMigration,
+  /^\s*(?:insert\s+into|update\s+public\.restaurant_expenses|delete\s+from|truncate\s)/im,
+  "the passwordless-access migration must not mutate expense rows",
+);
+assert.match(
+  publicAccessMigration,
+  /create policy restaurant_expenses_admin_update[\s\S]*?for update[\s\S]*?to authenticated[\s\S]*?has_app_role\(array\['admin'\]::text\[\]\)[\s\S]*?with check[\s\S]*?has_app_role\(array\['admin'\]::text\[\]\)/i,
+);
+assert.match(
+  publicAccessMigration,
+  /create policy restaurant_expenses_admin_delete[\s\S]*?for delete[\s\S]*?to authenticated[\s\S]*?has_app_role\(array\['admin'\]::text\[\]\)/i,
+);
+assert.match(
+  publicAccessMigration,
+  /grant select \([\s\S]*?\) on table public\.restaurant_expenses\s+to anon/i,
+);
+assert.match(
+  publicAccessMigration,
+  /grant insert \([\s\S]*?\) on table public\.restaurant_expenses\s+to anon/i,
+);
+assert.match(
+  publicAccessMigration,
+  /revoke update, delete, truncate, references, trigger[\s\S]*?from anon, authenticated/i,
+);
+assert.match(
+  publicAccessMigration,
+  /grant update \([\s\S]*?\) on table public\.restaurant_expenses\s+to authenticated/i,
+);
+assert.match(
+  publicAccessMigration,
+  /grant delete on table public\.restaurant_expenses\s+to authenticated/i,
+);
+assert.doesNotMatch(
+  publicAccessMigration,
+  /grant\s+(?:update|delete)(?:\s*\([^;]*?\))?\s+on table public\.restaurant_expenses\s+to anon/i,
+);
 
 // Grants are an independent security layer: the browser can read only fields
 // required by the page and insert only the five business fields. Import/audit
@@ -124,20 +182,28 @@ assert.match(
 );
 
 // The page keeps input simple, writes only business fields, paginates monthly
-// reads, and reveals the financial ledger only after an admin login.
+// reads, and opens without a password. Modification controls authenticate with
+// the administrator password before UPDATE or DELETE.
 assert.match(page, /<input[^>]+id="expenseDate"[^>]+type="date"/i);
 assert.match(page, /name="expenseType" value="general"/i);
 assert.match(page, /name="expenseType" value="invoice"/i);
 assert.match(page, /id="amountVnd"[^>]+inputmode="numeric"/i);
-assert.match(page, /\.from\("restaurant_expenses"\)\.insert\(\[\{/i);
+assert.match(page, /\.from\("restaurant_expenses"\)\.insert\(\[payload\]\)/i);
 for (const field of ["expense_date", "expense_type", "amount_vnd", "description", "note"]) {
   assert.match(page, new RegExp(`\\b${field}\\b`));
 }
-assert.doesNotMatch(page, /\.from\("restaurant_expenses"\)\.(?:update|delete)\(/i);
+assert.match(page, /\.from\("restaurant_expenses"\)\.update\(payload\)/i);
+assert.match(page, /\.from\("restaurant_expenses"\)[\s\S]*?\.delete\(\)/i);
 assert.match(page, /DGV\.collectSupabasePages\(/i);
 assert.match(page, /\.gte\("expense_date", bounds\.start\)/i);
 assert.match(page, /\.lt\("expense_date", bounds\.end\)/i);
-assert.match(page, /identity\.role === "admin"/i);
-assert.match(page, /getElementById\("expenseHistory"\)\.hidden = true/i);
+assert.match(page, /href="home_admin\.html"/i);
+assert.match(page, /document\.body\.classList\.remove\("locked"\)/i);
+assert.doesNotMatch(page, /QRStaff\.requireLogin\(/i);
+assert.match(page, /DGV\.signInAs\("admin", password\)/i);
+assert.match(page, /id="adminAuthPassword"[^>]*type="password"[^>]*autocomplete="current-password"/i);
+assert.match(page, /requestAdminPassword\(\)/i);
+assert.doesNotMatch(page, /id="login(?:Modal|Form|Password|Role|Confirm)"/i);
+assert.doesNotMatch(page, /getElementById\("expenseHistory"\)\.hidden = true/i);
 
 console.log("Restaurant expense schema, RLS, ACL, and import-safety contracts passed.");
