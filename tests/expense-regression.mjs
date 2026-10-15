@@ -197,7 +197,7 @@ assert.match(page, /\.from\("restaurant_expenses"\)[\s\S]*?\.delete\(\)/i);
 assert.match(page, /DGV\.collectSupabasePages\(/i);
 assert.match(page, /\.gte\("expense_date", bounds\.start\)/i);
 assert.match(page, /\.lt\("expense_date", bounds\.end\)/i);
-assert.match(page, /href="home_admin\.html"/i);
+assert.doesNotMatch(page, />관리자 홈<\/a>/i);
 assert.match(page, /document\.body\.classList\.remove\("locked"\)/i);
 assert.doesNotMatch(page, /QRStaff\.requireLogin\(/i);
 assert.match(page, /DGV\.signInAs\("admin", password\)/i);
