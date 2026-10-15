@@ -24,6 +24,8 @@
     .expense-history-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
     .expense-month-control{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;}
     .expense-month-control .qr-field{min-width:165px;}
+    .expense-global-search{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin:0 0 12px;padding:12px;border:1px solid var(--qr-line);border-radius:14px;background:#fffaf0;}
+    .expense-global-search .qr-field{flex:1 1 280px;min-width:220px;}
     .expense-summary{grid-template-columns:repeat(4,minmax(0,1fr));}
     .expense-summary .qr-summary-value{font-size:clamp(17px,2.1vw,23px);overflow-wrap:anywhere;}
     .expense-table-wrap{overflow-x:auto;border:1px solid var(--qr-line);border-radius:14px;background:#fff;}
@@ -52,7 +54,7 @@
       .expense-table td{display:grid;grid-template-columns:82px minmax(0,1fr);gap:10px;padding:7px 4px;border-bottom:1px dashed #eee4d3;text-align:left;}
       .expense-table td:last-child{border-bottom:0;}.expense-table td:before{content:attr(data-label);color:var(--qr-sub);font-size:11px;font-weight:1000;}.expense-table .amount{text-align:left;}.expense-table .note{max-width:none;}
     }
-    @media(max-width:430px){.expense-summary{grid-template-columns:1fr 1fr;}.expense-type{grid-template-columns:1fr;}.expense-month-control .qr-btn{width:100%;}}
+    @media(max-width:430px){.expense-summary{grid-template-columns:1fr 1fr;}.expense-type{grid-template-columns:1fr;}.expense-month-control .qr-field{min-width:100%;}.expense-month-control .qr-btn,.expense-global-search .qr-btn{width:100%;}}
   </style>
 </head>
 <body class="locked">
@@ -124,6 +126,15 @@
           </form>
         </div>
 
+        <form class="expense-global-search" id="searchForm" role="search">
+          <div class="qr-field">
+            <label class="qr-label" for="expenseSearch">전체 기록 검색 (이전 달 포함)</label>
+            <input class="qr-input" id="expenseSearch" name="expenseSearch" type="search" placeholder="내역·비고·날짜·금액 검색" autocomplete="off" />
+          </div>
+          <button class="qr-btn qr-btn-primary" id="searchBtn" type="submit">전체 검색</button>
+          <button class="qr-btn" id="clearSearchBtn" type="button" hidden>검색 해제</button>
+        </form>
+
         <div class="qr-summary expense-summary" aria-label="월별 지출 요약">
           <div class="qr-card qr-summary-card"><div class="qr-summary-label">일반 지출</div><div class="qr-summary-value" id="generalSubtotal">0 VND</div></div>
           <div class="qr-card qr-summary-card"><div class="qr-summary-label">계산서 지출</div><div class="qr-summary-value" id="invoiceSubtotal">0 VND</div></div>
@@ -176,6 +187,10 @@
     const editCancelBtn = document.getElementById("editCancelBtn");
     const monthForm = document.getElementById("monthForm");
     const monthPicker = document.getElementById("monthPicker");
+    const searchForm = document.getElementById("searchForm");
+    const searchInput = document.getElementById("expenseSearch");
+    const searchBtn = document.getElementById("searchBtn");
+    const clearSearchBtn = document.getElementById("clearSearchBtn");
     const refreshBtn = document.getElementById("refreshBtn");
     const rowsEl = document.getElementById("expenseRows");
     const tableWrap = document.getElementById("tableWrap");
@@ -187,6 +202,10 @@
     const adminAuthConfirm = document.getElementById("adminAuthConfirm");
     const escapeHtml = DGV.escapeHTML;
     let loadSequence = 0;
+    let monthRows = [];
+    let allRows = [];
+    let searchMode = false;
+    let loadedMonth = "";
     let currentRows = new Map();
     let editingId = null;
     let adminAuthResolve = null;
@@ -225,6 +244,26 @@
 
     function typeLabel(value){
       return value === "invoice" ? "계산서 지출" : "일반 지출";
+    }
+
+    function normalizeSearch(value){
+      return String(value || "")
+        .normalize("NFKC")
+        .toLocaleLowerCase("ko-KR")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function searchableExpenseText(row){
+      const amount = Math.max(0, Math.round(Number(row.amount_vnd) || 0));
+      return normalizeSearch([
+        row.expense_date,
+        typeLabel(row.expense_type),
+        row.description,
+        row.note,
+        String(amount),
+        amount.toLocaleString("ko-KR")
+      ].join(" "));
     }
 
     function finishAdminAuth(authorized){
@@ -305,6 +344,40 @@
       updateSummary(rows);
     }
 
+    function searchTerms(){
+      const query = normalizeSearch(searchInput.value);
+      return query ? query.split(" ").filter(Boolean) : [];
+    }
+
+    function filteredExpenses(rows, terms){
+      return terms.length
+        ? rows.filter((row) => {
+          const haystack = searchableExpenseText(row);
+          return terms.every((term) => haystack.includes(term));
+        })
+        : rows;
+    }
+
+    function renderMonthRows(){
+      searchMode = false;
+      clearSearchBtn.hidden = true;
+      emptyState.textContent = "선택한 달에 등록된 지출 내역이 없습니다.";
+      renderRows(monthRows);
+      loadStatus.dataset.tone = "";
+      loadStatus.textContent = `${loadedMonth || monthPicker.value} 지출 ${monthRows.length.toLocaleString("ko-KR")}건을 불러왔습니다.`;
+    }
+
+    function renderSearchResults(){
+      const terms = searchTerms();
+      const rows = filteredExpenses(allRows, terms);
+      searchMode = true;
+      clearSearchBtn.hidden = false;
+      emptyState.textContent = "전체 기록에서 검색 조건과 일치하는 지출 내역이 없습니다.";
+      renderRows(rows);
+      loadStatus.dataset.tone = "";
+      loadStatus.textContent = `전체 기록 ${allRows.length.toLocaleString("ko-KR")}건 중 검색 결과 ${rows.length.toLocaleString("ko-KR")}건입니다.`;
+    }
+
     async function verifyAdminSession(){
       const identity = await DGV.getIdentity();
       if (identity.user && identity.role === "admin") return true;
@@ -358,20 +431,81 @@
           ] }
         );
         if (requestId !== loadSequence) return;
-        renderRows(rows);
-        loadStatus.textContent = `${requestedMonth} 지출 ${rows.length.toLocaleString("ko-KR")}건을 불러왔습니다.`;
+        monthRows = rows;
+        loadedMonth = requestedMonth;
+        searchInput.value = "";
+        allRows = [];
+        renderMonthRows();
       }catch(error){
         console.error(error);
         if (requestId !== loadSequence) return;
         rowsEl.innerHTML = "";
+        monthRows = [];
+        loadedMonth = "";
+        allRows = [];
+        searchMode = false;
+        currentRows = new Map();
         tableWrap.hidden = true;
         emptyState.hidden = true;
         updateSummary([]);
         loadStatus.dataset.tone = "error";
         loadStatus.textContent = "지출 내역을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
       }finally{
-        if (requestId === loadSequence) QRStaff.setBusy(refreshBtn, false);
+        QRStaff.setBusy(refreshBtn, false);
       }
+    }
+
+    async function searchAllExpenses(event){
+      event.preventDefault();
+      if (searchBtn.disabled) return;
+      const terms = searchTerms();
+      if (!terms.length){
+        QRStaff.toast("검색어를 입력해 주세요.", "error");
+        searchInput.focus();
+        return;
+      }
+      const requestId = ++loadSequence;
+      loadStatus.dataset.tone = "";
+      loadStatus.textContent = "이전 달을 포함한 전체 지출 내역을 검색하는 중입니다…";
+      QRStaff.setBusy(searchBtn, true, "검색 중…");
+      try{
+        const rows = await DGV.collectSupabasePages(
+          () => sb
+            .from("restaurant_expenses")
+            .select("id,expense_date,expense_type,description,amount_vnd,note,created_at"),
+          { order:[
+            { column:"expense_date", ascending:false },
+            { column:"created_at", ascending:false },
+            { column:"id", ascending:false }
+          ] }
+        );
+        if (requestId !== loadSequence) return;
+        allRows = rows;
+        renderSearchResults();
+      }catch(error){
+        console.error(error);
+        if (requestId !== loadSequence) return;
+        allRows = [];
+        searchMode = false;
+        rowsEl.innerHTML = "";
+        currentRows = new Map();
+        tableWrap.hidden = true;
+        emptyState.hidden = true;
+        updateSummary([]);
+        loadStatus.dataset.tone = "error";
+        loadStatus.textContent = "전체 지출 내역을 검색하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+      }finally{
+        QRStaff.setBusy(searchBtn, false);
+      }
+    }
+
+    function clearSearch(){
+      ++loadSequence;
+      searchInput.value = "";
+      allRows = [];
+      if (loadedMonth) monthPicker.value = loadedMonth;
+      renderMonthRows();
+      searchInput.focus();
     }
 
     async function saveExpense(event){
@@ -440,6 +574,11 @@
       descriptionInput.focus();
     });
     monthForm.addEventListener("submit", (event) => { event.preventDefault(); loadMonth(); });
+    searchForm.addEventListener("submit", searchAllExpenses);
+    searchInput.addEventListener("input", () => {
+      if (searchMode) renderSearchResults();
+    });
+    clearSearchBtn.addEventListener("click", clearSearch);
     rowsEl.addEventListener("click", async (event) => {
       const button = event.target.closest("button[data-expense-action]");
       if (!button) return;
