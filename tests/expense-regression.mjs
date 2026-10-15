@@ -213,7 +213,10 @@ assert.match(page, /terms\.every\(\(term\) => haystack\.includes\(term\)\)/i);
 assert.match(page, /function searchAllExpenses\(event\)[\s\S]*?DGV\.collectSupabasePages\([\s\S]*?\.from\("restaurant_expenses"\)[\s\S]*?\.select\("id,expense_date,expense_type,description,amount_vnd,note,created_at"\)(?![\s\S]*?\.gte\("expense_date")/i);
 assert.match(page, /전체 기록 \$\{allRows\.length[\s\S]*?검색 결과 \$\{rows\.length/i);
 assert.match(page, /clearSearchBtn\.addEventListener\("click", clearSearch\)/i);
-assert.match(page, /async function loadMonth\(\)\{\s*if \(refreshBtn\.disabled\) return;/i);
+assert.match(page, /let loadedMonth = "";/i);
+assert.match(page, /monthRows = rows;\s*loadedMonth = requestedMonth;/i);
+assert.match(page, /function clearSearch\(\)[\s\S]*?if \(loadedMonth\) monthPicker\.value = loadedMonth;[\s\S]*?renderMonthRows\(\)/i);
+assert.doesNotMatch(page, /async function loadMonth\(\)\{\s*if \(refreshBtn\.disabled\) return;/i);
 assert.match(page, /async function searchAllExpenses\(event\)\{[\s\S]*?if \(searchBtn\.disabled\) return;/i);
 assert.match(page, /finally\{\s*QRStaff\.setBusy\(searchBtn, false\);\s*\}/i);
 
