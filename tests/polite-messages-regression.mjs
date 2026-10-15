@@ -10,6 +10,7 @@ const files = [
   "hana_admin_hidden.html",
   "code_admin.html",
   "notice.html",
+  "expense.html",
   "reservation.html",
   "reserv_check.html",
   "hana_reserv_check_hidden.html",

@@ -22,8 +22,8 @@ assert.match(
 );
 assert.deepEqual(
   hrefs(staffHome),
-  ["calc.html", "order_inbox.html", "reserv_check.html", "notice.html"],
-  "staff home must expose only the four approved staff destinations",
+  ["calc.html", "order_inbox.html", "reserv_check.html", "notice.html", "expense.html"],
+  "staff home must expose only the five approved staff destinations",
 );
 assert.doesNotMatch(staffHome, /href="(?:admin|menu_admin|hana_[^"]+|reservation|reserv_admin|report|code_admin)\.html"/);
 
@@ -42,6 +42,7 @@ const requiredAdminDestinations = [
   "admin.html",
   "hana_admin_hidden.html",
   "report.html",
+  "expense.html",
   "reserv_check.html",
   "hana_reserv_check_hidden.html",
   "reservation.html",
