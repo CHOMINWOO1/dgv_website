@@ -205,6 +205,7 @@
     let monthRows = [];
     let allRows = [];
     let searchMode = false;
+    let loadedMonth = "";
     let currentRows = new Map();
     let editingId = null;
     let adminAuthResolve = null;
@@ -363,7 +364,7 @@
       emptyState.textContent = "선택한 달에 등록된 지출 내역이 없습니다.";
       renderRows(monthRows);
       loadStatus.dataset.tone = "";
-      loadStatus.textContent = `${monthPicker.value} 지출 ${monthRows.length.toLocaleString("ko-KR")}건을 불러왔습니다.`;
+      loadStatus.textContent = `${loadedMonth || monthPicker.value} 지출 ${monthRows.length.toLocaleString("ko-KR")}건을 불러왔습니다.`;
     }
 
     function renderSearchResults(){
@@ -405,7 +406,6 @@
     }
 
     async function loadMonth(){
-      if (refreshBtn.disabled) return;
       const requestedMonth = monthPicker.value;
       if (!validMonth(requestedMonth)){
         QRStaff.toast("조회할 월을 선택해 주세요.", "error");
@@ -432,6 +432,7 @@
         );
         if (requestId !== loadSequence) return;
         monthRows = rows;
+        loadedMonth = requestedMonth;
         searchInput.value = "";
         allRows = [];
         renderMonthRows();
@@ -440,6 +441,7 @@
         if (requestId !== loadSequence) return;
         rowsEl.innerHTML = "";
         monthRows = [];
+        loadedMonth = "";
         allRows = [];
         searchMode = false;
         currentRows = new Map();
@@ -501,6 +503,7 @@
       ++loadSequence;
       searchInput.value = "";
       allRows = [];
+      if (loadedMonth) monthPicker.value = loadedMonth;
       renderMonthRows();
       searchInput.focus();
     }
