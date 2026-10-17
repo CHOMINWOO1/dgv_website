@@ -17,6 +17,7 @@ assert.ok(finalizeCutoverMigrationFile, "missing legacy QR finalize cutover migr
 const [
   adminHtml,
   menuHtml,
+  menuCss,
   guestSource,
   inboxHtml,
   inboxSource,
@@ -35,6 +36,7 @@ const [
 ] = await Promise.all([
   read("admin.html"),
   read("menu.html"),
+  read("assets/qr-menu.css"),
   read("assets/qr-menu.js"),
   read("order_inbox.html"),
   read("assets/order-inbox.js"),
@@ -69,6 +71,14 @@ function functionSource(source, name) {
 assert.match(menuHtml, /name="referrer" content="no-referrer"/i);
 assert.match(menuHtml, /Content-Security-Policy/i);
 assert.match(menuHtml, /connect-src 'self' https:\/\/\*\.supabase\.co/i);
+assert.match(menuHtml, /assets\/qr-menu\.css\?v=20261017-fixed-checkout/i);
+assert.match(menuHtml, /<div class="cart-body">[\s\S]*?id="orderNote"[\s\S]*?<\/div>\s*<footer class="cart-checkout">[\s\S]*?id="sheetTotal"[\s\S]*?id="reviewButton"/i);
+assert.match(menuHtml, /class="confirm-dialog order-confirm-dialog"[\s\S]*?id="confirmLines"[\s\S]*?<footer class="confirm-checkout">[\s\S]*?id="confirmTotal"[\s\S]*?id="submitOrder"/i);
+assert.match(menuCss, /\.cart-sheet\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*overflow:\s*hidden;[^}]*padding-bottom:\s*0;/i);
+assert.match(menuCss, /\.cart-body\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/i);
+assert.match(menuCss, /\.cart-checkout\s*\{[^}]*flex:\s*0 0 auto;[^}]*calc\(14px \+ var\(--safe-bottom\)\)/i);
+assert.match(menuCss, /\.order-confirm-dialog\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*overflow:\s*hidden;/i);
+assert.match(menuCss, /\.order-confirm-dialog \.confirm-lines\s*\{[^}]*flex:\s*1 1 auto;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/i);
 assert.doesNotMatch(`${menuHtml}\n${guestSource}`, /service[_-]?role/i);
 assert.match(guestSource, /global\.location\.hash/);
 assert.match(guestSource, /history\.replaceState[\s\S]*?url\.hash/);
