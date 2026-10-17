@@ -9,7 +9,7 @@
   <title>HANA Table Order</title>
   <meta name="description" content="HANA Restaurant table order menu">
   <link rel="icon" href="image/logo.png">
-  <link rel="stylesheet" href="assets/qr-menu.css?v=20261005-all-menu">
+  <link rel="stylesheet" href="assets/qr-menu.css?v=20261017-fixed-checkout">
 </head>
 <body>
   <a class="skip-link" href="#menuList">메뉴로 바로 이동</a>
@@ -157,31 +157,35 @@
         <span class="field-error" id="noteError" hidden></span>
         <span id="noteCounter">0 / 500</span>
       </div>
+    </div>
 
+    <footer class="cart-checkout">
       <div class="total-row">
         <span data-copy="total">합계</span>
         <strong id="sheetTotal">0 VND</strong>
       </div>
       <p class="payment-note" data-copy="paymentNote">주문 접수 후 직원에게 현금 또는 카드로 결제해 주세요.</p>
       <button class="primary-button order-button" id="reviewButton" type="button" data-copy="reviewOrder">주문 확인</button>
-    </div>
+    </footer>
   </section>
 
   <div class="modal-backdrop" id="confirmBackdrop" hidden>
-    <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+    <section class="confirm-dialog order-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
       <div class="confirm-icon" aria-hidden="true">✓</div>
       <h2 id="confirmTitle" data-copy="confirmTitle">주문을 접수할까요?</h2>
       <p id="confirmTable"></p>
       <div class="confirm-lines" id="confirmLines"></div>
-      <div class="total-row confirm-total">
-        <span data-copy="total">합계</span>
-        <strong id="confirmTotal">0 VND</strong>
-      </div>
-      <p class="payment-note" data-copy="confirmNotice">접수 후 변경이 필요하면 직원에게 말씀해 주세요.</p>
-      <div class="dialog-actions">
-        <button class="secondary-button" id="confirmCancel" type="button" data-copy="goBack">돌아가기</button>
-        <button class="primary-button" id="submitOrder" type="button" data-copy="submitOrder">주문하기</button>
-      </div>
+      <footer class="confirm-checkout">
+        <div class="total-row confirm-total">
+          <span data-copy="total">합계</span>
+          <strong id="confirmTotal">0 VND</strong>
+        </div>
+        <p class="payment-note" data-copy="confirmNotice">접수 후 변경이 필요하면 직원에게 말씀해 주세요.</p>
+        <div class="dialog-actions">
+          <button class="secondary-button" id="confirmCancel" type="button" data-copy="goBack">돌아가기</button>
+          <button class="primary-button" id="submitOrder" type="button" data-copy="submitOrder">주문하기</button>
+        </div>
+      </footer>
     </section>
   </div>
 
