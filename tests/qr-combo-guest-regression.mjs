@@ -32,7 +32,7 @@ for (const id of ["menuSearch", "menuSearchClear", "detailComboPricing", "detail
   assert.match(guestHtml, new RegExp(`id=["']${id}["']`));
 }
 assert.match(guestHtml, /id="menuToolbar"[\s\S]*?id="menuSearch"[\s\S]*?id="categoryNav"/);
-assert.match(guestHtml, /assets\/qr-menu\.css\?v=20261005-all-menu/);
+assert.match(guestHtml, /assets\/qr-menu\.css\?v=20261017-fixed-checkout/);
 assert.match(guestHtml, /assets\/qr-menu\.js\?v=20261005-all-menu/);
 assert.match(guestCss, /\.menu-toolbar\s*\{[\s\S]*?position:\s*sticky[\s\S]*?top:\s*0/);
 assert.match(guestCss, /\.menu-section\s*\{[\s\S]*?scroll-margin-top:\s*calc\(var\(--menu-toolbar-height\) \+ 10px\)/);

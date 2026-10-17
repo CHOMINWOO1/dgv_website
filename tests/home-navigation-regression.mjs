@@ -14,6 +14,14 @@ function hrefs(html) {
   return [...html.matchAll(/<a\b[^>]*\bhref="([^"]+)"/g)].map((match) => match[1]);
 }
 
+function sectionHtml(html, titleId, nextTitleId) {
+  const start = html.indexOf(`aria-labelledby="${titleId}"`);
+  assert.notEqual(start, -1, `missing ${titleId} section`);
+  const end = nextTitleId ? html.indexOf(`aria-labelledby="${nextTitleId}"`, start + 1) : html.length;
+  assert.notEqual(end, -1, `missing section after ${titleId}`);
+  return html.slice(start, end);
+}
+
 assert.match(staffHome, /<body class="locked">/);
 assert.match(
   staffHome,
@@ -61,6 +69,25 @@ const adminDestinations = hrefs(adminHome);
 for (const destination of requiredAdminDestinations) {
   assert.ok(adminDestinations.includes(destination), `administrator home is missing ${destination}`);
 }
+assert.deepEqual(
+  hrefs(sectionHtml(adminHome, "salesTitle", "reservationTitle")),
+  ["admin.html", "reserv_check.html", "expense.html"],
+  "sales section must keep the requested manager, staff reservation, and expense order",
+);
+assert.deepEqual(
+  hrefs(sectionHtml(adminHome, "reservationTitle", "settingsTitle")),
+  [
+    "hana_reserv_check_hidden.html",
+    "hana_admin_hidden.html",
+    "reservation.html",
+    "reserv_admin.html",
+    "hana_reserv_admin_hidden.html",
+    "report.html",
+  ],
+  "reservation section must keep the requested original views and monthly KB settlement order",
+);
+assert.match(adminHome, /href="hana_admin_hidden\.html"[\s\S]*?<span class="name">매출 원본 조회 · Hidden<\/span>/);
+assert.match(adminHome, /href="report\.html"[\s\S]*?<span class="name">월간 정산 · KB<\/span>/);
 assert.doesNotMatch(adminHome, /href="menu\.html"/, "tokenized customer menu must not be linked without a QR token");
 
 for (const html of [staffHome, adminHome]) {
