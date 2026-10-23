@@ -93,6 +93,7 @@ assert.match(page, /<button[^>]+id="exportExpenseBtn"[^>]*>엑셀 생성<\/butto
 assert.match(page, /id="expensePrintArea"/);
 assert.match(page, /id="printCriteria"/);
 assert.match(page, /id="printGeneratedAt"/);
+assert.match(page, /@media print\{[\s\S]*?body\s*>\s*main\.qr-shell\{display:block!important;\}/, "expense print must override the shared QR-only print rule");
 assert.match(page, /@media print\{[\s\S]*?\.screen-only\{display:none!important;\}[\s\S]*?\.print-only\{display:inline!important;\}/);
 assert.match(page, /@media print\{[\s\S]*?\.expense-table th:last-child,\.expense-table td:last-child\{display:none!important;\}/, "print must hide edit/delete controls");
 for (const printLabel of [
