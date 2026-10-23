@@ -244,7 +244,7 @@ const rangePrintBlock = admin.slice(
 assert.match(reportLoaderBlock, /Promise\.all\(\[/, "range exports must load orders and both line sources in bulk");
 assert.match(reportLoaderBlock, /\.from\("orders"\)[\s\S]*?\.select\("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method,source"\)[\s\S]*?\.eq\("sales_excluded", false\)/);
 assert.match(reportLoaderBlock, /column: "created_at", ascending: false[\s\S]*?column: "id", ascending: false/, "all printable orders need stable pagination");
-assert.match(reportLoaderBlock, /\.from\("order_items"\)[\s\S]*?menu_items\(ko_name,vi_name,type\)[\s\S]*?column: "order_id", ascending: false[\s\S]*?column: "id", ascending: true/, "regular lines need their own unique stable pagination");
+assert.match(reportLoaderBlock, /\.from\("order_items"\)[\s\S]*?menu_items\(ko_name,vi_name,type,qr_category\)[\s\S]*?column: "order_id", ascending: false[\s\S]*?column: "id", ascending: true/, "regular lines need their own unique stable pagination and tax category metadata");
 assert.match(reportLoaderBlock, /\.from\("order_custom_items"\)[\s\S]*?unit_usd,unit_vnd,line_usd,line_vnd[\s\S]*?column: "order_id", ascending: false[\s\S]*?column: "id", ascending: true/, "custom lines need their own unique stable pagination");
 assert.doesNotMatch(reportLoaderBlock, /\.eq\("status", "paid"\)/, "printable orders must match the unfiltered admin order list");
 assert.doesNotMatch(`${reportLoaderBlock}\n${rangePrintBlock}`, /\.(?:insert|update|upsert|delete|rpc)\s*\(/, "printing must remain read-only");
@@ -427,3 +427,4 @@ assert.doesNotMatch(confirmBlock, /app_update_reservation/);
 assert.doesNotMatch(confirmBlock, /app_confirm_reservation/);
 
 console.log("Frontend pagination, local-date, XSS, workflow, and calc modal contracts passed.");
+
