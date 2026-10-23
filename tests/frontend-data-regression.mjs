@@ -427,4 +427,3 @@ assert.doesNotMatch(confirmBlock, /app_update_reservation/);
 assert.doesNotMatch(confirmBlock, /app_confirm_reservation/);
 
 console.log("Frontend pagination, local-date, XSS, workflow, and calc modal contracts passed.");
-
