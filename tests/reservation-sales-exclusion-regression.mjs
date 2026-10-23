@@ -177,6 +177,16 @@ for (const [file, html] of [
 }
 
 assert.doesNotMatch(staffHtml, /<body[^>]*data-reservation-view="original"/);
+assert.match(
+  staffHtml,
+  /const allowedRoles = ORIGINAL_VIEW \? \["admin"\] : \["staff", "manager", "admin"\]/,
+  "the ordinary reservation page must accept staff, manager, and administrator sessions",
+);
+assert.match(
+  staffHtml,
+  /const loginRoles = ORIGINAL_VIEW \? \["admin"\] : \["staff", "manager", "admin"\][\s\S]*?DGV\.signInAsAny\(loginRoles, code\.trim\(\)\)/,
+  "the ordinary reservation page must accept each approved password directly",
+);
 assert.match(staffOriginalHtml, /<body[^>]*data-reservation-view="original"/);
 assert.match(staffOriginalHtml, /매출 제외 항목을 포함한 전체 예약입니다\./);
 assert.match(staffOriginalHtml, /매출 제외됨/);
@@ -208,10 +218,22 @@ const normalizedStaffOriginal = staffOriginalHtml
   )
   .replace(/[ \t]+$/gm, "")
   .trimEnd();
+const normalizedStaff = staffHtml
+  .replace(/\r\n/g, "\n")
+  .replace(
+    'const allowedRoles = ORIGINAL_VIEW ? ["admin"] : ["staff", "manager", "admin"];',
+    'const allowedRoles = ORIGINAL_VIEW ? ["admin"] : ["staff", "admin"];',
+  )
+  .replace(
+    /\s*const loginRoles = ORIGINAL_VIEW \? \["admin"\] : \["staff", "manager", "admin"\];\n\s*await DGV\.signInAsAny\(loginRoles, code\.trim\(\)\);/,
+    '\n      await DGV.signInAs(ORIGINAL_VIEW ? "admin" : "staff", code.trim());',
+  )
+  .replace(/[ \t]+$/gm, "")
+  .trimEnd();
 assert.equal(
   normalizedStaffOriginal,
-  staffHtml.replace(/\r\n/g, "\n").replace(/[ \t]+$/gm, "").trimEnd(),
-  "normal and original staff reservation pages must differ only by the approved title, marker, and banner",
+  normalizedStaff,
+  "normal and original staff reservation pages must differ only by the approved title, marker, banner, and role gate",
 );
 
 assert.match(

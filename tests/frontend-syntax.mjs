@@ -6,6 +6,7 @@ import vm from "node:vm";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const files = [
   "home.html",
+  "home_manager.html",
   "home_admin.html",
   "calc.html",
   "admin.html",

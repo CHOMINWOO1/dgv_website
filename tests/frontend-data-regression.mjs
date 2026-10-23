@@ -112,7 +112,11 @@ const browserGlobal = {
   DGV_SUPABASE_CONFIG: {
     url: "https://example.supabase.co",
     publishableKey: "public-test",
-    authAccounts: { staff: "staff@example.test", admin: "admin@example.test" },
+    authAccounts: {
+      staff: "staff@example.test",
+      manager: "manager@example.test",
+      admin: "admin@example.test",
+    },
   },
   DGV_DATA_UTILS: dataUtils,
   supabase: { createClient: () => ({ auth: {} }) },
@@ -120,6 +124,13 @@ const browserGlobal = {
 };
 browserGlobal.window = browserGlobal;
 vm.runInNewContext(clientSource, { window: browserGlobal, URL });
+assert.deepEqual(
+  JSON.parse(JSON.stringify(browserGlobal.DGV.validRoles)),
+  ["staff", "manager", "admin"],
+  "the browser client must recognize the three app_metadata roles",
+);
+assert.match(clientSource, /async function signInAsAny\(roles, password\)/);
+assert.match(clientSource, /return await signInAs\(role, password\)/);
 const xss = `<img src=x onerror=alert(1)> & "quoted"`;
 const safe = browserGlobal.DGV.escapeHTML(xss);
 assert.equal(safe, "&lt;img src=x onerror=alert(1)&gt; &amp; &quot;quoted&quot;");
@@ -357,9 +368,9 @@ assert.match(entryGateBlock, /placeholder: "보안코드"/);
 assert.match(entryGateBlock, /confirmLabel: "입장"/);
 assert.match(entryGateBlock, /DGV\.signInAs\("staff", code\)/, "entry role must remain staff");
 assert.match(entryGateBlock, /entered === null[\s\S]*?return false/);
-assert.match(calc, /DGV\.signInAs\("admin", pass\)/, "save role must remain admin");
-assert.match(calc, /desc: `\$\{actionLabel\}하려면 관리자 비밀번호를 입력하세요\.`,/);
-assert.match(calc, /placeholder: "관리자 비밀번호"/);
+assert.match(calc, /DGV\.signInAsAny\(\["manager", "admin"\], pass\)/, "save must accept manager and administrator credentials");
+assert.match(calc, /desc: `\$\{actionLabel\}하려면 매니저 또는 관리자 비밀번호를 입력하세요\.`,/);
+assert.match(calc, /placeholder: "매니저 또는 관리자 비밀번호"/);
 assert.match(calc, /confirmLabel: "확인"/);
 assert.match(calc, /e\.target\.id === "adminPassModal"[\s\S]*?closePassModal\(null\)/);
 assert.match(calc, /e\.key === "Escape"[\s\S]*?closePassModal\(null\)/);

@@ -53,7 +53,7 @@ assert.match(finalizeRpc, /p_table_id: tableId/);
 assert.match(finalizeRpc, /p_expected_orders: expectedOrders/);
 assert.doesNotMatch(inboxSource, /app_finalize_qr_order_checked/);
 assert.equal((inboxSource.match(/app_finalize_qr_table_orders_checked/g) || []).length, 1);
-assert.match(finalizePayment, /\["staff", "admin"\]\.includes\(identity\?\.role\)/);
+assert.match(finalizePayment, /\["staff", "manager", "admin"\]\.includes\(identity\?\.role\)/);
 assert.match(finalizePayment, /markTableCheckoutComplete\(data, paymentMethod\)[\s\S]*?closePayment\(\)[\s\S]*?await loadOrders\(\)/);
 assert.match(functionSource(inboxSource, "markTableCheckoutComplete"), /finalizedIds\.has\(order\.id\)[\s\S]*?finalized_order_id: paidOrderId[\s\S]*?renderOrders\(\)/);
 

@@ -296,7 +296,8 @@ assert.match(page, /rangeForm\.addEventListener\("submit"/i);
 assert.doesNotMatch(page, />관리자 홈<\/a>/i);
 assert.match(page, /document\.body\.classList\.remove\("locked"\)/i);
 assert.doesNotMatch(page, /QRStaff\.requireLogin\(/i);
-assert.match(page, /DGV\.signInAs\("admin", password\)/i);
+assert.match(page, /DGV\.signInAsAny\(\["manager", "admin"\], password\)/i);
+assert.match(page, /\["manager", "admin"\]\.includes\(identity\.role\)/i);
 assert.match(page, /id="adminAuthPassword"[^>]*type="password"[^>]*autocomplete="current-password"/i);
 assert.match(page, /requestAdminPassword\(\)/i);
 assert.doesNotMatch(page, /id="login(?:Modal|Form|Password|Role|Confirm)"/i);
@@ -359,4 +360,3 @@ assert.match(page, /async function deleteExpense\(row\)[\s\S]*?await refreshActi
 assert.match(page, /async function saveExpense\(event\)[\s\S]*?await refreshActiveView\(\)/i);
 
 console.log("Restaurant expense schema, RLS, ACL, and import-safety contracts passed.");
-

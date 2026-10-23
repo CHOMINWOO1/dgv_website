@@ -273,10 +273,10 @@
   <!-- ✅ Password Modal -->
   <div class="modalBack" id="passModal">
     <div class="modal" role="dialog" aria-modal="true">
-      <div class="modalTitle">관리자 비밀번호</div>
-      <p class="modalDesc">저장하려면 비밀번호를 입력하세요.</p>
+      <div class="modalTitle">매니저·관리자 비밀번호</div>
+      <p class="modalDesc">저장하려면 매니저 또는 관리자 비밀번호를 입력하세요.</p>
       <div class="modalRow">
-        <input id="passInput" type="password" placeholder="관리자 비밀번호" autocomplete="off"/>
+        <input id="passInput" type="password" placeholder="매니저 또는 관리자 비밀번호" autocomplete="off"/>
       </div>
       <div class="modalBtns">
         <button class="btn" id="passCancelBtn" type="button">취소</button>
@@ -558,7 +558,7 @@
     }
     async function verifyAdminPassword(pass){
       try{
-        await DGV.signInAs("admin", pass);
+        await DGV.signInAsAny(["manager", "admin"], pass);
         return true;
       }catch(error){
         return false;
@@ -566,7 +566,7 @@
 }
     async function getAdminPasswordForSave(){
   const identity = await DGV.getIdentity();
-  if (identity.role === "admin") return true;
+  if (["manager", "admin"].includes(identity.role)) return true;
 
   while(true){
     const pass = await new Promise((resolve) => {

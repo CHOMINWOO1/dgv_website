@@ -244,7 +244,7 @@
     // ===== Access Gate =====
 async function requireAccessGate(){
   const identity = await DGV.getIdentity();
-  const allowedRoles = ORIGINAL_VIEW ? ["admin"] : ["staff", "admin"];
+  const allowedRoles = ORIGINAL_VIEW ? ["admin"] : ["staff", "manager", "admin"];
   if (allowedRoles.includes(identity.role)) return true;
 
   while(true){
@@ -252,7 +252,8 @@ async function requireAccessGate(){
     if (!code) return false;
 
     try{
-      await DGV.signInAs(ORIGINAL_VIEW ? "admin" : "staff", code.trim());
+      const loginRoles = ORIGINAL_VIEW ? ["admin"] : ["staff", "manager", "admin"];
+      await DGV.signInAsAny(loginRoles, code.trim());
       return true;
     }catch(error){
       alert("보안코드가 올바르지 않습니다.");

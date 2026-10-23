@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 
 const STAFF_ACCOUNT_EMAIL = "staff@dgv.local";
+const MANAGER_ACCOUNT_EMAIL = "manager@dgv.local";
 const ADMIN_ACCOUNT_EMAIL = "admin@dgv.local";
 const ADMIN_SETTING_KEY = "delete_password";
 const MAX_REQUEST_BYTES = 512;
@@ -14,7 +15,11 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:4173",
 ]);
 
-type Action = "get_staff_code" | "set_staff_code" | "set_admin_password";
+type Action =
+  | "get_staff_code"
+  | "set_staff_code"
+  | "set_manager_password"
+  | "set_admin_password";
 type JsonRecord = Record<string, unknown>;
 type DatabaseClient = SupabaseClient;
 
@@ -172,7 +177,9 @@ async function parseRequest(req: Request): Promise<ParsedRequest> {
     return { action: value.action };
   }
   if (
-    value.action !== "set_staff_code" && value.action !== "set_admin_password"
+    value.action !== "set_staff_code" &&
+    value.action !== "set_manager_password" &&
+    value.action !== "set_admin_password"
   ) {
     throw new RequestError(400, "INVALID_ACTION", "Unsupported action");
   }
@@ -197,10 +204,13 @@ function bearerToken(req: Request): string {
 
 function appRole(user: User): string | null {
   const role = String(user.app_metadata?.role || "").toLowerCase();
-  return role === "admin" || role === "staff" ? role : null;
+  return role === "admin" || role === "manager" || role === "staff" ? role : null;
 }
 
-function derivedAuthPassword(role: "staff" | "admin", raw: string): string {
+function derivedAuthPassword(
+  role: "staff" | "manager" | "admin",
+  raw: string,
+): string {
   return `dgv-v2/${role}/${raw}`;
 }
 
@@ -264,6 +274,32 @@ async function findStaffUser(database: DatabaseClient): Promise<User> {
     "STAFF_ACCOUNT_MISSING",
     "The staff technical Auth account is not configured",
   );
+}
+
+async function findManagerUser(database: DatabaseClient): Promise<User | null> {
+  for (let page = 1; page <= 10; page += 1) {
+    const { data, error } = await database.auth.admin.listUsers({
+      page,
+      perPage: 100,
+    });
+    if (error) throw new Error("Unable to read technical Auth users");
+
+    const user = data.users.find((candidate) =>
+      candidate.email?.toLowerCase() === MANAGER_ACCOUNT_EMAIL
+    );
+    if (user) {
+      if (appRole(user) !== "manager") {
+        throw new RequestError(
+          409,
+          "MANAGER_ACCOUNT_ROLE_MISMATCH",
+          "The manager technical Auth account has an unexpected role",
+        );
+      }
+      return user;
+    }
+    if (data.users.length < 100) break;
+  }
+  return null;
 }
 
 async function restoreStaffCode(
@@ -374,6 +410,38 @@ async function setAdminPassword(
   throw new Error("Unable to update the admin Auth account");
 }
 
+async function setManagerPassword(
+  database: DatabaseClient,
+  password: string,
+): Promise<boolean> {
+  const managerUser = await findManagerUser(database);
+  const authPassword = derivedAuthPassword("manager", password);
+
+  if (!managerUser) {
+    const { data, error } = await database.auth.admin.createUser({
+      email: MANAGER_ACCOUNT_EMAIL,
+      password: authPassword,
+      email_confirm: true,
+      app_metadata: { role: "manager" },
+    });
+    if (
+      error ||
+      !data.user ||
+      data.user.email?.toLowerCase() !== MANAGER_ACCOUNT_EMAIL ||
+      appRole(data.user) !== "manager"
+    ) {
+      throw new Error("Unable to create the manager Auth account");
+    }
+    return true;
+  }
+
+  const { error } = await database.auth.admin.updateUserById(managerUser.id, {
+    password: authPassword,
+  });
+  if (error) throw new Error("Unable to update the manager Auth account");
+  return false;
+}
+
 export async function handler(req: Request): Promise<Response> {
   const origin = req.headers.get("origin");
   if (req.method === "OPTIONS") {
@@ -408,12 +476,18 @@ export async function handler(req: Request): Promise<Response> {
       });
     }
 
+    let managerCreated: boolean | null = null;
     if (parsed.action === "set_staff_code") {
       await setStaffCode(database, parsed.newPassword!);
-    } else {
+    } else if (parsed.action === "set_admin_password") {
       await setAdminPassword(database, adminUser, parsed.newPassword!);
+    } else {
+      managerCreated = await setManagerPassword(database, parsed.newPassword!);
     }
-    return jsonResponse(req, 200, { ok: true });
+    return jsonResponse(req, 200, {
+      ok: true,
+      ...(managerCreated === null ? {} : { created: managerCreated }),
+    });
   } catch (error) {
     if (error instanceof RequestError) {
       return jsonResponse(req, error.status, { ok: false, code: error.code });
