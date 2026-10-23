@@ -100,6 +100,7 @@ for (const printLabel of [
   "HANA 식당 지출 내역 / Chi phí nhà hàng HANA",
   "일반 지출 / Chi thường",
   "계산서 지출 / Chi có hóa đơn",
+  "인건비 지출 / Chi phí nhân công",
   "전체 지출 / Tổng chi phí",
   "입력 건수 / Số mục",
   "날짜 / Ngày",
@@ -135,6 +136,12 @@ assert.match(
   searchBlock,
   /\.select\(EXPENSE_COLUMNS\)[\s\S]*?\.gte\("expense_date", range\.start\)[\s\S]*?\.lte\("expense_date", range\.end\)/,
   "search must constrain the Supabase read to the current inclusive date range",
+);
+assert.match(page, /id="expenseCategoryFilter"/, "expense search needs a category selector");
+assert.match(
+  page,
+  /\.eq\("expense_type",\s*(?:category|searchType|selectedCategory)\)/,
+  "a category search must be constrained on the server",
 );
 assert.match(page, /const EXPENSE_COLUMNS = "id,expense_date,expense_type,description,vendor,amount_vnd,note,created_at"/);
 assert.doesNotMatch(
@@ -179,13 +186,13 @@ assert.ok(xlsx?.buildWorkbookBytes, "local DGV_XLSX helper must be usable");
 
 const handlers = new Map();
 const elements = new Map();
-const labels = { printExpenseBtn: "출력", exportExpenseBtn: "엑셀 생성", refreshBtn: "조회", searchBtn: "전체 검색", saveBtn: "지출 저장" };
+const labels = { printExpenseBtn: "출력", exportExpenseBtn: "엑셀 생성", refreshBtn: "조회", searchBtn: "검색", saveBtn: "지출 저장" };
 
 function element(id) {
   if (elements.has(id)) return elements.get(id);
   const value = {
     id,
-    value: "",
+    value: id === "expenseCategoryFilter" ? "all" : "",
     hidden: false,
     disabled: false,
     textContent: labels[id] || "",
@@ -235,20 +242,39 @@ const latestRangeRows = [
     amount_vnd: 250000,
     created_at: "2026-10-21T01:00:00Z",
   },
+  {
+    id: "range-labor",
+    expense_date: "2026-10-20",
+    expense_type: "labor",
+    description: "파트타임 급여",
+    vendor: "직원",
+    note: "Nhân công",
+    amount_vnd: 180000,
+    created_at: "2026-10-20T02:00:00Z",
+  },
 ];
 const firstSearchRows = [
   { ...latestRangeRows[0], id: "search-first-20", description: "베트남 20일 내역", note: "Việt Nam 20", amount_vnd: 220000 },
   { ...latestRangeRows[1], id: "search-first-21", description: "베트남 21일 내역", note: "Việt Nam 21", amount_vnd: 221000 },
-  { ...latestRangeRows[0], id: "search-first-before", expense_date: "2026-10-19", description: "베트남 범위 이전", note: "OUTSIDE BEFORE" },
-  { ...latestRangeRows[1], id: "search-first-after", expense_date: "2026-10-22", description: "베트남 범위 이후", note: "OUTSIDE AFTER" },
-  { ...latestRangeRows[1], id: "search-first-nonmatch", description: "한국 전용", note: "불일치" },
+  { ...latestRangeRows[2], id: "search-first-labor-20", description: "베트남 인건비 20일", note: "Việt Nam nhân công 20", amount_vnd: 230000 },
+  { ...latestRangeRows[2], id: "search-first-labor-21", expense_date: "2026-10-21", description: "베트남 인건비 21일", note: "Việt Nam nhân công 21", amount_vnd: 231000 },
+  { ...latestRangeRows[2], id: "search-first-before", expense_date: "2026-10-19", description: "베트남 인건비 범위 이전", note: "OUTSIDE BEFORE" },
+  { ...latestRangeRows[2], id: "search-first-after", expense_date: "2026-10-22", description: "베트남 인건비 범위 이후", note: "OUTSIDE AFTER" },
+  { ...latestRangeRows[2], id: "search-first-nonmatch", description: "한국 인건비", note: "불일치" },
 ];
 const latestSearchRows = [
   { ...latestRangeRows[0], id: "search-latest-20", description: "베트남 최신 20일", note: "Việt Nam mới 20", amount_vnd: 320000 },
   { ...latestRangeRows[1], id: "search-latest-21", description: "베트남 최신 21일", note: "Việt Nam mới 21", amount_vnd: 333000 },
-  { ...latestRangeRows[0], id: "search-latest-before", expense_date: "2026-10-19", description: "베트남 최신 범위 이전", note: "OUTSIDE BEFORE" },
-  { ...latestRangeRows[1], id: "search-latest-after", expense_date: "2026-10-22", description: "베트남 최신 범위 이후", note: "OUTSIDE AFTER" },
-  { ...latestRangeRows[0], id: "search-latest-nonmatch", description: "한국 전용", note: "불일치" },
+  { ...latestRangeRows[2], id: "search-latest-labor-20", description: "베트남 최신 인건비 20일", note: "Việt Nam nhân công mới 20", amount_vnd: 330000 },
+  { ...latestRangeRows[2], id: "search-latest-labor-21", expense_date: "2026-10-21", description: "베트남 최신 인건비 21일", note: "Việt Nam nhân công mới 21", amount_vnd: 331000 },
+  { ...latestRangeRows[2], id: "search-latest-before", expense_date: "2026-10-19", description: "베트남 최신 인건비 범위 이전", note: "OUTSIDE BEFORE" },
+  { ...latestRangeRows[2], id: "search-latest-after", expense_date: "2026-10-22", description: "베트남 최신 인건비 범위 이후", note: "OUTSIDE AFTER" },
+  { ...latestRangeRows[2], id: "search-latest-nonmatch", description: "한국 인건비", note: "불일치" },
+];
+const categoryOnlyRows = [
+  { ...latestRangeRows[0], id: "category-general", description: "일반 지출 전용" },
+  { ...latestRangeRows[1], id: "category-invoice", description: "계산서 카테고리 전용", amount_vnd: 444000 },
+  { ...latestRangeRows[2], id: "category-labor", description: "인건비 카테고리 전용" },
 ];
 const resultQueue = [
   staleRangeRows,
@@ -257,6 +283,7 @@ const resultQueue = [
   firstSearchRows,
   latestSearchRows,
   latestSearchRows,
+  categoryOnlyRows,
 ];
 let queryCalls = 0;
 const queryOperations = [];
@@ -303,9 +330,11 @@ const pageContext = {
       queryBatches.push(operations);
       const lowerBound = operations.find(([operation, column]) => operation === "gte" && column === "expense_date")?.[2];
       const upperBound = operations.find(([operation, column]) => operation === "lte" && column === "expense_date")?.[2];
+      const expenseType = operations.find(([operation, column]) => operation === "eq" && column === "expense_type")?.[2];
       const rows = sourceRows?.filter((row) =>
         (!lowerBound || row.expense_date >= lowerBound)
-        && (!upperBound || row.expense_date <= upperBound));
+        && (!upperBound || row.expense_date <= upperBound)
+        && (!expenseType || row.expense_type === expenseType));
       assert.ok(rows, `unexpected expense query ${queryCalls}`);
       return rows;
     },
@@ -373,6 +402,10 @@ assert.match(element("printGeneratedAt").textContent, /^출력 일시 \/ Thời 
 assert.match(element("expenseRows").innerHTML, /=HYPERLINK\(&quot;https:\/\/example\.com&quot;\)/);
 assert.match(element("expenseRows").innerHTML, /베트남 매입 Việt Nam/);
 assert.match(element("expenseRows").innerHTML, /Chợ Đà Lạt/);
+assert.match(element("expenseRows").innerHTML, /파트타임 급여/);
+assert.match(element("expenseRows").innerHTML, /인건비 지출/);
+assert.equal(element("laborSubtotal").textContent, "180,000 VND");
+assert.equal(element("totalAmount").textContent, "555,000 VND");
 assert.doesNotMatch(element("expenseRows").innerHTML, /내보내면 안 되는 이전 값|이전 거래처/);
 
 const exportHandler = handlers.get("exportExpenseBtn:click");
@@ -391,7 +424,7 @@ assert.deepEqual(
   Array.from(rangeSheetRows[4], (cell) => cell.value),
   ["날짜 / Ngày", "구분 / Phân loại", "내역 / Nội dung", "거래처 / Đối tác", "비고 / Ghi chú", "금액(VND) / Số tiền (VND)"],
 );
-assert.equal(rangeSheetRows.length, 8, "only the two freshly displayed range rows plus fixed report rows should export");
+assert.equal(rangeSheetRows.length, 9, "only the three freshly displayed range rows plus fixed report rows should export");
 assert.equal(rangeSheetRows[5][2].value, '=HYPERLINK("https://example.com")');
 assert.equal(rangeSheetRows[5][3].value, "하나마트");
 assert.equal(rangeSheetRows[5][4].value, "베트남 매입 Việt Nam");
@@ -399,6 +432,8 @@ assert.equal(rangeSheetRows[5][5].value, 125000);
 assert.equal(rangeSheetRows[5][5].style, "integer");
 assert.match(rangeSheetRows[5][1].value, /^일반 지출 \/ .*[ăâđêôơư]/iu);
 assert.match(rangeSheetRows[6][1].value, /^계산서 지출 \/ .*[ăâđêôơư]/iu);
+assert.equal(rangeSheetRows[7][1].value, "인건비 지출 / Chi phí nhân công");
+assert.equal(rangeSheetRows[7][5].value, 180000);
 assert.equal(JSON.stringify(rangeWorkbook).includes("stale-row"), false);
 assert.equal(JSON.stringify(rangeWorkbook).includes("이전 거래처"), false);
 
@@ -408,6 +443,7 @@ const rangeXml = new TextDecoder().decode(rangeEntries.get("xl/worksheets/sheet1
 assert.match(rangeXml, /한글|하나마트/);
 assert.match(rangeXml, /Việt Nam/);
 assert.match(rangeXml, /Chợ Đà Lạt/);
+assert.match(rangeXml, /인건비 지출 \/ Chi phí nhân công/);
 assert.match(rangeXml, /=HYPERLINK\(&quot;https:\/\/example\.com&quot;\)/);
 assert.doesNotMatch(rangeXml, /<f(?:\s|>)/, "formula-like expense text must remain an inline string");
 assert.match(rangeXml, /<c r="F6" s="2"><v>125000<\/v><\/c>/, "VND must be a numeric integer-formatted cell");
@@ -417,6 +453,7 @@ assert.match(rangeXml, /<c r="F6" s="2"><v>125000<\/v><\/c>/, "VND must be a num
 element("rangeStart").value = "2026-10-20";
 element("rangeEnd").value = "2026-10-21";
 element("expenseSearch").value = "베트남";
+element("expenseCategoryFilter").value = "labor";
 const searchHandler = handlers.get("searchForm:submit");
 assert.equal(typeof searchHandler, "function", "search handler is not wired");
 await searchHandler({ preventDefault() {} });
@@ -427,9 +464,14 @@ assert.deepEqual(
   [["gte", "expense_date", "2026-10-20"], ["lte", "expense_date", "2026-10-21"]],
   "search must query the date inputs immediately, without requiring a separate 조회 click",
 );
-assert.match(element("expenseRows").innerHTML, /베트남 20일 내역/);
-assert.match(element("expenseRows").innerHTML, /베트남 21일 내역/);
-assert.doesNotMatch(element("expenseRows").innerHTML, /OUTSIDE BEFORE|OUTSIDE AFTER|한국 전용/);
+assert.deepEqual(
+  queryBatches[3].filter(([operation, column]) => operation === "eq" && column === "expense_type"),
+  [["eq", "expense_type", "labor"]],
+  "category search must be pushed into the Supabase query",
+);
+assert.match(element("expenseRows").innerHTML, /베트남 인건비 20일/);
+assert.match(element("expenseRows").innerHTML, /베트남 인건비 21일/);
+assert.doesNotMatch(element("expenseRows").innerHTML, /베트남 20일 내역|베트남 21일 내역|OUTSIDE BEFORE|OUTSIDE AFTER|한국 인건비/);
 
 // Print must refresh the search with date inputs changed since the search.
 element("rangeStart").value = "2026-10-21";
@@ -445,9 +487,10 @@ assert.deepEqual(
 );
 assert.match(element("printCriteria").textContent, /2026-10-21\s*~\s*2026-10-21/);
 assert.match(element("printCriteria").textContent, /베트남/);
-assert.match(element("expenseRows").innerHTML, /베트남 최신 21일/);
-assert.match(element("expenseRows").innerHTML, /Việt Nam mới 21/);
-assert.doesNotMatch(element("expenseRows").innerHTML, /최신 20일|OUTSIDE BEFORE|OUTSIDE AFTER|한국 전용/);
+assert.match(element("printCriteria").textContent, /카테고리 \/ Phân loại:\s*인건비 지출 \/ Chi phí nhân công/);
+assert.match(element("expenseRows").innerHTML, /베트남 최신 인건비 21일/);
+assert.match(element("expenseRows").innerHTML, /Việt Nam nhân công mới 21/);
+assert.doesNotMatch(element("expenseRows").innerHTML, /최신 인건비 20일|베트남 최신 21일|OUTSIDE BEFORE|OUTSIDE AFTER|한국 인건비/);
 
 // XLSX must independently refresh with the date inputs changed again.
 element("rangeStart").value = "2026-10-20";
@@ -466,10 +509,32 @@ assert.equal(searchWorkbook.filename, "HANA_Expenses_Search_2026-10-20_2026-10-2
 assert.equal(searchWorkbook.sheets[0].rows.length, 7, "only the one freshly displayed matching search row should export");
 assert.match(searchWorkbook.sheets[0].rows[1][1].value, /2026-10-20\s*~\s*2026-10-20/);
 assert.match(searchWorkbook.sheets[0].rows[1][1].value, /베트남/);
+assert.match(searchWorkbook.sheets[0].rows[1][1].value, /카테고리 \/ Phân loại:\s*인건비 지출 \/ Chi phí nhân công/);
 const searchJson = JSON.stringify(searchWorkbook);
-assert.match(searchJson, /베트남 최신 20일/);
-assert.match(searchJson, /Việt Nam mới 20/);
-assert.doesNotMatch(searchJson, /최신 21일|OUTSIDE BEFORE|OUTSIDE AFTER|한국 전용/);
+assert.match(searchJson, /베트남 최신 인건비 20일/);
+assert.match(searchJson, /Việt Nam nhân công mới 20/);
+assert.match(searchJson, /인건비 지출 \/ Chi phí nhân công/);
+assert.doesNotMatch(searchJson, /최신 인건비 21일|베트남 최신 20일|OUTSIDE BEFORE|OUTSIDE AFTER|한국 인건비/);
+
+// A category alone is a valid selected-range search; text is optional when a
+// category other than "all" is chosen.
+element("rangeStart").value = "2026-10-20";
+element("rangeEnd").value = "2026-10-21";
+element("expenseSearch").value = "";
+element("expenseCategoryFilter").value = "invoice";
+await searchHandler({ preventDefault() {} });
+await settle();
+assert.equal(queryCalls, 7, "category-only search must issue a range-constrained read");
+assert.deepEqual(
+  queryBatches[6].filter(([operation]) => operation === "gte" || operation === "lte"),
+  [["gte", "expense_date", "2026-10-20"], ["lte", "expense_date", "2026-10-21"]],
+);
+assert.deepEqual(
+  queryBatches[6].filter(([operation, column]) => operation === "eq" && column === "expense_type"),
+  [["eq", "expense_type", "invoice"]],
+);
+assert.match(element("expenseRows").innerHTML, /계산서 카테고리 전용/);
+assert.doesNotMatch(element("expenseRows").innerHTML, /일반 지출 전용|인건비 카테고리 전용/);
 
 assert.equal(element("exportExpenseBtn").disabled, false, "Excel button must recover after export");
 assert.equal(element("exportExpenseBtn").textContent, "엑셀 생성");
