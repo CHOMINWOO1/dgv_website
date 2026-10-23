@@ -816,7 +816,7 @@
 
 async function requireAccessGate(){
   const identity = await DGV.getIdentity();
-  if (["staff", "admin"].includes(identity.role)) return true;
+  if (["staff", "manager", "admin"].includes(identity.role)) return true;
 
   while(true){
     const entered = await openPassModal({
@@ -1409,9 +1409,9 @@ function syncSpecialFromUsd(){
   let passModalBusy = false;
 
   function openPassModal({
-    title="관리자 로그인",
-    desc="저장하려면 관리자 비밀번호를 입력하세요.",
-    placeholder="관리자 비밀번호",
+    title="매니저·관리자 로그인",
+    desc="저장하려면 매니저 또는 관리자 비밀번호를 입력하세요.",
+    placeholder="매니저 또는 관리자 비밀번호",
     confirmLabel="확인"
   } = {}){
     passTitle.textContent = title;
@@ -1450,7 +1450,7 @@ function syncSpecialFromUsd(){
 
   async function verifyAdminPassword(pass){
     try{
-      await DGV.signInAs("admin", pass);
+      await DGV.signInAsAny(["manager", "admin"], pass);
       return true;
     }catch(e){
       console.error(e);
@@ -1460,13 +1460,13 @@ function syncSpecialFromUsd(){
 
   async function requireAdminPasswordModal({ actionLabel="저장" } = {}){
     const identity = await DGV.getIdentity();
-    if (identity.role === "admin") return true;
+    if (["manager", "admin"].includes(identity.role)) return true;
 
     while (true){
       const entered = await openPassModal({
-        title: "관리자 로그인",
-        desc: `${actionLabel}하려면 관리자 비밀번호를 입력하세요.`,
-        placeholder: "관리자 비밀번호",
+        title: "매니저·관리자 로그인",
+        desc: `${actionLabel}하려면 매니저 또는 관리자 비밀번호를 입력하세요.`,
+        placeholder: "매니저 또는 관리자 비밀번호",
         confirmLabel: "확인"
       });
 
@@ -1815,3 +1815,4 @@ document.getElementById("spUsd")?.addEventListener("input", () => {
   </script>
 </body>
 </html>
+
