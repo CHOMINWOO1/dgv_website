@@ -103,7 +103,8 @@
     return new Promise((resolve) => {
       async function submit(event) {
         event.preventDefault();
-        const requestedRole = byId("loginRole")?.value || preferredRole;
+        const roleSelect = byId("loginRole");
+        const requestedRole = roleSelect?.value || preferredRole;
         if (!roles.includes(requestedRole)) {
           toast("이 페이지에서 사용할 수 없는 권한입니다.", "error");
           return;
@@ -116,7 +117,10 @@
         }
         setBusy(confirm, true, "로그인 중…");
         try {
-          const result = await DGV.signInAs(requestedRole, password);
+          const loginRoles = roleSelect
+            ? [requestedRole]
+            : [preferredRole, ...roles.filter((role) => role !== preferredRole)];
+          const result = await DGV.signInAsAny(loginRoles, password);
           if (!roles.includes(result.role)) throw new Error("허용되지 않은 역할입니다.");
           modal.hidden = true;
           document.body.style.overflow = "";
@@ -124,9 +128,14 @@
           resolve(result);
         } catch (error) {
           console.error(error);
-          toast(requestedRole === "admin"
-            ? "관리자 비밀번호가 올바르지 않습니다."
-            : "직원 비밀번호가 올바르지 않습니다.", "error");
+          const roleLabel = requestedRole === "admin"
+            ? "관리자"
+            : requestedRole === "manager"
+              ? "매니저"
+              : "직원";
+          toast(roleSelect
+            ? `${roleLabel} 비밀번호가 올바르지 않습니다.`
+            : "사용 가능한 비밀번호가 올바르지 않습니다.", "error");
           input.select();
         } finally {
           setBusy(confirm, false);
@@ -215,3 +224,4 @@
     toast
   });
 })(window);
+
