@@ -13,7 +13,7 @@
     .expense-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
     .expense-field{display:flex;flex-direction:column;gap:6px;min-width:0;}
     .expense-field-wide{grid-column:1/-1;}
-    .expense-type{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0;padding:0;border:0;}
+    .expense-type{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0;padding:0;border:0;}
     .expense-type-option{position:relative;display:flex;align-items:center;justify-content:center;min-height:48px;padding:10px;border:1px solid var(--qr-line);border-radius:12px;background:#fff;font-weight:950;cursor:pointer;}
     .expense-type-option:has(input:checked){border-color:var(--qr-gold);background:var(--qr-gold-soft);box-shadow:0 0 0 2px rgba(202,162,76,.12);}
     .expense-type-option input{position:absolute;opacity:0;pointer-events:none;}
@@ -27,7 +27,8 @@
     .expense-range-actions{display:flex;gap:8px;flex-wrap:wrap;}
     .expense-global-search{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin:0 0 12px;padding:12px;border:1px solid var(--qr-line);border-radius:14px;background:#fffaf0;}
     .expense-global-search .qr-field{flex:1 1 280px;min-width:220px;}
-    .expense-summary{grid-template-columns:repeat(4,minmax(0,1fr));}
+    .expense-global-search .expense-category-field{flex:0 1 220px;min-width:190px;}
+    .expense-summary{grid-template-columns:repeat(5,minmax(0,1fr));}
     .expense-summary .qr-summary-value{font-size:clamp(17px,2.1vw,23px);overflow-wrap:anywhere;}
     .expense-table-wrap{overflow-x:auto;border:1px solid var(--qr-line);border-radius:14px;background:#fff;}
     .expense-table{width:100%;border-collapse:collapse;min-width:720px;}
@@ -42,6 +43,7 @@
     .expense-actions .danger{border-color:#d9a7a7;color:#9b2424;}
     .expense-kind{display:inline-flex;padding:4px 8px;border-radius:999px;background:#f3eee6;color:var(--qr-sub);font-size:11px;font-weight:1000;white-space:nowrap;}
     .expense-kind[data-type="invoice"]{background:#fff0c9;color:#75510c;}
+    .expense-kind[data-type="labor"]{background:#e9f3ff;color:#235b91;}
     .expense-status{min-height:20px;margin:10px 2px 0;color:var(--qr-sub);font-size:12px;font-weight:850;}
     .expense-status[data-tone="error"]{color:var(--qr-bad);}
     .expense-empty{padding:42px 16px;text-align:center;color:var(--qr-sub);font-weight:850;}
@@ -56,7 +58,7 @@
       .expense-table td{display:grid;grid-template-columns:82px minmax(0,1fr);gap:10px;padding:7px 4px;border-bottom:1px dashed #eee4d3;text-align:left;}
       .expense-table td:last-child{border-bottom:0;}.expense-table td:before{content:attr(data-label);color:var(--qr-sub);font-size:11px;font-weight:1000;}.expense-table .amount{text-align:left;}.expense-table .note{max-width:none;}
     }
-    @media(max-width:430px){.expense-summary{grid-template-columns:1fr 1fr;}.expense-type{grid-template-columns:1fr;}.expense-range-control .qr-field{min-width:100%;}.expense-range-actions,.expense-range-control .qr-btn,.expense-global-search .qr-btn{width:100%;}}
+    @media(max-width:430px){.expense-summary{grid-template-columns:1fr 1fr;}.expense-type{grid-template-columns:1fr;}.expense-range-control .qr-field,.expense-global-search .expense-category-field{min-width:100%;}.expense-range-actions,.expense-range-control .qr-btn,.expense-global-search .qr-btn{width:100%;}}
     @page{size:A4 landscape;margin:10mm;}
     @media print{
       html,body{background:#fff!important;color:#111!important;}
@@ -71,7 +73,7 @@
       .expense-print-head{display:block!important;margin:0 0 7mm;}
       .expense-print-head h1{margin:0 0 2mm;font-size:19pt;line-height:1.2;}
       .expense-print-head p{margin:1mm 0;color:#333;font-size:9.5pt;font-weight:700;}
-      .expense-summary{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:3mm!important;margin:0 0 5mm!important;}
+      .expense-summary{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:3mm!important;margin:0 0 5mm!important;}
       .expense-summary .qr-card{padding:3mm!important;border:1px solid #888!important;border-radius:0!important;background:#fff!important;box-shadow:none!important;break-inside:avoid;}
       .expense-summary .qr-summary-label{color:#333!important;font-size:8.5pt!important;}
       .expense-summary .qr-summary-value{color:#111!important;font-size:12pt!important;}
@@ -123,6 +125,7 @@
               <fieldset class="expense-type" aria-labelledby="expenseTypeLabel">
                 <label class="expense-type-option"><input type="radio" name="expenseType" value="general" checked />일반 지출</label>
                 <label class="expense-type-option"><input type="radio" name="expenseType" value="invoice" />계산서 지출</label>
+                <label class="expense-type-option"><input type="radio" name="expenseType" value="labor" />인건비 지출</label>
               </fieldset>
             </div>
             <div class="expense-field expense-field-wide">
@@ -183,6 +186,15 @@
             <label class="qr-label" for="expenseSearch">선택 기간 내 검색</label>
             <input class="qr-input" id="expenseSearch" name="expenseSearch" type="search" placeholder="내역·거래처·비고·날짜·금액 검색" autocomplete="off" />
           </div>
+          <div class="qr-field expense-category-field">
+            <label class="qr-label" for="expenseCategoryFilter">지출 카테고리</label>
+            <select class="qr-select" id="expenseCategoryFilter" name="expenseCategoryFilter">
+              <option value="all">전체 카테고리</option>
+              <option value="general">일반 지출</option>
+              <option value="invoice">계산서 지출</option>
+              <option value="labor">인건비 지출</option>
+            </select>
+          </div>
           <button class="qr-btn qr-btn-primary" id="searchBtn" type="submit">검색</button>
           <button class="qr-btn" id="clearSearchBtn" type="button" hidden>검색 초기화</button>
         </form>
@@ -190,6 +202,7 @@
         <div class="qr-summary expense-summary" aria-label="지출 내역 요약">
           <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">일반 지출</span><span class="print-only">일반 지출 / Chi thường</span></div><div class="qr-summary-value" id="generalSubtotal">0 VND</div></div>
           <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">계산서 지출</span><span class="print-only">계산서 지출 / Chi có hóa đơn</span></div><div class="qr-summary-value" id="invoiceSubtotal">0 VND</div></div>
+          <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">인건비 지출</span><span class="print-only">인건비 지출 / Chi phí nhân công</span></div><div class="qr-summary-value" id="laborSubtotal">0 VND</div></div>
           <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">전체 지출</span><span class="print-only">전체 지출 / Tổng chi phí</span></div><div class="qr-summary-value" id="totalAmount">0 VND</div></div>
           <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">입력 건수</span><span class="print-only">입력 건수 / Số mục</span></div><div class="qr-summary-value" id="entryCount">0건</div></div>
         </div>
@@ -252,6 +265,7 @@
     const rangeEnd = document.getElementById("rangeEnd");
     const searchForm = document.getElementById("searchForm");
     const searchInput = document.getElementById("expenseSearch");
+    const expenseCategoryFilter = document.getElementById("expenseCategoryFilter");
     const searchBtn = document.getElementById("searchBtn");
     const clearSearchBtn = document.getElementById("clearSearchBtn");
     const refreshBtn = document.getElementById("refreshBtn");
@@ -311,18 +325,39 @@
       return String(value || "").replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 15);
     }
 
+    function normalizeExpenseType(value){
+      return ["general", "invoice", "labor"].includes(value) ? value : "general";
+    }
+
     function selectedType(){
-      return form.elements.expenseType.value === "invoice" ? "invoice" : "general";
+      return normalizeExpenseType(form.elements.expenseType.value);
     }
 
     function typeLabel(value){
-      return value === "invoice" ? "계산서 지출" : "일반 지출";
+      const type = normalizeExpenseType(value);
+      if (type === "invoice") return "계산서 지출";
+      if (type === "labor") return "인건비 지출";
+      return "일반 지출";
     }
 
     function typeBilingualLabel(value){
-      return value === "invoice"
-        ? "계산서 지출 / Chi có hóa đơn"
-        : "일반 지출 / Chi thường";
+      const type = normalizeExpenseType(value);
+      if (type === "invoice") return "계산서 지출 / Chi có hóa đơn";
+      if (type === "labor") return "인건비 지출 / Chi phí nhân công";
+      return "일반 지출 / Chi thường";
+    }
+
+    function selectedSearchType(){
+      const value = expenseCategoryFilter.value;
+      return ["general", "invoice", "labor"].includes(value) ? value : "all";
+    }
+
+    function searchCategoryLabel(value=selectedSearchType()){
+      return value === "all" ? "전체 카테고리 / Tất cả danh mục" : typeBilingualLabel(value);
+    }
+
+    function hasSearchCriteria(){
+      return searchTerms().length > 0 || selectedSearchType() !== "all";
     }
 
     function normalizeSearch(value){
@@ -379,7 +414,7 @@
     function beginEdit(row){
       editingId = String(row.id);
       dateInput.value = String(row.expense_date || "");
-      form.elements.expenseType.value = row.expense_type === "invoice" ? "invoice" : "general";
+      form.elements.expenseType.value = normalizeExpenseType(row.expense_type);
       amountInput.value = Number(row.amount_vnd || 0).toLocaleString("ko-KR");
       descriptionInput.value = String(row.description || "");
       vendorInput.value = String(row.vendor || "");
@@ -393,13 +428,14 @@
     function updateSummary(rows){
       const totals = rows.reduce((sum, row) => {
         const amount = Math.max(0, Number(row.amount_vnd) || 0);
-        if (row.expense_type === "invoice") sum.invoice += amount;
-        else sum.general += amount;
+        const type = normalizeExpenseType(row.expense_type);
+        sum[type] += amount;
         return sum;
-      }, { general:0, invoice:0 });
+      }, { general:0, invoice:0, labor:0 });
       document.getElementById("generalSubtotal").textContent = formatVnd(totals.general);
       document.getElementById("invoiceSubtotal").textContent = formatVnd(totals.invoice);
-      document.getElementById("totalAmount").textContent = formatVnd(totals.general + totals.invoice);
+      document.getElementById("laborSubtotal").textContent = formatVnd(totals.labor);
+      document.getElementById("totalAmount").textContent = formatVnd(totals.general + totals.invoice + totals.labor);
       document.getElementById("entryCount").textContent = `${rows.length.toLocaleString("ko-KR")}건`;
     }
 
@@ -407,7 +443,7 @@
       displayedRows = rows.slice();
       currentRows = new Map(displayedRows.map((row) => [String(row.id), row]));
       rowsEl.innerHTML = displayedRows.map((row) => {
-        const type = row.expense_type === "invoice" ? "invoice" : "general";
+        const type = normalizeExpenseType(row.expense_type);
         const vendor = String(row.vendor || "").trim();
         const note = String(row.note || "").trim();
         const rowId = escapeHtml(String(row.id || ""));
@@ -434,13 +470,13 @@
       return query ? query.split(" ").filter(Boolean) : [];
     }
 
-    function filteredExpenses(rows, terms){
-      return terms.length
-        ? rows.filter((row) => {
-          const haystack = searchableExpenseText(row);
-          return terms.every((term) => haystack.includes(term));
-        })
-        : rows;
+    function filteredExpenses(rows, terms, category=selectedSearchType()){
+      return rows.filter((row) => {
+        if (category !== "all" && normalizeExpenseType(row.expense_type) !== category) return false;
+        if (!terms.length) return true;
+        const haystack = searchableExpenseText(row);
+        return terms.every((term) => haystack.includes(term));
+      });
     }
 
     function renderRangeRows(){
@@ -456,7 +492,8 @@
 
     function renderSearchResults(){
       const terms = searchTerms();
-      const rows = filteredExpenses(allRows, terms);
+      const category = selectedSearchType();
+      const rows = filteredExpenses(allRows, terms, category);
       const start = loadedRange.start || rangeStart.value;
       const end = loadedRange.end || rangeEnd.value;
       searchMode = true;
@@ -464,7 +501,7 @@
       emptyState.textContent = "선택한 기간에서 검색 조건과 일치하는 지출 내역이 없습니다.";
       renderRows(rows);
       loadStatus.dataset.tone = "";
-      loadStatus.textContent = `${start} ~ ${end} 지출 ${allRows.length.toLocaleString("ko-KR")}건 중 검색 결과 ${rows.length.toLocaleString("ko-KR")}건입니다.`;
+      loadStatus.textContent = `${start} ~ ${end} ${category === "all" ? "전체 카테고리" : typeLabel(category)} 검색 결과 ${rows.length.toLocaleString("ko-KR")}건입니다.`;
     }
 
     async function verifyAdminSession(){
@@ -520,6 +557,7 @@
         loadedRange = range;
         if (clearSearch){
           searchInput.value = "";
+          expenseCategoryFilter.value = "all";
           allRows = [];
         }
         renderRangeRows();
@@ -547,9 +585,10 @@
 
     async function loadSearchResults(){
       const terms = searchTerms();
-      if (!terms.length){
-        QRStaff.toast("검색어를 입력해 주세요.", "error");
-        searchInput.focus();
+      const category = selectedSearchType();
+      if (!terms.length && category === "all"){
+        QRStaff.toast("검색어를 입력하거나 지출 카테고리를 선택해 주세요.", "error");
+        expenseCategoryFilter.focus();
         return null;
       }
       const range = requestedRange();
@@ -560,11 +599,14 @@
       QRStaff.setBusy(searchBtn, true, "검색 중…");
       try{
         const rows = await DGV.collectSupabasePages(
-          () => sb
-            .from("restaurant_expenses")
-            .select(EXPENSE_COLUMNS)
-            .gte("expense_date", range.start)
-            .lte("expense_date", range.end),
+          () => {
+            const query = sb
+              .from("restaurant_expenses")
+              .select(EXPENSE_COLUMNS)
+              .gte("expense_date", range.start)
+              .lte("expense_date", range.end);
+            return category === "all" ? query : query.eq("expense_type", category);
+          },
           { order:[
             { column:"expense_date", ascending:false },
             { column:"created_at", ascending:false },
@@ -603,14 +645,27 @@
 
     async function clearSearch(){
       searchInput.value = "";
+      expenseCategoryFilter.value = "all";
       allRows = [];
       await loadRange({ clearSearch:true });
       searchInput.focus();
     }
 
     async function refreshActiveView(){
-      if (searchMode && searchTerms().length) return loadSearchResults();
+      if (searchMode && hasSearchCriteria()) return loadSearchResults();
       return loadRange({ clearSearch:false });
+    }
+
+    function searchCriteriaText(){
+      const start = loadedRange.start || rangeStart.value;
+      const end = loadedRange.end || rangeEnd.value;
+      const parts = [
+        `조회 기간 / Khoảng thời gian tra cứu: ${start} ~ ${end}`,
+        `카테고리 / Phân loại: ${searchCategoryLabel()}`
+      ];
+      const keyword = searchInput.value.trim();
+      if (keyword) parts.push(`검색어 / Từ khóa tìm kiếm: ${keyword}`);
+      return parts.join(" · ");
     }
 
     async function printExpenses(){
@@ -625,9 +680,9 @@
           QRStaff.toast("출력할 지출 내역이 없습니다.", "error");
           return;
         }
-        const exportingSearch = searchMode && searchTerms().length > 0;
+        const exportingSearch = searchMode && hasSearchCriteria();
         printCriteria.textContent = exportingSearch
-          ? `조회 기간 / Khoảng thời gian tra cứu: ${loadedRange.start || rangeStart.value} ~ ${loadedRange.end || rangeEnd.value} · 검색어 / Từ khóa tìm kiếm: ${searchInput.value.trim()}`
+          ? searchCriteriaText()
           : `조회 기간 / Thời gian tra cứu: ${loadedRange.start || rangeStart.value} ~ ${loadedRange.end || rangeEnd.value}`;
         printGeneratedAt.textContent = `출력 일시 / Thời gian in: ${new Date().toLocaleString("ko-KR", { timeZone:BUSINESS_TIME_ZONE })}`;
         await new Promise((resolve) => {
@@ -651,7 +706,7 @@
       exportExpenseBtn.textContent = "생성 중…";
       try{
         if (!window.DGV_XLSX?.downloadWorkbook) throw new Error("XLSX exporter is unavailable");
-        const exportingSearch = searchMode && searchTerms().length > 0;
+        const exportingSearch = searchMode && hasSearchCriteria();
         const rows = await refreshActiveView();
         if (!Array.isArray(rows)) throw new Error("Latest expense rows could not be loaded");
         if (!rows.length){
@@ -674,7 +729,7 @@
           "금액(VND) / Số tiền (VND)"
         ].map((label) => textCell(label, "header"));
         const criteria = exportingSearch
-          ? `조회 기간 / Khoảng thời gian tra cứu: ${loadedRange.start || rangeStart.value} ~ ${loadedRange.end || rangeEnd.value} · 검색어 / Từ khóa tìm kiếm: ${searchInput.value.trim()}`
+          ? searchCriteriaText()
           : `${loadedRange.start || rangeStart.value} ~ ${loadedRange.end || rangeEnd.value}`;
         const dataRows = rows.map((row) => [
           textCell(row.expense_date),
@@ -789,7 +844,12 @@
     searchForm.addEventListener("submit", searchAllExpenses);
     searchInput.addEventListener("input", () => {
       if (!searchMode) return;
-      if (searchTerms().length) renderSearchResults();
+      if (hasSearchCriteria()) renderSearchResults();
+      else clearSearch();
+    });
+    expenseCategoryFilter.addEventListener("change", () => {
+      if (!searchMode) return;
+      if (hasSearchCriteria()) loadSearchResults();
       else clearSearch();
     });
     clearSearchBtn.addEventListener("click", clearSearch);
