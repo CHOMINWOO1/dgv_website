@@ -199,7 +199,7 @@
   <script>
     (async function initStaffHome(){
       try{
-        await QRStaff.requireLogin({ roles:["staff", "admin"], preferredRole:"staff" });
+        await QRStaff.requireLogin({ roles:["staff", "manager", "admin"], preferredRole:"staff" });
         document.body.classList.remove("locked");
       } catch(error){
         console.error(error);
@@ -209,3 +209,4 @@
   </script>
 </body>
 </html>
+
