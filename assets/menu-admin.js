@@ -2373,7 +2373,7 @@
 
   async function boot() {
     try {
-      await ui.requireLogin({ roles: ["admin"], preferredRole: "admin" });
+      await ui.requireLogin({ roles: ["manager", "admin"], preferredRole: "manager" });
       bindEvents();
       updateMenuListMode();
       await loadAll();
@@ -2388,3 +2388,4 @@
 
   boot();
 })(window);
+
