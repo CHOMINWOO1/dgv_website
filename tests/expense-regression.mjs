@@ -220,8 +220,8 @@ assert.match(
   /grant select, insert, update, delete on table public\.restaurant_expenses\s+to service_role/i,
 );
 
-// The page keeps input simple, shows an inclusive date range or full-history
-// search result, and opens without a password. Modification controls still
+// The page keeps input simple, shows an inclusive date range or a search result
+// constrained to the currently selected range, and opens without a password. Modification controls still
 // authenticate with the administrator password before UPDATE or DELETE.
 assert.match(page, /<input[^>]+id="expenseDate"[^>]+type="date"/i);
 assert.match(page, /name="expenseType" value="general"/i);
@@ -258,15 +258,18 @@ assert.match(page, /requestAdminPassword\(\)/i);
 assert.doesNotMatch(page, /id="login(?:Modal|Form|Password|Role|Confirm)"/i);
 assert.doesNotMatch(page, /getElementById\("expenseHistory"\)\.hidden = true/i);
 assert.match(page, /id="expenseSearch"[^>]*type="search"[^>]*placeholder="내역·거래처·비고·날짜·금액 검색"/i);
-assert.match(page, /전체 기록 검색 \(이전 달 포함\)/i);
 assert.match(page, /searchForm\.addEventListener\("submit", searchAllExpenses\)/i);
 assert.match(page, /function searchableExpenseText\(row\)[\s\S]*?row\.expense_date[\s\S]*?typeLabel\(row\.expense_type\)[\s\S]*?row\.description[\s\S]*?row\.vendor[\s\S]*?row\.note[\s\S]*?amount\.toLocaleString/i);
 assert.match(page, /terms\.every\(\(term\) => haystack\.includes\(term\)\)/i);
 assert.match(page, /const EXPENSE_COLUMNS\s*=\s*"[^"\n]*\bvendor\b[^"\n]*"/i);
 assert.match(page, /\.select\(EXPENSE_COLUMNS\)/i);
-assert.match(page, /async function loadSearchResults\(\)[\s\S]*?DGV\.collectSupabasePages\([\s\S]*?\.from\("restaurant_expenses"\)[\s\S]*?\.select\(EXPENSE_COLUMNS\)/i);
+assert.match(
+  page,
+  /async function loadSearchResults\(\)[\s\S]*?const range\s*=\s*requestedRange\(\)[\s\S]*?DGV\.collectSupabasePages\([\s\S]*?\.from\("restaurant_expenses"\)[\s\S]*?\.select\(EXPENSE_COLUMNS\)[\s\S]*?\.gte\("expense_date",\s*range\.start\)[\s\S]*?\.lte\("expense_date",\s*range\.end\)/i,
+  "search must read the current date inputs and constrain its Supabase query to that inclusive range",
+);
 assert.match(page, /async function searchAllExpenses\(event\)[\s\S]*?await loadSearchResults\(\)/i);
-assert.match(page, /전체 기록 \$\{allRows\.length[\s\S]*?검색 결과 \$\{rows\.length/i);
+assert.match(page, /\$\{start\} ~ \$\{end\} 지출 \$\{allRows\.length[\s\S]*?검색 결과 \$\{rows\.length/i);
 assert.match(page, /clearSearchBtn\.addEventListener\("click", clearSearch\)/i);
 assert.match(page, /async function searchAllExpenses\(event\)\{[\s\S]*?if \(searchBtn\.disabled\) return;/i);
 assert.match(page, /finally\{\s*QRStaff\.setBusy\(searchBtn, false\);\s*\}/i);
@@ -285,3 +288,4 @@ assert.match(page, /async function deleteExpense\(row\)[\s\S]*?await refreshActi
 assert.match(page, /async function saveExpense\(event\)[\s\S]*?await refreshActiveView\(\)/i);
 
 console.log("Restaurant expense schema, RLS, ACL, and import-safety contracts passed.");
+
