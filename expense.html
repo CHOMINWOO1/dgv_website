@@ -180,11 +180,11 @@
 
         <form class="expense-global-search" id="searchForm" role="search">
           <div class="qr-field">
-            <label class="qr-label" for="expenseSearch">전체 기록 검색 (이전 달 포함)</label>
+            <label class="qr-label" for="expenseSearch">선택 기간 내 검색</label>
             <input class="qr-input" id="expenseSearch" name="expenseSearch" type="search" placeholder="내역·거래처·비고·날짜·금액 검색" autocomplete="off" />
           </div>
-          <button class="qr-btn qr-btn-primary" id="searchBtn" type="submit">전체 검색</button>
-          <button class="qr-btn" id="clearSearchBtn" type="button" hidden>검색 해제</button>
+          <button class="qr-btn qr-btn-primary" id="searchBtn" type="submit">검색</button>
+          <button class="qr-btn" id="clearSearchBtn" type="button" hidden>검색 초기화</button>
         </form>
 
         <div class="qr-summary expense-summary" aria-label="지출 내역 요약">
@@ -457,12 +457,14 @@
     function renderSearchResults(){
       const terms = searchTerms();
       const rows = filteredExpenses(allRows, terms);
+      const start = loadedRange.start || rangeStart.value;
+      const end = loadedRange.end || rangeEnd.value;
       searchMode = true;
       clearSearchBtn.hidden = false;
-      emptyState.textContent = "전체 기록에서 검색 조건과 일치하는 지출 내역이 없습니다.";
+      emptyState.textContent = "선택한 기간에서 검색 조건과 일치하는 지출 내역이 없습니다.";
       renderRows(rows);
       loadStatus.dataset.tone = "";
-      loadStatus.textContent = `전체 기록 ${allRows.length.toLocaleString("ko-KR")}건 중 검색 결과 ${rows.length.toLocaleString("ko-KR")}건입니다.`;
+      loadStatus.textContent = `${start} ~ ${end} 지출 ${allRows.length.toLocaleString("ko-KR")}건 중 검색 결과 ${rows.length.toLocaleString("ko-KR")}건입니다.`;
     }
 
     async function verifyAdminSession(){
@@ -550,15 +552,19 @@
         searchInput.focus();
         return null;
       }
+      const range = requestedRange();
+      if (!range) return null;
       const requestId = ++loadSequence;
       loadStatus.dataset.tone = "";
-      loadStatus.textContent = "이전 달을 포함한 전체 지출 내역을 검색하는 중입니다…";
+      loadStatus.textContent = "선택한 기간의 지출 내역을 검색하는 중입니다…";
       QRStaff.setBusy(searchBtn, true, "검색 중…");
       try{
         const rows = await DGV.collectSupabasePages(
           () => sb
             .from("restaurant_expenses")
-            .select(EXPENSE_COLUMNS),
+            .select(EXPENSE_COLUMNS)
+            .gte("expense_date", range.start)
+            .lte("expense_date", range.end),
           { order:[
             { column:"expense_date", ascending:false },
             { column:"created_at", ascending:false },
@@ -567,6 +573,7 @@
         );
         if (requestId !== loadSequence) return null;
         allRows = rows;
+        loadedRange = range;
         renderSearchResults();
         return displayedRows.slice();
       }catch(error){
@@ -581,7 +588,7 @@
         emptyState.hidden = true;
         updateSummary([]);
         loadStatus.dataset.tone = "error";
-        loadStatus.textContent = "전체 지출 내역을 검색하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+        loadStatus.textContent = "선택한 기간의 지출 내역을 검색하지 못했습니다. 잠시 후 다시 시도해 주세요.";
         return null;
       }finally{
         QRStaff.setBusy(searchBtn, false);
@@ -597,8 +604,6 @@
     async function clearSearch(){
       searchInput.value = "";
       allRows = [];
-      if (loadedRange.start) rangeStart.value = loadedRange.start;
-      if (loadedRange.end) rangeEnd.value = loadedRange.end;
       await loadRange({ clearSearch:true });
       searchInput.focus();
     }
@@ -622,7 +627,7 @@
         }
         const exportingSearch = searchMode && searchTerms().length > 0;
         printCriteria.textContent = exportingSearch
-          ? `검색어 / Từ khóa tìm kiếm: ${searchInput.value.trim()}`
+          ? `조회 기간 / Khoảng thời gian tra cứu: ${loadedRange.start || rangeStart.value} ~ ${loadedRange.end || rangeEnd.value} · 검색어 / Từ khóa tìm kiếm: ${searchInput.value.trim()}`
           : `조회 기간 / Thời gian tra cứu: ${loadedRange.start || rangeStart.value} ~ ${loadedRange.end || rangeEnd.value}`;
         printGeneratedAt.textContent = `출력 일시 / Thời gian in: ${new Date().toLocaleString("ko-KR", { timeZone:BUSINESS_TIME_ZONE })}`;
         await new Promise((resolve) => {
@@ -669,7 +674,7 @@
           "금액(VND) / Số tiền (VND)"
         ].map((label) => textCell(label, "header"));
         const criteria = exportingSearch
-          ? `전체 검색 / Tìm kiếm: ${searchInput.value.trim()}`
+          ? `조회 기간 / Khoảng thời gian tra cứu: ${loadedRange.start || rangeStart.value} ~ ${loadedRange.end || rangeEnd.value} · 검색어 / Từ khóa tìm kiếm: ${searchInput.value.trim()}`
           : `${loadedRange.start || rangeStart.value} ~ ${loadedRange.end || rangeEnd.value}`;
         const dataRows = rows.map((row) => [
           textCell(row.expense_date),
@@ -690,7 +695,7 @@
           ["", "", "", "", textCell("합계 / Tổng cộng", "totalLabel"), numberCell(total, "totalNumber")]
         ];
         const filename = exportingSearch
-          ? `HANA_Expenses_Search_${businessToday()}.xlsx`
+          ? `HANA_Expenses_Search_${loadedRange.start || rangeStart.value}_${loadedRange.end || rangeEnd.value}.xlsx`
           : `HANA_Expenses_${loadedRange.start || rangeStart.value}_${loadedRange.end || rangeEnd.value}.xlsx`;
 
         window.DGV_XLSX.downloadWorkbook({
