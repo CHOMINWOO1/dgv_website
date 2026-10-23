@@ -88,15 +88,42 @@ function readStoredZip(bytes) {
 
 // Static wiring and safety contracts.
 assert.match(page, /<script src="assets\/dgv-xlsx\.js"><\/script>/);
+assert.match(page, /<button[^>]+id="printExpenseBtn"[^>]*>출력<\/button>/);
 assert.match(page, /<button[^>]+id="exportExpenseBtn"[^>]*>엑셀 생성<\/button>/);
+assert.match(page, /id="expensePrintArea"/);
+assert.match(page, /id="printCriteria"/);
+assert.match(page, /id="printGeneratedAt"/);
+assert.match(page, /@media print\{[\s\S]*?\.screen-only\{display:none!important;\}[\s\S]*?\.print-only\{display:inline!important;\}/);
+assert.match(page, /@media print\{[\s\S]*?\.expense-table th:last-child,\.expense-table td:last-child\{display:none!important;\}/, "print must hide edit/delete controls");
+for (const printLabel of [
+  "HANA 식당 지출 내역 / Chi phí nhà hàng HANA",
+  "일반 지출 / Chi thường",
+  "계산서 지출 / Chi có hóa đơn",
+  "전체 지출 / Tổng chi phí",
+  "입력 건수 / Số mục",
+  "날짜 / Ngày",
+  "구분 / Phân loại",
+  "내역 / Nội dung",
+  "거래처 / Đối tác",
+  "비고 / Ghi chú",
+  "금액 / Số tiền",
+]) {
+  assert.ok(page.includes(printLabel), `missing bilingual print label: ${printLabel}`);
+}
 assert.match(page, /let displayedRows = \[\];/);
 assert.match(page, /function renderRows\(rows\)\{[\s\S]*?displayedRows = rows\.slice\(\)/);
+assert.match(page, /printExpenseBtn\.addEventListener\("click", printExpenses\)/);
 assert.match(page, /exportExpenseBtn\.addEventListener\("click", exportExpenses\)/);
 
+const printBlock = extractNamedFunction(page, "printExpenses");
 const exportBlock = extractNamedFunction(page, "exportExpenses");
 const refreshBlock = extractNamedFunction(page, "refreshActiveView");
 const rangeBlock = extractNamedFunction(page, "loadRange");
 const searchBlock = extractNamedFunction(page, "loadSearchResults");
+assert.match(printBlock, /const rows = await refreshActiveView\(\)/, "print must refresh before taking its row snapshot");
+assert.match(printBlock, /window\.print\(\)/);
+assert.match(printBlock, /printCriteria\.textContent\s*=/, "print must expose the active date range or search criteria");
+assert.match(printBlock, /printGeneratedAt\.textContent\s*=/, "print must expose its generated time");
 assert.match(exportBlock, /const rows = await refreshActiveView\(\)/, "export must refresh before taking its row snapshot");
 assert.match(exportBlock, /DGV_XLSX\.downloadWorkbook\(/);
 assert.match(refreshBlock, /loadSearchResults\(\)/);
@@ -105,9 +132,9 @@ assert.match(rangeBlock, /\.select\(EXPENSE_COLUMNS\)[\s\S]*?\.gte\("expense_dat
 assert.match(searchBlock, /\.select\(EXPENSE_COLUMNS\)/);
 assert.match(page, /const EXPENSE_COLUMNS = "id,expense_date,expense_type,description,vendor,amount_vnd,note,created_at"/);
 assert.doesNotMatch(
-  `${exportBlock}\n${refreshBlock}\n${rangeBlock}\n${searchBlock}`,
+  `${printBlock}\n${exportBlock}\n${refreshBlock}\n${rangeBlock}\n${searchBlock}`,
   /\.(?:insert|update|upsert|delete|rpc)\s*\(/,
-  "refresh and export path must remain read-only",
+  "print/export refresh path must remain read-only",
 );
 for (const label of [
   "날짜 / Ngày",
@@ -146,7 +173,7 @@ assert.ok(xlsx?.buildWorkbookBytes, "local DGV_XLSX helper must be usable");
 
 const handlers = new Map();
 const elements = new Map();
-const labels = { exportExpenseBtn: "엑셀 생성", refreshBtn: "조회", searchBtn: "전체 검색", saveBtn: "지출 저장" };
+const labels = { printExpenseBtn: "출력", exportExpenseBtn: "엑셀 생성", refreshBtn: "조회", searchBtn: "전체 검색", saveBtn: "지출 저장" };
 
 function element(id) {
   if (elements.has(id)) return elements.get(id);
@@ -211,7 +238,14 @@ const latestSearchRows = [
   { ...latestRangeRows[1], id: "search-new", description: "베트남 최신 내역", note: "Việt Nam mới", amount_vnd: 333000 },
   { ...latestRangeRows[0], id: "search-nonmatch", description: "한국 전용", note: "불일치" },
 ];
-const resultQueue = [staleRangeRows, latestRangeRows, firstSearchRows, latestSearchRows];
+const resultQueue = [
+  staleRangeRows,
+  latestRangeRows,
+  latestRangeRows,
+  firstSearchRows,
+  latestSearchRows,
+  latestSearchRows,
+];
 let queryCalls = 0;
 const queryOperations = [];
 let queryProxy;
@@ -232,6 +266,7 @@ const sb = {
 };
 const downloads = [];
 const toasts = [];
+let printCalls = 0;
 const pageContext = {
   console: { error() {} },
   document: {
@@ -279,6 +314,7 @@ const pageContext = {
   setTimeout,
   clearTimeout,
   confirm: () => true,
+  print: () => { printCalls += 1; },
 };
 pageContext.window = pageContext;
 pageContext.globalThis = pageContext;
@@ -305,11 +341,24 @@ assert.equal(queryCalls, 1, "page start must load the default date range once");
 assert.equal(element("rangeStart").value, "2026-10-01");
 assert.equal(element("rangeEnd").value, "2026-10-23");
 
+const printHandler = handlers.get("printExpenseBtn:click");
+assert.equal(typeof printHandler, "function", "print button handler is not wired");
+await printHandler({ preventDefault() {} });
+await settle();
+assert.equal(queryCalls, 2, "range print must refresh the active view before printing");
+assert.equal(printCalls, 1);
+assert.equal(element("printCriteria").textContent, "조회 기간 / Thời gian tra cứu: 2026-10-01 ~ 2026-10-23");
+assert.match(element("printGeneratedAt").textContent, /^출력 일시 \/ Thời gian in:/);
+assert.match(element("expenseRows").innerHTML, /=HYPERLINK\(&quot;https:\/\/example\.com&quot;\)/);
+assert.match(element("expenseRows").innerHTML, /베트남 매입 Việt Nam/);
+assert.match(element("expenseRows").innerHTML, /Chợ Đà Lạt/);
+assert.doesNotMatch(element("expenseRows").innerHTML, /내보내면 안 되는 이전 값|이전 거래처/);
+
 const exportHandler = handlers.get("exportExpenseBtn:click");
 assert.equal(typeof exportHandler, "function", "Excel button handler is not wired");
 await exportHandler({ preventDefault() {} });
 await settle();
-assert.equal(queryCalls, 2, "range export must refresh the active view before export");
+assert.equal(queryCalls, 3, "range export must refresh the active view before export");
 assert.equal(downloads.length, 1);
 
 const rangeWorkbook = downloads[0];
@@ -347,11 +396,20 @@ const searchHandler = handlers.get("searchForm:submit");
 assert.equal(typeof searchHandler, "function", "search handler is not wired");
 await searchHandler({ preventDefault() {} });
 await settle();
-assert.equal(queryCalls, 3);
+assert.equal(queryCalls, 4);
+
+await printHandler({ preventDefault() {} });
+await settle();
+assert.equal(queryCalls, 5, "search print must refresh the full-history search before printing");
+assert.equal(printCalls, 2);
+assert.equal(element("printCriteria").textContent, "검색어 / Từ khóa tìm kiếm: 베트남");
+assert.match(element("expenseRows").innerHTML, /베트남 최신 내역/);
+assert.match(element("expenseRows").innerHTML, /Việt Nam mới/);
+assert.doesNotMatch(element("expenseRows").innerHTML, /search-old|베트남 이전 결과|search-nonmatch|한국 전용/);
 
 await exportHandler({ preventDefault() {} });
 await settle();
-assert.equal(queryCalls, 4, "search export must refresh the full-history search before export");
+assert.equal(queryCalls, 6, "search export must refresh the full-history search before export");
 assert.equal(downloads.length, 2);
 const searchWorkbook = downloads[1];
 assert.equal(searchWorkbook.filename, "HANA_Expenses_Search_2026-10-23.xlsx");
@@ -363,11 +421,14 @@ assert.doesNotMatch(searchJson, /search-old|베트남 이전 결과|search-nonma
 
 assert.equal(element("exportExpenseBtn").disabled, false, "Excel button must recover after export");
 assert.equal(element("exportExpenseBtn").textContent, "엑셀 생성");
+assert.equal(element("printExpenseBtn").disabled, false, "print button must recover after printing");
+assert.equal(element("printExpenseBtn").textContent, "출력");
 assert.equal(toasts.filter((item) => item.tone === "error").length, 0);
 assert.equal(
   queryOperations.some(([operation]) => ["insert", "update", "upsert", "delete", "rpc"].includes(operation)),
   false,
-  "export refresh queries must never write to Supabase",
+  "print/export refresh queries must never write to Supabase",
 );
 
-console.log("Expense current-view XLSX refresh, mapping, UTF-8, numeric, filename, and read-only contracts passed.");
+console.log("Expense current-view print/XLSX refresh, mapping, UTF-8, numeric, filename, and read-only contracts passed.");
+
