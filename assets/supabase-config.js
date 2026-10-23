@@ -14,4 +14,3 @@ window.DGV_SUPABASE_CONFIG = Object.freeze({
     admin: "admin@dgv.local"
   })
 });
-

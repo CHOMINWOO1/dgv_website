@@ -149,4 +149,3 @@
     collectRestPages: global.DGV_DATA_UTILS.collectRestPages
   });
 })(window);
-
