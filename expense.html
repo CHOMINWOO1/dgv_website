@@ -45,6 +45,7 @@
     .expense-status{min-height:20px;margin:10px 2px 0;color:var(--qr-sub);font-size:12px;font-weight:850;}
     .expense-status[data-tone="error"]{color:var(--qr-bad);}
     .expense-empty{padding:42px 16px;text-align:center;color:var(--qr-sub);font-weight:850;}
+    .print-only,.expense-print-head{display:none;}
     @media(max-width:980px){.expense-layout{grid-template-columns:1fr;}.expense-summary{grid-template-columns:repeat(2,minmax(0,1fr));}}
     @media(max-width:700px){
       .qr-header{align-items:flex-start;}
@@ -56,6 +57,41 @@
       .expense-table td:last-child{border-bottom:0;}.expense-table td:before{content:attr(data-label);color:var(--qr-sub);font-size:11px;font-weight:1000;}.expense-table .amount{text-align:left;}.expense-table .note{max-width:none;}
     }
     @media(max-width:430px){.expense-summary{grid-template-columns:1fr 1fr;}.expense-type{grid-template-columns:1fr;}.expense-range-control .qr-field{min-width:100%;}.expense-range-actions,.expense-range-control .qr-btn,.expense-global-search .qr-btn{width:100%;}}
+    @page{size:A4 landscape;margin:10mm;}
+    @media print{
+      html,body{background:#fff!important;color:#111!important;}
+      body{font-family:Arial,"Malgun Gothic",sans-serif!important;}
+      .screen-only{display:none!important;}
+      .print-only{display:inline!important;}
+      .qr-header,.expense-form,.expense-history-head,.expense-global-search,.expense-status,.expense-empty,.expense-actions,.qr-modal-back{display:none!important;}
+      .qr-shell{width:auto!important;max-width:none!important;margin:0!important;padding:0!important;}
+      .expense-layout{display:block!important;}
+      .expense-history{padding:0!important;border:0!important;border-radius:0!important;background:#fff!important;box-shadow:none!important;}
+      .expense-print-head{display:block!important;margin:0 0 7mm;}
+      .expense-print-head h1{margin:0 0 2mm;font-size:19pt;line-height:1.2;}
+      .expense-print-head p{margin:1mm 0;color:#333;font-size:9.5pt;font-weight:700;}
+      .expense-summary{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:3mm!important;margin:0 0 5mm!important;}
+      .expense-summary .qr-card{padding:3mm!important;border:1px solid #888!important;border-radius:0!important;background:#fff!important;box-shadow:none!important;break-inside:avoid;}
+      .expense-summary .qr-summary-label{color:#333!important;font-size:8.5pt!important;}
+      .expense-summary .qr-summary-value{color:#111!important;font-size:12pt!important;}
+      .expense-table-wrap{display:block!important;overflow:visible!important;border:1px solid #777!important;border-radius:0!important;background:#fff!important;}
+      .expense-table{display:table!important;width:100%!important;min-width:0!important;table-layout:fixed!important;border-collapse:collapse!important;}
+      .expense-table thead{display:table-header-group!important;}
+      .expense-table tbody{display:table-row-group!important;}
+      .expense-table tr{display:table-row!important;padding:0!important;border:0!important;border-radius:0!important;background:#fff!important;box-shadow:none!important;break-inside:avoid;page-break-inside:avoid;}
+      .expense-table th,.expense-table td{display:table-cell!important;padding:2.2mm 2mm!important;border:1px solid #aaa!important;color:#111!important;background:#fff!important;font-size:8.5pt!important;text-align:left!important;vertical-align:top!important;overflow-wrap:anywhere!important;}
+      .expense-table th{font-weight:900!important;}
+      .expense-table td:before{content:none!important;}
+      .expense-table th:nth-child(1),.expense-table td:nth-child(1){width:11%;}
+      .expense-table th:nth-child(2),.expense-table td:nth-child(2){width:15%;}
+      .expense-table th:nth-child(3),.expense-table td:nth-child(3){width:22%;}
+      .expense-table th:nth-child(4),.expense-table td:nth-child(4){width:16%;}
+      .expense-table th:nth-child(5),.expense-table td:nth-child(5){width:24%;}
+      .expense-table th:nth-child(6),.expense-table td:nth-child(6){width:12%;text-align:right!important;white-space:nowrap!important;}
+      .expense-table th:last-child,.expense-table td:last-child{display:none!important;}
+      .expense-table .note{max-width:none!important;color:#111!important;white-space:pre-wrap!important;}
+      .expense-kind{display:inline!important;padding:0!important;border:0!important;background:transparent!important;color:#111!important;font-size:8.5pt!important;white-space:normal!important;}
+    }
   </style>
 </head>
 <body class="locked">
@@ -114,6 +150,11 @@
       </section>
 
       <section class="qr-card expense-history" id="expenseHistory" aria-labelledby="historyTitle">
+        <div class="expense-print-head" id="expensePrintArea" aria-hidden="true">
+          <h1>HANA 식당 지출 내역 / Chi phí nhà hàng HANA</h1>
+          <p id="printCriteria"></p>
+          <p id="printGeneratedAt"></p>
+        </div>
         <div class="expense-history-head">
           <div>
             <h2 class="qr-section-title" id="historyTitle">지출 내역 조회</h2>
@@ -130,6 +171,7 @@
             </div>
             <div class="expense-range-actions">
               <button class="qr-btn" id="refreshBtn" type="submit">조회</button>
+              <button class="qr-btn" id="printExpenseBtn" type="button">출력</button>
               <button class="qr-btn qr-btn-primary" id="exportExpenseBtn" type="button">엑셀 생성</button>
             </div>
           </form>
@@ -145,15 +187,23 @@
         </form>
 
         <div class="qr-summary expense-summary" aria-label="지출 내역 요약">
-          <div class="qr-card qr-summary-card"><div class="qr-summary-label">일반 지출</div><div class="qr-summary-value" id="generalSubtotal">0 VND</div></div>
-          <div class="qr-card qr-summary-card"><div class="qr-summary-label">계산서 지출</div><div class="qr-summary-value" id="invoiceSubtotal">0 VND</div></div>
-          <div class="qr-card qr-summary-card"><div class="qr-summary-label">전체 지출</div><div class="qr-summary-value" id="totalAmount">0 VND</div></div>
-          <div class="qr-card qr-summary-card"><div class="qr-summary-label">입력 건수</div><div class="qr-summary-value" id="entryCount">0건</div></div>
+          <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">일반 지출</span><span class="print-only">일반 지출 / Chi thường</span></div><div class="qr-summary-value" id="generalSubtotal">0 VND</div></div>
+          <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">계산서 지출</span><span class="print-only">계산서 지출 / Chi có hóa đơn</span></div><div class="qr-summary-value" id="invoiceSubtotal">0 VND</div></div>
+          <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">전체 지출</span><span class="print-only">전체 지출 / Tổng chi phí</span></div><div class="qr-summary-value" id="totalAmount">0 VND</div></div>
+          <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">입력 건수</span><span class="print-only">입력 건수 / Số mục</span></div><div class="qr-summary-value" id="entryCount">0건</div></div>
         </div>
 
         <div class="expense-table-wrap" id="tableWrap" hidden>
           <table class="expense-table">
-            <thead><tr><th>날짜</th><th>구분</th><th>내역</th><th>거래처</th><th>비고</th><th style="text-align:right">금액</th><th>관리</th></tr></thead>
+            <thead><tr>
+              <th><span class="screen-only">날짜</span><span class="print-only">날짜 / Ngày</span></th>
+              <th><span class="screen-only">구분</span><span class="print-only">구분 / Phân loại</span></th>
+              <th><span class="screen-only">내역</span><span class="print-only">내역 / Nội dung</span></th>
+              <th><span class="screen-only">거래처</span><span class="print-only">거래처 / Đối tác</span></th>
+              <th><span class="screen-only">비고</span><span class="print-only">비고 / Ghi chú</span></th>
+              <th style="text-align:right"><span class="screen-only">금액</span><span class="print-only">금액 / Số tiền</span></th>
+              <th>관리</th>
+            </tr></thead>
             <tbody id="expenseRows"></tbody>
           </table>
         </div>
@@ -204,7 +254,10 @@
     const searchBtn = document.getElementById("searchBtn");
     const clearSearchBtn = document.getElementById("clearSearchBtn");
     const refreshBtn = document.getElementById("refreshBtn");
+    const printExpenseBtn = document.getElementById("printExpenseBtn");
     const exportExpenseBtn = document.getElementById("exportExpenseBtn");
+    const printCriteria = document.getElementById("printCriteria");
+    const printGeneratedAt = document.getElementById("printGeneratedAt");
     const rowsEl = document.getElementById("expenseRows");
     const tableWrap = document.getElementById("tableWrap");
     const emptyState = document.getElementById("emptyState");
@@ -359,7 +412,7 @@
         const rowId = escapeHtml(String(row.id || ""));
         return `<tr>
           <td data-label="날짜">${escapeHtml(String(row.expense_date || ""))}</td>
-          <td data-label="구분"><span class="expense-kind" data-type="${type}">${typeLabel(type)}</span></td>
+          <td data-label="구분"><span class="expense-kind" data-type="${type}"><span class="screen-only">${typeLabel(type)}</span><span class="print-only">${typeBilingualLabel(type)}</span></span></td>
           <td data-label="내역">${escapeHtml(String(row.description || ""))}</td>
           <td class="note" data-label="거래처">${vendor ? escapeHtml(vendor) : "—"}</td>
           <td class="note" data-label="비고">${note ? escapeHtml(note) : "—"}</td>
@@ -554,6 +607,37 @@
       return loadRange({ clearSearch:false });
     }
 
+    async function printExpenses(){
+      if (printExpenseBtn.disabled) return;
+      const originalLabel = printExpenseBtn.textContent;
+      printExpenseBtn.disabled = true;
+      printExpenseBtn.textContent = "준비 중…";
+      try{
+        const rows = await refreshActiveView();
+        if (!Array.isArray(rows)) throw new Error("Latest expense rows could not be loaded");
+        if (!rows.length){
+          QRStaff.toast("출력할 지출 내역이 없습니다.", "error");
+          return;
+        }
+        const exportingSearch = searchMode && searchTerms().length > 0;
+        printCriteria.textContent = exportingSearch
+          ? `검색어 / Từ khóa tìm kiếm: ${searchInput.value.trim()}`
+          : `조회 기간 / Thời gian tra cứu: ${loadedRange.start || rangeStart.value} ~ ${loadedRange.end || rangeEnd.value}`;
+        printGeneratedAt.textContent = `출력 일시 / Thời gian in: ${new Date().toLocaleString("ko-KR", { timeZone:BUSINESS_TIME_ZONE })}`;
+        await new Promise((resolve) => {
+          if (typeof globalThis.requestAnimationFrame === "function") globalThis.requestAnimationFrame(resolve);
+          else globalThis.setTimeout(resolve, 0);
+        });
+        window.print();
+      }catch(error){
+        console.error(error);
+        QRStaff.toast("지출 내역을 출력하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
+      }finally{
+        printExpenseBtn.disabled = false;
+        printExpenseBtn.textContent = originalLabel;
+      }
+    }
+
     async function exportExpenses(){
       if (exportExpenseBtn.disabled) return;
       const originalLabel = exportExpenseBtn.textContent;
@@ -703,6 +787,7 @@
       else clearSearch();
     });
     clearSearchBtn.addEventListener("click", clearSearch);
+    printExpenseBtn.addEventListener("click", printExpenses);
     exportExpenseBtn.addEventListener("click", exportExpenses);
     rowsEl.addEventListener("click", async (event) => {
       const button = event.target.closest("button[data-expense-action]");
@@ -750,3 +835,4 @@
   </script>
 </body>
 </html>
+
