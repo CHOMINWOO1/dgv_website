@@ -60,4 +60,3 @@ for (const file of externalScripts) {
 }
 
 console.log(`Parsed ${scriptsChecked} browser scripts across ${files.length} pages.`);
-
