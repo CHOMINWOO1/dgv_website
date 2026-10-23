@@ -30,6 +30,7 @@ const externalScripts = [
   "assets/qr-staff.js",
   "assets/order-inbox.js",
   "assets/menu-admin.js",
+  "assets/admin-tax-report.js",
   "assets/reservation-visibility.js",
   "assets/vendor/qrcode.min.js",
 ];
@@ -59,3 +60,4 @@ for (const file of externalScripts) {
 }
 
 console.log(`Parsed ${scriptsChecked} browser scripts across ${files.length} pages.`);
+
