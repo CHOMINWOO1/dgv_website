@@ -146,6 +146,22 @@
   </div>
 </div>
 
+<div class="statusBox" style="margin-top:14px;">
+  <div class="title" style="margin:0 0 8px;">매니저 비밀번호 변경</div>
+
+  <div class="row">
+    <div class="field">
+      <label for="newManagerPw">새 매니저 비밀번호</label>
+      <input id="newManagerPw" type="password" placeholder="최소 4자" autocomplete="new-password" minlength="4" maxlength="128" />
+    </div>
+    <button class="btn btnPrimary" id="saveManagerPwBtn" type="button">비밀번호 설정</button>
+  </div>
+
+  <div class="muted" style="margin-top:6px;">
+    ※ 최초 설정 시 매니저 계정이 생성되며, 이후에는 같은 계정의 비밀번호가 변경됩니다.
+  </div>
+</div>
+
     </div>
     
   </div>
@@ -361,6 +377,41 @@ document.getElementById("saveAdminPwBtn").addEventListener("click", async ()=>{
   await updateAdminPassword(document.getElementById("newAdminPw").value);
 });
 
+async function updateManagerPassword(newPw){
+  const np = String(newPw||"").trim();
+  if (np.length < 4){
+    alert("새 매니저 비밀번호는 최소 4자 이상이어야 합니다.");
+    return;
+  }
+
+  const button = document.getElementById("saveManagerPwBtn");
+  button.disabled = true;
+  try{
+    const { data, error } = await sb.functions.invoke("admin-credential-settings", {
+      body: { action: "set_manager_password", new_password: np }
+    });
+    if (error) throw error;
+
+    if (data?.ok === true){
+      alert(data.created === true
+        ? "매니저 계정과 비밀번호가 설정되었습니다."
+        : "매니저 비밀번호가 변경되었습니다.");
+      document.getElementById("newManagerPw").value = "";
+    }else{
+      alert("매니저 비밀번호를 설정하지 못했습니다.");
+    }
+  }catch(e){
+    console.error("manager password update error:", e);
+    alert("매니저 비밀번호 설정에 실패했습니다.");
+  }finally{
+    button.disabled = false;
+  }
+}
+
+document.getElementById("saveManagerPwBtn").addEventListener("click", async ()=>{
+  await updateManagerPassword(document.getElementById("newManagerPw").value);
+});
+
     (async function init(){
       const ok = await requireAdminPassword();
       if (!ok){
@@ -372,3 +423,4 @@ document.getElementById("saveAdminPwBtn").addEventListener("click", async ()=>{
   </script>
 </body>
 </html>
+
