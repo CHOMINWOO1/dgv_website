@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -16,6 +16,20 @@ const vendorMigration = await readFile(
   path.join(projectRoot, "supabase/migrations/20261023123000_restaurant_expense_vendor.sql"),
   "utf8",
 );
+const migrationDirectory = path.join(projectRoot, "supabase/migrations");
+const migrationFiles = (await readdir(migrationDirectory))
+  .filter((name) => name.endsWith(".sql"))
+  .sort();
+const migrationSources = await Promise.all(migrationFiles.map(async (name) => ({
+  name,
+  source: await readFile(path.join(migrationDirectory, name), "utf8"),
+})));
+const laborMigrationEntry = migrationSources.find(({ name, source }) =>
+  name !== "20261015113201_restaurant_expenses.sql"
+  && /restaurant_expenses_type_check/i.test(source)
+  && /'labor'/i.test(source));
+assert.ok(laborMigrationEntry, "a follow-up migration must add the labor expense type");
+const laborMigration = laborMigrationEntry.source;
 const page = await readFile(path.join(projectRoot, "expense.html"), "utf8");
 
 // The ledger is a new, isolated table and deployment itself never mutates any
@@ -172,6 +186,35 @@ assert.doesNotMatch(
   "anonymous clients must not receive vendor UPDATE access",
 );
 
+// Labor is an additive category. The migration widens only the type check and
+// reclassifies the explicitly requested October rows without touching their
+// date, amount, description, vendor, note, or audit fields.
+assert.match(
+  laborMigration,
+  /alter table public\.restaurant_expenses[\s\S]*?drop constraint(?: if exists)? restaurant_expenses_type_check/i,
+);
+const laborTypeCheck = laborMigration.match(
+  /constraint restaurant_expenses_type_check[\s\S]*?check\s*\(\s*expense_type\s+in\s*\(([^)]+)\)\s*\)/i,
+);
+assert.ok(laborTypeCheck, "the labor migration must recreate the expense type check");
+for (const allowedType of ["general", "invoice", "labor"]) {
+  assert.match(laborTypeCheck[1], new RegExp(`'${allowedType}'`, "i"));
+}
+const laborBackfill = laborMigration.match(
+  /update\s+public\.restaurant_expenses\s+set\s+([\s\S]*?)\s+where\s+([\s\S]*?);/i,
+);
+assert.ok(laborBackfill, "the labor migration must reclassify the approved October rows");
+assert.match(laborBackfill[1].trim(), /^expense_type\s*=\s*'labor'$/i);
+assert.match(laborBackfill[2], /expense_date\s*>=\s*(?:date\s*)?'2026-10-01'/i);
+assert.match(laborBackfill[2], /expense_date\s*<\s*(?:date\s*)?'2026-11-01'/i);
+assert.match(
+  laborBackfill[2],
+  /(?:\bid\s+in\s*\(|\b(?:description|vendor|note)\b[\s\S]*(?:파트타임|알바))/i,
+  "the October backfill must be limited to audited row ids or the requested labor keywords",
+);
+assert.doesNotMatch(laborMigration, /^\s*(?:insert\s+into|delete\s+from|truncate|merge\s+into)\b/im);
+assert.doesNotMatch(laborMigration, /create\s+policy|grant\s+|revoke\s+/i);
+
 // Grants are an independent security layer: the browser can read only fields
 // required by the page and insert only the five business fields. Import/audit
 // fields require service_role.
@@ -226,6 +269,7 @@ assert.match(
 assert.match(page, /<input[^>]+id="expenseDate"[^>]+type="date"/i);
 assert.match(page, /name="expenseType" value="general"/i);
 assert.match(page, /name="expenseType" value="invoice"/i);
+assert.match(page, /name="expenseType" value="labor"/i);
 assert.match(page, /id="amountVnd"[^>]+inputmode="numeric"/i);
 assert.match(page, /id="vendor"[^>]+maxlength="300"/i);
 assert.match(page, /\.from\("restaurant_expenses"\)\.insert\(\[payload\]\)/i);
@@ -258,9 +302,23 @@ assert.match(page, /requestAdminPassword\(\)/i);
 assert.doesNotMatch(page, /id="login(?:Modal|Form|Password|Role|Confirm)"/i);
 assert.doesNotMatch(page, /getElementById\("expenseHistory"\)\.hidden = true/i);
 assert.match(page, /id="expenseSearch"[^>]*type="search"[^>]*placeholder="내역·거래처·비고·날짜·금액 검색"/i);
+assert.match(page, /<select[^>]+id="expenseCategoryFilter"[^>]*>[\s\S]*?value="all"[\s\S]*?전체 카테고리[\s\S]*?value="general"[\s\S]*?일반 지출[\s\S]*?value="invoice"[\s\S]*?계산서 지출[\s\S]*?value="labor"[\s\S]*?인건비 지출[\s\S]*?<\/select>/i);
 assert.match(page, /searchForm\.addEventListener\("submit", searchAllExpenses\)/i);
 assert.match(page, /function searchableExpenseText\(row\)[\s\S]*?row\.expense_date[\s\S]*?typeLabel\(row\.expense_type\)[\s\S]*?row\.description[\s\S]*?row\.vendor[\s\S]*?row\.note[\s\S]*?amount\.toLocaleString/i);
 assert.match(page, /terms\.every\(\(term\) => haystack\.includes\(term\)\)/i);
+assert.match(page, /function selectedSearchType\(\)[\s\S]*?expenseCategoryFilter\.value[\s\S]*?(?:all|general|invoice|labor)/i);
+assert.match(page, /function normalizeExpenseType\(value\)[\s\S]*?\["general",\s*"invoice",\s*"labor"\]\.includes\(value\)/i);
+assert.match(page, /function selectedType\(\)[\s\S]*?normalizeExpenseType\(form\.elements\.expenseType\.value\)/i);
+assert.match(page, /function typeLabel\(value\)[\s\S]*?labor[\s\S]*?인건비 지출/i);
+assert.match(page, /function typeBilingualLabel\(value\)[\s\S]*?labor[\s\S]*?인건비 지출 \/ Chi phí nhân công/i);
+assert.match(page, /function beginEdit\(row\)[\s\S]*?normalizeExpenseType\(row\.expense_type\)/i);
+assert.match(
+  page,
+  /function updateSummary\(rows\)[\s\S]*?normalizeExpenseType\(row\.expense_type\)[\s\S]*?\{\s*general\s*:\s*0\s*,\s*invoice\s*:\s*0\s*,\s*labor\s*:\s*0\s*\}[\s\S]*?laborSubtotal[\s\S]*?totals\.labor/i,
+);
+assert.match(page, /function renderRows\(rows\)[\s\S]*?normalizeExpenseType\(row\.expense_type\)[\s\S]*?data-type="\$\{type\}"[\s\S]*?typeBilingualLabel\(type\)/i);
+assert.match(page, /id="laborSubtotal"/i);
+assert.match(page, /인건비 지출 \/ Chi phí nhân công/i);
 assert.match(page, /const EXPENSE_COLUMNS\s*=\s*"[^"\n]*\bvendor\b[^"\n]*"/i);
 assert.match(page, /\.select\(EXPENSE_COLUMNS\)/i);
 assert.match(
@@ -268,8 +326,21 @@ assert.match(
   /async function loadSearchResults\(\)[\s\S]*?const range\s*=\s*requestedRange\(\)[\s\S]*?DGV\.collectSupabasePages\([\s\S]*?\.from\("restaurant_expenses"\)[\s\S]*?\.select\(EXPENSE_COLUMNS\)[\s\S]*?\.gte\("expense_date",\s*range\.start\)[\s\S]*?\.lte\("expense_date",\s*range\.end\)/i,
   "search must read the current date inputs and constrain its Supabase query to that inclusive range",
 );
+assert.match(
+  page,
+  /\.eq\("expense_type",\s*(?:category|searchType|selectedCategory)\)/i,
+  "a selected expense category must constrain the Supabase search query",
+);
+assert.match(
+  page,
+  /if\s*\(\s*!terms\.length\s*&&\s*(?:category|searchType|selectedCategory)\s*===\s*"all"\s*\)/i,
+  "category-only searches must be accepted while a fully empty search is rejected",
+);
 assert.match(page, /async function searchAllExpenses\(event\)[\s\S]*?await loadSearchResults\(\)/i);
-assert.match(page, /\$\{start\} ~ \$\{end\} 지출 \$\{allRows\.length[\s\S]*?검색 결과 \$\{rows\.length/i);
+assert.match(
+  page,
+  /function renderSearchResults\(\)[\s\S]*?const category\s*=\s*selectedSearchType\(\)[\s\S]*?loadStatus\.textContent\s*=\s*`[^`]*검색 결과 \$\{rows\.length/i,
+);
 assert.match(page, /clearSearchBtn\.addEventListener\("click", clearSearch\)/i);
 assert.match(page, /async function searchAllExpenses\(event\)\{[\s\S]*?if \(searchBtn\.disabled\) return;/i);
 assert.match(page, /finally\{\s*QRStaff\.setBusy\(searchBtn, false\);\s*\}/i);
