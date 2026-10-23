@@ -230,9 +230,9 @@
   <div class="qr-modal-back" id="adminAuthModal" hidden>
     <form class="qr-modal" id="adminAuthForm" role="dialog" aria-modal="true" aria-labelledby="adminAuthTitle" aria-describedby="adminAuthDescription">
       <h2 id="adminAuthTitle">수정·삭제 확인</h2>
-      <p id="adminAuthDescription">수정 또는 삭제하려면 관리자 비밀번호를 입력해 주세요.</p>
-      <label class="qr-label" for="adminAuthPassword">관리자 비밀번호</label>
-      <input class="qr-input" id="adminAuthPassword" type="password" placeholder="관리자 비밀번호" autocomplete="current-password" required />
+      <p id="adminAuthDescription">수정 또는 삭제하려면 매니저 또는 관리자 비밀번호를 입력해 주세요.</p>
+      <label class="qr-label" for="adminAuthPassword">매니저·관리자 비밀번호</label>
+      <input class="qr-input" id="adminAuthPassword" type="password" placeholder="매니저 또는 관리자 비밀번호" autocomplete="current-password" required />
       <div class="qr-form-actions">
         <button class="qr-btn" id="adminAuthCancel" type="button">취소</button>
         <button class="qr-btn qr-btn-primary" id="adminAuthConfirm" type="submit">확인</button>
@@ -506,7 +506,7 @@
 
     async function verifyAdminSession(){
       const identity = await DGV.getIdentity();
-      if (identity.user && identity.role === "admin") return true;
+      if (identity.user && ["manager", "admin"].includes(identity.role)) return true;
       return requestAdminPassword();
     }
 
@@ -527,7 +527,7 @@
         await refreshActiveView();
       }catch(error){
         console.error(error);
-        QRStaff.toast("지출 내역을 삭제하지 못했습니다. 관리자 비밀번호를 확인해 주세요.", "error");
+        QRStaff.toast("지출 내역을 삭제하지 못했습니다. 매니저 또는 관리자 비밀번호를 확인해 주세요.", "error");
       }
     }
 
@@ -823,7 +823,7 @@
       }catch(error){
         console.error(error);
         QRStaff.toast(updateId
-          ? "지출 내역을 수정하지 못했습니다. 관리자 비밀번호를 확인해 주세요."
+          ? "지출 내역을 수정하지 못했습니다. 매니저 또는 관리자 비밀번호를 확인해 주세요."
           : "지출 내역을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
       }finally{
         QRStaff.setBusy(saveBtn, false);
@@ -871,18 +871,18 @@
       event.preventDefault();
       const password = adminAuthPassword.value.trim();
       if (!password) {
-        QRStaff.toast("관리자 비밀번호를 입력해 주세요.", "error");
+        QRStaff.toast("매니저 또는 관리자 비밀번호를 입력해 주세요.", "error");
         adminAuthPassword.focus();
         return;
       }
       QRStaff.setBusy(adminAuthConfirm, true, "확인 중…");
       try{
-        const identity = await DGV.signInAs("admin", password);
-        if (identity.role !== "admin") throw new Error("ADMIN_REQUIRED");
+        const identity = await DGV.signInAsAny(["manager", "admin"], password);
+        if (!["manager", "admin"].includes(identity.role)) throw new Error("MANAGER_OR_ADMIN_REQUIRED");
         finishAdminAuth(true);
       }catch(error){
         console.error(error);
-        QRStaff.toast("관리자 비밀번호가 올바르지 않습니다.", "error");
+        QRStaff.toast("매니저 또는 관리자 비밀번호가 올바르지 않습니다.", "error");
         adminAuthPassword.select();
       }finally{
         QRStaff.setBusy(adminAuthConfirm, false);
@@ -901,4 +901,3 @@
   </script>
 </body>
 </html>
-

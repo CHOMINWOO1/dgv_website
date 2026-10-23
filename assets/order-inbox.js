@@ -960,7 +960,7 @@
     if (!order
        || !CURRENT_STATUSES.includes(order.status)
        || order.finalized_order_id
-       || !["staff", "admin"].includes(identity?.role)) {
+       || !["staff", "manager", "admin"].includes(identity?.role)) {
       ui.toast("현재 수정할 수 없는 주문입니다. 최신 상태를 다시 확인해 주세요.", "error");
       await loadOrders();
       return;
@@ -1055,7 +1055,7 @@
 
   async function saveEditedOrder(event) {
     event.preventDefault();
-    if (!editOrderId || !editExpectedUpdatedAt || !["staff", "admin"].includes(identity?.role) || !renderEditTotal()) return;
+    if (!editOrderId || !editExpectedUpdatedAt || !["staff", "manager", "admin"].includes(identity?.role) || !renderEditTotal()) return;
     const note = ui.byId("editOrderNote").value;
     if (note.length > 500 || /[\u0000-\u001f\u007f-\u009f]/.test(note)) {
       ui.toast("요청사항은 줄바꿈이나 제어 문자 없이 500자 이내로 입력해 주세요.", "error");
@@ -1223,7 +1223,7 @@
 
   async function finalizePayment(event) {
     event.preventDefault();
-    if (!paymentTableId || !paymentOrders.length || !["staff", "admin"].includes(identity?.role)) return;
+    if (!paymentTableId || !paymentOrders.length || !["staff", "manager", "admin"].includes(identity?.role)) return;
     const latestSubmitted = openOrdersForTable(paymentTableId).filter((order) => order.status === "submitted");
     if (latestSubmitted.length) {
       ui.toast(`신규 주문 ${latestSubmitted.length.toLocaleString("ko-KR")}건을 먼저 주문 확인해 주세요. 미확인 주문이 있으면 테이블 전체 결제를 진행할 수 없습니다.`, "error", 6500);
@@ -1512,8 +1512,8 @@
 
   async function boot() {
     try {
-      identity = await ui.requireLogin({ roles: ["staff", "admin"], preferredRole: "staff" });
-      if (identity.role === "admin") ui.byId("menuAdminLink").hidden = false;
+      identity = await ui.requireLogin({ roles: ["staff", "manager", "admin"], preferredRole: "staff" });
+      if (["manager", "admin"].includes(identity.role)) ui.byId("menuAdminLink").hidden = false;
       initializeHistoryFilter();
       scheduleBusinessDayRollover();
       bindEvents();

@@ -5,8 +5,9 @@ import path from "node:path";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(projectRoot, file), "utf8");
-const [staffHome, adminHome] = await Promise.all([
+const [staffHome, managerHome, adminHome] = await Promise.all([
   read("home.html"),
+  read("home_manager.html"),
   read("home_admin.html"),
 ]);
 
@@ -25,8 +26,8 @@ function sectionHtml(html, titleId, nextTitleId) {
 assert.match(staffHome, /<body class="locked">/);
 assert.match(
   staffHome,
-  /QRStaff\.requireLogin\(\{\s*roles:\["staff", "admin"\],\s*preferredRole:"staff"\s*\}\)/,
-  "staff home must reuse the staff password while allowing an already verified admin session",
+  /QRStaff\.requireLogin\(\{\s*roles:\["staff", "manager", "admin"\],\s*preferredRole:"staff"\s*\}\)/,
+  "staff home must reuse the staff password while allowing verified manager and admin sessions",
 );
 assert.deepEqual(
   hrefs(staffHome),
@@ -34,6 +35,41 @@ assert.deepEqual(
   "staff home must expose only the five approved staff destinations",
 );
 assert.doesNotMatch(staffHome, /href="(?:admin|menu_admin|hana_[^"]+|reservation|reserv_admin|report|code_admin)\.html"/);
+
+assert.match(managerHome, /<body class="locked">/);
+assert.match(
+  managerHome,
+  /QRStaff\.requireLogin\(\{\s*roles:\["manager", "admin"\],\s*preferredRole:"manager"\s*\}\)/,
+  "manager home must accept the manager password and an already verified administrator session",
+);
+assert.deepEqual(
+  hrefs(managerHome),
+  [
+    "home.html",
+    "calc.html",
+    "order_inbox.html",
+    "menu_admin.html",
+    "admin.html",
+    "reserv_check.html",
+    "expense.html",
+    "reservation.html",
+    "reserv_admin.html",
+    "notice.html",
+    "index.html",
+    "restaurant.html",
+    "golf.html",
+    "hotel.html",
+    "car.html",
+    "package.html",
+  ],
+  "manager home must expose the approved administrator destinations in their existing section order",
+);
+assert.doesNotMatch(
+  managerHome,
+  /href="(?:hana_reserv_check_hidden|hana_admin_hidden|hana_reserv_admin_hidden|report|code_admin)\.html"/,
+  "manager home must not expose Hidden, monthly KB settlement, or password-management pages",
+);
+assert.doesNotMatch(managerHome, /hiddenView|· Hidden|월간 정산 · KB|접근 비밀번호 관리/);
 
 assert.match(adminHome, /<body class="locked">/);
 assert.match(
@@ -90,7 +126,7 @@ assert.match(adminHome, /href="hana_admin_hidden\.html"[\s\S]*?<span class="name
 assert.match(adminHome, /href="report\.html"[\s\S]*?<span class="name">월간 정산 · KB<\/span>/);
 assert.doesNotMatch(adminHome, /href="menu\.html"/, "tokenized customer menu must not be linked without a QR token");
 
-for (const html of [staffHome, adminHome]) {
+for (const html of [staffHome, managerHome, adminHome]) {
   assert.match(html, /@supabase\/supabase-js@2\.112\.2/);
   assert.match(html, /assets\/supabase-config\.js/);
   assert.match(html, /assets\/dgv-data\.js/);
@@ -102,5 +138,5 @@ for (const html of [staffHome, adminHome]) {
   assert.doesNotMatch(html, /sessionStorage\.setItem\([^\n]*(?:pass|password|code)/i);
 }
 
-console.log("Staff and administrator home navigation/auth contracts verified.");
+console.log("Staff, manager, and administrator home navigation/auth contracts verified.");
 

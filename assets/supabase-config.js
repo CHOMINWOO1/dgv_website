@@ -10,6 +10,7 @@ window.DGV_SUPABASE_CONFIG = Object.freeze({
   publishableKey: "sb_publishable_kvhurEnExMnJxTiaqBLnOA_p2bcCuxx",
   authAccounts: Object.freeze({
     staff: "staff@dgv.local",
+    manager: "manager@dgv.local",
     admin: "admin@dgv.local"
   })
 });

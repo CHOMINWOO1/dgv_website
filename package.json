@@ -6,6 +6,7 @@
     "supabase": "supabase",
     "db:lint": "supabase db lint",
     "test:security": "node tests/security-regression.mjs",
+    "test:manager-credentials": "node tests/manager-credential-regression.mjs",
     "test:notifications": "node tests/notification-chunking.mjs",
     "test:legacy-compatibility": "node tests/legacy-cutover-compatibility-static.mjs",
     "test:legacy-compatibility:db": "supabase test db --local supabase/tests/legacy_cutover_compatibility.sql",

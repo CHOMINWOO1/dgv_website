@@ -416,10 +416,10 @@
   <!-- ✅ Admin Gate Modal -->
   <div class="modalBack" id="gateModal">
     <div class="modal" role="dialog" aria-modal="true">
-      <div class="modalTitle">관리자 로그인</div>
-      <p class="modalDesc">비밀번호를 입력하면 관리자 페이지에 입장합니다.</p>
+      <div class="modalTitle">매니저·관리자 로그인</div>
+      <p class="modalDesc">매니저 또는 관리자 비밀번호를 입력하면 매출 관리 페이지에 입장합니다.</p>
       <div class="modalRow">
-        <input id="gatePassInput" type="password" placeholder="관리자 비밀번호" autocomplete="off"/>
+        <input id="gatePassInput" type="password" placeholder="매니저 또는 관리자 비밀번호" autocomplete="off"/>
       </div>
       <div class="modalBtns">
         <button class="btn btnPrimary" id="gateConfirmBtn">입장</button>
@@ -431,10 +431,10 @@
   <!-- ✅ Delete Password Modal -->
   <div class="modalBack" id="deleteModal">
     <div class="modal" role="dialog" aria-modal="true">
-      <div class="modalTitle">관리자 삭제</div>
-      <p class="modalDesc">비밀번호를 입력하면 해당 주문이 DB에서 완전 삭제됩니다.</p>
+      <div class="modalTitle">주문 삭제 확인</div>
+      <p class="modalDesc">매니저 또는 관리자 비밀번호를 입력하면 해당 주문이 DB에서 완전 삭제됩니다.</p>
       <div class="modalRow">
-        <input id="deletePassInput" type="password" placeholder="관리자 비밀번호" autocomplete="off"/>
+        <input id="deletePassInput" type="password" placeholder="매니저 또는 관리자 비밀번호" autocomplete="off"/>
       </div>
       <div class="modalBtns">
         <button class="btn" id="deleteCancelBtn">취소</button>
@@ -485,7 +485,7 @@
      *************************************************/
     async function isGateOk(){
       const identity = await DGV.getIdentity();
-      return identity.role === "admin";
+      return ["manager", "admin"].includes(identity.role);
     }
     function lockPage(){
       document.body.classList.add("locked");
@@ -501,7 +501,7 @@
     }
 
     async function checkGatePassword(pass){
-      await DGV.signInAs("admin", pass);
+      await DGV.signInAsAny(["manager", "admin"], pass);
       return true;
     }
 
@@ -511,7 +511,7 @@
       try{
         const ok = await checkGatePassword(pass);
         if (!ok){
-          alert("관리자 비밀번호가 올바르지 않습니다.");
+          alert("매니저 또는 관리자 비밀번호가 올바르지 않습니다.");
           return;
         }
         unlockPage();
@@ -1170,7 +1170,7 @@
       if (!okConfirm) return;
 
       try{
-        await DGV.signInAs("admin", pass);
+        await DGV.signInAsAny(["manager", "admin"], pass);
         const { data, error } = await sb.rpc("app_delete_order", {
           p_order_id: pendingDeleteOrderId
         });

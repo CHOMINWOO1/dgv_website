@@ -381,8 +381,8 @@
   <!-- ✅ 관리자 비밀번호 모달 -->
   <div class="modalBack" id="pwModal">
     <div class="modal">
-      <div class="modalTitle">관리자 비밀번호</div>
-      <p class="modalDesc">접근하려면 비밀번호를 입력하세요.</p>
+      <div class="modalTitle">매니저·관리자 비밀번호</div>
+      <p class="modalDesc">접근하려면 매니저 또는 관리자 비밀번호를 입력하세요.</p>
 
       <div class="modalRow">
         <input id="pwInput" type="password" placeholder="비밀번호 입력" />
@@ -478,7 +478,7 @@
 
     async function requireAdminPassword(){
       const identity = await DGV.getIdentity();
-      if(identity.role === "admin") return true;
+      if(["manager", "admin"].includes(identity.role)) return true;
 
       return new Promise((resolve)=>{
         openPwModal();
@@ -488,7 +488,7 @@
           if(!pw) return;
 
           try{
-            await DGV.signInAs("admin", pw);
+            await DGV.signInAsAny(["manager", "admin"], pw);
             $("pwInput").value = "";
             closePwModal();
             cleanup();
