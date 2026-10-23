@@ -22,8 +22,9 @@
     .expense-save{flex:1;min-height:50px;font-size:16px;}
     .expense-history{min-width:0;padding:14px;}
     .expense-history-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
-    .expense-month-control{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;}
-    .expense-month-control .qr-field{min-width:165px;}
+    .expense-range-control{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;}
+    .expense-range-control .qr-field{min-width:165px;}
+    .expense-range-actions{display:flex;gap:8px;flex-wrap:wrap;}
     .expense-global-search{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;margin:0 0 12px;padding:12px;border:1px solid var(--qr-line);border-radius:14px;background:#fffaf0;}
     .expense-global-search .qr-field{flex:1 1 280px;min-width:220px;}
     .expense-summary{grid-template-columns:repeat(4,minmax(0,1fr));}
@@ -48,13 +49,13 @@
     @media(max-width:700px){
       .qr-header{align-items:flex-start;}
       .expense-form-grid{grid-template-columns:1fr;}.expense-field-wide{grid-column:auto;}
-      .expense-history-head{align-items:stretch;flex-direction:column;}.expense-month-control{align-items:stretch;}.expense-month-control .qr-field{flex:1 1 160px;}
+      .expense-history-head{align-items:stretch;flex-direction:column;}.expense-range-control{align-items:stretch;}.expense-range-control .qr-field{flex:1 1 160px;}.expense-range-actions{width:100%;}.expense-range-actions .qr-btn{flex:1;}
       .expense-table-wrap{overflow:visible;border:0;background:transparent;}.expense-table{min-width:0;display:block;}.expense-table thead{display:none;}.expense-table tbody{display:grid;gap:10px;}
       .expense-table tr{display:block;padding:10px;border:1px solid var(--qr-line);border-radius:13px;background:#fff;box-shadow:0 5px 14px rgba(58,42,31,.06);}
       .expense-table td{display:grid;grid-template-columns:82px minmax(0,1fr);gap:10px;padding:7px 4px;border-bottom:1px dashed #eee4d3;text-align:left;}
       .expense-table td:last-child{border-bottom:0;}.expense-table td:before{content:attr(data-label);color:var(--qr-sub);font-size:11px;font-weight:1000;}.expense-table .amount{text-align:left;}.expense-table .note{max-width:none;}
     }
-    @media(max-width:430px){.expense-summary{grid-template-columns:1fr 1fr;}.expense-type{grid-template-columns:1fr;}.expense-month-control .qr-field{min-width:100%;}.expense-month-control .qr-btn,.expense-global-search .qr-btn{width:100%;}}
+    @media(max-width:430px){.expense-summary{grid-template-columns:1fr 1fr;}.expense-type{grid-template-columns:1fr;}.expense-range-control .qr-field{min-width:100%;}.expense-range-actions,.expense-range-control .qr-btn,.expense-global-search .qr-btn{width:100%;}}
   </style>
 </head>
 <body class="locked">
@@ -97,6 +98,10 @@
               <input class="qr-input" id="description" name="description" type="text" maxlength="500" placeholder="예: 식자재 구입" autocomplete="off" required />
             </div>
             <div class="expense-field expense-field-wide">
+              <label class="qr-label" for="vendor">거래처 (선택)</label>
+              <input class="qr-input" id="vendor" name="vendor" type="text" maxlength="300" placeholder="예: 하나마트" autocomplete="off" />
+            </div>
+            <div class="expense-field expense-field-wide">
               <label class="qr-label" for="note">비고 (선택)</label>
               <textarea class="qr-textarea" id="note" name="note" maxlength="2000" placeholder="필요한 내용을 적어 주세요."></textarea>
             </div>
@@ -111,28 +116,35 @@
       <section class="qr-card expense-history" id="expenseHistory" aria-labelledby="historyTitle">
         <div class="expense-history-head">
           <div>
-            <h2 class="qr-section-title" id="historyTitle">월별 지출 내역</h2>
-            <div class="qr-hint">선택한 달의 모든 지출과 합계를 확인합니다.</div>
+            <h2 class="qr-section-title" id="historyTitle">지출 내역 조회</h2>
+            <div class="qr-hint">시작일과 종료일을 선택하면 해당 기간의 지출과 합계를 확인할 수 있습니다.</div>
           </div>
-          <form class="expense-month-control" id="monthForm">
+          <form class="expense-range-control" id="rangeForm">
             <div class="qr-field">
-              <label class="qr-label" for="monthPicker">조회 월</label>
-              <input class="qr-input" id="monthPicker" name="monthPicker" type="month" required />
+              <label class="qr-label" for="rangeStart">시작일</label>
+              <input class="qr-input" id="rangeStart" name="rangeStart" type="date" required />
             </div>
-            <button class="qr-btn" id="refreshBtn" type="submit">조회</button>
+            <div class="qr-field">
+              <label class="qr-label" for="rangeEnd">종료일</label>
+              <input class="qr-input" id="rangeEnd" name="rangeEnd" type="date" required />
+            </div>
+            <div class="expense-range-actions">
+              <button class="qr-btn" id="refreshBtn" type="submit">조회</button>
+              <button class="qr-btn qr-btn-primary" id="exportExpenseBtn" type="button">엑셀 생성</button>
+            </div>
           </form>
         </div>
 
         <form class="expense-global-search" id="searchForm" role="search">
           <div class="qr-field">
             <label class="qr-label" for="expenseSearch">전체 기록 검색 (이전 달 포함)</label>
-            <input class="qr-input" id="expenseSearch" name="expenseSearch" type="search" placeholder="내역·비고·날짜·금액 검색" autocomplete="off" />
+            <input class="qr-input" id="expenseSearch" name="expenseSearch" type="search" placeholder="내역·거래처·비고·날짜·금액 검색" autocomplete="off" />
           </div>
           <button class="qr-btn qr-btn-primary" id="searchBtn" type="submit">전체 검색</button>
           <button class="qr-btn" id="clearSearchBtn" type="button" hidden>검색 해제</button>
         </form>
 
-        <div class="qr-summary expense-summary" aria-label="월별 지출 요약">
+        <div class="qr-summary expense-summary" aria-label="지출 내역 요약">
           <div class="qr-card qr-summary-card"><div class="qr-summary-label">일반 지출</div><div class="qr-summary-value" id="generalSubtotal">0 VND</div></div>
           <div class="qr-card qr-summary-card"><div class="qr-summary-label">계산서 지출</div><div class="qr-summary-value" id="invoiceSubtotal">0 VND</div></div>
           <div class="qr-card qr-summary-card"><div class="qr-summary-label">전체 지출</div><div class="qr-summary-value" id="totalAmount">0 VND</div></div>
@@ -141,11 +153,11 @@
 
         <div class="expense-table-wrap" id="tableWrap" hidden>
           <table class="expense-table">
-            <thead><tr><th>날짜</th><th>구분</th><th>내역</th><th>비고</th><th style="text-align:right">금액</th><th>관리</th></tr></thead>
+            <thead><tr><th>날짜</th><th>구분</th><th>내역</th><th>거래처</th><th>비고</th><th style="text-align:right">금액</th><th>관리</th></tr></thead>
             <tbody id="expenseRows"></tbody>
           </table>
         </div>
-        <div class="expense-empty" id="emptyState" hidden>선택한 달에 등록된 지출 내역이 없습니다.</div>
+        <div class="expense-empty" id="emptyState" hidden>선택한 기간에 등록된 지출 내역이 없습니다.</div>
         <div class="expense-status" id="loadStatus" role="status" aria-live="polite"></div>
       </section>
     </div>
@@ -169,6 +181,7 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
+  <script src="assets/dgv-xlsx.js"></script>
   <script>
   (function initExpensePage(){
     "use strict";
@@ -179,16 +192,19 @@
     const dateInput = document.getElementById("expenseDate");
     const amountInput = document.getElementById("amountVnd");
     const descriptionInput = document.getElementById("description");
+    const vendorInput = document.getElementById("vendor");
     const noteInput = document.getElementById("note");
     const saveBtn = document.getElementById("saveBtn");
     const editCancelBtn = document.getElementById("editCancelBtn");
-    const monthForm = document.getElementById("monthForm");
-    const monthPicker = document.getElementById("monthPicker");
+    const rangeForm = document.getElementById("rangeForm");
+    const rangeStart = document.getElementById("rangeStart");
+    const rangeEnd = document.getElementById("rangeEnd");
     const searchForm = document.getElementById("searchForm");
     const searchInput = document.getElementById("expenseSearch");
     const searchBtn = document.getElementById("searchBtn");
     const clearSearchBtn = document.getElementById("clearSearchBtn");
     const refreshBtn = document.getElementById("refreshBtn");
+    const exportExpenseBtn = document.getElementById("exportExpenseBtn");
     const rowsEl = document.getElementById("expenseRows");
     const tableWrap = document.getElementById("tableWrap");
     const emptyState = document.getElementById("emptyState");
@@ -198,11 +214,13 @@
     const adminAuthPassword = document.getElementById("adminAuthPassword");
     const adminAuthConfirm = document.getElementById("adminAuthConfirm");
     const escapeHtml = DGV.escapeHTML;
+    const EXPENSE_COLUMNS = "id,expense_date,expense_type,description,vendor,amount_vnd,note,created_at";
     let loadSequence = 0;
-    let monthRows = [];
+    let rangeRows = [];
     let allRows = [];
     let searchMode = false;
-    let loadedMonth = "";
+    let loadedRange = { start:"", end:"" };
+    let displayedRows = [];
     let currentRows = new Map();
     let editingId = null;
     let adminAuthResolve = null;
@@ -215,16 +233,20 @@
       return /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/.test(String(value || ""));
     }
 
-    function validMonth(value){
-      return /^\d{4}-(?:0[1-9]|1[0-2])$/.test(String(value || ""));
-    }
-
-    function monthBounds(value){
-      if (!validMonth(value)) throw new TypeError("Invalid month");
-      const [year, month] = value.split("-").map(Number);
-      const nextYear = month === 12 ? year + 1 : year;
-      const nextMonth = month === 12 ? 1 : month + 1;
-      return { start:`${value}-01`, end:`${nextYear}-${String(nextMonth).padStart(2,"0")}-01` };
+    function requestedRange(){
+      const start = rangeStart.value;
+      const end = rangeEnd.value;
+      if (!validYmd(start) || !validYmd(end)){
+        QRStaff.toast("조회 시작일과 종료일을 선택해 주세요.", "error");
+        (!validYmd(start) ? rangeStart : rangeEnd).focus();
+        return null;
+      }
+      if (start > end){
+        QRStaff.toast("시작일은 종료일보다 늦을 수 없습니다.", "error");
+        rangeStart.focus();
+        return null;
+      }
+      return { start, end };
     }
 
     function formatVnd(value){
@@ -243,6 +265,12 @@
       return value === "invoice" ? "계산서 지출" : "일반 지출";
     }
 
+    function typeBilingualLabel(value){
+      return value === "invoice"
+        ? "계산서 지출 / Chi có hóa đơn"
+        : "일반 지출 / Chi thường";
+    }
+
     function normalizeSearch(value){
       return String(value || "")
         .normalize("NFKC")
@@ -257,6 +285,7 @@
         row.expense_date,
         typeLabel(row.expense_type),
         row.description,
+        row.vendor,
         row.note,
         String(amount),
         amount.toLocaleString("ko-KR")
@@ -287,6 +316,7 @@
       form.elements.expenseType.value = "general";
       amountInput.value = "";
       descriptionInput.value = "";
+      vendorInput.value = "";
       noteInput.value = "";
       saveBtn.textContent = "지출 저장";
       editCancelBtn.hidden = true;
@@ -298,6 +328,7 @@
       form.elements.expenseType.value = row.expense_type === "invoice" ? "invoice" : "general";
       amountInput.value = Number(row.amount_vnd || 0).toLocaleString("ko-KR");
       descriptionInput.value = String(row.description || "");
+      vendorInput.value = String(row.vendor || "");
       noteInput.value = String(row.note || "");
       saveBtn.textContent = "수정 저장";
       editCancelBtn.hidden = false;
@@ -319,15 +350,18 @@
     }
 
     function renderRows(rows){
-      currentRows = new Map(rows.map((row) => [String(row.id), row]));
-      rowsEl.innerHTML = rows.map((row) => {
+      displayedRows = rows.slice();
+      currentRows = new Map(displayedRows.map((row) => [String(row.id), row]));
+      rowsEl.innerHTML = displayedRows.map((row) => {
         const type = row.expense_type === "invoice" ? "invoice" : "general";
+        const vendor = String(row.vendor || "").trim();
         const note = String(row.note || "").trim();
         const rowId = escapeHtml(String(row.id || ""));
         return `<tr>
           <td data-label="날짜">${escapeHtml(String(row.expense_date || ""))}</td>
           <td data-label="구분"><span class="expense-kind" data-type="${type}">${typeLabel(type)}</span></td>
           <td data-label="내역">${escapeHtml(String(row.description || ""))}</td>
+          <td class="note" data-label="거래처">${vendor ? escapeHtml(vendor) : "—"}</td>
           <td class="note" data-label="비고">${note ? escapeHtml(note) : "—"}</td>
           <td class="amount" data-label="금액">${escapeHtml(formatVnd(row.amount_vnd))}</td>
           <td data-label="관리"><div class="expense-actions">
@@ -336,9 +370,9 @@
           </div></td>
         </tr>`;
       }).join("");
-      tableWrap.hidden = rows.length === 0;
-      emptyState.hidden = rows.length !== 0;
-      updateSummary(rows);
+      tableWrap.hidden = displayedRows.length === 0;
+      emptyState.hidden = displayedRows.length !== 0;
+      updateSummary(displayedRows);
     }
 
     function searchTerms(){
@@ -355,13 +389,15 @@
         : rows;
     }
 
-    function renderMonthRows(){
+    function renderRangeRows(){
       searchMode = false;
       clearSearchBtn.hidden = true;
-      emptyState.textContent = "선택한 달에 등록된 지출 내역이 없습니다.";
-      renderRows(monthRows);
+      emptyState.textContent = "선택한 기간에 등록된 지출 내역이 없습니다.";
+      renderRows(rangeRows);
       loadStatus.dataset.tone = "";
-      loadStatus.textContent = `${loadedMonth || monthPicker.value} 지출 ${monthRows.length.toLocaleString("ko-KR")}건을 불러왔습니다.`;
+      const start = loadedRange.start || rangeStart.value;
+      const end = loadedRange.end || rangeEnd.value;
+      loadStatus.textContent = `${start} ~ ${end} 지출 ${rangeRows.length.toLocaleString("ko-KR")}건을 불러왔습니다.`;
     }
 
     function renderSearchResults(){
@@ -395,22 +431,18 @@
         if (error) throw error;
         if (editingId === String(row.id)) resetEntryForm();
         QRStaff.toast("지출 내역이 삭제되었습니다.", "ok");
-        await loadMonth();
+        await refreshActiveView();
       }catch(error){
         console.error(error);
         QRStaff.toast("지출 내역을 삭제하지 못했습니다. 관리자 비밀번호를 확인해 주세요.", "error");
       }
     }
 
-    async function loadMonth(){
-      const requestedMonth = monthPicker.value;
-      if (!validMonth(requestedMonth)){
-        QRStaff.toast("조회할 월을 선택해 주세요.", "error");
-        monthPicker.focus();
-        return;
-      }
+    async function loadRange(options={}){
+      const range = requestedRange();
+      if (!range) return null;
+      const clearSearch = options.clearSearch !== false;
       const requestId = ++loadSequence;
-      const bounds = monthBounds(requestedMonth);
       loadStatus.dataset.tone = "";
       loadStatus.textContent = "지출 내역을 불러오는 중입니다…";
       QRStaff.setBusy(refreshBtn, true, "조회 중…");
@@ -418,27 +450,31 @@
         const rows = await DGV.collectSupabasePages(
           () => sb
             .from("restaurant_expenses")
-            .select("id,expense_date,expense_type,description,amount_vnd,note,created_at")
-            .gte("expense_date", bounds.start)
-            .lt("expense_date", bounds.end),
+            .select(EXPENSE_COLUMNS)
+            .gte("expense_date", range.start)
+            .lte("expense_date", range.end),
           { order:[
             { column:"expense_date", ascending:false },
             { column:"created_at", ascending:false },
             { column:"id", ascending:false }
           ] }
         );
-        if (requestId !== loadSequence) return;
-        monthRows = rows;
-        loadedMonth = requestedMonth;
-        searchInput.value = "";
-        allRows = [];
-        renderMonthRows();
+        if (requestId !== loadSequence) return null;
+        rangeRows = rows;
+        loadedRange = range;
+        if (clearSearch){
+          searchInput.value = "";
+          allRows = [];
+        }
+        renderRangeRows();
+        return displayedRows.slice();
       }catch(error){
         console.error(error);
-        if (requestId !== loadSequence) return;
+        if (requestId !== loadSequence) return null;
         rowsEl.innerHTML = "";
-        monthRows = [];
-        loadedMonth = "";
+        rangeRows = [];
+        displayedRows = [];
+        loadedRange = { start:"", end:"" };
         allRows = [];
         searchMode = false;
         currentRows = new Map();
@@ -447,19 +483,18 @@
         updateSummary([]);
         loadStatus.dataset.tone = "error";
         loadStatus.textContent = "지출 내역을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+        return null;
       }finally{
         QRStaff.setBusy(refreshBtn, false);
       }
     }
 
-    async function searchAllExpenses(event){
-      event.preventDefault();
-      if (searchBtn.disabled) return;
+    async function loadSearchResults(){
       const terms = searchTerms();
       if (!terms.length){
         QRStaff.toast("검색어를 입력해 주세요.", "error");
         searchInput.focus();
-        return;
+        return null;
       }
       const requestId = ++loadSequence;
       loadStatus.dataset.tone = "";
@@ -469,21 +504,23 @@
         const rows = await DGV.collectSupabasePages(
           () => sb
             .from("restaurant_expenses")
-            .select("id,expense_date,expense_type,description,amount_vnd,note,created_at"),
+            .select(EXPENSE_COLUMNS),
           { order:[
             { column:"expense_date", ascending:false },
             { column:"created_at", ascending:false },
             { column:"id", ascending:false }
           ] }
         );
-        if (requestId !== loadSequence) return;
+        if (requestId !== loadSequence) return null;
         allRows = rows;
         renderSearchResults();
+        return displayedRows.slice();
       }catch(error){
         console.error(error);
-        if (requestId !== loadSequence) return;
+        if (requestId !== loadSequence) return null;
         allRows = [];
-        searchMode = false;
+        displayedRows = [];
+        searchMode = true;
         rowsEl.innerHTML = "";
         currentRows = new Map();
         tableWrap.hidden = true;
@@ -491,18 +528,104 @@
         updateSummary([]);
         loadStatus.dataset.tone = "error";
         loadStatus.textContent = "전체 지출 내역을 검색하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+        return null;
       }finally{
         QRStaff.setBusy(searchBtn, false);
       }
     }
 
-    function clearSearch(){
-      ++loadSequence;
+    async function searchAllExpenses(event){
+      event.preventDefault();
+      if (searchBtn.disabled) return;
+      await loadSearchResults();
+    }
+
+    async function clearSearch(){
       searchInput.value = "";
       allRows = [];
-      if (loadedMonth) monthPicker.value = loadedMonth;
-      renderMonthRows();
+      if (loadedRange.start) rangeStart.value = loadedRange.start;
+      if (loadedRange.end) rangeEnd.value = loadedRange.end;
+      await loadRange({ clearSearch:true });
       searchInput.focus();
+    }
+
+    async function refreshActiveView(){
+      if (searchMode && searchTerms().length) return loadSearchResults();
+      return loadRange({ clearSearch:false });
+    }
+
+    async function exportExpenses(){
+      if (exportExpenseBtn.disabled) return;
+      const originalLabel = exportExpenseBtn.textContent;
+      exportExpenseBtn.disabled = true;
+      exportExpenseBtn.textContent = "생성 중…";
+      try{
+        if (!window.DGV_XLSX?.downloadWorkbook) throw new Error("XLSX exporter is unavailable");
+        const exportingSearch = searchMode && searchTerms().length > 0;
+        const rows = await refreshActiveView();
+        if (!Array.isArray(rows)) throw new Error("Latest expense rows could not be loaded");
+        if (!rows.length){
+          QRStaff.toast("출력할 지출 내역이 없습니다.", "error");
+          return;
+        }
+
+        const textCell = (value, style="normal") => ({ value:String(value ?? ""), style });
+        const numberCell = (value, style="integer") => {
+          const number = Number(value ?? 0);
+          if (!Number.isFinite(number)) throw new Error("Invalid expense amount");
+          return { value:number, style };
+        };
+        const headerRow = [
+          "날짜 / Ngày",
+          "구분 / Phân loại",
+          "내역 / Nội dung",
+          "거래처 / Đối tác",
+          "비고 / Ghi chú",
+          "금액(VND) / Số tiền (VND)"
+        ].map((label) => textCell(label, "header"));
+        const criteria = exportingSearch
+          ? `전체 검색 / Tìm kiếm: ${searchInput.value.trim()}`
+          : `${loadedRange.start || rangeStart.value} ~ ${loadedRange.end || rangeEnd.value}`;
+        const dataRows = rows.map((row) => [
+          textCell(row.expense_date),
+          textCell(typeBilingualLabel(row.expense_type)),
+          textCell(row.description, "wrapped"),
+          textCell(row.vendor, "wrapped"),
+          textCell(row.note, "wrapped"),
+          numberCell(row.amount_vnd)
+        ]);
+        const total = rows.reduce((sum, row) => sum + (Number(row.amount_vnd) || 0), 0);
+        const sheetRows = [
+          [textCell("HANA 식당 지출 내역 / Chi phí nhà hàng HANA", "title"), "", "", "", "", ""],
+          [textCell("조회 기준 / Phạm vi"), textCell(criteria), "", "", "", ""],
+          [textCell("생성 일시 / Thời gian xuất"), textCell(new Date().toLocaleString("ko-KR", { timeZone:BUSINESS_TIME_ZONE })), "", "", "", ""],
+          [],
+          headerRow,
+          ...dataRows,
+          ["", "", "", "", textCell("합계 / Tổng cộng", "totalLabel"), numberCell(total, "totalNumber")]
+        ];
+        const filename = exportingSearch
+          ? `HANA_Expenses_Search_${businessToday()}.xlsx`
+          : `HANA_Expenses_${loadedRange.start || rangeStart.value}_${loadedRange.end || rangeEnd.value}.xlsx`;
+
+        window.DGV_XLSX.downloadWorkbook({
+          filename,
+          sheets:[{
+            name:"지출 내역",
+            rows:sheetRows,
+            columnWidths:[15,28,32,24,36,22],
+            merges:["A1:F1"],
+            freezeRows:5,
+            autoFilterRange:`A5:F${Math.max(5, 5 + dataRows.length)}`
+          }]
+        });
+      }catch(error){
+        console.error(error);
+        QRStaff.toast("엑셀 파일을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
+      }finally{
+        exportExpenseBtn.disabled = false;
+        exportExpenseBtn.textContent = originalLabel;
+      }
     }
 
     async function saveExpense(event){
@@ -511,6 +634,7 @@
       const amountText = amountDigits(amountInput.value);
       const amountVnd = Number(amountText);
       const description = descriptionInput.value.trim();
+      const vendor = vendorInput.value.trim();
       const note = noteInput.value.trim();
 
       if (!validYmd(expenseDate)){
@@ -533,6 +657,7 @@
         expense_date:expenseDate,
         expense_type:selectedType(),
         description,
+        vendor:vendor || null,
         amount_vnd:amountVnd,
         note:note || null
       };
@@ -548,7 +673,7 @@
         if (error) throw error;
         resetEntryForm();
         QRStaff.toast(updateId ? "지출 내역이 수정되었습니다." : "지출 내역이 저장되었습니다.", "ok");
-        await loadMonth();
+        await refreshActiveView();
         descriptionInput.focus();
       }catch(error){
         console.error(error);
@@ -570,12 +695,15 @@
       resetEntryForm();
       descriptionInput.focus();
     });
-    monthForm.addEventListener("submit", (event) => { event.preventDefault(); loadMonth(); });
+    rangeForm.addEventListener("submit", (event) => { event.preventDefault(); loadRange({ clearSearch:true }); });
     searchForm.addEventListener("submit", searchAllExpenses);
     searchInput.addEventListener("input", () => {
-      if (searchMode) renderSearchResults();
+      if (!searchMode) return;
+      if (searchTerms().length) renderSearchResults();
+      else clearSearch();
     });
     clearSearchBtn.addEventListener("click", clearSearch);
+    exportExpenseBtn.addEventListener("click", exportExpenses);
     rowsEl.addEventListener("click", async (event) => {
       const button = event.target.closest("button[data-expense-action]");
       if (!button) return;
@@ -613,9 +741,10 @@
     (async function start(){
       const today = businessToday();
       dateInput.value = today;
-      monthPicker.value = today.slice(0, 7);
+      rangeStart.value = `${today.slice(0, 7)}-01`;
+      rangeEnd.value = today;
       document.body.classList.remove("locked");
-      await loadMonth();
+      await loadRange({ clearSearch:true });
     })();
   })();
   </script>

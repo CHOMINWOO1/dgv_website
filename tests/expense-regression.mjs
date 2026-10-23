@@ -12,6 +12,10 @@ const publicAccessMigration = await readFile(
   path.join(projectRoot, "supabase/migrations/20261015115438_allow_public_restaurant_expense_entry.sql"),
   "utf8",
 );
+const vendorMigration = await readFile(
+  path.join(projectRoot, "supabase/migrations/20261023123000_restaurant_expense_vendor.sql"),
+  "utf8",
+);
 const page = await readFile(path.join(projectRoot, "expense.html"), "utf8");
 
 // The ledger is a new, isolated table and deployment itself never mutates any
@@ -133,6 +137,41 @@ assert.doesNotMatch(
   /grant\s+(?:update|delete)(?:\s*\([^;]*?\))?\s+on table public\.restaurant_expenses\s+to anon/i,
 );
 
+// Vendor support is a nullable, additive column. The follow-up migration must
+// not rewrite any imported or web-created expense row.
+const vendorColumn = vendorMigration.match(
+  /alter table public\.restaurant_expenses\s+add column vendor text\s*;/i,
+)?.[0];
+assert.ok(vendorColumn, "the optional vendor column is missing");
+assert.doesNotMatch(vendorColumn, /\b(?:not null|default)\b/i);
+assert.match(
+  vendorMigration,
+  /constraint restaurant_expenses_vendor_check[\s\S]*?vendor is null[\s\S]*?length\(btrim\(vendor\)\)\s*<=\s*300/i,
+);
+assert.match(
+  vendorMigration,
+  /grant select\s*\(\s*vendor\s*\)\s+on table public\.restaurant_expenses\s+to anon, authenticated/i,
+);
+assert.match(
+  vendorMigration,
+  /grant insert\s*\(\s*vendor\s*\)\s+on table public\.restaurant_expenses\s+to anon, authenticated/i,
+);
+assert.match(
+  vendorMigration,
+  /grant update\s*\(\s*vendor\s*\)\s+on table public\.restaurant_expenses\s+to authenticated/i,
+);
+assert.doesNotMatch(
+  vendorMigration,
+  /^\s*(?:insert\s+into|update\s+(?:public\.)?restaurant_expenses|delete\s+from|truncate|merge\s+into)\b/im,
+  "the vendor migration must not mutate existing expense rows",
+);
+assert.doesNotMatch(vendorMigration, /create\s+policy\b/i);
+assert.doesNotMatch(
+  vendorMigration,
+  /grant\s+update\s*\([^)]*\bvendor\b[^)]*\)[\s\S]*?\bto\s+anon\b/i,
+  "anonymous clients must not receive vendor UPDATE access",
+);
+
 // Grants are an independent security layer: the browser can read only fields
 // required by the page and insert only the five business fields. Import/audit
 // fields require service_role.
@@ -181,22 +220,35 @@ assert.match(
   /grant select, insert, update, delete on table public\.restaurant_expenses\s+to service_role/i,
 );
 
-// The page keeps input simple, writes only business fields, paginates monthly
-// reads, and opens without a password. Modification controls authenticate with
-// the administrator password before UPDATE or DELETE.
+// The page keeps input simple, shows an inclusive date range or full-history
+// search result, and opens without a password. Modification controls still
+// authenticate with the administrator password before UPDATE or DELETE.
 assert.match(page, /<input[^>]+id="expenseDate"[^>]+type="date"/i);
 assert.match(page, /name="expenseType" value="general"/i);
 assert.match(page, /name="expenseType" value="invoice"/i);
 assert.match(page, /id="amountVnd"[^>]+inputmode="numeric"/i);
+assert.match(page, /id="vendor"[^>]+maxlength="300"/i);
 assert.match(page, /\.from\("restaurant_expenses"\)\.insert\(\[payload\]\)/i);
-for (const field of ["expense_date", "expense_type", "amount_vnd", "description", "note"]) {
+for (const field of ["expense_date", "expense_type", "amount_vnd", "description", "vendor", "note"]) {
   assert.match(page, new RegExp(`\\b${field}\\b`));
 }
 assert.match(page, /\.from\("restaurant_expenses"\)\.update\(payload\)/i);
 assert.match(page, /\.from\("restaurant_expenses"\)[\s\S]*?\.delete\(\)/i);
 assert.match(page, /DGV\.collectSupabasePages\(/i);
-assert.match(page, /\.gte\("expense_date", bounds\.start\)/i);
-assert.match(page, /\.lt\("expense_date", bounds\.end\)/i);
+assert.match(page, /id="rangeForm"/i);
+assert.match(page, /id="rangeStart"[^>]*type="date"/i);
+assert.match(page, /id="rangeEnd"[^>]*type="date"/i);
+assert.match(page, /id="exportExpenseBtn"[^>]*type="button"/i);
+assert.match(page, /\.gte\("expense_date",\s*[^)]+\)/i);
+assert.match(page, /\.lte\("expense_date",\s*[^)]+\)/i);
+assert.doesNotMatch(page, /\.lt\("expense_date",\s*bounds\.end\)/i);
+assert.match(page, /let displayedRows = \[\];/i);
+assert.match(
+  page,
+  /function renderRows\(rows\)[\s\S]*?displayedRows\s*=\s*(?:rows\.slice\(\)|\[\.\.\.rows\])/i,
+);
+assert.match(page, /function refreshActiveView\s*\(/i);
+assert.match(page, /rangeForm\.addEventListener\("submit"/i);
 assert.doesNotMatch(page, />관리자 홈<\/a>/i);
 assert.match(page, /document\.body\.classList\.remove\("locked"\)/i);
 assert.doesNotMatch(page, /QRStaff\.requireLogin\(/i);
@@ -205,19 +257,31 @@ assert.match(page, /id="adminAuthPassword"[^>]*type="password"[^>]*autocomplete=
 assert.match(page, /requestAdminPassword\(\)/i);
 assert.doesNotMatch(page, /id="login(?:Modal|Form|Password|Role|Confirm)"/i);
 assert.doesNotMatch(page, /getElementById\("expenseHistory"\)\.hidden = true/i);
-assert.match(page, /id="expenseSearch"[^>]*type="search"[^>]*placeholder="내역·비고·날짜·금액 검색"/i);
+assert.match(page, /id="expenseSearch"[^>]*type="search"[^>]*placeholder="내역·거래처·비고·날짜·금액 검색"/i);
 assert.match(page, /전체 기록 검색 \(이전 달 포함\)/i);
 assert.match(page, /searchForm\.addEventListener\("submit", searchAllExpenses\)/i);
-assert.match(page, /function searchableExpenseText\(row\)[\s\S]*?row\.expense_date[\s\S]*?typeLabel\(row\.expense_type\)[\s\S]*?row\.description[\s\S]*?row\.note[\s\S]*?amount\.toLocaleString/i);
+assert.match(page, /function searchableExpenseText\(row\)[\s\S]*?row\.expense_date[\s\S]*?typeLabel\(row\.expense_type\)[\s\S]*?row\.description[\s\S]*?row\.vendor[\s\S]*?row\.note[\s\S]*?amount\.toLocaleString/i);
 assert.match(page, /terms\.every\(\(term\) => haystack\.includes\(term\)\)/i);
-assert.match(page, /function searchAllExpenses\(event\)[\s\S]*?DGV\.collectSupabasePages\([\s\S]*?\.from\("restaurant_expenses"\)[\s\S]*?\.select\("id,expense_date,expense_type,description,amount_vnd,note,created_at"\)(?![\s\S]*?\.gte\("expense_date")/i);
+assert.match(page, /const EXPENSE_COLUMNS\s*=\s*"[^"\n]*\bvendor\b[^"\n]*"/i);
+assert.match(page, /\.select\(EXPENSE_COLUMNS\)/i);
+assert.match(page, /async function loadSearchResults\(\)[\s\S]*?DGV\.collectSupabasePages\([\s\S]*?\.from\("restaurant_expenses"\)[\s\S]*?\.select\(EXPENSE_COLUMNS\)/i);
+assert.match(page, /async function searchAllExpenses\(event\)[\s\S]*?await loadSearchResults\(\)/i);
 assert.match(page, /전체 기록 \$\{allRows\.length[\s\S]*?검색 결과 \$\{rows\.length/i);
 assert.match(page, /clearSearchBtn\.addEventListener\("click", clearSearch\)/i);
-assert.match(page, /let loadedMonth = "";/i);
-assert.match(page, /monthRows = rows;\s*loadedMonth = requestedMonth;/i);
-assert.match(page, /function clearSearch\(\)[\s\S]*?if \(loadedMonth\) monthPicker\.value = loadedMonth;[\s\S]*?renderMonthRows\(\)/i);
-assert.doesNotMatch(page, /async function loadMonth\(\)\{\s*if \(refreshBtn\.disabled\) return;/i);
 assert.match(page, /async function searchAllExpenses\(event\)\{[\s\S]*?if \(searchBtn\.disabled\) return;/i);
 assert.match(page, /finally\{\s*QRStaff\.setBusy\(searchBtn, false\);\s*\}/i);
+
+// XLSX generation uses the same in-memory row set currently rendered on the
+// page. It is a client-side download and does not mutate Supabase data.
+assert.match(page, /<script src="assets\/dgv-xlsx\.js"><\/script>/i);
+assert.match(page, /window\.DGV_XLSX\?\.downloadWorkbook/i);
+assert.match(page, /window\.DGV_XLSX\.downloadWorkbook\(/i);
+assert.match(page, /displayedRows\s*\.\s*slice\(\)/i);
+assert.match(page, /["']거래처 \/ Đối tác["']/i);
+assert.match(page, /["']금액\(VND\) \/ Số tiền \(VND\)["']/i);
+assert.match(page, /const rows = await refreshActiveView\(\)/i);
+assert.match(page, /exportExpenseBtn\.addEventListener\("click"/i);
+assert.match(page, /async function deleteExpense\(row\)[\s\S]*?await refreshActiveView\(\)/i);
+assert.match(page, /async function saveExpense\(event\)[\s\S]*?await refreshActiveView\(\)/i);
 
 console.log("Restaurant expense schema, RLS, ACL, and import-safety contracts passed.");
