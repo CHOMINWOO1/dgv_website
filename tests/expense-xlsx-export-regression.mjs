@@ -130,7 +130,12 @@ assert.match(exportBlock, /DGV_XLSX\.downloadWorkbook\(/);
 assert.match(refreshBlock, /loadSearchResults\(\)/);
 assert.match(refreshBlock, /loadRange\(/);
 assert.match(rangeBlock, /\.select\(EXPENSE_COLUMNS\)[\s\S]*?\.gte\("expense_date", range\.start\)[\s\S]*?\.lte\("expense_date", range\.end\)/);
-assert.match(searchBlock, /\.select\(EXPENSE_COLUMNS\)/);
+assert.match(searchBlock, /const range = requestedRange\(\)/, "search must read the currently selected date inputs");
+assert.match(
+  searchBlock,
+  /\.select\(EXPENSE_COLUMNS\)[\s\S]*?\.gte\("expense_date", range\.start\)[\s\S]*?\.lte\("expense_date", range\.end\)/,
+  "search must constrain the Supabase read to the current inclusive date range",
+);
 assert.match(page, /const EXPENSE_COLUMNS = "id,expense_date,expense_type,description,vendor,amount_vnd,note,created_at"/);
 assert.doesNotMatch(
   `${printBlock}\n${exportBlock}\n${refreshBlock}\n${rangeBlock}\n${searchBlock}`,
@@ -152,7 +157,7 @@ for (const field of ["row.expense_date", "row.expense_type", "row.description", 
 }
 assert.match(exportBlock, /numberCell\(row\.amount_vnd\)/, "VND must be emitted through a numeric cell helper");
 assert.match(exportBlock, /style="integer"/);
-assert.match(exportBlock, /HANA_Expenses_Search_\$\{businessToday\(\)\}\.xlsx/);
+assert.match(exportBlock, /HANA_Expenses_Search_\$\{loadedRange\.start \|\| rangeStart\.value\}_\$\{loadedRange\.end \|\| rangeEnd\.value\}\.xlsx/);
 assert.match(exportBlock, /HANA_Expenses_\$\{loadedRange\.start \|\| rangeStart\.value\}_\$\{loadedRange\.end \|\| rangeEnd\.value\}\.xlsx/);
 
 const helperContext = {
@@ -232,12 +237,18 @@ const latestRangeRows = [
   },
 ];
 const firstSearchRows = [
-  { ...latestRangeRows[0], id: "search-old", note: "베트남 이전 결과" },
-  { ...latestRangeRows[1], id: "search-hidden", note: "검색어 불일치" },
+  { ...latestRangeRows[0], id: "search-first-20", description: "베트남 20일 내역", note: "Việt Nam 20", amount_vnd: 220000 },
+  { ...latestRangeRows[1], id: "search-first-21", description: "베트남 21일 내역", note: "Việt Nam 21", amount_vnd: 221000 },
+  { ...latestRangeRows[0], id: "search-first-before", expense_date: "2026-10-19", description: "베트남 범위 이전", note: "OUTSIDE BEFORE" },
+  { ...latestRangeRows[1], id: "search-first-after", expense_date: "2026-10-22", description: "베트남 범위 이후", note: "OUTSIDE AFTER" },
+  { ...latestRangeRows[1], id: "search-first-nonmatch", description: "한국 전용", note: "불일치" },
 ];
 const latestSearchRows = [
-  { ...latestRangeRows[1], id: "search-new", description: "베트남 최신 내역", note: "Việt Nam mới", amount_vnd: 333000 },
-  { ...latestRangeRows[0], id: "search-nonmatch", description: "한국 전용", note: "불일치" },
+  { ...latestRangeRows[0], id: "search-latest-20", description: "베트남 최신 20일", note: "Việt Nam mới 20", amount_vnd: 320000 },
+  { ...latestRangeRows[1], id: "search-latest-21", description: "베트남 최신 21일", note: "Việt Nam mới 21", amount_vnd: 333000 },
+  { ...latestRangeRows[0], id: "search-latest-before", expense_date: "2026-10-19", description: "베트남 최신 범위 이전", note: "OUTSIDE BEFORE" },
+  { ...latestRangeRows[1], id: "search-latest-after", expense_date: "2026-10-22", description: "베트남 최신 범위 이후", note: "OUTSIDE AFTER" },
+  { ...latestRangeRows[0], id: "search-latest-nonmatch", description: "한국 전용", note: "불일치" },
 ];
 const resultQueue = [
   staleRangeRows,
@@ -249,6 +260,7 @@ const resultQueue = [
 ];
 let queryCalls = 0;
 const queryOperations = [];
+const queryBatches = [];
 let queryProxy;
 queryProxy = new Proxy({}, {
   get(_target, property) {
@@ -284,8 +296,16 @@ const pageContext = {
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;"),
     collectSupabasePages: async (factory) => {
+      const operationStart = queryOperations.length;
       factory();
-      const rows = resultQueue[queryCalls++];
+      const sourceRows = resultQueue[queryCalls++];
+      const operations = queryOperations.slice(operationStart);
+      queryBatches.push(operations);
+      const lowerBound = operations.find(([operation, column]) => operation === "gte" && column === "expense_date")?.[2];
+      const upperBound = operations.find(([operation, column]) => operation === "lte" && column === "expense_date")?.[2];
+      const rows = sourceRows?.filter((row) =>
+        (!lowerBound || row.expense_date >= lowerBound)
+        && (!upperBound || row.expense_date <= upperBound));
       assert.ok(rows, `unexpected expense query ${queryCalls}`);
       return rows;
     },
@@ -392,33 +412,64 @@ assert.match(rangeXml, /=HYPERLINK\(&quot;https:\/\/example\.com&quot;\)/);
 assert.doesNotMatch(rangeXml, /<f(?:\s|>)/, "formula-like expense text must remain an inline string");
 assert.match(rangeXml, /<c r="F6" s="2"><v>125000<\/v><\/c>/, "VND must be a numeric integer-formatted cell");
 
+// Change the inputs without submitting the range form. Search must use these
+// current values rather than the previously loaded 2026-10-01..23 range.
+element("rangeStart").value = "2026-10-20";
+element("rangeEnd").value = "2026-10-21";
 element("expenseSearch").value = "베트남";
 const searchHandler = handlers.get("searchForm:submit");
 assert.equal(typeof searchHandler, "function", "search handler is not wired");
 await searchHandler({ preventDefault() {} });
 await settle();
 assert.equal(queryCalls, 4);
+assert.deepEqual(
+  queryBatches[3].filter(([operation]) => operation === "gte" || operation === "lte"),
+  [["gte", "expense_date", "2026-10-20"], ["lte", "expense_date", "2026-10-21"]],
+  "search must query the date inputs immediately, without requiring a separate 조회 click",
+);
+assert.match(element("expenseRows").innerHTML, /베트남 20일 내역/);
+assert.match(element("expenseRows").innerHTML, /베트남 21일 내역/);
+assert.doesNotMatch(element("expenseRows").innerHTML, /OUTSIDE BEFORE|OUTSIDE AFTER|한국 전용/);
 
+// Print must refresh the search with date inputs changed since the search.
+element("rangeStart").value = "2026-10-21";
+element("rangeEnd").value = "2026-10-21";
 await printHandler({ preventDefault() {} });
 await settle();
-assert.equal(queryCalls, 5, "search print must refresh the full-history search before printing");
+assert.equal(queryCalls, 5, "search print must refresh the range-constrained search before printing");
 assert.equal(printCalls, 2);
-assert.equal(element("printCriteria").textContent, "검색어 / Từ khóa tìm kiếm: 베트남");
-assert.match(element("expenseRows").innerHTML, /베트남 최신 내역/);
-assert.match(element("expenseRows").innerHTML, /Việt Nam mới/);
-assert.doesNotMatch(element("expenseRows").innerHTML, /search-old|베트남 이전 결과|search-nonmatch|한국 전용/);
+assert.deepEqual(
+  queryBatches[4].filter(([operation]) => operation === "gte" || operation === "lte"),
+  [["gte", "expense_date", "2026-10-21"], ["lte", "expense_date", "2026-10-21"]],
+  "print must refresh using the current date inputs",
+);
+assert.match(element("printCriteria").textContent, /2026-10-21\s*~\s*2026-10-21/);
+assert.match(element("printCriteria").textContent, /베트남/);
+assert.match(element("expenseRows").innerHTML, /베트남 최신 21일/);
+assert.match(element("expenseRows").innerHTML, /Việt Nam mới 21/);
+assert.doesNotMatch(element("expenseRows").innerHTML, /최신 20일|OUTSIDE BEFORE|OUTSIDE AFTER|한국 전용/);
 
+// XLSX must independently refresh with the date inputs changed again.
+element("rangeStart").value = "2026-10-20";
+element("rangeEnd").value = "2026-10-20";
 await exportHandler({ preventDefault() {} });
 await settle();
-assert.equal(queryCalls, 6, "search export must refresh the full-history search before export");
+assert.equal(queryCalls, 6, "search export must refresh the range-constrained search before export");
+assert.deepEqual(
+  queryBatches[5].filter(([operation]) => operation === "gte" || operation === "lte"),
+  [["gte", "expense_date", "2026-10-20"], ["lte", "expense_date", "2026-10-20"]],
+  "XLSX export must refresh using the current date inputs",
+);
 assert.equal(downloads.length, 2);
 const searchWorkbook = downloads[1];
-assert.equal(searchWorkbook.filename, "HANA_Expenses_Search_2026-10-23.xlsx");
+assert.equal(searchWorkbook.filename, "HANA_Expenses_Search_2026-10-20_2026-10-20.xlsx");
 assert.equal(searchWorkbook.sheets[0].rows.length, 7, "only the one freshly displayed matching search row should export");
+assert.match(searchWorkbook.sheets[0].rows[1][1].value, /2026-10-20\s*~\s*2026-10-20/);
+assert.match(searchWorkbook.sheets[0].rows[1][1].value, /베트남/);
 const searchJson = JSON.stringify(searchWorkbook);
-assert.match(searchJson, /베트남 최신 내역/);
-assert.match(searchJson, /Việt Nam mới/);
-assert.doesNotMatch(searchJson, /search-old|베트남 이전 결과|search-nonmatch|한국 전용/);
+assert.match(searchJson, /베트남 최신 20일/);
+assert.match(searchJson, /Việt Nam mới 20/);
+assert.doesNotMatch(searchJson, /최신 21일|OUTSIDE BEFORE|OUTSIDE AFTER|한국 전용/);
 
 assert.equal(element("exportExpenseBtn").disabled, false, "Excel button must recover after export");
 assert.equal(element("exportExpenseBtn").textContent, "엑셀 생성");
@@ -430,6 +481,13 @@ assert.equal(
   false,
   "print/export refresh queries must never write to Supabase",
 );
+for (const [index, operations] of queryBatches.slice(3).entries()) {
+  assert.equal(
+    operations.some(([operation]) => ["insert", "update", "upsert", "delete", "rpc"].includes(operation)),
+    false,
+    `range-constrained search path ${index + 1} must remain read-only`,
+  );
+}
 
 console.log("Expense current-view print/XLSX refresh, mapping, UTF-8, numeric, filename, and read-only contracts passed.");
 
