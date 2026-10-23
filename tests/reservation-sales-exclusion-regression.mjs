@@ -26,6 +26,13 @@ const staffLookupMigration = await readFile(
   ),
   "utf8",
 );
+const managerUnconfirmGuardMigration = await readFile(
+  path.join(
+    projectRoot,
+    "supabase/migrations/20261023204500_manager_unconfirm_missing_order_fail_closed.sql",
+  ),
+  "utf8",
+);
 
 const context = vm.createContext({});
 new vm.Script(helperSource, {
@@ -279,6 +286,46 @@ assert.doesNotMatch(
   staffLookupMigration,
   /\b(?:update|insert into|delete from)\s+public\./i,
   "the reservation visibility bridge must not mutate application rows",
+);
+
+assert.match(
+  managerUnconfirmGuardMigration,
+  /to_regprocedure\(v_signature\)[\s\S]*?pg_get_functiondef\(v_oid\)/,
+  "the manager unconfirm guard must transform the exact live function",
+);
+assert.match(
+  managerUnconfirmGuardMigration,
+  /v_signature constant text := 'public\.app_unconfirm_reservation\(bigint\)'/,
+);
+assert.match(
+  managerUnconfirmGuardMigration,
+  /if public\.current_app_role\(\) = ''manager'' then\\n\s+raise exception using\\n\s+errcode = ''P0002''/,
+  "manager must fail closed when the linked order is missing or hidden",
+);
+assert.match(
+  managerUnconfirmGuardMigration,
+  /errcode = ''P0002''[\s\S]*?reservation not found[\s\S]*?Imported legacy data can contain/,
+  "the manager denial must run before the administrator legacy recovery path",
+);
+assert.match(
+  managerUnconfirmGuardMigration,
+  /v_count <> 1[\s\S]*?execute v_rewritten[\s\S]*?post-rewrite verification failed/,
+  "the migration must reject an unexpected live definition and verify its rewrite",
+);
+assert.match(
+  managerUnconfirmGuardMigration,
+  /proowner[\s\S]*?proacl[\s\S]*?proconfig[\s\S]*?prosecdef[\s\S]*?has_function_privilege[\s\S]*?function security metadata changed/,
+  "the migration must prove that owner, grants, settings, invoker mode, and authenticated execution are preserved",
+);
+assert.match(
+  managerUnconfirmGuardMigration,
+  /v_admin_recovery_anchor[\s\S]*?Imported legacy data can contain[\s\S]*?update public\.resv_groups[\s\S]*?v_admin_recovery_anchor\) = 0/,
+  "administrator-only legacy recovery must remain intact after the rewrite",
+);
+assert.doesNotMatch(
+  managerUnconfirmGuardMigration,
+  /^\s*(?:update|insert into|delete from)\s+public\./im,
+  "the follow-up migration must not execute application-row DML",
 );
 
 console.log("Reservation sales-exclusion visibility contracts passed.");
