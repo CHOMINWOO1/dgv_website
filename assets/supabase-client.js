@@ -2,7 +2,13 @@
   "use strict";
 
   const config = global.DGV_SUPABASE_CONFIG;
-  if (!config?.url || !config?.publishableKey || !config?.authAccounts?.staff || !config?.authAccounts?.admin) {
+  if (
+    !config?.url ||
+    !config?.publishableKey ||
+    !config?.authAccounts?.staff ||
+    !config?.authAccounts?.manager ||
+    !config?.authAccounts?.admin
+  ) {
     throw new Error("Supabase public configuration is missing.");
   }
   if (!global.supabase?.createClient) {
@@ -23,7 +29,7 @@
     }
   });
 
-  const VALID_ROLES = Object.freeze(["staff", "admin"]);
+  const VALID_ROLES = Object.freeze(["staff", "manager", "admin"]);
 
   function roleOf(user) {
     const role = String(user?.app_metadata?.role || "").toLowerCase();
@@ -79,6 +85,21 @@
     return { user, role: actualRole };
   }
 
+  async function signInAsAny(roles, password) {
+    const normalizedRoles = normalizeRoles(roles);
+    let lastError = null;
+
+    for (const role of normalizedRoles) {
+      try {
+        return await signInAs(role, password);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError || new Error("비밀번호가 올바르지 않습니다.");
+  }
+
   async function requireAuth(options = {}) {
     const roles = normalizeRoles(options.roles || VALID_ROLES);
     const user = await getVerifiedUser();
@@ -105,7 +126,7 @@
 
   async function signOut(options = {}) {
     // These are intentionally shared technical accounts. Clearing one browser
-    // tab must never revoke staff/admin sessions on other devices.
+    // tab must never revoke staff/manager/admin sessions on other devices.
     await client.auth.signOut({ scope: "local" });
     if (options.reload !== false) global.location.reload();
   }
@@ -116,6 +137,7 @@
     validRoles: VALID_ROLES,
     roleOf,
     signInAs,
+    signInAsAny,
     getIdentity,
     requireAuth,
     authHeaders,
@@ -127,3 +149,4 @@
     collectRestPages: global.DGV_DATA_UTILS.collectRestPages
   });
 })(window);
+
