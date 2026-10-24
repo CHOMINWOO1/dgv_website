@@ -11,8 +11,8 @@
   const GOLF_COURSES = new Set(["AT1200", "SAM", "PALACE"]);
   const STANDARD_HOLES = new Set([9, 18, 27, 26]);
   const COLUMNS = [
-    "id", "representative_name", "player_names_en", "pax",
-    "coordinator_name", "booking_date", "golf_date", "golf_time",
+    "id", "counterparty_name", "representative_name", "player_names_en", "pax",
+    "booking_date", "golf_date", "golf_time",
     "golf_course", "holes", "guest_unit_price_vnd", "smart_cart_note",
     "guest_total_vnd", "course_unit_price_vnd", "course_total_vnd",
     "deposit_amount_vnd", "deposit_received_date",
@@ -31,6 +31,15 @@
   function dateLabel(value) {
     const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
     return match ? `${match[1]}. ${match[2]}. ${match[3]}` : "—";
+  }
+
+  function golfDateLabel(value) {
+    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return "—";
+    const weekday = ["일/CN", "월/T2", "화/T3", "수/T4", "목/T5", "금/T6", "토/T7"][
+      new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).getUTCDay()
+    ];
+    return match[1] + ". " + match[2] + ". " + match[3] + " (" + weekday + ")";
   }
 
   function dateTimeLabel(value) {
@@ -72,6 +81,18 @@
 
   function namesCount(value) {
     return String(value || "").split(/[\n,;]+/).map((name) => name.trim()).filter(Boolean).length;
+  }
+
+  function firstPlayerName(value) {
+    const first = String(value || "").replace(/\r/g, "").split(/[\n,;]+/)
+      .map((name) => name.trim()).find(Boolean) || "";
+    return first
+      .replace(/^["'-]*\s*(?:\d+\s*[.)/-]?\s*)?/, "")
+      .split("\t", 1)[0]
+      .replace(/\s+(?:남|여)\s*\([MF]\)\s*$/i, "")
+      .replace(/\s+(?:MR|MS|MRS)(?:\s+\d{4}-\d{2}-\d{2})?\s*$/i, "")
+      .replace(/["']+\s*$/, "")
+      .trim();
   }
 
   function setBanner(message, tone = "info") {
@@ -145,11 +166,12 @@
     byId("saveButton").textContent = "예약 저장 / Lưu đặt chỗ";
     byId("cancelEditButton").hidden = true;
     updatePreview();
-    if (options.focus !== false) byId("representativeName").focus();
+    if (options.focus !== false) byId("counterpartyName").focus();
   }
 
   function fillForm(row, options = {}) {
     byId("recordId").value = row.id;
+    byId("counterpartyName").value = row.counterparty_name || "";
     byId("representativeName").value = row.representative_name || "";
     byId("playerNamesEn").value = row.player_names_en || "";
     byId("pax").value = row.pax || "";
@@ -183,9 +205,10 @@
   }
 
   function payloadFromForm() {
-    const representativeName = clean(byId("representativeName").value);
     const playerNamesEn = clean(byId("playerNamesEn").value)
       .split(/[\n,;]+/).map((name) => name.trim()).filter(Boolean).join("\n");
+    const counterpartyName = clean(byId("counterpartyName").value);
+    const representativeName = firstPlayerName(playerNamesEn);
     const pax = Number(byId("pax").value);
     const golfDateTime = byId("golfDateTime").value;
     const golfDateTimeMatch = golfDateTime.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/);
@@ -203,7 +226,8 @@
     const withdrawalDate = byId("withdrawalDate").value || null;
     const existingRow = state.rows.find((row) => row.id === byId("recordId").value);
 
-    if (!representativeName) throw new Error("예약자 대표를 입력해 주세요.");
+    if (!counterpartyName) throw new Error("거래처를 입력해 주세요.");
+    if (!representativeName) throw new Error("첫 번째 예약자 이름을 확인해 주세요.");
     if (!playerNamesEn) throw new Error("전체 영문 이름을 입력해 주세요.");
     if (!Number.isInteger(pax) || pax < 1 || pax > 100) throw new Error("인원을 1명 이상 100명 이하로 입력해 주세요.");
     if (!golfDate || !golfTime) throw new Error("골프 날짜와 티오프 시간을 선택해 주세요.");
@@ -229,7 +253,7 @@
     if (!new Set(["individual", "company"]).has(byId("customerType").value)) throw new Error("개인 또는 회사를 선택해 주세요.");
 
     return {
-      representative_name: representativeName, player_names_en: playerNamesEn, pax,
+      counterparty_name: counterpartyName, representative_name: representativeName, player_names_en: playerNamesEn, pax,
       golf_date: golfDate, golf_time: golfTime, golf_course: golfCourse, holes,
       guest_unit_price_vnd: guestUnit, smart_cart_note: nullableText(byId("smartCartNote").value),
       course_unit_price_vnd: courseUnit, deposit_amount_vnd: depositAmount,
@@ -262,7 +286,7 @@
       if (from && row.golf_date < from) return false;
       if (to && row.golf_date > to) return false;
       if (!query) return true;
-      return [row.representative_name, row.player_names_en, row.golf_course, row.coordinator_name, row.note]
+      return [row.counterparty_name, row.representative_name, row.player_names_en, row.golf_course, row.note]
         .some((value) => String(value || "").toLocaleLowerCase().includes(query));
     });
   }
@@ -277,14 +301,14 @@
       <article class="golf-row" data-status="${escape(row.status)}">
         <div class="golf-row-head">
           <div><div class="golf-row-title">${escape(row.representative_name)}</div>
-          <div class="golf-row-sub">${escape(row.golf_course)} · ${escape(row.holes)}H · ${escape(row.pax)}명 · ${escape(customerLabel)}</div></div>
+          <div class="golf-row-sub">거래처 ${escape(row.counterparty_name || "—")} · ${escape(row.golf_course)} · ${escape(row.holes)}H · ${escape(row.pax)}명 · ${escape(customerLabel)}</div></div>
           <span class="qr-status" data-tone="${completed ? "ready" : "working"}">${escape(statusLabel)}</span>
         </div>
         <div class="golf-row-body">
           <div class="golf-detail-grid">
             <div class="golf-detail"><span>등록 일시 / Thời gian tạo</span><strong>${escape(dateTimeLabel(row.created_at))}</strong></div>
-            <div class="golf-detail"><span>골프 / Ngày chơi</span><strong>${escape(dateLabel(row.golf_date))} ${escape(timeLabel(row.golf_time))}</strong></div>
-            <div class="golf-detail"><span>담당자 / Phụ trách</span><strong>${escape(row.coordinator_name || "—")}</strong></div>
+            <div class="golf-detail"><span>골프 / Ngày chơi</span><strong>${escape(golfDateLabel(row.golf_date))} ${escape(timeLabel(row.golf_time))}</strong></div>
+
             <div class="golf-detail"><span>1인 판매가 / Giá khách mỗi người</span><strong>${escape(moneyLabel(row.guest_unit_price_vnd))}</strong></div>
             <div class="golf-detail"><span>고객 합계 / Tổng tiền khách</span><strong>${escape(moneyLabel(row.guest_total_vnd))}</strong></div>
             <div class="golf-detail"><span>1인 골프장 원가 / Giá sân mỗi người</span><strong>${escape(moneyLabel(row.course_unit_price_vnd))}</strong></div>
@@ -400,6 +424,7 @@
     byId("playerNamesEn").addEventListener("input", () => {
       const count = namesCount(byId("playerNamesEn").value);
       if (count) byId("pax").value = String(count);
+      byId("representativeName").value = firstPlayerName(byId("playerNamesEn").value);
       updatePreview();
     });
     byId("finalDate").addEventListener("change", updatePreview);
@@ -438,4 +463,3 @@
 
   init();
 })(window);
-
