@@ -293,6 +293,9 @@ assert.match(paymentMigration, /payment_method is not null and legacy_import/i);
 assert.match(paymentMigration, /revoke all on table public\.golf_reservation_payments from public, anon, authenticated/i);
 assert.match(paymentMigration, /grant select on table public\.golf_reservation_payments to authenticated/i);
 assert.match(source, /id:\s*payment\.id/);
+assert.match(source, /expected_updated_at:\s*existingRow\?\.updated_at/);
+assert.match(paymentMigration, /select gr\.updated_at into v_current_updated_at[\s\S]*?for update/i);
+assert.match(paymentMigration, /existing\.payment_kind = p\.payment_kind[\s\S]*?existing\.amount_vnd = p\.amount_vnd[\s\S]*?existing\.payment_date = p\.payment_date/i);
 assert.doesNotMatch(paymentMigration, /update\s+public\.golf_reservations[\s\S]*?set\s+note\s*=\s*null/i);
 
 console.log("Golf reservation page, CRUD, workflow, bilingual UI, and schema contracts verified.");

@@ -228,6 +228,8 @@ declare
   v_deposit_date date;
   v_completion_date date;
   v_withdrawal_date date;
+  v_expected_updated_at timestamptz;
+  v_current_updated_at timestamptz;
 begin
   if (select auth.uid()) is null or not public.has_app_role(array['manager', 'admin']) then
     raise exception 'Manager or administrator role required' using errcode = '42501';
@@ -238,6 +240,21 @@ begin
   end if;
   if jsonb_array_length(coalesce(p_payments, '[]'::jsonb)) > 100 then
     raise exception 'Too many golf payment rows' using errcode = '22023';
+  end if;
+
+  if p_reservation_id is not null then
+    v_expected_updated_at := nullif(p_reservation ->> 'expected_updated_at', '')::timestamptz;
+    select gr.updated_at into v_current_updated_at
+    from public.golf_reservations gr
+    where gr.id = p_reservation_id
+    for update;
+    if not found then
+      raise exception 'Golf reservation not found' using errcode = 'P0002';
+    end if;
+    if v_expected_updated_at is null or v_expected_updated_at is distinct from v_current_updated_at then
+      raise exception '다른 기기에서 예약이 변경되었습니다. 새로고침 후 다시 시도해 주세요. / Dữ liệu đã được thay đổi trên thiết bị khác. Vui lòng tải lại.'
+        using errcode = '40001';
+    end if;
   end if;
 
   if exists (
@@ -261,6 +278,9 @@ begin
            where existing.id = p.id
              and existing.reservation_id = p_reservation_id
              and existing.legacy_import
+             and existing.payment_kind = p.payment_kind
+             and existing.amount_vnd = p.amount_vnd
+             and existing.payment_date = p.payment_date
          )
        )
        or (p.payment_method = 'cash' and p.amount_vnd >= 5000000)
@@ -406,6 +426,14 @@ begin
     and existing.id = incoming.id
     and existing.reservation_id = v_id;
 
+  delete from public.golf_reservation_payments existing
+  where existing.reservation_id = v_id
+    and not exists (
+      select 1
+      from jsonb_to_recordset(coalesce(p_payments, '[]'::jsonb)) as incoming(id uuid)
+      where incoming.id = existing.id
+    );
+
   insert into public.golf_reservation_payments (
     reservation_id, payment_kind, amount_vnd, payment_date, payment_method,
     completes_booking, sort_order, legacy_import, created_by, updated_by
@@ -419,14 +447,6 @@ begin
     completes_booking boolean, sort_order integer
   )
   where p.id is null;
-
-  delete from public.golf_reservation_payments existing
-  where existing.reservation_id = v_id
-    and not exists (
-      select 1
-      from jsonb_to_recordset(coalesce(p_payments, '[]'::jsonb)) as incoming(id uuid)
-      where incoming.id = existing.id
-    );
 
   return query
   select gr.id, gr.status

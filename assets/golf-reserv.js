@@ -441,7 +441,8 @@
         smart_cart_note: nullableText(byId("smartCartNote").value),
         course_unit_price_vnd: courseUnit,
         customer_type: customerType,
-        note: nullableText(byId("note").value)
+        note: nullableText(byId("note").value),
+        expected_updated_at: existingRow?.updated_at || null
       },
       payments: payments.map((payment) => ({
         id: payment.id,
