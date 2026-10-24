@@ -45,6 +45,7 @@ assert.match(source, /event\.detail !== 0/);
 assert.match(source, /이 예약을 수정하시겠습니까\?\\nBạn có muốn chỉnh sửa đặt sân này không\?/);
 assert.match(source, /if \(!global\.confirm\([\s\S]*\)\) return;[\s\S]*global\.location\.assign\(href\)/);
 assert.match(page, /예약자 대표를 더블클릭하면 수정할 수 있습니다/);
+assert.match(page, /\.golf-list-app\{[^}]*font-size:16px;font-weight:750\}/);
 assert.match(page, /\.golf-list-app \.qr-label\{font-size:13px;font-weight:1000\}/);
 assert.match(page, /\.golf-sheet\{[^}]*font-size:14px\}/);
 assert.match(page, /\.golf-sheet td\{font-weight:800\}/);
