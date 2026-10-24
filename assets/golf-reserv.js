@@ -290,6 +290,18 @@
     });
   }
 
+  function receivedAmountForBooking(row) {
+    const value = row.final_received_amount_vnd == null
+      ? row.deposit_amount_vnd
+      : row.final_received_amount_vnd;
+    return Number(value) || 0;
+  }
+
+  function receivableBalanceForBooking(row) {
+    if (row.guest_total_vnd == null) return null;
+    return Number(row.guest_total_vnd) - receivedAmountForBooking(row);
+  }
+
   function receivableGroups(rows) {
     const groups = new Map();
     for (const row of rows) {
@@ -298,26 +310,46 @@
       if (!groups.has(key)) {
         groups.set(key, {
           name, bookingCount: 0, expected: 0, received: 0,
-          receivable: 0, unsetExpected: 0
+          receivable: 0, unsetExpected: 0, unpricedReceived: 0, bookings: []
         });
       }
       const group = groups.get(key);
+      const received = receivedAmountForBooking(row);
+      const balance = receivableBalanceForBooking(row);
       group.bookingCount += 1;
-      const received = row.final_received_amount_vnd == null
-        ? row.deposit_amount_vnd
-        : row.final_received_amount_vnd;
-      group.received += Number(received) || 0;
-      if (row.guest_total_vnd == null) {
+      group.bookings.push({ row, received, balance });
+      if (balance == null) {
         group.unsetExpected += 1;
+        group.unpricedReceived += received;
       } else {
         group.expected += Number(row.guest_total_vnd) || 0;
+        group.received += received;
+        group.receivable += balance;
       }
     }
     for (const group of groups.values()) {
-      group.receivable = group.expected - group.received;
+      group.bookings.sort((a, b) =>
+        `${a.row.golf_date} ${a.row.golf_time} ${a.row.id}`
+          .localeCompare(`${b.row.golf_date} ${b.row.golf_time} ${b.row.id}`)
+      );
     }
     return [...groups.values()]
       .sort((a, b) => b.receivable - a.receivable || a.name.localeCompare(b.name));
+  }
+
+  function renderReceivableBooking(item) {
+    const row = item.row;
+    const statusLabel = row.status === "completed" ? "완료 / Hoàn tất" : "진행중 / Đang xử lý";
+    const balanceLabel = item.balance == null
+      ? '<span class="golf-receivable-warning">금액 미설정 / Chưa đặt giá</span>'
+      : `<strong>${escape(moneyLabel(item.balance))}</strong>`;
+    return `<tr>
+      <td>${escape(golfDateLabel(row.golf_date))} ${escape(timeLabel(row.golf_time))}</td>
+      <td><strong>${escape(row.representative_name || "—")}</strong><span class="golf-receivable-warning">${escape(statusLabel)}</span></td>
+      <td>${escape(moneyLabel(row.guest_total_vnd))}</td>
+      <td>${escape(moneyLabel(item.received))}</td>
+      <td>${balanceLabel}</td>
+    </tr>`;
   }
 
   function renderReceivables(rows) {
@@ -326,8 +358,9 @@
       expected: sum.expected + group.expected,
       received: sum.received + group.received,
       receivable: sum.receivable + group.receivable,
-      unsetExpected: sum.unsetExpected + group.unsetExpected
-    }), { expected: 0, received: 0, receivable: 0, unsetExpected: 0 });
+      unsetExpected: sum.unsetExpected + group.unsetExpected,
+      unpricedReceived: sum.unpricedReceived + group.unpricedReceived
+    }), { expected: 0, received: 0, receivable: 0, unsetExpected: 0, unpricedReceived: 0 });
     byId("listCount").textContent =
       `${groups.length.toLocaleString("ko-KR")}개 거래처 · ${rows.length.toLocaleString("ko-KR")}건`;
     byId("receivablePanel").innerHTML = groups.length ? `
@@ -335,14 +368,25 @@
         <div><span>원래 받을 금액 / Phải thu</span><strong>${escape(moneyLabel(totals.expected))}</strong></div>
         <div><span>현재 받은 금액 / Đã nhận</span><strong>${escape(moneyLabel(totals.received))}</strong></div>
         <div><span>미수금 잔액 / Công nợ ròng</span><strong>${escape(moneyLabel(totals.receivable))}</strong>
-          ${totals.unsetExpected ? `<span class="golf-receivable-warning">금액 미설정 ${escape(totals.unsetExpected)}건</span>` : ""}</div>
+          ${totals.unsetExpected ? `<span class="golf-receivable-warning">금액 미설정 ${escape(totals.unsetExpected)}건 · 별도 수령 ${escape(moneyLabel(totals.unpricedReceived))}</span>` : ""}</div>
       </div>
+      <div class="golf-receivable-note">음수 금액은 초과 수령입니다. 업체별·전체 금액은 자동으로 상계됩니다. / Số âm là khoản thu vượt và được tự động bù trừ.</div>
       <div class="golf-receivable-table-wrap"><table class="golf-receivable-table">
         <thead><tr><th>거래처 / Đối tác</th><th>예약 / Đặt sân</th><th>원래 받을 금액 / Phải thu</th><th>받은 금액 / Đã nhận</th><th>미수금 잔액 / Công nợ ròng</th></tr></thead>
-        <tbody>${groups.map((group) => `<tr><td><strong>${escape(group.name)}</strong>
-          ${group.unsetExpected ? `<span class="golf-receivable-warning">금액 미설정 ${escape(group.unsetExpected)}건</span>` : ""}</td>
-          <td>${escape(group.bookingCount)}건</td><td>${escape(moneyLabel(group.expected))}</td>
-          <td>${escape(moneyLabel(group.received))}</td><td><strong>${escape(moneyLabel(group.receivable))}</strong></td></tr>`).join("")}</tbody>
+        <tbody>${groups.map((group) => `
+          <tr><td><strong>${escape(group.name)}</strong>
+            ${group.unsetExpected ? `<span class="golf-receivable-warning">금액 미설정 ${escape(group.unsetExpected)}건 · 별도 수령 ${escape(moneyLabel(group.unpricedReceived))}</span>` : ""}</td>
+            <td>${escape(group.bookingCount)}건</td><td>${escape(moneyLabel(group.expected))}</td>
+            <td>${escape(moneyLabel(group.received))}</td><td><strong>${escape(moneyLabel(group.receivable))}</strong></td></tr>
+          <tr class="golf-receivable-detail-row"><td colspan="5">
+            <details class="golf-receivable-detail">
+              <summary>${escape(group.bookingCount)}건 건당 미수금 보기 / Xem công nợ từng đặt sân</summary>
+              <div class="golf-receivable-table-wrap"><table class="golf-receivable-table">
+                <thead><tr><th>골프 날짜 / Ngày chơi</th><th>예약자 / Khách</th><th>원래 받을 금액 / Phải thu</th><th>받은 금액 / Đã nhận</th><th>건당 미수금 / Công nợ</th></tr></thead>
+                <tbody>${group.bookings.map(renderReceivableBooking).join("")}</tbody>
+              </table></div>
+            </details>
+          </td></tr>`).join("")}</tbody>
       </table></div>` : '<div class="qr-empty">선택한 기간에 회사 거래처의 미수금 내역이 없습니다.<br />Không có công nợ công ty trong khoảng thời gian đã chọn.</div>';
   }
 
