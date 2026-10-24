@@ -96,9 +96,7 @@
   }
 
   function setBanner(message, tone = "info") {
-    const banner = byId("pageBanner");
-    banner.textContent = message;
-    banner.dataset.tone = tone;
+    if (tone === "error") QRStaff.toast(message, "error");
   }
 
   function clearLegacyCourseOption() {
@@ -264,18 +262,6 @@
     };
   }
 
-  function summary() {
-    const progress = state.rows.filter((row) => row.status === "in_progress").length;
-    const completed = state.rows.filter((row) => row.status === "completed").length;
-    const deposit = state.rows.reduce((total, row) => total + Number(row.deposit_amount_vnd || 0), 0);
-    const profit = state.rows.reduce((total, row) => row.final_received_amount_vnd == null
-      ? total
-      : total + Number(row.final_received_amount_vnd || 0) - Number(row.withdrawal_amount_vnd || 0), 0);
-    byId("summaryProgress").textContent = progress.toLocaleString("ko-KR");
-    byId("summaryCompleted").textContent = completed.toLocaleString("ko-KR");
-    byId("summaryDeposit").textContent = moneyLabel(deposit);
-    byId("summaryProfit").textContent = moneyLabel(profit);
-  }
 
   function filteredRows() {
     const query = clean(byId("searchInput").value).toLocaleLowerCase();
@@ -330,7 +316,6 @@
   }
 
   function render() {
-    summary();
     const rows = filteredRows();
     byId("listCount").textContent = `${rows.length.toLocaleString("ko-KR")}건 / mục`;
     byId("reservationList").innerHTML = rows.length ? rows.map(renderRow).join("")
