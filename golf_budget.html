@@ -14,9 +14,14 @@
     .budget-course-card{padding:16px;border:1px solid var(--qr-line);border-top:5px solid #caa24c;border-radius:15px;background:#fff;box-shadow:0 7px 18px rgba(58,42,31,.08)}
     .budget-course-card.is-negative{border-top-color:#b33a2e;background:#fff9f8}
     .budget-course-name{margin:0 0 8px;font-size:22px;font-weight:1000}
+    .budget-balance-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:12px}
+    .budget-balance-box{padding:11px;border-radius:11px;background:#fff7e9}
     .budget-current-label{color:var(--qr-sub);font-size:12px;font-weight:1000}
-    .budget-current{display:block;margin:3px 0 12px;font-size:25px;font-weight:1000;font-variant-numeric:tabular-nums}
+    .budget-current{display:block;margin-top:3px;font-size:25px;font-weight:1000;font-variant-numeric:tabular-nums}
     .budget-current.is-negative{color:#a72820}
+    .budget-expected{display:block;margin-top:3px;color:#9b4a2a;font-size:22px;font-weight:1000;font-variant-numeric:tabular-nums}
+    .budget-expected-meta{margin-top:5px;color:var(--qr-sub);font-size:11px;font-weight:900}
+    .budget-overall-summary{grid-template-columns:repeat(5,minmax(0,1fr))}
     .budget-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
     .budget-breakdown>div{min-width:0;padding:9px;border-radius:10px;background:#fff7e9}
     .budget-breakdown span{display:block;color:var(--qr-sub);font-size:10px;font-weight:1000}
@@ -26,6 +31,11 @@
     .budget-opening-edit .qr-label{font-size:10px}
     .budget-form-grid{display:grid;grid-template-columns:minmax(150px,.7fr) minmax(145px,.7fr) minmax(180px,1fr) minmax(160px,.75fr);gap:10px}
     .budget-form-note{margin-top:10px}
+    .budget-month-panel{margin-bottom:14px}
+    .budget-month-controls{display:flex;flex-wrap:wrap;gap:9px;align-items:flex-end}
+    .budget-month-controls .qr-field{min-width:210px;max-width:300px;flex:1}
+    .budget-month-status{min-height:44px;display:flex;align-items:center;padding:0 12px;border-radius:10px;background:#fff7e9;color:#5b3525;font-weight:1000}
+    .budget-month-all.is-active{background:#5b3525;color:#fff;border-color:#5b3525}
     .budget-table-wrap{overflow:auto;border:1px solid var(--qr-line);border-radius:12px;background:#fff}
     .budget-table{width:100%;min-width:850px;border-collapse:collapse;font-size:14px}
     .budget-table th,.budget-table td{padding:11px;border-right:1px solid var(--qr-line);border-bottom:1px solid var(--qr-line);text-align:left;vertical-align:middle}
@@ -43,15 +53,40 @@
     .budget-rule{margin-top:9px;color:#9b4a2a;font-size:12px;font-weight:1000}
     .budget-explainer{margin:0;color:var(--qr-sub);font-size:13px;font-weight:900;line-height:1.6}
     .budget-edit-link{color:#6f452e;font-weight:1000;text-underline-offset:3px}
+    .budget-print-head{display:none}
     @media(max-width:900px){
+      .budget-overall-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
       .budget-course-grid{grid-template-columns:1fr}
       .budget-form-grid{grid-template-columns:1fr 1fr}
     }
     @media(max-width:560px){
       .budget-form-grid,.budget-opening-edit{grid-template-columns:1fr}
+      .budget-balance-pair{grid-template-columns:1fr}
       .budget-breakdown{grid-template-columns:1fr}
       .qr-header-actions{width:100%}
       .qr-header-actions .qr-btn{flex:1}
+    }
+    @page{size:A4 landscape;margin:10mm}
+    @media print{
+      body.print-budget-payments{background:#fff!important;color:#111!important;font-family:Arial,"Malgun Gothic",sans-serif!important}
+      body.print-budget-payments .budget-app> *{display:none!important}
+      body.print-budget-payments #depositListSection{display:block!important;padding:0!important;border:0!important;border-radius:0!important;background:#fff!important;box-shadow:none!important}
+      body.print-budget-payments .budget-print-head{display:block!important;margin:0 0 7mm}
+      body.print-budget-payments .budget-print-head h1{margin:0 0 2mm;font-size:19pt;line-height:1.2}
+      body.print-budget-payments .budget-print-head p{margin:1mm 0;color:#333;font-size:9.5pt;font-weight:700}
+      body.print-budget-payments #depositListSection>.qr-section-head{display:none!important}
+      body.print-budget-payments .budget-table-wrap{display:block!important;overflow:visible!important;border:1px solid #777!important;border-radius:0!important;background:#fff!important}
+      body.print-budget-payments .budget-table{display:table!important;width:100%!important;min-width:0!important;table-layout:fixed!important;border-collapse:collapse!important}
+      body.print-budget-payments .budget-table thead{display:table-header-group!important}
+      body.print-budget-payments .budget-table tbody{display:table-row-group!important}
+      body.print-budget-payments .budget-table tr{display:table-row!important;break-inside:avoid;page-break-inside:avoid}
+      body.print-budget-payments .budget-table th,body.print-budget-payments .budget-table td{display:table-cell!important;padding:2.2mm 2mm!important;border:1px solid #aaa!important;color:#111!important;background:#fff!important;font-size:9pt!important;vertical-align:top!important;overflow-wrap:anywhere!important}
+      body.print-budget-payments .budget-table th:last-child,body.print-budget-payments .budget-table td:last-child{display:none!important}
+      body.print-budget-payments .budget-table th:nth-child(1),body.print-budget-payments .budget-table td:nth-child(1){width:15%}
+      body.print-budget-payments .budget-table th:nth-child(2),body.print-budget-payments .budget-table td:nth-child(2){width:13%}
+      body.print-budget-payments .budget-table th:nth-child(3),body.print-budget-payments .budget-table td:nth-child(3){width:20%}
+      body.print-budget-payments .budget-table th:nth-child(4),body.print-budget-payments .budget-table td:nth-child(4){width:18%;text-align:right!important}
+      body.print-budget-payments .budget-table th:nth-child(5),body.print-budget-payments .budget-table td:nth-child(5){width:34%}
     }
   </style>
 </head>
@@ -73,11 +108,28 @@
       Các đặt sân đã hoàn tất được hiển thị là khoản đã trừ nhưng số dư hiện tại đã cung cấp vẫn được giữ nguyên. Sau đó, giá vốn sân sẽ tự động được trừ khi đặt sân đang xử lý hoàn tất.
     </div>
 
-    <section class="qr-summary" aria-label="전체 골프장 예산 요약">
-      <div class="qr-card qr-summary-card"><div class="qr-summary-label">기준 잔액 / Số dư đầu kỳ</div><div class="qr-summary-value" id="summaryOpening">0 VND</div></div>
-      <div class="qr-card qr-summary-card"><div class="qr-summary-label">직접 충전 / Nạp thêm</div><div class="qr-summary-value" id="summaryDeposits">0 VND</div></div>
-      <div class="qr-card qr-summary-card"><div class="qr-summary-label">완료 예약 차감 / Đã trừ</div><div class="qr-summary-value" id="summaryCharges">0 VND</div></div>
-      <div class="qr-card qr-summary-card"><div class="qr-summary-label">현재 잔액 / Số dư hiện tại</div><div class="qr-summary-value" id="summaryBalance">0 VND</div></div>
+    <section class="qr-summary budget-overall-summary" aria-label="전체 골프장 예산 요약">
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">전체 기준 잔액 / Tổng số dư đầu kỳ</div><div class="qr-summary-value" id="summaryOpening">0 VND</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">전체 골프장 결제 / Tổng thanh toán sân</div><div class="qr-summary-value" id="summaryDeposits">0 VND</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">전체 완료 예약 차감 / Tổng đã trừ</div><div class="qr-summary-value" id="summaryCharges">0 VND</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">완료 반영 현재 잔액 / Số dư sau hoàn tất</div><div class="qr-summary-value" id="summaryBalance">0 VND</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">추가 예상 결제금액 / Thanh toán dự kiến thêm</div><div class="qr-summary-value" id="summaryExpectedCharges">0 VND</div><div class="budget-expected-meta" id="summaryExpectedMeta">진행중 0건</div></div>
+    </section>
+
+    <section class="qr-card qr-card-pad budget-month-panel" aria-labelledby="monthFilterTitle">
+      <div class="qr-section-head"><div><h2 class="qr-section-title" id="monthFilterTitle">월별 조회 / Xem theo tháng</h2><p class="budget-explainer">선택한 월의 골프장 결제와 자동 차감·복원 내역만 아래 목록에 표시합니다. 위 현재 잔액은 항상 전체 누계입니다.<br />Chỉ hiển thị thanh toán sân và lịch sử khấu trừ·hoàn trả của tháng đã chọn. Số dư hiện tại phía trên luôn là tổng lũy kế.</p></div></div>
+      <div class="budget-month-controls">
+        <label class="qr-field"><span class="qr-label">조회 월 / Tháng tra cứu</span><input class="qr-input" id="monthFilter" type="month" /></label>
+        <button class="qr-btn budget-month-all" id="allMonthsButton" type="button">전체 기간 / Toàn bộ</button>
+        <div class="budget-month-status" id="monthStatus" aria-live="polite">—</div>
+      </div>
+    </section>
+
+    <section class="qr-summary" aria-label="선택 기간 골프장 예산 증감 요약">
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">조회 기간 결제 / Thanh toán kỳ này</div><div class="qr-summary-value" id="periodDeposits">0 VND</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">조회 기간 차감 / Khấu trừ kỳ này</div><div class="qr-summary-value" id="periodCharges">0 VND</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">조회 기간 복원 / Hoàn trả kỳ này</div><div class="qr-summary-value" id="periodRestorations">0 VND</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">조회 기간 순증감 / Biến động ròng</div><div class="qr-summary-value" id="periodNet">0 VND</div></div>
     </section>
 
     <section aria-labelledby="courseBalanceTitle">
@@ -88,33 +140,45 @@
     <section class="qr-card qr-card-pad" aria-labelledby="depositFormTitle">
       <div class="qr-section-head">
         <div>
-          <h2 class="qr-section-title" id="depositFormTitle">골프장 충전 추가 / Thêm khoản nạp sân</h2>
-          <p class="budget-explainer">고객에게 받은 계약금·입금액은 여기에 넣지 않습니다. 실제로 골프장 계좌에 추가한 금액만 입력해 주세요.<br />Không nhập tiền khách trả. Chỉ nhập số tiền thực tế đã nạp vào tài khoản sân golf.</p>
+          <h2 class="qr-section-title" id="depositFormTitle">골프장 결제 / Thanh toán sân golf</h2>
+          <p class="budget-explainer">고객에게 받은 계약금·입금액은 여기에 넣지 않습니다. 실제로 골프장에 결제한 금액만 입력해 주세요.<br />Không nhập tiền khách trả. Chỉ nhập số tiền thực tế đã thanh toán cho sân golf.</p>
         </div>
       </div>
       <form id="depositForm">
         <input id="depositId" type="hidden" />
         <div class="budget-form-grid">
-          <label class="qr-field"><span class="qr-label">입금 날짜 / Ngày nạp</span><input class="qr-input" id="depositDate" type="date" required /></label>
+          <label class="qr-field"><span class="qr-label">결제 날짜 / Ngày thanh toán</span><input class="qr-input" id="depositDate" type="date" required /></label>
           <label class="qr-field"><span class="qr-label">골프장 / Sân golf</span><select class="qr-select" id="depositCourse" required><option value="">선택 / Chọn</option><option value="AT1200">AT1200</option><option value="SAM">SAM</option><option value="PALACE">PALACE</option></select></label>
-          <label class="qr-field"><span class="qr-label">충전 금액 (VND) / Số tiền nạp</span><input class="qr-input" id="depositAmount" type="text" inputmode="numeric" autocomplete="off" required /></label>
+          <label class="qr-field"><span class="qr-label">결제 금액 (VND) / Số tiền thanh toán</span><input class="qr-input" id="depositAmount" type="text" inputmode="numeric" autocomplete="off" required /></label>
           <label class="qr-field"><span class="qr-label">수단 / Phương thức</span><select class="qr-select" id="depositMethod" required><option value="">선택 / Chọn</option><option value="bank">은행 / Chuyển khoản</option><option value="cash">현금 / Tiền mặt</option><option value="card">카드 / Thẻ</option></select></label>
         </div>
         <label class="qr-field budget-form-note"><span class="qr-label">비고 / Ghi chú</span><textarea class="qr-textarea" id="depositNote" maxlength="1000"></textarea></label>
         <div class="budget-rule">5,000,000 VND 이상은 현금으로 저장할 수 없습니다. 은행 또는 카드를 선택해 주세요. / Giao dịch từ 5.000.000 VND không được dùng tiền mặt. Vui lòng chọn chuyển khoản hoặc thẻ.</div>
         <div class="qr-form-actions">
           <button class="qr-btn" id="cancelDepositEditButton" type="button" hidden>수정 취소 / Hủy sửa</button>
-          <button class="qr-btn qr-btn-primary" id="saveDepositButton" type="submit">충전 저장 / Lưu khoản nạp</button>
+          <button class="qr-btn qr-btn-primary" id="saveDepositButton" type="submit">결제 저장 / Lưu thanh toán</button>
         </div>
       </form>
     </section>
 
-    <section class="qr-card qr-card-pad" aria-labelledby="depositListTitle">
-      <div class="qr-section-head"><div><h2 class="qr-section-title" id="depositListTitle">직접 충전 내역 / Lịch sử nạp trực tiếp</h2><div class="qr-muted" id="depositCount">0건</div></div></div>
+    <section class="qr-card qr-card-pad" id="depositListSection" aria-labelledby="depositListTitle">
+      <div class="budget-print-head" aria-hidden="true">
+        <h1>HANA 골프장 결제 내역 / Lịch sử thanh toán sân golf</h1>
+        <p id="printDepositCriteria"></p>
+        <p id="printDepositGeneratedAt"></p>
+        <p id="printDepositTotal"></p>
+      </div>
+      <div class="qr-section-head">
+        <div><h2 class="qr-section-title" id="depositListTitle">골프장 결제 내역 / Lịch sử thanh toán sân</h2><div class="qr-muted" id="depositCount">0건</div></div>
+        <div class="qr-button-row">
+          <button class="qr-btn" id="printDepositButton" type="button">출력 / In</button>
+          <button class="qr-btn qr-btn-primary" id="exportDepositButton" type="button">엑셀 생성 / Tạo Excel</button>
+        </div>
+      </div>
       <div class="budget-table-wrap">
         <table class="budget-table">
           <thead><tr><th>날짜<br />Ngày</th><th>골프장<br />Sân</th><th>수단<br />Phương thức</th><th>금액<br />Số tiền</th><th>비고<br />Ghi chú</th><th>관리<br />Quản lý</th></tr></thead>
-          <tbody id="depositTableBody"><tr><td class="budget-empty" colspan="6">충전 내역을 불러오는 중입니다.</td></tr></tbody>
+          <tbody id="depositTableBody"><tr><td class="budget-empty" colspan="6">결제 내역을 불러오는 중입니다.</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -139,9 +203,9 @@
 
   <div class="qr-modal-back" id="loginModal" hidden>
     <form class="qr-modal" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="loginTitle" aria-describedby="loginDescription">
-      <h2 id="loginTitle">관리자 로그인</h2>
-      <p id="loginDescription">골프장 예산은 관리자만 볼 수 있습니다.<br />Chỉ quản trị viên mới có thể xem ngân sách sân golf.</p>
-      <label class="qr-label" for="loginPassword">관리자 비밀번호 / Mật khẩu quản trị</label>
+      <h2 id="loginTitle">매니저 / 관리자 로그인</h2>
+      <p id="loginDescription">골프장 예산은 매니저와 관리자만 볼 수 있습니다.<br />Chỉ quản lý và quản trị viên mới có thể xem ngân sách sân golf.</p>
+      <label class="qr-label" for="loginPassword">매니저 또는 관리자 비밀번호 / Mật khẩu quản lý hoặc quản trị</label>
       <input class="qr-input" id="loginPassword" type="password" autocomplete="current-password" required />
       <div class="qr-button-row" style="margin-top:12px;justify-content:flex-end"><button class="qr-btn qr-btn-primary" id="loginConfirm" type="submit">입장 / Đăng nhập</button></div>
     </form>
@@ -152,6 +216,7 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-budget.js?v=20261024-2"></script>
+  <script src="assets/dgv-xlsx.js"></script>
+  <script src="assets/golf-budget.js?v=20261024-3"></script>
 </body>
 </html>

@@ -5,10 +5,11 @@ import path from "node:path";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(projectRoot, file), "utf8");
-const [page, source, migration, editorPage, editorSource, listPage, listSource, adminHome, managerHome] = await Promise.all([
+const [page, source, migration, managerAccessMigration, editorPage, editorSource, listPage, listSource, adminHome, managerHome] = await Promise.all([
   read("golf_budget.html"),
   read("assets/golf-budget.js"),
   read("supabase/migrations/20261024143000_golf_course_budget_transition_ledger.sql"),
+  read("supabase/migrations/20261024144000_allow_manager_golf_budget_access.sql"),
   read("golf_reserv.html"),
   read("assets/golf-reserv.js"),
   read("golf_reserv_list.html"),
@@ -17,15 +18,55 @@ const [page, source, migration, editorPage, editorSource, listPage, listSource, 
   read("home_manager.html"),
 ]);
 
-// Administrator-only budget UI and course-specific deduction detail.
-assert.match(page, /assets\/golf-budget\.js\?v=20261024-2/);
+// Manager/admin budget UI, month filtering and course-specific deduction detail.
+assert.match(page, /assets\/golf-budget\.js\?v=20261024-3/);
 assert.match(page, /골프장별 현재 잔액 \/ Số dư theo sân/);
+assert.match(page, /id="monthFilter"[^>]*type="month"/);
+assert.match(page, /id="allMonthsButton"/);
+for (const id of ["periodDeposits", "periodCharges", "periodRestorations", "periodNet"]) {
+  assert.match(page, new RegExp(`id="${id}"`));
+}
+assert.match(page, /골프장 결제 \/ Thanh toán sân golf/);
+assert.match(page, /완료 반영 현재 잔액 \/ Số dư sau hoàn tất/);
+assert.match(page, /추가 예상 결제금액 \/ Thanh toán dự kiến thêm/);
+assert.match(page, /id="summaryExpectedCharges"/);
+assert.match(page, /id="summaryExpectedMeta"/);
+assert.match(page, /id="printDepositButton"/);
+assert.match(page, /id="exportDepositButton"/);
+assert.match(page, /id="printDepositCriteria"/);
+assert.match(page, /assets\/dgv-xlsx\.js/);
+assert.match(page, /@media print[\s\S]*body\.print-budget-payments[\s\S]*#depositListSection[\s\S]*\.budget-table th:last-child/);
+assert.doesNotMatch(page, /충전|Nạp thêm|nạp sân/);
 assert.match(page, /id="chargeFilters"/);
 for (const course of ["AT1200", "SAM", "PALACE"]) {
   assert.match(page, new RegExp(`data-charge-course="${course}"`));
 }
 assert.match(page, /상태[\s\S]*예산 차감 일시[\s\S]*복원 일시[\s\S]*골프 날짜[\s\S]*거래처[\s\S]*예약자 대표[\s\S]*골프장 원가·차감액/);
-assert.match(source, /QRStaff\.requireLogin\(\{ roles: \["admin"\]/);
+assert.match(source, /QRStaff\.requireLogin\(\{ roles: \["manager", "admin"\], preferredRole: "manager" \}\)/);
+assert.match(source, /state\.selectedMonth = currentMonthKey\(\)/);
+assert.match(source, /String\(deposit\?\.deposit_date \|\| ""\)\.slice\(0, 7\) === state\.selectedMonth/);
+assert.match(source, /dateTimeMonthKey\(charge\?\.charged_at\) === state\.selectedMonth/);
+assert.match(source, /timeZone: TIME_ZONE[\s\S]*year: "numeric"[\s\S]*month: "2-digit"/);
+assert.match(source, /chargePostedInSelectedPeriod\(charge\) \|\| chargeRestoredInSelectedPeriod\(charge\)/);
+assert.match(source, /state\.deposits\.filter\(depositInSelectedPeriod\)/);
+assert.match(source, /state\.charges\.filter\(chargeTouchesSelectedPeriod\)/);
+assert.match(source, /setSelectedMonth\("all"\)/);
+assert.match(source, /pendingReservations: \[\]/);
+assert.match(source, /function expectedPaymentStats\(course = null\)/);
+assert.match(source, /row\.course_total_vnd == null/);
+assert.match(source, /Number\(row\.course_total_vnd \|\| 0\)/);
+assert.match(source, /from\("golf_reservations"\)[\s\S]*\.select\("id,golf_course,status,course_total_vnd"\)[\s\S]*\.eq\("status", "in_progress"\)/);
+assert.match(source, /state\.pendingReservations = pendingReservations/);
+assert.match(source, /summaryExpectedCharges/);
+assert.match(source, /완료 반영 현재 잔액[\s\S]*추가 예상 결제금액/);
+assert.match(source, /function printDeposits\(\)/);
+assert.match(source, /document\.body\.classList\.add\("print-budget-payments"\)/);
+assert.match(source, /global\.addEventListener\("afterprint", cleanup, \{ once: true \}\)/);
+assert.match(source, /function depositWorkbookOptions\(rows\)/);
+assert.match(source, /HANA_Golf_Course_Payments_\$\{filePeriod\}\.xlsx/);
+assert.match(source, /global\.DGV_XLSX\.downloadWorkbook\(depositWorkbookOptions\(rows\)\)/);
+assert.match(source, /printDepositButton"\)\.addEventListener\("click", printDeposits\)/);
+assert.match(source, /exportDepositButton"\)\.addEventListener\("click", exportDeposits\)/);
 assert.match(source, /data-show-charge-course/);
 assert.match(source, /state\.chargeCourse === "all"[\s\S]*charge\.golf_course === state\.chargeCourse/);
 assert.match(source, /dateTimeLabel\(charge\.charged_at\)/);
@@ -38,6 +79,7 @@ assert.match(source, /charge\.historical[\s\S]*기존 완료·차감/);
 
 // Balance only uses opening snapshot + manual course top-ups - active reservation charges.
 assert.match(source, /return opening \+ depositTotal\(course\) - chargeTotal\(course\)/);
+assert.doesNotMatch(source, /return opening \+ depositTotal\(course\) - chargeTotal\(course\) - expectedPaymentStats/);
 assert.match(source, /from\("golf_course_budget_accounts"\)/);
 assert.match(source, /from\("golf_course_budget_deposits"\)/);
 assert.match(source, /from\("golf_course_budget_reservation_charges"\)/);
@@ -92,6 +134,16 @@ assert.match(migration, /revoke all on function private\.sync_golf_course_budget
 assert.match(migration, /\('AT1200'::text, 77500000::bigint\)/);
 assert.match(migration, /\('SAM'::text, 220000000::bigint\)/);
 assert.match(migration, /\('PALACE'::text, 0::bigint\)/);
+
+assert.match(managerAccessMigration, /drop policy if exists golf_course_budget_accounts_admin_read/);
+assert.match(managerAccessMigration, /golf_course_budget_accounts_manager_admin_read/);
+assert.match(managerAccessMigration, /golf_course_budget_accounts_manager_admin_update/);
+assert.match(managerAccessMigration, /golf_course_budget_deposits_manager_admin_insert/);
+assert.match(managerAccessMigration, /golf_course_budget_deposits_manager_admin_update/);
+assert.match(managerAccessMigration, /golf_course_budget_deposits_manager_admin_delete/);
+assert.match(managerAccessMigration, /golf_course_budget_reservation_charges_manager_admin_read/);
+assert.ok((managerAccessMigration.match(/current_app_role\(\)\) in \('manager', 'admin'\)/g) || []).length >= 8);
+assert.doesNotMatch(managerAccessMigration, /to anon|grant [^;]+ to anon/i);
 
 assert.match(adminHome, /href="golf_budget\.html"/);
 assert.doesNotMatch(managerHome, /href="golf_budget\.html"/);
