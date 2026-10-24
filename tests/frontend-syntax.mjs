@@ -20,6 +20,7 @@ const files = [
   "reserv_admin.html",
   "golf_reserv.html",
   "golf_reserv_list.html",
+  "golf_budget.html",
   "hana_reserv_admin_hidden.html",
   "report.html",
   "menu.html",
@@ -36,6 +37,7 @@ const externalScripts = [
   "assets/reservation-visibility.js",
   "assets/golf-reserv.js",
   "assets/golf-reserv-list.js",
+  "assets/golf-budget.js",
   "assets/vendor/qrcode.min.js",
 ];
 

@@ -26,7 +26,7 @@ const [
 assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
-assert.match(page, /assets\/golf-reserv\.js\?v=20261024-multi-payments-1/);
+assert.match(page, /assets\/golf-reserv\.js\?v=20261024-budget-1/);
 assert.match(page, /assets\/qr-staff\.css/);
 assert.match(page, /\.golf-layout\{display:flex;flex-direction:column/);
 assert.match(page, /\.golf-form-card\{position:static\}/);
@@ -53,8 +53,8 @@ assert.doesNotMatch(source, /byId\("homeLink"\)|byId\("reloadButton"\)/);
 for (const id of [
   "counterpartyName", "representativeName", "playerNamesEn", "pax", "golfDate", "golfHour", "golfMinute", "golfCourse", "holes",
   "guestUnitPrice", "guestTotalPreview", "smartCartNote", "courseUnitPrice",
-  "courseTotalPreview", "depositPayments", "receiptPayments", "withdrawalPayments",
-  "depositTotalPreview", "receivedTotalPreview", "withdrawalTotalPreview", "cashProfitPreview",
+  "courseTotalPreview", "depositPayments", "receiptPayments",
+  "depositTotalPreview", "receivedTotalPreview", "customerBalancePreview",
   "paymentCompleted", "customerType", "note",
 ]) {
   assert.match(page, new RegExp(`id="${id}"`), `missing field #${id}`);
@@ -144,10 +144,18 @@ assert.match(source, /const guestTotal = pax > 0[\s\S]*?pax \* guestUnit/);
 assert.match(source, /const courseTotal = pax > 0[\s\S]*?pax \* courseUnit/);
 assert.match(source, /completed \? "완료 \/ Hoàn tất" : "진행중 \/ Đang xử lý"/);
 
-// Multiple deposits, receipts, and withdrawals are stored as individual ledger rows.
-for (const kind of ["deposit", "receipt", "withdrawal"]) {
+// Customer deposits and receipts remain editable. Legacy withdrawal rows stay in
+// hidden state and the save payload so editing cannot delete historical data.
+for (const kind of ["deposit", "receipt"]) {
   assert.match(page, new RegExp(`data-add-payment="${kind}"`));
 }
+assert.doesNotMatch(page, /data-add-payment="withdrawal"|id="withdrawalPayments"|골프장 총출금|출금 추가/);
+assert.match(source, /const VISIBLE_PAYMENT_KINDS = \["deposit", "receipt"\]/);
+assert.match(source, /for \(const kind of VISIBLE_PAYMENT_KINDS\) renderPaymentKind\(kind\)/);
+assert.match(source, /for \(const kind of \["deposit", "receipt", "withdrawal"\]\)/);
+assert.match(source, /state\.paymentDrafts = \{ deposit: \[\], receipt: \[\], withdrawal: \[\] \}/);
+assert.match(source, /payments\.push\(newPaymentDraft\("withdrawal"/);
+assert.match(source, /if \(!VISIBLE_PAYMENT_KINDS\.includes\(kind\)\) return/);
 for (const method of ["bank", "cash", "card"]) {
   assert.match(source, new RegExp(`value="${method}"`));
 }
@@ -158,6 +166,9 @@ assert.match(source, /byId\("paymentCompleted"\)\.checked/);
 assert.match(source, /5,000,000 VND 이상은 은행 거래가 필요합니다/);
 assert.match(source, /Giao dịch từ 5\.000\.000 VND phải chuyển khoản ngân hàng/);
 assert.match(source, /payment\.payment_method === "cash" && payment\.amount_vnd >= CASH_BANK_THRESHOLD/);
+assert.match(source, /guestTotal == null \? null : guestTotal - totals\.received/);
+assert.match(source, /row\.course_total_vnd != null[\s\S]*rowTotals\.received[\s\S]*Number\(row\.course_total_vnd\)/);
+assert.match(source, /골프장 원가를 입력한 후 완료 처리해 주세요/);
 assert.doesNotMatch(page, /id="(?:depositAmount|depositDate|finalAmount|finalDate|withdrawalAmount|withdrawalDate)"/);
 assert.match(page, /비고/);
 assert.match(page, /Ghi chú/);
@@ -304,4 +315,3 @@ assert.match(paymentMigration, /existing\.payment_kind = p\.payment_kind[\s\S]*?
 assert.doesNotMatch(paymentMigration, /update\s+public\.golf_reservations[\s\S]*?set\s+note\s*=\s*null/i);
 
 console.log("Golf reservation page, CRUD, workflow, bilingual UI, and schema contracts verified.");
-

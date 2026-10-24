@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HANA 골프장 예산 관리</title>
+  <link rel="stylesheet" href="assets/qr-staff.css" />
+  <style>
+    .locked .budget-app{pointer-events:none;user-select:none;filter:blur(2px)}
+    .budget-app{transition:filter .15s ease;font-size:16px;font-weight:750}
+    .budget-app .qr-label{font-size:13px;font-weight:1000}
+    .budget-app .qr-section-title{font-size:18px}
+    .budget-course-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+    .budget-course-card{padding:16px;border:1px solid var(--qr-line);border-top:5px solid #caa24c;border-radius:15px;background:#fff;box-shadow:0 7px 18px rgba(58,42,31,.08)}
+    .budget-course-card.is-negative{border-top-color:#b33a2e;background:#fff9f8}
+    .budget-course-name{margin:0 0 8px;font-size:22px;font-weight:1000}
+    .budget-current-label{color:var(--qr-sub);font-size:12px;font-weight:1000}
+    .budget-current{display:block;margin:3px 0 12px;font-size:25px;font-weight:1000;font-variant-numeric:tabular-nums}
+    .budget-current.is-negative{color:#a72820}
+    .budget-breakdown{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+    .budget-breakdown>div{min-width:0;padding:9px;border-radius:10px;background:#fff7e9}
+    .budget-breakdown span{display:block;color:var(--qr-sub);font-size:10px;font-weight:1000}
+    .budget-breakdown strong{display:block;margin-top:3px;font-size:13px;font-weight:1000;overflow-wrap:anywhere}
+    .budget-opening-edit{display:grid;grid-template-columns:minmax(0,1fr) minmax(130px,.7fr) auto;gap:7px;align-items:end;margin-top:12px;padding-top:12px;border-top:1px dashed var(--qr-line)}
+    .budget-basis-date{min-height:44px;display:flex;align-items:center;padding:0 12px;border:1px solid var(--qr-line);border-radius:10px;background:#f7f2ea;font-weight:1000}
+    .budget-opening-edit .qr-label{font-size:10px}
+    .budget-form-grid{display:grid;grid-template-columns:minmax(150px,.7fr) minmax(145px,.7fr) minmax(180px,1fr) minmax(160px,.75fr);gap:10px}
+    .budget-form-note{margin-top:10px}
+    .budget-table-wrap{overflow:auto;border:1px solid var(--qr-line);border-radius:12px;background:#fff}
+    .budget-table{width:100%;min-width:850px;border-collapse:collapse;font-size:14px}
+    .budget-table th,.budget-table td{padding:11px;border-right:1px solid var(--qr-line);border-bottom:1px solid var(--qr-line);text-align:left;vertical-align:middle}
+    .budget-table th{background:#f7ead0;color:#4d392b;font-size:12px;font-weight:1000}
+    .budget-table td{font-weight:800}
+    .budget-table th:last-child,.budget-table td:last-child{border-right:0}
+    .budget-table tbody tr:last-child td{border-bottom:0}
+    .budget-money{text-align:right!important;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .budget-note{min-width:180px;white-space:pre-wrap;overflow-wrap:anywhere}
+    .budget-actions{display:flex;gap:6px;white-space:nowrap}
+    .budget-detail-button{width:100%;margin-top:10px}
+    .budget-charge-filters{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
+    .budget-charge-filter.is-active{background:#5b3525;color:#fff;border-color:#5b3525}
+    .budget-empty{padding:28px!important;text-align:center!important;color:var(--qr-sub)}
+    .budget-rule{margin-top:9px;color:#9b4a2a;font-size:12px;font-weight:1000}
+    .budget-explainer{margin:0;color:var(--qr-sub);font-size:13px;font-weight:900;line-height:1.6}
+    .budget-edit-link{color:#6f452e;font-weight:1000;text-underline-offset:3px}
+    @media(max-width:900px){
+      .budget-course-grid{grid-template-columns:1fr}
+      .budget-form-grid{grid-template-columns:1fr 1fr}
+    }
+    @media(max-width:560px){
+      .budget-form-grid,.budget-opening-edit{grid-template-columns:1fr}
+      .budget-breakdown{grid-template-columns:1fr}
+      .qr-header-actions{width:100%}
+      .qr-header-actions .qr-btn{flex:1}
+    }
+  </style>
+</head>
+<body class="locked">
+  <main class="qr-shell budget-app">
+    <header class="qr-header">
+      <div>
+        <h1 class="qr-brand-title">골프장 예산 관리</h1>
+        <p class="qr-brand-subtitle">Quản lý ngân sách sân golf</p>
+      </div>
+      <div class="qr-header-actions">
+        <span class="qr-pill"><span class="qr-dot is-connecting" id="connectionDot"></span><span id="connectionText">연결 중</span></span>
+        <button class="qr-btn" id="reloadButton" type="button">새로고침 / Làm mới</button>
+      </div>
+    </header>
+
+    <div class="qr-banner" id="pageBanner">
+      기존 완료 예약은 이미 차감된 상세내역으로 표시되며, 알려주신 현재잔액은 그대로 유지됩니다. 이후 진행 중 예약이 완료되면 골프장 원가 합계가 자동 차감됩니다.<br />
+      Các đặt sân đã hoàn tất được hiển thị là khoản đã trừ nhưng số dư hiện tại đã cung cấp vẫn được giữ nguyên. Sau đó, giá vốn sân sẽ tự động được trừ khi đặt sân đang xử lý hoàn tất.
+    </div>
+
+    <section class="qr-summary" aria-label="전체 골프장 예산 요약">
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">기준 잔액 / Số dư đầu kỳ</div><div class="qr-summary-value" id="summaryOpening">0 VND</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">직접 충전 / Nạp thêm</div><div class="qr-summary-value" id="summaryDeposits">0 VND</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">완료 예약 차감 / Đã trừ</div><div class="qr-summary-value" id="summaryCharges">0 VND</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">현재 잔액 / Số dư hiện tại</div><div class="qr-summary-value" id="summaryBalance">0 VND</div></div>
+    </section>
+
+    <section aria-labelledby="courseBalanceTitle">
+      <div class="qr-section-head"><div><h2 class="qr-section-title" id="courseBalanceTitle">골프장별 현재 잔액 / Số dư theo sân</h2></div></div>
+      <div class="budget-course-grid" id="courseCards"><div class="qr-empty">잔액을 불러오는 중입니다.</div></div>
+    </section>
+
+    <section class="qr-card qr-card-pad" aria-labelledby="depositFormTitle">
+      <div class="qr-section-head">
+        <div>
+          <h2 class="qr-section-title" id="depositFormTitle">골프장 충전 추가 / Thêm khoản nạp sân</h2>
+          <p class="budget-explainer">고객에게 받은 계약금·입금액은 여기에 넣지 않습니다. 실제로 골프장 계좌에 추가한 금액만 입력해 주세요.<br />Không nhập tiền khách trả. Chỉ nhập số tiền thực tế đã nạp vào tài khoản sân golf.</p>
+        </div>
+      </div>
+      <form id="depositForm">
+        <input id="depositId" type="hidden" />
+        <div class="budget-form-grid">
+          <label class="qr-field"><span class="qr-label">입금 날짜 / Ngày nạp</span><input class="qr-input" id="depositDate" type="date" required /></label>
+          <label class="qr-field"><span class="qr-label">골프장 / Sân golf</span><select class="qr-select" id="depositCourse" required><option value="">선택 / Chọn</option><option value="AT1200">AT1200</option><option value="SAM">SAM</option><option value="PALACE">PALACE</option></select></label>
+          <label class="qr-field"><span class="qr-label">충전 금액 (VND) / Số tiền nạp</span><input class="qr-input" id="depositAmount" type="text" inputmode="numeric" autocomplete="off" required /></label>
+          <label class="qr-field"><span class="qr-label">수단 / Phương thức</span><select class="qr-select" id="depositMethod" required><option value="">선택 / Chọn</option><option value="bank">은행 / Chuyển khoản</option><option value="cash">현금 / Tiền mặt</option><option value="card">카드 / Thẻ</option></select></label>
+        </div>
+        <label class="qr-field budget-form-note"><span class="qr-label">비고 / Ghi chú</span><textarea class="qr-textarea" id="depositNote" maxlength="1000"></textarea></label>
+        <div class="budget-rule">5,000,000 VND 이상은 현금으로 저장할 수 없습니다. 은행 또는 카드를 선택해 주세요. / Giao dịch từ 5.000.000 VND không được dùng tiền mặt. Vui lòng chọn chuyển khoản hoặc thẻ.</div>
+        <div class="qr-form-actions">
+          <button class="qr-btn" id="cancelDepositEditButton" type="button" hidden>수정 취소 / Hủy sửa</button>
+          <button class="qr-btn qr-btn-primary" id="saveDepositButton" type="submit">충전 저장 / Lưu khoản nạp</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="qr-card qr-card-pad" aria-labelledby="depositListTitle">
+      <div class="qr-section-head"><div><h2 class="qr-section-title" id="depositListTitle">직접 충전 내역 / Lịch sử nạp trực tiếp</h2><div class="qr-muted" id="depositCount">0건</div></div></div>
+      <div class="budget-table-wrap">
+        <table class="budget-table">
+          <thead><tr><th>날짜<br />Ngày</th><th>골프장<br />Sân</th><th>수단<br />Phương thức</th><th>금액<br />Số tiền</th><th>비고<br />Ghi chú</th><th>관리<br />Quản lý</th></tr></thead>
+          <tbody id="depositTableBody"><tr><td class="budget-empty" colspan="6">충전 내역을 불러오는 중입니다.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="qr-card qr-card-pad" aria-labelledby="chargeListTitle">
+      <div class="qr-section-head"><div><h2 class="qr-section-title" id="chargeListTitle">완료 예약 자동 차감 상세 / Chi tiết khấu trừ đặt sân</h2><div class="qr-muted" id="chargeCount">0건</div></div></div>
+      <p class="budget-explainer" style="margin-bottom:10px">기존 완료 예약과 이후 완료되는 예약을 모두 표시합니다. 원가가 없던 기존 완료 건은 원가 미입력으로 표시되며 현재잔액에는 영향을 주지 않습니다.<br />Hiển thị cả đặt sân đã hoàn tất trước đây và đặt sân hoàn tất sau này. Dữ liệu cũ chưa có giá vốn sẽ được đánh dấu chưa nhập và không làm thay đổi số dư hiện tại.</p>
+      <div class="budget-charge-filters" id="chargeFilters" aria-label="골프장별 자동 차감 상세 필터">
+        <button class="qr-btn qr-btn-small budget-charge-filter is-active" type="button" data-charge-course="all">전체 / Tất cả</button>
+        <button class="qr-btn qr-btn-small budget-charge-filter" type="button" data-charge-course="AT1200">AT1200</button>
+        <button class="qr-btn qr-btn-small budget-charge-filter" type="button" data-charge-course="SAM">SAM</button>
+        <button class="qr-btn qr-btn-small budget-charge-filter" type="button" data-charge-course="PALACE">PALACE</button>
+      </div>
+      <div class="budget-table-wrap">
+        <table class="budget-table">
+          <thead><tr><th>상태<br />Trạng thái</th><th>예산 차감 일시<br />Thời điểm trừ</th><th>복원 일시<br />Thời điểm hoàn</th><th>골프장<br />Sân</th><th>골프 날짜<br />Ngày chơi</th><th>거래처<br />Đối tác</th><th>예약자 대표<br />Người đại diện</th><th>골프장 원가·차감액<br />Giá vốn đã trừ</th><th>예약<br />Đặt sân</th></tr></thead>
+          <tbody id="chargeTableBody"><tr><td class="budget-empty" colspan="9">자동 차감 내역을 불러오는 중입니다.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div class="qr-modal-back" id="loginModal" hidden>
+    <form class="qr-modal" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="loginTitle" aria-describedby="loginDescription">
+      <h2 id="loginTitle">관리자 로그인</h2>
+      <p id="loginDescription">골프장 예산은 관리자만 볼 수 있습니다.<br />Chỉ quản trị viên mới có thể xem ngân sách sân golf.</p>
+      <label class="qr-label" for="loginPassword">관리자 비밀번호 / Mật khẩu quản trị</label>
+      <input class="qr-input" id="loginPassword" type="password" autocomplete="current-password" required />
+      <div class="qr-button-row" style="margin-top:12px;justify-content:flex-end"><button class="qr-btn qr-btn-primary" id="loginConfirm" type="submit">입장 / Đăng nhập</button></div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/dgv-data.js"></script>
+  <script src="assets/supabase-client.js"></script>
+  <script src="assets/qr-staff.js"></script>
+  <script src="assets/golf-budget.js?v=20261024-2"></script>
+</body>
+</html>

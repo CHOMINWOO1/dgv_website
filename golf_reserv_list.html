@@ -17,7 +17,7 @@
     .golf-list-count{margin-top:9px;color:var(--qr-sub);font-size:13px;font-weight:1000}
     .golf-sheet-wrap{margin-top:12px;overflow:auto;max-height:calc(100vh - 315px);border:1px solid var(--qr-line);border-radius:12px;background:#fff;overscroll-behavior:contain;cursor:grab}
     .golf-sheet-wrap.is-dragging{cursor:grabbing;user-select:none}
-    .golf-sheet{width:max-content;min-width:2860px;border-collapse:separate;border-spacing:0;font-size:14px}
+    .golf-sheet{width:max-content;min-width:2500px;border-collapse:separate;border-spacing:0;font-size:14px}
     .golf-sheet th,.golf-sheet td{height:47px;padding:9px 11px;border-right:1px solid var(--qr-line);border-bottom:1px solid var(--qr-line);text-align:left;vertical-align:middle;white-space:nowrap}
     .golf-sheet th{position:sticky;top:0;z-index:3;background:#f7ead0;color:#4d392b;font-size:12px;font-weight:1000;line-height:1.25}
     .golf-sheet th:last-child,.golf-sheet td:last-child{border-right:0}
@@ -91,7 +91,7 @@
       </div>
     </header>
 
-    <div class="qr-banner" id="pageBanner">저장된 골프 예약을 예약 1건당 한 줄로 표시합니다. / Mỗi đặt sân được hiển thị trên một dòng.<br />행을 한 번 클릭하면 전체 예약자 명단과 입출금 상세가 펼쳐집니다. / Nhấp một lần vào dòng để xem đầy đủ danh sách khách và chi tiết thu chi.<br />예약자 대표를 더블클릭하면 수정할 수 있습니다. / Nhấp đúp vào người đại diện để chỉnh sửa.</div>
+    <div class="qr-banner" id="pageBanner">저장된 골프 예약을 예약 1건당 한 줄로 표시합니다. / Mỗi đặt sân được hiển thị trên một dòng.<br />행을 한 번 클릭하면 전체 예약자 명단과 고객 입금 상세가 펼쳐집니다. / Nhấp một lần vào dòng để xem đầy đủ danh sách khách và chi tiết khoản thu.<br />예약자 대표를 더블클릭하면 수정할 수 있습니다. / Nhấp đúp vào người đại diện để chỉnh sửa.</div>
 
     <section class="qr-summary" aria-label="예약 요약">
       <div class="qr-card qr-summary-card"><div class="qr-summary-label">진행중 / Đang xử lý</div><div class="qr-summary-value" id="summaryProgress">0</div></div>
@@ -144,8 +144,6 @@
               <th>계약금 수단<br />Phương thức cọc</th>
               <th>고객 총입금<br />Tổng tiền khách đã trả</th>
               <th>입금 수단<br />Phương thức thu</th>
-              <th>골프장 총출금<br />Tổng chi sân golf</th>
-              <th>출금 수단<br />Phương thức chi</th>
               <th>실제 수익<br />Lợi nhuận</th>
               <th>구분<br />Loại khách</th>
               <th>등록 일시<br />Thời gian tạo</th>
@@ -153,7 +151,7 @@
               <th>최종 수정<br />Cập nhật</th>
             </tr>
           </thead>
-          <tbody id="reservationTableBody"><tr><td class="golf-cell-empty" colspan="25">예약을 불러오는 중입니다.</td></tr></tbody>
+          <tbody id="reservationTableBody"><tr><td class="golf-cell-empty" colspan="23">예약을 불러오는 중입니다.</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -175,7 +173,6 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
-  <script src="assets/golf-reserv-list.js?v=20261024-multi-payments-1"></script>
+  <script src="assets/golf-reserv-list.js?v=20261024-budget-1"></script>
 </body>
 </html>
-

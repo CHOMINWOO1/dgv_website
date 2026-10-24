@@ -93,6 +93,7 @@ const requiredAdminDestinations = [
   "reserv_admin.html",
   "golf_reserv.html",
   "golf_reserv_list.html",
+  "golf_budget.html",
   "hana_reserv_admin_hidden.html",
   "notice.html",
   "code_admin.html",
@@ -121,6 +122,7 @@ assert.deepEqual(
     "reserv_admin.html",
     "golf_reserv.html",
     "golf_reserv_list.html",
+    "golf_budget.html",
     "hana_reserv_admin_hidden.html",
     "report.html",
   ],
@@ -130,8 +132,10 @@ assert.match(adminHome, /href="hana_admin_hidden\.html"[\s\S]*?<span class="name
 assert.match(adminHome, /href="report\.html"[\s\S]*?<span class="name">월간 정산 · KB<\/span>/);
 assert.match(adminHome, /href="golf_reserv\.html"[\s\S]*?<span class="name">골프 예약 관리<\/span>/);
 assert.match(adminHome, /href="golf_reserv_list\.html"[\s\S]*?<span class="name">골프 예약 한 줄 목록<\/span>/);
+assert.match(adminHome, /href="golf_budget\.html"[\s\S]*?<span class="name">골프장 예산 관리<\/span>/);
 assert.doesNotMatch(managerHome, /href="golf_reserv\.html"/, "manager home must not expose golf reservation management");
 assert.doesNotMatch(managerHome, /href="golf_reserv_list\.html"/, "manager home must not expose golf reservation one-row list");
+assert.doesNotMatch(managerHome, /href="golf_budget\.html"/, "manager home must not expose golf-course budget management");
 assert.doesNotMatch(adminHome, /href="menu\.html"/, "tokenized customer menu must not be linked without a QR token");
 
 for (const html of [staffHome, managerHome, adminHome]) {
