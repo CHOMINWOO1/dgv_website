@@ -314,7 +314,7 @@
       }
     }
     for (const group of groups.values()) {
-      group.receivable = Math.max(group.expected - group.received, 0);
+      group.receivable = group.expected - group.received;
     }
     return [...groups.values()]
       .sort((a, b) => b.receivable - a.receivable || a.name.localeCompare(b.name));
@@ -334,11 +334,11 @@
       <div class="golf-receivable-total">
         <div><span>원래 받을 금액 / Phải thu</span><strong>${escape(moneyLabel(totals.expected))}</strong></div>
         <div><span>현재 받은 금액 / Đã nhận</span><strong>${escape(moneyLabel(totals.received))}</strong></div>
-        <div><span>남은 미수금 / Công nợ</span><strong>${escape(moneyLabel(totals.receivable))}</strong>
+        <div><span>미수금 잔액 / Công nợ ròng</span><strong>${escape(moneyLabel(totals.receivable))}</strong>
           ${totals.unsetExpected ? `<span class="golf-receivable-warning">금액 미설정 ${escape(totals.unsetExpected)}건</span>` : ""}</div>
       </div>
       <div class="golf-receivable-table-wrap"><table class="golf-receivable-table">
-        <thead><tr><th>거래처 / Đối tác</th><th>예약 / Đặt sân</th><th>원래 받을 금액 / Phải thu</th><th>받은 금액 / Đã nhận</th><th>미수금 / Công nợ</th></tr></thead>
+        <thead><tr><th>거래처 / Đối tác</th><th>예약 / Đặt sân</th><th>원래 받을 금액 / Phải thu</th><th>받은 금액 / Đã nhận</th><th>미수금 잔액 / Công nợ ròng</th></tr></thead>
         <tbody>${groups.map((group) => `<tr><td><strong>${escape(group.name)}</strong>
           ${group.unsetExpected ? `<span class="golf-receivable-warning">금액 미설정 ${escape(group.unsetExpected)}건</span>` : ""}</td>
           <td>${escape(group.bookingCount)}건</td><td>${escape(moneyLabel(group.expected))}</td>
