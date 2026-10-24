@@ -193,7 +193,7 @@ assert.match(source, /const row = rowById\(rawId\)/);
 assert.match(source, /fillForm\(row, \{ focusFinal: false \}\)/);
 assert.match(source, /global\.history\.replaceState/);
 assert.match(source, /const loaded = await loadRows\(\{ quiet: true \}\);[\s\S]*if \(loaded\) openRequestedEdit\(\);/);
-assert.match(source, /return true;[\s\S]*catch \(error\)[\s\S]*return false;/);
+assert.match(source, /async function loadRows\(options = \{\}\)[\s\S]*return true;[\s\S]*catch \(error\)[\s\S]*return false;[\s\S]*async function save/);
 
 // The additive migration is isolated from the restaurant data model, computes
 // totals/status server-side, and grants manager/admin CRUD only through RLS.
