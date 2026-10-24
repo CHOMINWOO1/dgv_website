@@ -444,13 +444,13 @@
         note: nullableText(byId("note").value)
       },
       payments: payments.map((payment) => ({
+        id: payment.id,
         payment_kind: payment.payment_kind,
         amount_vnd: payment.amount_vnd,
         payment_date: payment.payment_date,
         payment_method: payment.payment_method,
         completes_booking: payment.completes_booking,
-        sort_order: payment.sort_order,
-        legacy_import: payment.legacy_import
+        sort_order: payment.sort_order
       }))
     };
   }
@@ -857,3 +857,4 @@
 
   init();
 })(window);
+

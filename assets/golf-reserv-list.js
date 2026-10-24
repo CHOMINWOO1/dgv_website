@@ -425,8 +425,10 @@
     tableBody.addEventListener("click", (event) => {
       const button = event.target.closest("button.golf-edit-link[data-edit-href]");
       if (button) {
-        if (event.detail === 0) confirmAndOpenEdit(button);
-        return;
+        if (event.detail === 0) {
+          confirmAndOpenEdit(button);
+          return;
+        }
       }
       if (event.detail !== 1 || Date.now() < suppressRowClickUntil) return;
       const row = event.target.closest("tr[data-status]");
@@ -496,3 +498,4 @@
 
   init();
 })(window);
+

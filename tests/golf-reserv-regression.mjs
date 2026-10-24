@@ -18,7 +18,7 @@ const [
   read("supabase/migrations/20261024130000_golf_reservation_counterparty.sql"),
   read("supabase/migrations/20261024131000_drop_golf_reservation_coordinator.sql"),
   read("supabase/migrations/20261024132000_classify_golf_counterparties.sql"),
-  read("supabase/migrations/20261024062000_golf_reservation_multi_payments.sql"),
+  read("supabase/migrations/20261024140000_golf_reservation_multi_payments.sql"),
 ]);
 
 // The page is a single manager/admin workspace: create, filter, inspect, edit,
@@ -285,11 +285,15 @@ assert.match(paymentMigration, /alter table public\.golf_reservation_payments en
 for (const action of ["read", "insert", "update", "delete"]) {
   assert.match(paymentMigration, new RegExp(`golf_reservation_payments_manager_admin_${action}`, "i"));
 }
-assert.match(paymentMigration, /security invoker/i);
+assert.match(paymentMigration, /security definer/i);
 assert.match(paymentMigration, /save_golf_reservation_with_payments/i);
 assert.match(paymentMigration, /legacy_import/i);
 assert.match(paymentMigration, /gr\.final_received_amount_vnd - gr\.deposit_amount_vnd/i);
 assert.match(paymentMigration, /payment_method is not null and legacy_import/i);
+assert.match(paymentMigration, /revoke all on table public\.golf_reservation_payments from public, anon, authenticated/i);
+assert.match(paymentMigration, /grant select on table public\.golf_reservation_payments to authenticated/i);
+assert.match(source, /id:\s*payment\.id/);
 assert.doesNotMatch(paymentMigration, /update\s+public\.golf_reservations[\s\S]*?set\s+note\s*=\s*null/i);
 
 console.log("Golf reservation page, CRUD, workflow, bilingual UI, and schema contracts verified.");
+
