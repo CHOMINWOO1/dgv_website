@@ -60,7 +60,7 @@
     .golf-payment-row{display:grid;grid-template-columns:minmax(145px,1fr) minmax(145px,.75fr) minmax(165px,.8fr) auto;gap:8px;align-items:end;padding:9px;border-radius:10px;background:#fff8e9}
     .golf-payment-row .qr-label{font-size:11px}
     .golf-payment-empty{padding:10px;border:1px dashed var(--qr-line);border-radius:9px;color:var(--qr-sub);font-size:12px;font-weight:900;text-align:center}
-    .golf-payment-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+    .golf-payment-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
     .golf-payment-summary>div{padding:10px;border:1px solid var(--qr-line);border-radius:11px;background:#fffaf0}
     .golf-payment-summary span{display:block;color:var(--qr-sub);font-size:11px;font-weight:950}
     .golf-payment-summary strong{display:block;margin-top:4px;font-size:15px;font-weight:1000;overflow-wrap:anywhere}
@@ -148,7 +148,7 @@
           </div>
 
           <div class="golf-form-section">
-            <h3>입출금 및 상태 / Thu chi và trạng thái</h3>
+            <h3>고객 입금 및 상태 / Thu tiền khách và trạng thái</h3>
             <div class="golf-payment-ledgers">
               <section class="golf-payment-group" aria-labelledby="depositPaymentsTitle">
                 <div class="golf-payment-head"><h4 id="depositPaymentsTitle">계약금·예약금 / Tiền cọc</h4><button class="qr-btn qr-btn-small" type="button" data-add-payment="deposit">계약금 추가 / Thêm tiền cọc</button></div>
@@ -160,17 +160,11 @@
                 <p class="golf-payment-help">고객이 나누어 입금한 금액을 건별로 추가합니다. / Thêm riêng từng khoản khách thanh toán nhiều lần.</p>
                 <div class="golf-payment-rows" id="receiptPayments"></div>
               </section>
-              <section class="golf-payment-group" aria-labelledby="withdrawalPaymentsTitle">
-                <div class="golf-payment-head"><h4 id="withdrawalPaymentsTitle">골프장 출금 / Chi trả sân golf</h4><button class="qr-btn qr-btn-small" type="button" data-add-payment="withdrawal">출금 추가 / Thêm khoản chi</button></div>
-                <p class="golf-payment-help">골프장에 나누어 지급한 금액을 건별로 추가합니다. / Thêm riêng từng khoản thanh toán cho sân golf.</p>
-                <div class="golf-payment-rows" id="withdrawalPayments"></div>
-              </section>
             </div>
             <div class="golf-payment-summary" aria-live="polite">
               <div><span>계약금 합계 / Tổng tiền cọc</span><strong id="depositTotalPreview">0 VND</strong></div>
               <div><span>고객 총입금 / Tổng tiền khách đã trả</span><strong id="receivedTotalPreview">0 VND</strong></div>
-              <div><span>골프장 총출금 / Tổng chi sân golf</span><strong id="withdrawalTotalPreview">0 VND</strong></div>
-              <div><span>현재 입출금 차액 / Chênh lệch thu chi</span><strong id="cashProfitPreview">0 VND</strong></div>
+              <div><span>고객 미수금 / Công nợ khách hàng</span><strong id="customerBalancePreview">—</strong></div>
             </div>
             <label class="golf-complete-toggle"><input id="paymentCompleted" type="checkbox" /><span>입금 완료 처리 / Đánh dấu đã nhận đủ tiền<span class="golf-label-vi">체크하면 현재 고객 총입금액과 마지막 입금일로 완료 처리됩니다. / Khi chọn, tổng tiền đã nhận và ngày thu cuối sẽ được dùng để hoàn tất.</span></span></label>
             <div class="golf-cash-rule">5,000,000 VND 이상은 현금으로 저장할 수 없습니다. 은행 또는 카드를 선택해 주세요. / Giao dịch từ 5.000.000 VND không được dùng tiền mặt. Vui lòng chọn chuyển khoản hoặc thẻ.</div>
@@ -222,7 +216,6 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-reserv.js?v=20261024-multi-payments-1"></script>
+  <script src="assets/golf-reserv.js?v=20261024-budget-1"></script>
 </body>
 </html>
-

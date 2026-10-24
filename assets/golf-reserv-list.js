@@ -13,8 +13,7 @@
     "golf_course", "holes", "guest_unit_price_vnd", "smart_cart_note",
     "guest_total_vnd", "course_unit_price_vnd", "course_total_vnd",
     "deposit_amount_vnd", "deposit_received_date",
-    "final_received_amount_vnd", "final_received_date",
-    "withdrawal_amount_vnd", "withdrawal_date", "customer_type", "note",
+    "final_received_amount_vnd", "final_received_date", "customer_type", "note",
     "status", "created_at", "updated_at"
   ].join(",");
   const state = { identity: null, rows: [] };
@@ -71,7 +70,6 @@
   function paymentKindLabel(value) {
     return value === "deposit" ? "계약금 / Tiền cọc"
       : value === "receipt" ? "추가 입금 / Khoản thu thêm"
-      : value === "withdrawal" ? "골프장 출금 / Chi sân golf"
       : "";
   }
 
@@ -109,8 +107,7 @@
   function paymentDetailMarkup(row) {
     const groups = [
       ["deposit", "계약금 / Tiền cọc"],
-      ["receipt", "추가 입금 / Khoản thu thêm"],
-      ["withdrawal", "골프장 출금 / Chi sân golf"]
+      ["receipt", "추가 입금 / Khoản thu thêm"]
     ];
     return groups.map(([kind, label]) => {
       const payments = paymentsOfKinds(row, kind);
@@ -132,11 +129,10 @@
   }
 
   function actualProfit(row) {
-    if (row.status !== "completed") return null;
+    if (row.status !== "completed" || row.course_total_vnd == null) return null;
     const received = paymentTotal(row, ["deposit", "receipt"]);
-    const withdrawn = paymentTotal(row, "withdrawal");
-    if (received == null) return Number(row.final_received_amount_vnd || 0) - Number(row.withdrawal_amount_vnd || 0);
-    return received - Number(withdrawn || 0);
+    if (received == null) return Number(row.final_received_amount_vnd || 0) - Number(row.course_total_vnd);
+    return received - Number(row.course_total_vnd);
   }
 
   function filteredRows() {
@@ -197,14 +193,12 @@
       "고객 합계(VND) / Tổng tiền khách", "1인 원가(VND) / Giá sân",
       "골프장 합계(VND) / Tổng tiền sân", "계약금 합계(VND) / Tổng tiền cọc", "계약금 상세 / Chi tiết tiền cọc",
       "고객 총입금(VND) / Tổng tiền khách đã trả", "입금 상세 / Chi tiết khoản thu",
-      "골프장 총출금(VND) / Tổng chi sân golf", "출금 상세 / Chi tiết khoản chi",
       "실제 수익(VND) / Lợi nhuận", "구분 / Loại khách",
       "등록 일시 / Thời gian tạo", "비고 / Ghi chú", "최종 수정 / Cập nhật"
     ];
     const dataRows = rows.map((row) => {
       const depositTotal = paymentTotal(row, "deposit");
       const receivedTotal = paymentTotal(row, ["deposit", "receipt"]);
-      const withdrawalTotal = paymentTotal(row, "withdrawal");
       return [
         textCell(row.status === "completed" ? "완료 / Hoàn tất" : "진행중 / Đang xử lý"),
         textCell(row.golf_date), textCell(timeLabel(row.golf_time)), textCell(row.counterparty_name),
@@ -214,7 +208,6 @@
         integerCell(row.course_unit_price_vnd), integerCell(row.course_total_vnd),
         integerCell(depositTotal), textCell(depositTotal == null ? "" : paymentDetailText(row, "deposit"), "wrapped"),
         integerCell(receivedTotal), textCell(receivedTotal == null ? "" : paymentDetailText(row, ["deposit", "receipt"]), "wrapped"),
-        integerCell(withdrawalTotal), textCell(withdrawalTotal == null ? "" : paymentDetailText(row, "withdrawal"), "wrapped"),
         integerCell(actualProfit(row)),
         textCell(row.customer_type === "company" ? "회사 / Công ty" : "개인 / Cá nhân"),
         textCell(dateTimeLabel(row.created_at)), textCell(row.note, "wrapped"), textCell(dateTimeLabel(row.updated_at))
@@ -225,7 +218,7 @@
       "거래 종류 / Loại giao dịch", "거래 날짜 / Ngày giao dịch", "금액(VND) / Số tiền",
       "수단 / Phương thức", "상태 / Trạng thái", "기존 이관 / Dữ liệu cũ"
     ];
-    const transactionRows = rows.flatMap((row) => paymentRowsFor(row).map((payment) => [
+    const transactionRows = rows.flatMap((row) => paymentsOfKinds(row, ["deposit", "receipt"]).map((payment) => [
       textCell(row.id), textCell(row.golf_date), textCell(row.counterparty_name), textCell(row.representative_name),
       textCell(paymentKindLabel(payment.payment_kind)), textCell(payment.payment_date), integerCell(payment.amount_vnd),
       textCell(paymentMethodLabel(payment.payment_method)),
@@ -240,21 +233,21 @@
       sheets: [{
         name: "골프 예약",
         rows: [
-          [textCell("HANA 골프 예약 목록 / Danh sách đặt sân golf", "title"), ...Array(24).fill("")],
-          [textCell("조회 기준 / Điều kiện lọc"), textCell(filterDescription()), ...Array(23).fill("")],
-          [textCell("생성 일시 / Thời gian xuất"), textCell(generatedAt), ...Array(23).fill("")],
+          [textCell("HANA 골프 예약 목록 / Danh sách đặt sân golf", "title"), ...Array(22).fill("")],
+          [textCell("조회 기준 / Điều kiện lọc"), textCell(filterDescription()), ...Array(21).fill("")],
+          [textCell("생성 일시 / Thời gian xuất"), textCell(generatedAt), ...Array(21).fill("")],
           [],
           headers.map((label) => textCell(label, "header")),
           ...dataRows
         ],
-        columnWidths: [17,16,10,20,22,34,9,13,8,18,18,20,18,20,18,34,20,38,20,38,20,16,20,30,20],
-        merges: ["A1:Y1"],
+        columnWidths: [17,16,10,20,22,34,9,13,8,18,18,20,18,20,18,34,20,38,20,16,20,30,20],
+        merges: ["A1:W1"],
         freezeRows: 5,
-        autoFilterRange: `A5:Y${Math.max(5, 5 + dataRows.length)}`
+        autoFilterRange: `A5:W${Math.max(5, 5 + dataRows.length)}`
       }, {
-        name: "입출금 내역",
+        name: "입금 내역",
         rows: [
-          [textCell("골프 예약 입출금 내역 / Giao dịch đặt sân golf", "title"), ...Array(9).fill("")],
+          [textCell("골프 예약 고객 입금 내역 / Khoản thu đặt sân golf", "title"), ...Array(9).fill("")],
           [textCell("조회 기준 / Điều kiện lọc"), textCell(filterDescription()), ...Array(8).fill("")],
           [textCell("생성 일시 / Thời gian xuất"), textCell(generatedAt), ...Array(8).fill("")],
           [],
@@ -318,7 +311,6 @@
     const editHref = `golf_reserv.html?edit=${encodeURIComponent(String(row.id || ""))}`;
     const depositTotal = paymentTotal(row, "deposit");
     const receivedTotal = paymentTotal(row, ["deposit", "receipt"]);
-    const withdrawalTotal = paymentTotal(row, "withdrawal");
     return `<tr data-status="${escape(row.status)}" aria-expanded="false">
       <td><span class="golf-status-chip${completed ? " is-completed" : ""}">${escape(statusLabel)}</span></td>
       <td>${escape(golfDateLabel(row.golf_date))}</td>
@@ -338,8 +330,6 @@
       <td class="golf-cell-text golf-cell-payments" title="${escape(paymentDetailText(row, "deposit"))}"><span class="golf-payment-screen-summary">${escape(paymentMethodSummary(row, "deposit"))}</span><span class="golf-payment-print-detail">${escape(paymentDetailText(row, "deposit"))}</span></td>
       <td class="golf-cell-money">${escape(moneyLabel(receivedTotal))}</td>
       <td class="golf-cell-text golf-cell-payments" title="${escape(paymentDetailText(row, ["deposit", "receipt"]))}"><span class="golf-payment-screen-summary">${escape(paymentMethodSummary(row, ["deposit", "receipt"]))}</span><span class="golf-payment-print-detail">${escape(paymentDetailText(row, ["deposit", "receipt"]))}</span></td>
-      <td class="golf-cell-money">${escape(moneyLabel(withdrawalTotal))}</td>
-      <td class="golf-cell-text golf-cell-payments" title="${escape(paymentDetailText(row, "withdrawal"))}"><span class="golf-payment-screen-summary">${escape(paymentMethodSummary(row, "withdrawal"))}</span><span class="golf-payment-print-detail">${escape(paymentDetailText(row, "withdrawal"))}</span></td>
       <td class="golf-cell-money">${escape(moneyLabel(actualProfit(row)))}</td>
       <td>${escape(customerType)}</td>
       <td>${escape(dateTimeLabel(row.created_at))}</td>
@@ -347,9 +337,9 @@
       <td>${escape(dateTimeLabel(row.updated_at))}</td>
     </tr>
     <tr class="golf-roster-detail" data-roster-for="${escape(String(row.id || ""))}" hidden aria-hidden="true">
-      <td colspan="25"><div class="golf-roster-panel"><div class="golf-expanded-grid">
+      <td colspan="23"><div class="golf-roster-panel"><div class="golf-expanded-grid">
         <section class="golf-expanded-section"><strong class="golf-roster-title">예약자 명단 ${rosterNames.length.toLocaleString("ko-KR")}명 / Danh sách khách</strong><div class="golf-roster-names">${rosterMarkup}</div></section>
-        <section class="golf-expanded-section"><strong class="golf-roster-title">입출금 상세 / Chi tiết thu chi</strong><div class="golf-payment-detail-groups">${paymentDetailMarkup(row)}</div></section>
+        <section class="golf-expanded-section"><strong class="golf-roster-title">고객 입금 상세 / Chi tiết khoản thu</strong><div class="golf-payment-detail-groups">${paymentDetailMarkup(row)}</div></section>
       </div></div></td>
     </tr>`;
   }
@@ -360,7 +350,7 @@
     byId("listCount").textContent = `${rows.length.toLocaleString("ko-KR")}건 / mục`;
     byId("reservationTableBody").innerHTML = rows.length
       ? rows.map(renderRow).join("")
-      : '<tr><td class="golf-cell-empty" colspan="25">조건에 맞는 골프 예약이 없습니다. / Không có đặt sân phù hợp.</td></tr>';
+      : '<tr><td class="golf-cell-empty" colspan="23">조건에 맞는 골프 예약이 없습니다. / Không có đặt sân phù hợp.</td></tr>';
   }
 
   async function loadRows(options = {}) {
@@ -376,7 +366,7 @@
           ] }
         ),
         DGV.collectSupabasePages(
-          () => sb.from("golf_reservation_payments").select(PAYMENT_COLUMNS),
+          () => sb.from("golf_reservation_payments").select(PAYMENT_COLUMNS).in("payment_kind", ["deposit", "receipt"]),
           { pageSize: 500, order: [
             { column: "payment_date", ascending: true },
             { column: "sort_order", ascending: true },
@@ -498,4 +488,3 @@
 
   init();
 })(window);
-

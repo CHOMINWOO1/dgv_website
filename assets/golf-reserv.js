@@ -11,6 +11,7 @@
   const GOLF_COURSES = new Set(["AT1200", "SAM", "PALACE"]);
   const STANDARD_HOLES = new Set([9, 18, 27, 26]);
   const PAYMENT_KINDS = new Set(["deposit", "receipt", "withdrawal"]);
+  const VISIBLE_PAYMENT_KINDS = ["deposit", "receipt"];
   const PAYMENT_METHODS = new Set(["bank", "cash", "card"]);
   const CASH_BANK_THRESHOLD = 5000000;
   const PAYMENT_COLUMNS = "id,reservation_id,payment_kind,amount_vnd,payment_date,payment_method,completes_booking,sort_order,legacy_import";
@@ -250,7 +251,7 @@
   }
 
   function renderPaymentDrafts() {
-    for (const kind of PAYMENT_KINDS) renderPaymentKind(kind);
+    for (const kind of VISIBLE_PAYMENT_KINDS) renderPaymentKind(kind);
     updatePreview();
   }
 
@@ -340,8 +341,9 @@
     const totals = paymentTotals(allPaymentDrafts());
     byId("depositTotalPreview").textContent = moneyLabel(totals.deposit);
     byId("receivedTotalPreview").textContent = moneyLabel(totals.received);
-    byId("withdrawalTotalPreview").textContent = moneyLabel(totals.withdrawal);
-    byId("cashProfitPreview").textContent = moneyLabel(totals.received - totals.withdrawal);
+    byId("customerBalancePreview").textContent = moneyLabel(
+      guestTotal == null ? null : guestTotal - totals.received
+    );
     byId("statusPreview").textContent = byId("paymentCompleted").checked
       ? "완료 / Hoàn tất"
       : "진행중 / Đang xử lý";
@@ -361,7 +363,7 @@
     byId("paymentCompleted").checked = false;
     setPaymentDrafts([]);
     byId("formTitle").textContent = "새 골프 예약 / Đặt sân mới";
-    byId("editingHint").textContent = "계약금과 입출금 내역을 건별로 입력합니다. / Nhập riêng từng khoản thu và chi.";
+    byId("editingHint").textContent = "계약금과 고객 입금 내역을 건별로 입력합니다. / Nhập riêng từng khoản khách thanh toán.";
     byId("saveButton").textContent = "예약 저장 / Lưu đặt chỗ";
     byId("cancelEditButton").hidden = true;
     updatePreview();
@@ -394,8 +396,8 @@
     byId("note").value = row.note || "";
     byId("formTitle").textContent = `${row.representative_name} 수정 / Chỉnh sửa ${row.representative_name}`;
     byId("editingHint").textContent = row.status === "completed"
-      ? "완료 기록과 입출금 내역을 수정할 수 있습니다. 완료 체크를 해제하면 거래내역은 유지되고 진행중으로 바뀝니다. / Có thể sửa giao dịch; bỏ chọn hoàn tất để chuyển về đang xử lý."
-      : "진행중 예약의 입출금 내역을 추가하고 완료 처리할 수 있습니다. / Có thể thêm giao dịch và hoàn tất đặt sân.";
+      ? "완료 기록과 고객 입금 내역을 수정할 수 있습니다. 완료 체크를 해제하면 입금내역은 유지되고 진행중으로 바뀝니다. / Có thể sửa khoản thu; bỏ chọn hoàn tất để chuyển về đang xử lý."
+      : "진행중 예약의 고객 입금 내역을 추가하고 완료 처리할 수 있습니다. / Có thể thêm khoản thu và hoàn tất đặt sân.";
     byId("saveButton").textContent = "변경 저장 / Lưu thay đổi";
     byId("cancelEditButton").hidden = false;
     updatePreview();
@@ -433,6 +435,9 @@
     if (!STANDARD_HOLES.has(holes) && !unchangedLegacyHoles) throw new Error("홀 수를 9, 18, 27, 26 중에서 선택해 주세요. / Chọn số hố 9, 18, 27 hoặc 26.");
     for (const [label, value] of [["1인 판매가", guestUnit], ["1인 골프장 원가", courseUnit]]) {
       if (Number.isNaN(value) || (value != null && (value < 0 || value > 1000000000000))) throw new Error(`${label}을 올바르게 입력해 주세요.`);
+    }
+    if (byId("paymentCompleted").checked && courseUnit == null) {
+      throw new Error("골프장 원가를 입력한 후 완료 처리해 주세요. / Vui lòng nhập giá sân trước khi hoàn tất.");
     }
     if (!new Set(["individual", "company"]).has(customerType)) throw new Error("개인 또는 회사를 선택해 주세요. / Chọn cá nhân hoặc công ty.");
 
@@ -590,10 +595,9 @@
     const customerLabel = row.customer_type === "company" ? "회사 / Công ty" : "개인 / Cá nhân";
     const rowPayments = paymentRowsFor(row);
     const rowTotals = paymentTotals(rowPayments);
-    const actualProfit = completed
-      ? (rowPayments.length
-        ? rowTotals.received - rowTotals.withdrawal
-        : Number(row.final_received_amount_vnd || 0) - Number(row.withdrawal_amount_vnd || 0))
+    const actualProfit = completed && row.course_total_vnd != null
+      ? (rowPayments.length ? rowTotals.received : Number(row.final_received_amount_vnd || 0))
+        - Number(row.course_total_vnd)
       : null;
     return `
       <article class="golf-row" data-status="${escape(row.status)}">
@@ -614,14 +618,13 @@
             <div class="golf-detail"><span>S-CART</span><strong>${escape(row.smart_cart_note || "—")}</strong></div>
             <div class="golf-detail"><span>계약금 내역 / Chi tiết tiền cọc</span><strong>${escape(paymentDetailText(row, "deposit"))}</strong></div>
             <div class="golf-detail"><span>고객 총입금 / Tổng tiền khách đã trả</span><strong>${escape(moneyLabel(rowTotals.received))}\n${escape(paymentDetailText(row, "receipt"))}</strong></div>
-            <div class="golf-detail"><span>골프장 총출금 / Tổng chi sân golf</span><strong>${escape(moneyLabel(rowTotals.withdrawal))}\n${escape(paymentDetailText(row, "withdrawal"))}</strong></div>
             <div class="golf-detail"><span>실제 수익 / Lợi nhuận</span><strong>${escape(moneyLabel(actualProfit))}</strong></div>
           </div>
           <div class="golf-row-names"><strong>영문 명단 / Danh sách tên tiếng Anh</strong>\n${escape(row.player_names_en)}</div>
           ${row.note ? `<div class="golf-row-note"><strong>비고 / Ghi chú:</strong> ${escape(row.note)}</div>` : ""}
         </div>
         <div class="golf-row-actions">
-          <button class="qr-btn qr-btn-small" type="button" data-action="edit" data-id="${escape(row.id)}">${completed ? "수정 / Chỉnh sửa" : "수정·입출금 / Sửa thu chi"}</button>
+          <button class="qr-btn qr-btn-small" type="button" data-action="edit" data-id="${escape(row.id)}">${completed ? "수정 / Chỉnh sửa" : "수정·입금 / Sửa khoản thu"}</button>
           <button class="qr-btn qr-btn-small qr-btn-danger" type="button" data-action="delete" data-id="${escape(row.id)}">삭제 / Xóa</button>
         </div>
       </article>`;
@@ -791,7 +794,7 @@
     const addButton = event.target.closest("[data-add-payment]");
     if (addButton) {
       const kind = addButton.dataset.addPayment;
-      if (!PAYMENT_KINDS.has(kind)) return;
+      if (!VISIBLE_PAYMENT_KINDS.includes(kind)) return;
       state.paymentDrafts[kind].push(newPaymentDraft(kind, { payment_date: todayYmd() }));
       renderPaymentKind(kind);
       updatePreview();
@@ -867,4 +870,3 @@
 
   init();
 })(window);
-
