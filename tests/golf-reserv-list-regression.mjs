@@ -14,7 +14,7 @@ const [page, source, editor, adminHome, managerHome] = await Promise.all([
 ]);
 
 assert.match(page, /<table class="golf-sheet">/);
-assert.match(page, /assets\/golf-reserv-list\.js\?v=20261024-edit-link-1/);
+assert.match(page, /assets\/golf-reserv-list\.js\?v=20261024-double-edit-1/);
 assert.match(page, /id="reservationTableBody"/);
 assert.match(page, /colspan="25"/);
 assert.match(page, /min-width:2860px/);
@@ -37,8 +37,18 @@ assert.match(source, /row\.golf_date < from/);
 assert.match(source, /row\.golf_date > to/);
 assert.match(source, /rows\.map\(renderRow\)/);
 assert.ok(source.includes('const editHref = `golf_reserv.html?edit=${encodeURIComponent(String(row.id || ""))}`;'));
-assert.ok(source.includes('<a class="golf-edit-link" href="${escape(editHref)}">'));
+assert.ok(source.includes('<button class="golf-edit-link" type="button" data-edit-href="${escape(editHref)}"'));
+assert.doesNotMatch(source, /<a class="golf-edit-link"/);
 assert.match(source, /event\.target\.closest\("a, button, input, select, textarea"\)/);
+assert.match(source, /tableBody\.addEventListener\("dblclick"/);
+assert.match(source, /event\.detail !== 0/);
+assert.match(source, /이 예약을 수정하시겠습니까\?\\nBạn có muốn chỉnh sửa đặt sân này không\?/);
+assert.match(source, /if \(!global\.confirm\([\s\S]*\)\) return;[\s\S]*global\.location\.assign\(href\)/);
+assert.match(page, /예약자 대표를 더블클릭하면 수정할 수 있습니다/);
+assert.match(page, /\.golf-list-app \.qr-label\{font-size:13px;font-weight:1000\}/);
+assert.match(page, /\.golf-sheet\{[^}]*font-size:14px\}/);
+assert.match(page, /\.golf-sheet td\{font-weight:800\}/);
+assert.match(page, /height:47px;padding:9px 11px/);
 assert.doesNotMatch(page, /id="homeLink"/);
 assert.doesNotMatch(source, /byId\("homeLink"\)/);
 assert.match(source, /DGV\.escapeHTML/);
