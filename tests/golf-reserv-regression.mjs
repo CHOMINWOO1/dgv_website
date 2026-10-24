@@ -29,6 +29,7 @@ assert.match(page, /assets\/golf-reserv\.js\?v=20261024-deep-edit-1/);
 assert.match(page, /assets\/qr-staff\.css/);
 assert.match(page, /\.golf-layout\{display:flex;flex-direction:column/);
 assert.match(page, /\.golf-form-card\{position:static\}/);
+assert.match(page, /\.golf-app\{[^}]*font-size:16px;font-weight:750\}/);
 assert.match(page, /\.golf-app \.qr-label\{font-size:14px;font-weight:1000\}/);
 assert.match(page, /\.golf-app \.qr-input,\.golf-app \.qr-select,\.golf-app \.qr-textarea\{font-size:16px;font-weight:900\}/);
 assert.match(page, /\.golf-form-section h3\{[^}]*font-size:16px;font-weight:1000\}/);
