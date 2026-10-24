@@ -9,6 +9,7 @@
   const TIME_ZONE = "Asia/Ho_Chi_Minh";
   const MAX_SAFE_MONEY = 9007199254740991;
   const GOLF_COURSES = new Set(["AT1200", "SAM", "PALACE"]);
+  const STANDARD_HOLES = new Set([9, 18, 27, 26]);
   const COLUMNS = [
     "id", "representative_name", "player_names_en", "pax",
     "coordinator_name", "booking_date", "golf_date", "golf_time",
@@ -30,6 +31,16 @@
   function dateLabel(value) {
     const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
     return match ? `${match[1]}. ${match[2]}. ${match[3]}` : "—";
+  }
+
+  function dateTimeLabel(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return new Intl.DateTimeFormat("ko-KR", {
+      timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false
+    }).format(date);
   }
 
   function timeLabel(value) {
@@ -69,6 +80,24 @@
     banner.dataset.tone = tone;
   }
 
+  function clearLegacyHoleOption() {
+    const option = byId("holes").querySelector("option[data-legacy-hole]");
+    if (option) option.remove();
+  }
+
+  function setHoleValue(value) {
+    clearLegacyHoleOption();
+    const holes = Number(value || 18);
+    if (!STANDARD_HOLES.has(holes)) {
+      const option = document.createElement("option");
+      option.value = String(holes);
+      option.textContent = `${holes} (기존값 / Dữ liệu cũ)`;
+      option.dataset.legacyHole = "true";
+      byId("holes").append(option);
+    }
+    byId("holes").value = String(holes);
+  }
+
   function updatePreview() {
     const pax = Number(byId("pax").value || 0);
     const guestUnit = moneyNumber(byId("guestUnitPrice").value);
@@ -87,8 +116,8 @@
   function resetForm(options = {}) {
     byId("reservationForm").reset();
     byId("recordId").value = "";
-    byId("bookingDate").value = todayYmd();
     byId("depositDate").value = todayYmd();
+    clearLegacyHoleOption();
     byId("holes").value = "18";
     byId("customerType").value = "individual";
     byId("formTitle").textContent = "새 골프 예약 / Đặt sân mới";
@@ -104,13 +133,12 @@
     byId("representativeName").value = row.representative_name || "";
     byId("playerNamesEn").value = row.player_names_en || "";
     byId("pax").value = row.pax || "";
-    byId("coordinatorName").value = row.coordinator_name || "";
     byId("customerType").value = row.customer_type || "individual";
-    byId("bookingDate").value = row.booking_date || "";
-    byId("golfDate").value = row.golf_date || "";
-    byId("golfTime").value = String(row.golf_time || "").slice(0, 5);
+    byId("golfDateTime").value = row.golf_date && row.golf_time
+      ? `${row.golf_date}T${String(row.golf_time).slice(0, 5)}`
+      : "";
     byId("golfCourse").value = row.golf_course || "";
-    byId("holes").value = row.holes || 18;
+    setHoleValue(row.holes);
     byId("smartCartNote").value = row.smart_cart_note || "";
     setMoneyInput("guestUnitPrice", row.guest_unit_price_vnd);
     setMoneyInput("courseUnitPrice", row.course_unit_price_vnd);
@@ -139,9 +167,10 @@
     const playerNamesEn = clean(byId("playerNamesEn").value)
       .split(/[\n,;]+/).map((name) => name.trim()).filter(Boolean).join("\n");
     const pax = Number(byId("pax").value);
-    const bookingDate = byId("bookingDate").value;
-    const golfDate = byId("golfDate").value;
-    const golfTime = byId("golfTime").value;
+    const golfDateTime = byId("golfDateTime").value;
+    const golfDateTimeMatch = golfDateTime.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/);
+    const golfDate = golfDateTimeMatch?.[1] || "";
+    const golfTime = golfDateTimeMatch?.[2] || "";
     const golfCourse = clean(byId("golfCourse").value);
     const holes = Number(byId("holes").value);
     const guestUnit = moneyNumber(byId("guestUnitPrice").value);
@@ -156,10 +185,11 @@
     if (!representativeName) throw new Error("예약자 대표를 입력해 주세요.");
     if (!playerNamesEn) throw new Error("전체 영문 이름을 입력해 주세요.");
     if (!Number.isInteger(pax) || pax < 1 || pax > 100) throw new Error("인원을 1명 이상 100명 이하로 입력해 주세요.");
-    if (!bookingDate || !golfDate || !golfTime) throw new Error("예약 날짜, 골프 날짜, 티오프 시간을 모두 입력해 주세요.");
-    if (bookingDate > golfDate) throw new Error("골프 날짜는 예약 날짜보다 빠를 수 없습니다.");
+    if (!golfDate || !golfTime) throw new Error("골프 날짜와 티오프 시간을 선택해 주세요.");
     if (!GOLF_COURSES.has(golfCourse)) throw new Error("골프장을 AT1200, SAM, PALACE 중에서 선택해 주세요.");
-    if (!Number.isInteger(holes) || holes < 1 || holes > 72) throw new Error("홀 수를 1에서 72 사이로 입력해 주세요.");
+    const existingRow = state.rows.find((row) => row.id === byId("recordId").value);
+    const unchangedLegacyHoles = existingRow && Number(existingRow.holes) === holes;
+    if (!STANDARD_HOLES.has(holes) && !unchangedLegacyHoles) throw new Error("홀 수를 9, 18, 27, 26 중에서 선택해 주세요.");
     for (const [label, value, max] of [
       ["1인 판매가", guestUnit, 1000000000000], ["1인 골프장 원가", courseUnit, 1000000000000],
       ["예약금", depositAmount, MAX_SAFE_MONEY], ["최종 총입금액", finalAmount, MAX_SAFE_MONEY],
@@ -177,7 +207,6 @@
 
     return {
       representative_name: representativeName, player_names_en: playerNamesEn, pax,
-      coordinator_name: nullableText(byId("coordinatorName").value), booking_date: bookingDate,
       golf_date: golfDate, golf_time: golfTime, golf_course: golfCourse, holes,
       guest_unit_price_vnd: guestUnit, smart_cart_note: nullableText(byId("smartCartNote").value),
       course_unit_price_vnd: courseUnit, deposit_amount_vnd: depositAmount,
@@ -230,7 +259,7 @@
         </div>
         <div class="golf-row-body">
           <div class="golf-detail-grid">
-            <div class="golf-detail"><span>예약일 / Ngày đặt</span><strong>${escape(dateLabel(row.booking_date))}</strong></div>
+            <div class="golf-detail"><span>등록 일시 / Thời gian tạo</span><strong>${escape(dateTimeLabel(row.created_at))}</strong></div>
             <div class="golf-detail"><span>골프 / Ngày chơi</span><strong>${escape(dateLabel(row.golf_date))} ${escape(timeLabel(row.golf_time))}</strong></div>
             <div class="golf-detail"><span>담당자 / Phụ trách</span><strong>${escape(row.coordinator_name || "—")}</strong></div>
             <div class="golf-detail"><span>1인 판매가 / Giá khách mỗi người</span><strong>${escape(moneyLabel(row.guest_unit_price_vnd))}</strong></div>

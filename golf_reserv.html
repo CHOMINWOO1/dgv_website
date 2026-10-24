@@ -54,6 +54,7 @@
       </div>
       <div class="qr-header-actions">
         <span class="qr-pill"><span class="qr-dot is-connecting" id="connectionDot"></span><span id="connectionText">연결 중</span></span>
+        <a class="qr-btn" href="golf_reserv_list.html">한 줄 목록 / Bảng</a>
         <a class="qr-btn" id="homeLink" href="home_manager.html">홈 / Trang chủ</a>
         <button class="qr-btn" id="reloadButton" type="button">새로고침 / Làm mới</button>
       </div>
@@ -87,13 +88,10 @@
               <label class="qr-field"><span class="qr-label">예약자 대표(팀명)<span class="golf-label-vi">Người đại diện (tên đội)</span></span><input class="qr-input" id="representativeName" type="text" maxlength="200" required /></label>
               <label class="qr-field qr-field-wide"><span class="qr-label">전체 이름(영어, 한 줄에 한 명)<span class="golf-label-vi">Họ tên tất cả khách bằng tiếng Anh, mỗi người một dòng</span></span><textarea class="qr-textarea" id="playerNamesEn" maxlength="5000" placeholder="CHO MINWOO&#10;CHO GISANG" required></textarea></label>
               <label class="qr-field"><span class="qr-label">인원 (명단에서 자동 계산, 수정 가능)<span class="golf-label-vi">Số khách (tự đếm từ danh sách, có thể sửa)</span></span><input class="qr-input" id="pax" type="number" min="1" max="100" inputmode="numeric" required /></label>
-              <label class="qr-field"><span class="qr-label">담당자<span class="golf-label-vi">Người phụ trách</span></span><input class="qr-input" id="coordinatorName" type="text" maxlength="200" placeholder="예: Chị Oanh" /></label>
               <label class="qr-field"><span class="qr-label">개인 / 회사<span class="golf-label-vi">Cá nhân / Công ty</span></span><select class="qr-select" id="customerType"><option value="individual">개인 / Cá nhân</option><option value="company">회사 / Công ty</option></select></label>
-              <label class="qr-field"><span class="qr-label">예약 날짜<span class="golf-label-vi">Ngày đặt chỗ</span></span><input class="qr-input" id="bookingDate" type="date" required /></label>
-              <label class="qr-field"><span class="qr-label">골프 날짜<span class="golf-label-vi">Ngày chơi golf</span></span><input class="qr-input" id="golfDate" type="date" required /></label>
-              <label class="qr-field"><span class="qr-label">티오프 시간<span class="golf-label-vi">Giờ phát bóng</span></span><input class="qr-input" id="golfTime" type="time" required /></label>
+              <label class="qr-field"><span class="qr-label">골프 날짜·티오프<span class="golf-label-vi">Ngày chơi và giờ phát bóng</span></span><input class="qr-input" id="golfDateTime" type="datetime-local" step="300" required /></label>
               <label class="qr-field"><span class="qr-label">골프장<span class="golf-label-vi">Sân golf</span></span><select class="qr-select" id="golfCourse" required><option value="">선택 / Chọn</option><option value="AT1200">AT1200</option><option value="SAM">SAM</option><option value="PALACE">PALACE</option></select></label>
-              <label class="qr-field"><span class="qr-label">홀 수<span class="golf-label-vi">Số hố</span></span><input class="qr-input" id="holes" type="number" min="1" max="72" inputmode="numeric" value="18" required /></label>
+              <label class="qr-field"><span class="qr-label">홀 수<span class="golf-label-vi">Số hố</span></span><select class="qr-select" id="holes" required><option value="9">9</option><option value="18" selected>18</option><option value="27">27</option><option value="26">26</option></select></label>
               <label class="qr-field"><span class="qr-label">S-CART<span class="golf-label-vi">Ghi chú xe điện</span></span><input class="qr-input" id="smartCartNote" type="text" maxlength="300" /></label>
             </div>
           </div>
