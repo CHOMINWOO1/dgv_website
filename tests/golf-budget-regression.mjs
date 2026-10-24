@@ -50,7 +50,8 @@ assert.match(page, /id="chargeFilters"/);
 for (const course of ["AT1200", "SAM", "PALACE"]) {
   assert.match(page, new RegExp(`data-charge-course="${course}"`));
 }
-assert.match(page, /상태[\s\S]*예산 차감 일시[\s\S]*복원 일시[\s\S]*골프 날짜[\s\S]*거래처[\s\S]*예약자 대표[\s\S]*골프장 원가·차감액[\s\S]*예약[\s\S]*차감 후 잔액/);
+assert.match(page, /상태[\s\S]*예산 차감 일시[\s\S]*골프장[\s\S]*골프 날짜[\s\S]*거래처[\s\S]*예약자 대표[\s\S]*골프장 원가·차감액[\s\S]*예약[\s\S]*차감 후 잔액[\s\S]*복원 일시/);
+assert.match(page, /<tfoot><tr><th colspan="6">현재 차감 합계[\s\S]*id="chargeTableTotal"[\s\S]*<th><\/th><th><\/th><th><\/th>/);
 assert.match(source, /QRStaff\.requireLogin\(\{ roles: \["manager", "admin"\], preferredRole: "manager" \}\)/);
 assert.match(source, /paymentFrom: ""[\s\S]*paymentTo: ""[\s\S]*chargeFrom: ""[\s\S]*chargeTo: ""/);
 assert.match(source, /state\.paymentFrom = rangeStart[\s\S]*state\.paymentTo = rangeEnd[\s\S]*state\.chargeFrom = rangeStart[\s\S]*state\.chargeTo = rangeEnd/);
@@ -67,6 +68,7 @@ assert.match(source, /delta: -amount[\s\S]*delta: amount/);
 assert.match(source, /charge\.reversed_at \? new Date\(charge\.reversed_at\)\.getTime\(\) : NaN/);
 assert.match(source, /balanceAfterCharge\.get\(charge\.reservation_id\)/);
 assert.match(source, /moneyLabel\(balanceAfter\)/);
+assert.match(source, /moneyLabel\(balanceAfter\)[\s\S]*dateTimeLabel\(charge\.reversed_at\)/);
 assert.match(source, /function setPaymentRange\(from, to\)[\s\S]*renderDeposits\(\);\s*}/);
 assert.match(source, /function setChargeRange\(from, to\)[\s\S]*renderCharges\(\);\s*}/);
 assert.match(source, /시작일은 종료일보다 늦을 수 없습니다\.[\s\S]*Ngày bắt đầu không được sau ngày kết thúc\./);
