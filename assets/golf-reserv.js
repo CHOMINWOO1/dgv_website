@@ -355,6 +355,9 @@
     clearLegacyHoleOption();
     byId("holes").value = "18";
     byId("customerType").value = "company";
+    byId("golfDate").value = "";
+    byId("golfHour").value = "";
+    byId("golfMinute").value = "00";
     byId("paymentCompleted").checked = false;
     setPaymentDrafts([]);
     byId("formTitle").textContent = "새 골프 예약 / Đặt sân mới";
@@ -372,9 +375,15 @@
     byId("playerNamesEn").value = row.player_names_en || "";
     byId("pax").value = row.pax || "";
     byId("customerType").value = row.customer_type === "individual" ? "individual" : "company";
-    byId("golfDateTime").value = row.golf_date && row.golf_time
-      ? `${row.golf_date}T${String(row.golf_time).slice(0, 5)}`
-      : "";
+    const teeOffMatch = String(row.golf_time || "").match(/^(\d{2}):(\d{2})/);
+    byId("golfDate").value = row.golf_date || "";
+    byId("golfHour").value = teeOffMatch?.[1] || "";
+    const savedMinute = teeOffMatch?.[2] || "00";
+    const minuteSelect = byId("golfMinute");
+    if (![...minuteSelect.options].some((option) => option.value === savedMinute)) {
+      minuteSelect.add(new Option(savedMinute, savedMinute));
+    }
+    minuteSelect.value = savedMinute;
     setCourseValue(row.golf_course);
     setHoleValue(row.holes);
     byId("smartCartNote").value = row.smart_cart_note || "";
@@ -399,10 +408,10 @@
     const counterpartyName = clean(byId("counterpartyName").value);
     const representativeName = firstPlayerName(playerNamesEn);
     const pax = Number(byId("pax").value);
-    const golfDateTime = byId("golfDateTime").value;
-    const golfDateTimeMatch = golfDateTime.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})$/);
-    const golfDate = golfDateTimeMatch?.[1] || "";
-    const golfTime = golfDateTimeMatch?.[2] || "";
+    const golfDate = byId("golfDate").value;
+    const golfHour = byId("golfHour").value;
+    const golfMinute = byId("golfMinute").value || "00";
+    const golfTime = golfHour && /^\d{2}$/.test(golfMinute) ? `${golfHour}:${golfMinute}` : "";
     const golfCourse = clean(byId("golfCourse").value);
     const holes = Number(byId("holes").value);
     const guestUnit = moneyNumber(byId("guestUnitPrice").value);
