@@ -104,6 +104,10 @@
     const customerType = row.customer_type === "company" ? "회사 / Công ty" : "개인 / Cá nhân";
     const statusLabel = completed ? "완료 / Hoàn tất" : "진행중 / Đang xử lý";
     const names = oneLine(row.player_names_en);
+    const rosterNames = String(row.player_names_en || "").split(/[\n,;]+/).map((name) => name.trim()).filter(Boolean);
+    const rosterMarkup = rosterNames.length
+      ? rosterNames.map((name, index) => `<span class="golf-roster-name"><b>${index + 1}</b>${escape(name)}</span>`).join("")
+      : '<span class="golf-roster-name">예약자 명단이 없습니다. / Không có danh sách khách.</span>';
     const note = oneLine(row.note);
     const cart = oneLine(row.smart_cart_note);
     const representative = row.representative_name || "—";
@@ -134,6 +138,9 @@
       <td>${escape(dateTimeLabel(row.created_at))}</td>
       <td class="golf-cell-text" title="${escape(note)}">${escape(note)}</td>
       <td>${escape(dateTimeLabel(row.updated_at))}</td>
+    </tr>
+    <tr class="golf-roster-detail" data-roster-for="${escape(String(row.id || ""))}" hidden aria-hidden="true">
+      <td colspan="25"><div class="golf-roster-panel"><strong class="golf-roster-title">예약자 명단 ${rosterNames.length.toLocaleString("ko-KR")}명 / Danh sách khách</strong><div class="golf-roster-names">${rosterMarkup}</div></div></td>
     </tr>`;
   }
 
@@ -193,7 +200,12 @@
       if (event.detail !== 1 || Date.now() < suppressRowClickUntil) return;
       const row = event.target.closest("tr[data-status]");
       if (!row) return;
-      const expanded = row.classList.toggle("is-names-expanded");
+      const detailRow = row.nextElementSibling;
+      if (!detailRow?.classList.contains("golf-roster-detail")) return;
+      const expanded = detailRow.hidden;
+      detailRow.hidden = !expanded;
+      detailRow.setAttribute("aria-hidden", String(!expanded));
+      row.classList.toggle("is-names-expanded", expanded);
       row.setAttribute("aria-expanded", String(expanded));
     });
     byId("clearFiltersButton").addEventListener("click", () => {
@@ -212,18 +224,25 @@
       if (event.pointerType === "touch" || event.button !== 0) return;
       if (event.target.closest("a, button, input, select, textarea")) return;
       drag = { pointerId: event.pointerId, x: event.clientX, scrollLeft: sheet.scrollLeft, moved: false };
-      sheet.setPointerCapture(event.pointerId);
-      sheet.classList.add("is-dragging");
     });
     sheet.addEventListener("pointermove", (event) => {
       if (!drag || drag.pointerId !== event.pointerId) return;
-      if (Math.abs(event.clientX - drag.x) > 5) drag.moved = true;
-      sheet.scrollLeft = drag.scrollLeft - (event.clientX - drag.x);
+      const deltaX = event.clientX - drag.x;
+      if (!drag.moved && Math.abs(deltaX) <= 5) return;
+      if (!drag.moved) {
+        drag.moved = true;
+        sheet.setPointerCapture(event.pointerId);
+        sheet.classList.add("is-dragging");
+      }
+      sheet.scrollLeft = drag.scrollLeft - deltaX;
       event.preventDefault();
     });
     const stopDrag = (event) => {
       if (!drag || drag.pointerId !== event.pointerId) return;
-      if (drag.moved) suppressRowClickUntil = Date.now() + 250;
+      if (drag.moved) {
+        suppressRowClickUntil = Date.now() + 250;
+        if (sheet.hasPointerCapture?.(event.pointerId)) sheet.releasePointerCapture(event.pointerId);
+      }
       drag = null;
       sheet.classList.remove("is-dragging");
     };
