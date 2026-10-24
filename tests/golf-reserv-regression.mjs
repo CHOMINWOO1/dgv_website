@@ -18,7 +18,7 @@ const [page, source, migration, zeroDepositMigration] = await Promise.all([
 assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
-assert.match(page, /assets\/golf-reserv\.js/);
+assert.match(page, /assets\/golf-reserv\.js\?v=20261024-simplified-1/);
 assert.match(page, /assets\/qr-staff\.css/);
 assert.match(source, /QRStaff\.requireLogin\(\{ roles: \["manager", "admin"\], preferredRole: "manager" \}\)/);
 assert.match(source, /state\.identity\.role === "admin" \? "home_admin\.html" : "home_manager\.html"/);
