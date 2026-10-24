@@ -6,6 +6,7 @@
   const DGV = global.DGV;
   const QRStaff = global.QRStaff;
   const sb = DGV.supabase;
+  const PAYMENT_COLUMNS = "id,reservation_id,payment_kind,amount_vnd,payment_date,payment_method,completes_booking,sort_order,legacy_import";
   const COLUMNS = [
     "id", "counterparty_name", "representative_name", "player_names_en", "pax",
     "booking_date", "golf_date", "golf_time",
@@ -60,6 +61,70 @@
     return clean(value).split(/[\n,;]+/).map((part) => part.trim()).filter(Boolean).join(" / ") || "—";
   }
 
+  function paymentMethodLabel(value) {
+    return value === "bank" ? "은행 / Chuyển khoản"
+      : value === "cash" ? "현금 / Tiền mặt"
+      : value === "card" ? "카드 / Thẻ"
+      : "";
+  }
+
+  function paymentKindLabel(value) {
+    return value === "deposit" ? "계약금 / Tiền cọc"
+      : value === "receipt" ? "추가 입금 / Khoản thu thêm"
+      : value === "withdrawal" ? "골프장 출금 / Chi sân golf"
+      : "";
+  }
+
+  function paymentRowsFor(row) {
+    return Array.isArray(row?.payments) ? row.payments : [];
+  }
+
+  function paymentsOfKinds(row, kinds) {
+    const allowed = new Set(Array.isArray(kinds) ? kinds : [kinds]);
+    return paymentRowsFor(row).filter((payment) => allowed.has(payment.payment_kind));
+  }
+
+  function paymentTotal(row, kinds) {
+    const payments = paymentsOfKinds(row, kinds);
+    if (!payments.length) return null;
+    return payments.reduce((total, payment) => total + Number(payment.amount_vnd || 0), 0);
+  }
+
+  function paymentDetailText(row, kinds) {
+    const payments = paymentsOfKinds(row, kinds);
+    if (!payments.length) return "—";
+    return payments.map((payment) => {
+      const method = paymentMethodLabel(payment.payment_method);
+      return `${dateLabel(payment.payment_date)} · ${method ? `${method} · ` : ""}${moneyLabel(payment.amount_vnd)}`;
+    }).join("\n");
+  }
+
+  function paymentMethodSummary(row, kinds) {
+    const methods = [...new Set(paymentsOfKinds(row, kinds)
+      .map((payment) => paymentMethodLabel(payment.payment_method))
+      .filter(Boolean))];
+    return methods.length ? methods.join(" + ") : "—";
+  }
+
+  function paymentDetailMarkup(row) {
+    const groups = [
+      ["deposit", "계약금 / Tiền cọc"],
+      ["receipt", "추가 입금 / Khoản thu thêm"],
+      ["withdrawal", "골프장 출금 / Chi sân golf"]
+    ];
+    return groups.map(([kind, label]) => {
+      const payments = paymentsOfKinds(row, kind);
+      const items = payments.length
+        ? payments.map((payment) => {
+          const method = paymentMethodLabel(payment.payment_method);
+          const text = `${dateLabel(payment.payment_date)} · ${method ? `${method} · ` : ""}${moneyLabel(payment.amount_vnd)}`;
+          return `<span class="golf-payment-detail-item">${escape(text)}</span>`;
+        }).join("")
+        : '<span class="golf-payment-detail-item">—</span>';
+      return `<div class="golf-payment-detail-group"><strong>${escape(label)}</strong><div class="golf-payment-detail-list">${items}</div></div>`;
+    }).join("");
+  }
+
   function setBanner(message, tone = "info") {
     const banner = byId("pageBanner");
     banner.textContent = message;
@@ -67,8 +132,11 @@
   }
 
   function actualProfit(row) {
-    if (row.final_received_amount_vnd == null) return null;
-    return Number(row.final_received_amount_vnd || 0) - Number(row.withdrawal_amount_vnd || 0);
+    if (row.status !== "completed") return null;
+    const received = paymentTotal(row, ["deposit", "receipt"]);
+    const withdrawn = paymentTotal(row, "withdrawal");
+    if (received == null) return Number(row.final_received_amount_vnd || 0) - Number(row.withdrawal_amount_vnd || 0);
+    return received - Number(withdrawn || 0);
   }
 
   function filteredRows() {
@@ -88,10 +156,146 @@
     });
   }
 
+  function filterDescription() {
+    const status = byId("statusFilter").value;
+    const statusLabel = status === "completed"
+      ? "완료 / Hoàn tất"
+      : status === "in_progress"
+        ? "진행중 / Đang xử lý"
+        : "전체 / Tất cả";
+    const from = byId("filterFrom").value || "전체 / Tất cả";
+    const to = byId("filterTo").value || "전체 / Tất cả";
+    const parts = [`상태 / Trạng thái: ${statusLabel}`, `골프 날짜 / Ngày chơi: ${from} ~ ${to}`];
+    const query = clean(byId("searchInput").value);
+    if (query) parts.push(`검색 / Tìm kiếm: ${query}`);
+    return parts.join(" · ");
+  }
+
+  function printList() {
+    const rows = filteredRows();
+    if (!rows.length) {
+      QRStaff.toast("출력할 골프 예약이 없습니다. / Không có đặt sân để in.", "error");
+      return;
+    }
+    byId("golfPrintCriteria").textContent = filterDescription();
+    byId("golfPrintGeneratedAt").textContent = `출력 일시 / Thời gian in: ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Ho_Chi_Minh" })}`;
+    global.print();
+  }
+
+  function workbookOptions(rows) {
+    const textCell = (value, style = "normal") => ({ value: String(value ?? ""), style });
+    const integerCell = (value) => {
+      if (value == null || value === "") return "";
+      const number = Number(value);
+      if (!Number.isFinite(number)) throw new Error("Invalid golf reservation number");
+      return { value: number, style: "integer" };
+    };
+    const headers = [
+      "상태 / Trạng thái", "골프 날짜 / Ngày chơi", "티오프 / Giờ", "거래처 / Đối tác",
+      "예약자 대표 / Người đại diện", "전체 이름(영어) / Họ tên tiếng Anh", "인원 / Số khách",
+      "골프장 / Sân golf", "홀 / Số hố", "S-CART", "1인 판매가(VND) / Giá khách",
+      "고객 합계(VND) / Tổng tiền khách", "1인 원가(VND) / Giá sân",
+      "골프장 합계(VND) / Tổng tiền sân", "계약금 합계(VND) / Tổng tiền cọc", "계약금 상세 / Chi tiết tiền cọc",
+      "고객 총입금(VND) / Tổng tiền khách đã trả", "입금 상세 / Chi tiết khoản thu",
+      "골프장 총출금(VND) / Tổng chi sân golf", "출금 상세 / Chi tiết khoản chi",
+      "실제 수익(VND) / Lợi nhuận", "구분 / Loại khách",
+      "등록 일시 / Thời gian tạo", "비고 / Ghi chú", "최종 수정 / Cập nhật"
+    ];
+    const dataRows = rows.map((row) => {
+      const depositTotal = paymentTotal(row, "deposit");
+      const receivedTotal = paymentTotal(row, ["deposit", "receipt"]);
+      const withdrawalTotal = paymentTotal(row, "withdrawal");
+      return [
+        textCell(row.status === "completed" ? "완료 / Hoàn tất" : "진행중 / Đang xử lý"),
+        textCell(row.golf_date), textCell(timeLabel(row.golf_time)), textCell(row.counterparty_name),
+        textCell(row.representative_name), textCell(row.player_names_en, "wrapped"), integerCell(row.pax),
+        textCell(row.golf_course), integerCell(row.holes), textCell(row.smart_cart_note, "wrapped"),
+        integerCell(row.guest_unit_price_vnd), integerCell(row.guest_total_vnd),
+        integerCell(row.course_unit_price_vnd), integerCell(row.course_total_vnd),
+        integerCell(depositTotal), textCell(depositTotal == null ? "" : paymentDetailText(row, "deposit"), "wrapped"),
+        integerCell(receivedTotal), textCell(receivedTotal == null ? "" : paymentDetailText(row, ["deposit", "receipt"]), "wrapped"),
+        integerCell(withdrawalTotal), textCell(withdrawalTotal == null ? "" : paymentDetailText(row, "withdrawal"), "wrapped"),
+        integerCell(actualProfit(row)),
+        textCell(row.customer_type === "company" ? "회사 / Công ty" : "개인 / Cá nhân"),
+        textCell(dateTimeLabel(row.created_at)), textCell(row.note, "wrapped"), textCell(dateTimeLabel(row.updated_at))
+      ];
+    });
+    const transactionHeaders = [
+      "예약 ID / ID đặt sân", "골프 날짜 / Ngày chơi", "거래처 / Đối tác", "예약자 대표 / Người đại diện",
+      "거래 종류 / Loại giao dịch", "거래 날짜 / Ngày giao dịch", "금액(VND) / Số tiền",
+      "수단 / Phương thức", "상태 / Trạng thái", "기존 이관 / Dữ liệu cũ"
+    ];
+    const transactionRows = rows.flatMap((row) => paymentRowsFor(row).map((payment) => [
+      textCell(row.id), textCell(row.golf_date), textCell(row.counterparty_name), textCell(row.representative_name),
+      textCell(paymentKindLabel(payment.payment_kind)), textCell(payment.payment_date), integerCell(payment.amount_vnd),
+      textCell(paymentMethodLabel(payment.payment_method)),
+      textCell(row.status === "completed" ? "완료 / Hoàn tất" : "진행중 / Đang xử lý"),
+      textCell(payment.legacy_import ? "기존 / Dữ liệu cũ" : "")
+    ]));
+    const from = byId("filterFrom").value || "ALL";
+    const to = byId("filterTo").value || "ALL";
+    const generatedAt = new Date().toLocaleString("ko-KR", { timeZone: "Asia/Ho_Chi_Minh" });
+    return {
+      filename: `HANA_Golf_Reservations_${from}_${to}.xlsx`,
+      sheets: [{
+        name: "골프 예약",
+        rows: [
+          [textCell("HANA 골프 예약 목록 / Danh sách đặt sân golf", "title"), ...Array(24).fill("")],
+          [textCell("조회 기준 / Điều kiện lọc"), textCell(filterDescription()), ...Array(23).fill("")],
+          [textCell("생성 일시 / Thời gian xuất"), textCell(generatedAt), ...Array(23).fill("")],
+          [],
+          headers.map((label) => textCell(label, "header")),
+          ...dataRows
+        ],
+        columnWidths: [17,16,10,20,22,34,9,13,8,18,18,20,18,20,18,34,20,38,20,38,20,16,20,30,20],
+        merges: ["A1:Y1"],
+        freezeRows: 5,
+        autoFilterRange: `A5:Y${Math.max(5, 5 + dataRows.length)}`
+      }, {
+        name: "입출금 내역",
+        rows: [
+          [textCell("골프 예약 입출금 내역 / Giao dịch đặt sân golf", "title"), ...Array(9).fill("")],
+          [textCell("조회 기준 / Điều kiện lọc"), textCell(filterDescription()), ...Array(8).fill("")],
+          [textCell("생성 일시 / Thời gian xuất"), textCell(generatedAt), ...Array(8).fill("")],
+          [],
+          transactionHeaders.map((label) => textCell(label, "header")),
+          ...transactionRows
+        ],
+        columnWidths: [38,16,22,24,22,17,20,24,18,18],
+        merges: ["A1:J1"],
+        freezeRows: 5,
+        autoFilterRange: `A5:J${Math.max(5, 5 + transactionRows.length)}`
+      }]
+    };
+  }
+
+  function exportList() {
+    const button = byId("exportListButton");
+    if (button.disabled) return;
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = "생성 중…";
+    try {
+      const rows = filteredRows();
+      if (!rows.length) {
+        QRStaff.toast("엑셀로 생성할 골프 예약이 없습니다. / Không có đặt sân để xuất Excel.", "error");
+        return;
+      }
+      if (!global.DGV_XLSX?.downloadWorkbook) throw new Error("XLSX exporter is unavailable");
+      global.DGV_XLSX.downloadWorkbook(workbookOptions(rows));
+    } catch (error) {
+      console.error(error);
+      QRStaff.toast("엑셀 파일을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+
   function renderSummary(rows) {
     const progress = rows.filter((row) => row.status === "in_progress").length;
     const completed = rows.filter((row) => row.status === "completed").length;
-    const deposits = rows.reduce((total, row) => total + Number(row.deposit_amount_vnd || 0), 0);
+    const deposits = rows.reduce((total, row) => total + Number(paymentTotal(row, "deposit") || 0), 0);
     const profit = rows.reduce((total, row) => total + Number(actualProfit(row) || 0), 0);
     byId("summaryProgress").textContent = progress.toLocaleString("ko-KR");
     byId("summaryCompleted").textContent = completed.toLocaleString("ko-KR");
@@ -104,10 +308,17 @@
     const customerType = row.customer_type === "company" ? "회사 / Công ty" : "개인 / Cá nhân";
     const statusLabel = completed ? "완료 / Hoàn tất" : "진행중 / Đang xử lý";
     const names = oneLine(row.player_names_en);
+    const rosterNames = String(row.player_names_en || "").split(/[\n,;]+/).map((name) => name.trim()).filter(Boolean);
+    const rosterMarkup = rosterNames.length
+      ? rosterNames.map((name, index) => `<span class="golf-roster-name"><b>${index + 1}</b>${escape(name)}</span>`).join("")
+      : '<span class="golf-roster-name">예약자 명단이 없습니다. / Không có danh sách khách.</span>';
     const note = oneLine(row.note);
     const cart = oneLine(row.smart_cart_note);
     const representative = row.representative_name || "—";
     const editHref = `golf_reserv.html?edit=${encodeURIComponent(String(row.id || ""))}`;
+    const depositTotal = paymentTotal(row, "deposit");
+    const receivedTotal = paymentTotal(row, ["deposit", "receipt"]);
+    const withdrawalTotal = paymentTotal(row, "withdrawal");
     return `<tr data-status="${escape(row.status)}" aria-expanded="false">
       <td><span class="golf-status-chip${completed ? " is-completed" : ""}">${escape(statusLabel)}</span></td>
       <td>${escape(golfDateLabel(row.golf_date))}</td>
@@ -123,17 +334,23 @@
       <td class="golf-cell-money">${escape(moneyLabel(row.guest_total_vnd))}</td>
       <td class="golf-cell-money">${escape(moneyLabel(row.course_unit_price_vnd))}</td>
       <td class="golf-cell-money">${escape(moneyLabel(row.course_total_vnd))}</td>
-      <td class="golf-cell-money">${escape(moneyLabel(row.deposit_amount_vnd))}</td>
-      <td>${escape(dateLabel(row.deposit_received_date))}</td>
-      <td class="golf-cell-money">${escape(moneyLabel(row.final_received_amount_vnd))}</td>
-      <td>${escape(dateLabel(row.final_received_date))}</td>
-      <td class="golf-cell-money">${escape(moneyLabel(row.withdrawal_amount_vnd))}</td>
-      <td>${escape(dateLabel(row.withdrawal_date))}</td>
+      <td class="golf-cell-money">${escape(moneyLabel(depositTotal))}</td>
+      <td class="golf-cell-text golf-cell-payments" title="${escape(paymentDetailText(row, "deposit"))}"><span class="golf-payment-screen-summary">${escape(paymentMethodSummary(row, "deposit"))}</span><span class="golf-payment-print-detail">${escape(paymentDetailText(row, "deposit"))}</span></td>
+      <td class="golf-cell-money">${escape(moneyLabel(receivedTotal))}</td>
+      <td class="golf-cell-text golf-cell-payments" title="${escape(paymentDetailText(row, ["deposit", "receipt"]))}"><span class="golf-payment-screen-summary">${escape(paymentMethodSummary(row, ["deposit", "receipt"]))}</span><span class="golf-payment-print-detail">${escape(paymentDetailText(row, ["deposit", "receipt"]))}</span></td>
+      <td class="golf-cell-money">${escape(moneyLabel(withdrawalTotal))}</td>
+      <td class="golf-cell-text golf-cell-payments" title="${escape(paymentDetailText(row, "withdrawal"))}"><span class="golf-payment-screen-summary">${escape(paymentMethodSummary(row, "withdrawal"))}</span><span class="golf-payment-print-detail">${escape(paymentDetailText(row, "withdrawal"))}</span></td>
       <td class="golf-cell-money">${escape(moneyLabel(actualProfit(row)))}</td>
       <td>${escape(customerType)}</td>
       <td>${escape(dateTimeLabel(row.created_at))}</td>
       <td class="golf-cell-text" title="${escape(note)}">${escape(note)}</td>
       <td>${escape(dateTimeLabel(row.updated_at))}</td>
+    </tr>
+    <tr class="golf-roster-detail" data-roster-for="${escape(String(row.id || ""))}" hidden aria-hidden="true">
+      <td colspan="25"><div class="golf-roster-panel"><div class="golf-expanded-grid">
+        <section class="golf-expanded-section"><strong class="golf-roster-title">예약자 명단 ${rosterNames.length.toLocaleString("ko-KR")}명 / Danh sách khách</strong><div class="golf-roster-names">${rosterMarkup}</div></section>
+        <section class="golf-expanded-section"><strong class="golf-roster-title">입출금 상세 / Chi tiết thu chi</strong><div class="golf-payment-detail-groups">${paymentDetailMarkup(row)}</div></section>
+      </div></div></td>
     </tr>`;
   }
 
@@ -149,14 +366,33 @@
   async function loadRows(options = {}) {
     QRStaff.connectionBadge("connecting", "불러오는 중");
     try {
-      state.rows = await DGV.collectSupabasePages(
-        () => sb.from("golf_reservations").select(COLUMNS),
-        { pageSize: 500, order: [
-          { column: "golf_date", ascending: true },
-          { column: "golf_time", ascending: true },
-          { column: "id", ascending: true }
-        ] }
-      );
+      const [reservations, payments] = await Promise.all([
+        DGV.collectSupabasePages(
+          () => sb.from("golf_reservations").select(COLUMNS),
+          { pageSize: 500, order: [
+            { column: "golf_date", ascending: true },
+            { column: "golf_time", ascending: true },
+            { column: "id", ascending: true }
+          ] }
+        ),
+        DGV.collectSupabasePages(
+          () => sb.from("golf_reservation_payments").select(PAYMENT_COLUMNS),
+          { pageSize: 500, order: [
+            { column: "payment_date", ascending: true },
+            { column: "sort_order", ascending: true },
+            { column: "id", ascending: true }
+          ] }
+        )
+      ]);
+      const paymentsByReservation = new Map();
+      for (const payment of payments) {
+        if (!paymentsByReservation.has(payment.reservation_id)) paymentsByReservation.set(payment.reservation_id, []);
+        paymentsByReservation.get(payment.reservation_id).push(payment);
+      }
+      state.rows = reservations.map((row) => ({
+        ...row,
+        payments: paymentsByReservation.get(row.id) || []
+      }));
       render();
       QRStaff.connectionBadge("online", "연결됨");
       if (!options.quiet) setBanner("골프 예약 목록을 불러왔습니다. / Đã tải danh sách đặt sân.", "ok");
@@ -176,6 +412,8 @@
 
   function bindEvents() {
     byId("reloadButton").addEventListener("click", () => loadRows());
+    byId("printListButton").addEventListener("click", printList);
+    byId("exportListButton").addEventListener("click", exportList);
     const tableBody = byId("reservationTableBody");
     tableBody.addEventListener("dblclick", (event) => {
       const button = event.target.closest("button.golf-edit-link[data-edit-href]");
@@ -187,13 +425,20 @@
     tableBody.addEventListener("click", (event) => {
       const button = event.target.closest("button.golf-edit-link[data-edit-href]");
       if (button) {
-        if (event.detail === 0) confirmAndOpenEdit(button);
-        return;
+        if (event.detail === 0) {
+          confirmAndOpenEdit(button);
+          return;
+        }
       }
       if (event.detail !== 1 || Date.now() < suppressRowClickUntil) return;
       const row = event.target.closest("tr[data-status]");
       if (!row) return;
-      const expanded = row.classList.toggle("is-names-expanded");
+      const detailRow = row.nextElementSibling;
+      if (!detailRow?.classList.contains("golf-roster-detail")) return;
+      const expanded = detailRow.hidden;
+      detailRow.hidden = !expanded;
+      detailRow.setAttribute("aria-hidden", String(!expanded));
+      row.classList.toggle("is-names-expanded", expanded);
       row.setAttribute("aria-expanded", String(expanded));
     });
     byId("clearFiltersButton").addEventListener("click", () => {
@@ -212,18 +457,25 @@
       if (event.pointerType === "touch" || event.button !== 0) return;
       if (event.target.closest("a, button, input, select, textarea")) return;
       drag = { pointerId: event.pointerId, x: event.clientX, scrollLeft: sheet.scrollLeft, moved: false };
-      sheet.setPointerCapture(event.pointerId);
-      sheet.classList.add("is-dragging");
     });
     sheet.addEventListener("pointermove", (event) => {
       if (!drag || drag.pointerId !== event.pointerId) return;
-      if (Math.abs(event.clientX - drag.x) > 5) drag.moved = true;
-      sheet.scrollLeft = drag.scrollLeft - (event.clientX - drag.x);
+      const deltaX = event.clientX - drag.x;
+      if (!drag.moved && Math.abs(deltaX) <= 5) return;
+      if (!drag.moved) {
+        drag.moved = true;
+        sheet.setPointerCapture(event.pointerId);
+        sheet.classList.add("is-dragging");
+      }
+      sheet.scrollLeft = drag.scrollLeft - deltaX;
       event.preventDefault();
     });
     const stopDrag = (event) => {
       if (!drag || drag.pointerId !== event.pointerId) return;
-      if (drag.moved) suppressRowClickUntil = Date.now() + 250;
+      if (drag.moved) {
+        suppressRowClickUntil = Date.now() + 250;
+        if (sheet.hasPointerCapture?.(event.pointerId)) sheet.releasePointerCapture(event.pointerId);
+      }
       drag = null;
       sheet.classList.remove("is-dragging");
     };
@@ -246,3 +498,4 @@
 
   init();
 })(window);
+

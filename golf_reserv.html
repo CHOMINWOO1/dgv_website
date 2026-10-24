@@ -46,6 +46,22 @@
     .golf-row-actions{display:flex;justify-content:flex-end;gap:8px;padding:0 13px 13px}
     .golf-status-preview{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:11px;border:1px solid var(--qr-line);border-radius:12px;background:#fffaf0}
     .golf-status-preview strong{font-size:15px;font-weight:1000}
+    .golf-payment-ledgers{display:grid;gap:12px}
+    .golf-payment-group{padding:12px;border:1px solid var(--qr-line);border-radius:12px;background:#fffdf8}
+    .golf-payment-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+    .golf-payment-head h4{margin:0;font-size:15px;font-weight:1000}
+    .golf-payment-help{margin:0 0 9px;color:var(--qr-sub);font-size:12px;font-weight:900}
+    .golf-payment-rows{display:flex;flex-direction:column;gap:8px}
+    .golf-payment-row{display:grid;grid-template-columns:minmax(145px,1fr) minmax(145px,.75fr) minmax(165px,.8fr) auto;gap:8px;align-items:end;padding:9px;border-radius:10px;background:#fff8e9}
+    .golf-payment-row .qr-label{font-size:11px}
+    .golf-payment-empty{padding:10px;border:1px dashed var(--qr-line);border-radius:9px;color:var(--qr-sub);font-size:12px;font-weight:900;text-align:center}
+    .golf-payment-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+    .golf-payment-summary>div{padding:10px;border:1px solid var(--qr-line);border-radius:11px;background:#fffaf0}
+    .golf-payment-summary span{display:block;color:var(--qr-sub);font-size:11px;font-weight:950}
+    .golf-payment-summary strong{display:block;margin-top:4px;font-size:15px;font-weight:1000;overflow-wrap:anywhere}
+    .golf-complete-toggle{display:flex;align-items:flex-start;gap:9px;margin-top:12px;padding:12px;border:1px solid var(--qr-line);border-radius:11px;background:#fffaf0;font-weight:1000}
+    .golf-complete-toggle input{width:20px;height:20px;flex:0 0 auto}
+    .golf-cash-rule{margin-top:9px;color:#9b4a2a;font-size:12px;font-weight:1000}
     .golf-count{color:var(--qr-sub);font-size:13px;font-weight:1000}
     .golf-receivable-panel{display:flex;flex-direction:column;gap:10px}
     .golf-receivable-total{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
@@ -66,8 +82,9 @@
     .golf-receivable-detail .golf-receivable-table-wrap{margin-top:8px}
     .golf-receivable-detail .golf-receivable-table{min-width:680px}
     @media(max-width:1050px){.golf-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:760px){.golf-payment-row{grid-template-columns:1fr 1fr}.golf-payment-row .golf-payment-delete{grid-column:1/-1}.golf-payment-summary{grid-template-columns:1fr 1fr}}
     @media(max-width:680px){.golf-filters{grid-template-columns:1fr 1fr}.golf-filter-field:first-child{grid-column:1/-1}.golf-filter-apply{grid-column:1/-1}.golf-filter-apply .qr-btn{width:100%}.golf-money-preview,.golf-receivable-total{grid-template-columns:1fr}.golf-detail-grid{grid-template-columns:1fr 1fr}}
-    @media(max-width:430px){.golf-detail-grid{grid-template-columns:1fr}.golf-row-head{flex-direction:column}.golf-row-actions{display:grid;grid-template-columns:1fr}.golf-row-actions .qr-btn{width:100%}}
+    @media(max-width:430px){.golf-payment-row,.golf-payment-summary{grid-template-columns:1fr}.golf-payment-row .golf-payment-delete{grid-column:auto}.golf-detail-grid{grid-template-columns:1fr}.golf-row-head{flex-direction:column}.golf-row-actions{display:grid;grid-template-columns:1fr}.golf-row-actions .qr-btn{width:100%}}
   </style>
 </head>
 <body class="locked">
@@ -104,7 +121,7 @@
               <label class="qr-field"><span class="qr-label">예약자 대표(첫 번째 이름)<span class="golf-label-vi">Người đại diện (tên đầu tiên)</span></span><input class="qr-input" id="representativeName" type="text" maxlength="200" readonly aria-readonly="true" /></label>
               <label class="qr-field qr-field-wide"><span class="qr-label">전체 이름(영어, 한 줄에 한 명)<span class="golf-label-vi">Họ tên tất cả khách bằng tiếng Anh, mỗi người một dòng</span></span><textarea class="qr-textarea" id="playerNamesEn" maxlength="5000" placeholder="CHO MINWOO&#10;CHO GISANG" required></textarea></label>
               <label class="qr-field"><span class="qr-label">인원 (명단에서 자동 계산, 수정 가능)<span class="golf-label-vi">Số khách (tự đếm từ danh sách, có thể sửa)</span></span><input class="qr-input" id="pax" type="number" min="1" max="100" inputmode="numeric" required /></label>
-              <label class="qr-field"><span class="qr-label">개인 / 회사<span class="golf-label-vi">Cá nhân / Công ty</span></span><select class="qr-select" id="customerType" disabled aria-disabled="true"><option value="individual">개인 / Cá nhân</option><option value="company">회사 / Công ty</option></select><span class="golf-label-vi">Sếp/SEP는 개인, 그 외 거래처는 회사로 자동 분류됩니다.</span></label>
+              <label class="qr-field"><span class="qr-label">개인 / 회사<span class="golf-label-vi">Cá nhân / Công ty</span></span><select class="qr-select" id="customerType" required><option value="individual">개인 / Cá nhân</option><option value="company" selected>회사 / Công ty</option></select></label>
               <label class="qr-field"><span class="qr-label">골프 날짜·티오프<span class="golf-label-vi">Ngày chơi và giờ phát bóng</span></span><input class="qr-input" id="golfDateTime" type="datetime-local" step="300" required /><span class="golf-datetime-guide" id="golfDateTimeGuide">티오프 시간: 시(HH) : 분(MM) / Giờ phát bóng: giờ (HH) : phút (MM)</span></label>
               <label class="qr-field"><span class="qr-label">골프장<span class="golf-label-vi">Sân golf</span></span><select class="qr-select" id="golfCourse" required><option value="">선택 / Chọn</option><option value="AT1200">AT1200</option><option value="SAM">SAM</option><option value="PALACE">PALACE</option></select></label>
               <label class="qr-field"><span class="qr-label">홀 수<span class="golf-label-vi">Số hố</span></span><select class="qr-select" id="holes" required><option value="9">9</option><option value="18" selected>18</option><option value="27">27</option><option value="26">26</option></select></label>
@@ -127,15 +144,32 @@
 
           <div class="golf-form-section">
             <h3>입출금 및 상태 / Thu chi và trạng thái</h3>
-            <div class="qr-form-grid">
-              <label class="qr-field"><span class="qr-label">예약금 (0 VND 가능)<span class="golf-label-vi">Tiền đặt cọc (chấp nhận 0 VND)</span></span><input class="qr-input golf-money-input" id="depositAmount" type="text" inputmode="numeric" autocomplete="off" required /></label>
-              <label class="qr-field"><span class="qr-label">예약금 입금일<span class="golf-label-vi">Ngày nhận tiền đặt cọc</span></span><input class="qr-input" id="depositDate" type="date" required /></label>
-              <label class="qr-field"><span class="qr-label">최종 총입금액 (예약금 포함, VND)<span class="golf-label-vi">Tổng tiền đã nhận, gồm tiền cọc</span></span><input class="qr-input golf-money-input" id="finalAmount" type="text" inputmode="numeric" autocomplete="off" /></label>
-              <label class="qr-field"><span class="qr-label">최종 입금일<span class="golf-label-vi">Ngày nhận đủ tiền</span></span><input class="qr-input" id="finalDate" type="date" /></label>
-              <label class="qr-field"><span class="qr-label">출금액 (VND)<span class="golf-label-vi">Số tiền chi ra</span></span><input class="qr-input golf-money-input" id="withdrawalAmount" type="text" inputmode="numeric" autocomplete="off" /></label>
-              <label class="qr-field"><span class="qr-label">출금일<span class="golf-label-vi">Ngày chi tiền</span></span><input class="qr-input" id="withdrawalDate" type="date" /></label>
-              <label class="qr-field qr-field-wide"><span class="qr-label">비고<span class="golf-label-vi">Ghi chú</span></span><textarea class="qr-textarea" id="note" maxlength="5000"></textarea></label>
+            <div class="golf-payment-ledgers">
+              <section class="golf-payment-group" aria-labelledby="depositPaymentsTitle">
+                <div class="golf-payment-head"><h4 id="depositPaymentsTitle">계약금·예약금 / Tiền cọc</h4><button class="qr-btn qr-btn-small" type="button" data-add-payment="deposit">계약금 추가 / Thêm tiền cọc</button></div>
+                <p class="golf-payment-help">처음에는 비워두고, 계약금을 받았을 때 건별로 추가합니다. 0 VND도 등록할 수 있습니다. / Có thể để trống ban đầu và thêm từng khoản khi nhận tiền cọc; chấp nhận 0 VND.</p>
+                <div class="golf-payment-rows" id="depositPayments"></div>
+              </section>
+              <section class="golf-payment-group" aria-labelledby="receiptPaymentsTitle">
+                <div class="golf-payment-head"><h4 id="receiptPaymentsTitle">추가 입금·잔금 / Khoản thu thêm</h4><button class="qr-btn qr-btn-small" type="button" data-add-payment="receipt">입금 추가 / Thêm khoản thu</button></div>
+                <p class="golf-payment-help">고객이 나누어 입금한 금액을 건별로 추가합니다. / Thêm riêng từng khoản khách thanh toán nhiều lần.</p>
+                <div class="golf-payment-rows" id="receiptPayments"></div>
+              </section>
+              <section class="golf-payment-group" aria-labelledby="withdrawalPaymentsTitle">
+                <div class="golf-payment-head"><h4 id="withdrawalPaymentsTitle">골프장 출금 / Chi trả sân golf</h4><button class="qr-btn qr-btn-small" type="button" data-add-payment="withdrawal">출금 추가 / Thêm khoản chi</button></div>
+                <p class="golf-payment-help">골프장에 나누어 지급한 금액을 건별로 추가합니다. / Thêm riêng từng khoản thanh toán cho sân golf.</p>
+                <div class="golf-payment-rows" id="withdrawalPayments"></div>
+              </section>
             </div>
+            <div class="golf-payment-summary" aria-live="polite">
+              <div><span>계약금 합계 / Tổng tiền cọc</span><strong id="depositTotalPreview">0 VND</strong></div>
+              <div><span>고객 총입금 / Tổng tiền khách đã trả</span><strong id="receivedTotalPreview">0 VND</strong></div>
+              <div><span>골프장 총출금 / Tổng chi sân golf</span><strong id="withdrawalTotalPreview">0 VND</strong></div>
+              <div><span>현재 입출금 차액 / Chênh lệch thu chi</span><strong id="cashProfitPreview">0 VND</strong></div>
+            </div>
+            <label class="golf-complete-toggle"><input id="paymentCompleted" type="checkbox" /><span>입금 완료 처리 / Đánh dấu đã nhận đủ tiền<span class="golf-label-vi">체크하면 현재 고객 총입금액과 마지막 입금일로 완료 처리됩니다. / Khi chọn, tổng tiền đã nhận và ngày thu cuối sẽ được dùng để hoàn tất.</span></span></label>
+            <div class="golf-cash-rule">5,000,000 VND 이상은 현금으로 저장할 수 없습니다. 은행 또는 카드를 선택해 주세요. / Giao dịch từ 5.000.000 VND không được dùng tiền mặt. Vui lòng chọn chuyển khoản hoặc thẻ.</div>
+            <label class="qr-field" style="margin-top:12px"><span class="qr-label">비고<span class="golf-label-vi">Ghi chú</span></span><textarea class="qr-textarea" id="note" maxlength="5000"></textarea></label>
             <div class="golf-status-preview"><span>저장 후 상태 / Trạng thái sau khi lưu</span><strong id="statusPreview">진행중 / Đang xử lý</strong></div>
           </div>
 
@@ -183,6 +217,6 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-reserv.js?v=20261024-deep-edit-1"></script>
+  <script src="assets/golf-reserv.js?v=20261024-multi-payments-1"></script>
 </body>
 </html>
