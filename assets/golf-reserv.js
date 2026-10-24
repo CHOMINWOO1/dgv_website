@@ -461,10 +461,12 @@
       render();
       QRStaff.connectionBadge("online", "연결됨");
       if (!options.quiet) setBanner("골프 예약 정보를 불러왔습니다.", "ok");
+      return true;
     } catch (error) {
       console.error(error);
       QRStaff.connectionBadge("offline", "연결 오류");
       setBanner(QRStaff.messageOf(error, "골프 예약을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."), "error");
+      return false;
     }
   }
 
@@ -579,8 +581,8 @@
     try {
       state.identity = await QRStaff.requireLogin({ roles: ["manager", "admin"], preferredRole: "manager" });
       document.body.classList.remove("locked");
-      await loadRows({ quiet: true });
-      openRequestedEdit();
+      const loaded = await loadRows({ quiet: true });
+      if (loaded) openRequestedEdit();
     } catch (error) {
       console.error(error);
       QRStaff.connectionBadge("offline", "로그인 오류");
