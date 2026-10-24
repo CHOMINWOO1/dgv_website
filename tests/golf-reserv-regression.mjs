@@ -25,7 +25,7 @@ const [
 assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
-assert.match(page, /assets\/golf-reserv\.js\?v=20261024-receivables-1/);
+assert.match(page, /assets\/golf-reserv\.js\?v=20261024-deep-edit-1/);
 assert.match(page, /assets\/qr-staff\.css/);
 assert.match(page, /\.golf-layout\{display:flex;flex-direction:column/);
 assert.match(page, /\.golf-form-card\{position:static\}/);
@@ -186,6 +186,13 @@ assert.match(source, /건당 미수금 보기/);
 assert.match(source, /group\.bookings\.map\(renderReceivableBooking\)/);
 assert.match(source, /byId\("receivablePanel"\)\.hidden = !receivableMode/);
 assert.match(source, /byId\("reservationList"\)\.hidden = receivableMode/);
+assert.match(source, /function openRequestedEdit\(\)/);
+assert.match(source, /new URLSearchParams\(global\.location\.search\)/);
+assert.match(source, /UUID_PATTERN\.test\(rawId\)/);
+assert.match(source, /const row = rowById\(rawId\)/);
+assert.match(source, /fillForm\(row, \{ focusFinal: false \}\)/);
+assert.match(source, /global\.history\.replaceState/);
+assert.match(source, /await loadRows\(\{ quiet: true \}\);[\s\S]*openRequestedEdit\(\);/);
 
 // The additive migration is isolated from the restaurant data model, computes
 // totals/status server-side, and grants manager/admin CRUD only through RLS.
