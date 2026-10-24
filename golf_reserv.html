@@ -40,8 +40,21 @@
     .golf-status-preview{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:11px;border:1px solid var(--qr-line);border-radius:12px;background:#fffaf0}
     .golf-status-preview strong{font-size:14px}
     .golf-count{color:var(--qr-sub);font-size:12px;font-weight:900}
+    .golf-receivable-panel{display:flex;flex-direction:column;gap:10px}
+    .golf-receivable-total{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .golf-receivable-total>div{padding:11px;border:1px solid var(--qr-line);border-radius:11px;background:#fffaf0}
+    .golf-receivable-total span{display:block;color:var(--qr-sub);font-size:10px;font-weight:900}
+    .golf-receivable-total strong{display:block;margin-top:4px;font-size:16px;font-weight:1000;overflow-wrap:anywhere}
+    .golf-receivable-table-wrap{overflow-x:auto;border:1px solid var(--qr-line);border-radius:12px;background:#fff}
+    .golf-receivable-table{width:100%;min-width:760px;border-collapse:collapse}
+    .golf-receivable-table th,.golf-receivable-table td{padding:10px;border-bottom:1px solid var(--qr-line);text-align:right;white-space:nowrap}
+    .golf-receivable-table th{background:#fffaf0;color:var(--qr-sub);font-size:11px;font-weight:1000}
+    .golf-receivable-table th:first-child,.golf-receivable-table td:first-child{text-align:left}
+    .golf-receivable-table tbody tr:last-child td{border-bottom:0}
+    .golf-receivable-table td{font-size:13px;font-weight:850}
+    .golf-receivable-warning{display:block;margin-top:3px;color:#a15c2b;font-size:10px;font-weight:900}
     @media(max-width:1050px){.golf-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media(max-width:680px){.golf-filters{grid-template-columns:1fr 1fr}.golf-filter-field:first-child{grid-column:1/-1}.golf-filter-apply{grid-column:1/-1}.golf-filter-apply .qr-btn{width:100%}.golf-money-preview{grid-template-columns:1fr}.golf-detail-grid{grid-template-columns:1fr 1fr}}
+    @media(max-width:680px){.golf-filters{grid-template-columns:1fr 1fr}.golf-filter-field:first-child{grid-column:1/-1}.golf-filter-apply{grid-column:1/-1}.golf-filter-apply .qr-btn{width:100%}.golf-money-preview,.golf-receivable-total{grid-template-columns:1fr}.golf-detail-grid{grid-template-columns:1fr 1fr}}
     @media(max-width:430px){.golf-detail-grid{grid-template-columns:1fr}.golf-row-head{flex-direction:column}.golf-row-actions{display:grid;grid-template-columns:1fr}.golf-row-actions .qr-btn{width:100%}}
   </style>
 </head>
@@ -55,8 +68,6 @@
       <div class="qr-header-actions">
         <span class="qr-pill"><span class="qr-dot is-connecting" id="connectionDot"></span><span id="connectionText">연결 중</span></span>
         <a class="qr-btn" href="golf_reserv_list.html">한 줄 목록 / Bảng</a>
-        <a class="qr-btn" id="homeLink" href="home_manager.html">홈 / Trang chủ</a>
-        <button class="qr-btn" id="reloadButton" type="button">새로고침 / Làm mới</button>
       </div>
     </header>
 
@@ -81,7 +92,7 @@
               <label class="qr-field"><span class="qr-label">예약자 대표(첫 번째 이름)<span class="golf-label-vi">Người đại diện (tên đầu tiên)</span></span><input class="qr-input" id="representativeName" type="text" maxlength="200" readonly aria-readonly="true" /></label>
               <label class="qr-field qr-field-wide"><span class="qr-label">전체 이름(영어, 한 줄에 한 명)<span class="golf-label-vi">Họ tên tất cả khách bằng tiếng Anh, mỗi người một dòng</span></span><textarea class="qr-textarea" id="playerNamesEn" maxlength="5000" placeholder="CHO MINWOO&#10;CHO GISANG" required></textarea></label>
               <label class="qr-field"><span class="qr-label">인원 (명단에서 자동 계산, 수정 가능)<span class="golf-label-vi">Số khách (tự đếm từ danh sách, có thể sửa)</span></span><input class="qr-input" id="pax" type="number" min="1" max="100" inputmode="numeric" required /></label>
-              <label class="qr-field"><span class="qr-label">개인 / 회사<span class="golf-label-vi">Cá nhân / Công ty</span></span><select class="qr-select" id="customerType"><option value="individual">개인 / Cá nhân</option><option value="company">회사 / Công ty</option></select></label>
+              <label class="qr-field"><span class="qr-label">개인 / 회사<span class="golf-label-vi">Cá nhân / Công ty</span></span><select class="qr-select" id="customerType" disabled aria-disabled="true"><option value="individual">개인 / Cá nhân</option><option value="company">회사 / Công ty</option></select><span class="golf-label-vi">Sếp/SEP는 개인, 그 외 거래처는 회사로 자동 분류됩니다.</span></label>
               <label class="qr-field"><span class="qr-label">골프 날짜·티오프<span class="golf-label-vi">Ngày chơi và giờ phát bóng</span></span><input class="qr-input" id="golfDateTime" type="datetime-local" step="300" required /></label>
               <label class="qr-field"><span class="qr-label">골프장<span class="golf-label-vi">Sân golf</span></span><select class="qr-select" id="golfCourse" required><option value="">선택 / Chọn</option><option value="AT1200">AT1200</option><option value="SAM">SAM</option><option value="PALACE">PALACE</option></select></label>
               <label class="qr-field"><span class="qr-label">홀 수<span class="golf-label-vi">Số hố</span></span><select class="qr-select" id="holes" required><option value="9">9</option><option value="18" selected>18</option><option value="27">27</option><option value="26">26</option></select></label>
@@ -131,6 +142,7 @@
           <button class="qr-btn qr-btn-small" type="button" data-status-filter="in_progress" aria-pressed="true">진행중 / Đang xử lý</button>
           <button class="qr-btn qr-btn-small" type="button" data-status-filter="completed" aria-pressed="false">완료 / Hoàn tất</button>
           <button class="qr-btn qr-btn-small" type="button" data-status-filter="all" aria-pressed="false">전체 / Tất cả</button>
+          <button class="qr-btn qr-btn-small" type="button" data-status-filter="receivable" aria-pressed="false">미수금 내역 / Công nợ</button>
         </div>
         <div class="golf-filters">
           <label class="golf-filter-field"><span class="qr-label">검색 / Tìm kiếm</span><input class="qr-input" id="searchInput" type="search" placeholder="예약자 이름, 거래처, 영문 이름, 골프장" /></label>
@@ -138,6 +150,7 @@
           <label class="golf-filter-field"><span class="qr-label">골프 종료일 / Đến ngày</span><input class="qr-input" id="filterTo" type="date" /></label>
           <div class="golf-filter-apply"><button class="qr-btn qr-btn-small" id="clearFiltersButton" type="button">검색 초기화 / Xóa lọc</button></div>
         </div>
+        <div class="golf-receivable-panel" id="receivablePanel" hidden></div>
         <div class="golf-list" id="reservationList"><div class="qr-empty">예약을 불러오는 중입니다.</div></div>
       </section>
     </div>
@@ -158,6 +171,6 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-reserv.js?v=20261024-vertical-layout-1"></script>
+  <script src="assets/golf-reserv.js?v=20261024-receivables-1"></script>
 </body>
 </html>
