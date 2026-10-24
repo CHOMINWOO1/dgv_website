@@ -88,6 +88,108 @@
     });
   }
 
+  function filterDescription() {
+    const status = byId("statusFilter").value;
+    const statusLabel = status === "completed"
+      ? "완료 / Hoàn tất"
+      : status === "in_progress"
+        ? "진행중 / Đang xử lý"
+        : "전체 / Tất cả";
+    const from = byId("filterFrom").value || "전체 / Tất cả";
+    const to = byId("filterTo").value || "전체 / Tất cả";
+    const parts = [`상태 / Trạng thái: ${statusLabel}`, `골프 날짜 / Ngày chơi: ${from} ~ ${to}`];
+    const query = clean(byId("searchInput").value);
+    if (query) parts.push(`검색 / Tìm kiếm: ${query}`);
+    return parts.join(" · ");
+  }
+
+  function printList() {
+    const rows = filteredRows();
+    if (!rows.length) {
+      QRStaff.toast("출력할 골프 예약이 없습니다. / Không có đặt sân để in.", "error");
+      return;
+    }
+    byId("golfPrintCriteria").textContent = filterDescription();
+    byId("golfPrintGeneratedAt").textContent = `출력 일시 / Thời gian in: ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Ho_Chi_Minh" })}`;
+    global.print();
+  }
+
+  function workbookOptions(rows) {
+    const textCell = (value, style = "normal") => ({ value: String(value ?? ""), style });
+    const integerCell = (value) => {
+      if (value == null || value === "") return "";
+      const number = Number(value);
+      if (!Number.isFinite(number)) throw new Error("Invalid golf reservation number");
+      return { value: number, style: "integer" };
+    };
+    const headers = [
+      "상태 / Trạng thái", "골프 날짜 / Ngày chơi", "티오프 / Giờ", "거래처 / Đối tác",
+      "예약자 대표 / Người đại diện", "전체 이름(영어) / Họ tên tiếng Anh", "인원 / Số khách",
+      "골프장 / Sân golf", "홀 / Số hố", "S-CART", "1인 판매가(VND) / Giá khách",
+      "고객 합계(VND) / Tổng tiền khách", "1인 원가(VND) / Giá sân",
+      "골프장 합계(VND) / Tổng tiền sân", "예약금(VND) / Tiền cọc", "예약금 일자 / Ngày cọc",
+      "최종 입금(VND) / Tổng đã nhận", "최종 입금일 / Ngày nhận đủ", "출금액(VND) / Tiền chi",
+      "출금일 / Ngày chi", "실제 수익(VND) / Lợi nhuận", "구분 / Loại khách",
+      "등록 일시 / Thời gian tạo", "비고 / Ghi chú", "최종 수정 / Cập nhật"
+    ];
+    const dataRows = rows.map((row) => [
+      textCell(row.status === "completed" ? "완료 / Hoàn tất" : "진행중 / Đang xử lý"),
+      textCell(row.golf_date), textCell(timeLabel(row.golf_time)), textCell(row.counterparty_name),
+      textCell(row.representative_name), textCell(row.player_names_en, "wrapped"), integerCell(row.pax),
+      textCell(row.golf_course), integerCell(row.holes), textCell(row.smart_cart_note, "wrapped"),
+      integerCell(row.guest_unit_price_vnd), integerCell(row.guest_total_vnd),
+      integerCell(row.course_unit_price_vnd), integerCell(row.course_total_vnd),
+      integerCell(row.deposit_amount_vnd), textCell(row.deposit_received_date),
+      integerCell(row.final_received_amount_vnd), textCell(row.final_received_date),
+      integerCell(row.withdrawal_amount_vnd), textCell(row.withdrawal_date), integerCell(actualProfit(row)),
+      textCell(row.customer_type === "company" ? "회사 / Công ty" : "개인 / Cá nhân"),
+      textCell(dateTimeLabel(row.created_at)), textCell(row.note, "wrapped"), textCell(dateTimeLabel(row.updated_at))
+    ]);
+    const from = byId("filterFrom").value || "ALL";
+    const to = byId("filterTo").value || "ALL";
+    return {
+      filename: `HANA_Golf_Reservations_${from}_${to}.xlsx`,
+      sheets: [{
+        name: "골프 예약",
+        rows: [
+          [textCell("HANA 골프 예약 목록 / Danh sách đặt sân golf", "title"), ...Array(24).fill("")],
+          [textCell("조회 기준 / Điều kiện lọc"), textCell(filterDescription()), ...Array(23).fill("")],
+          [textCell("생성 일시 / Thời gian xuất"), textCell(new Date().toLocaleString("ko-KR", { timeZone: "Asia/Ho_Chi_Minh" })), ...Array(23).fill("")],
+          [],
+          headers.map((label) => textCell(label, "header")),
+          ...dataRows
+        ],
+        columnWidths: [17,16,10,20,22,34,9,13,8,18,18,20,18,20,18,16,20,16,18,16,20,16,20,30,20],
+        merges: ["A1:Y1"],
+        freezeRows: 5,
+        autoFilterRange: `A5:Y${Math.max(5, 5 + dataRows.length)}`
+      }]
+    };
+  }
+
+  function exportList() {
+    const button = byId("exportListButton");
+    if (button.disabled) return;
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = "생성 중…";
+    try {
+      const rows = filteredRows();
+      if (!rows.length) {
+        QRStaff.toast("엑셀로 생성할 골프 예약이 없습니다. / Không có đặt sân để xuất Excel.", "error");
+        return;
+      }
+      if (!global.DGV_XLSX?.downloadWorkbook) throw new Error("XLSX exporter is unavailable");
+      global.DGV_XLSX.downloadWorkbook(workbookOptions(rows));
+    } catch (error) {
+      console.error(error);
+      QRStaff.toast("엑셀 파일을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+
   function renderSummary(rows) {
     const progress = rows.filter((row) => row.status === "in_progress").length;
     const completed = rows.filter((row) => row.status === "completed").length;
@@ -183,6 +285,8 @@
 
   function bindEvents() {
     byId("reloadButton").addEventListener("click", () => loadRows());
+    byId("printListButton").addEventListener("click", printList);
+    byId("exportListButton").addEventListener("click", exportList);
     const tableBody = byId("reservationTableBody");
     tableBody.addEventListener("dblclick", (event) => {
       const button = event.target.closest("button.golf-edit-link[data-edit-href]");
