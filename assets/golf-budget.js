@@ -148,7 +148,10 @@
   }
 
   function expectedPaymentStats(course = null) {
-    const rows = state.pendingReservations.filter((row) => !course || row.golf_course === course);
+    const rows = state.pendingReservations.filter((row) => {
+      if ((row.cost_settlement_type || "golf_course") !== "golf_course") return false;
+      return !course || row.golf_course === course;
+    });
     return {
       count: rows.length,
       missing: rows.filter((row) => row.course_total_vnd == null).length,
@@ -552,8 +555,9 @@
         ),
         DGV.collectSupabasePages(
           () => sb.from("golf_reservations")
-            .select("id,golf_course,status,course_total_vnd")
-            .eq("status", "in_progress"),
+            .select("id,golf_course,status,course_total_vnd,cost_settlement_type,cost_partner_name")
+            .eq("status", "in_progress")
+            .eq("cost_settlement_type", "golf_course"),
           { pageSize: 500, order: [
             { column: "golf_course", ascending: true },
             { column: "id", ascending: true }
