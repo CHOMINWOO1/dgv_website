@@ -112,7 +112,7 @@
       <td><span class="golf-status-chip${completed ? " is-completed" : ""}">${escape(statusLabel)}</span></td>
       <td>${escape(golfDateLabel(row.golf_date))}</td>
       <td>${escape(timeLabel(row.golf_time))}</td>
-      <td class="golf-cell-text" title="${escape(representative)}"><a class="golf-edit-link" href="${escape(editHref)}">${escape(representative)}</a></td>
+      <td class="golf-cell-text" title="${escape(representative)}"><button class="golf-edit-link" type="button" data-edit-href="${escape(editHref)}" title="더블클릭하여 수정 / Nhấp đúp để chỉnh sửa" aria-label="${escape(`${representative} 예약 수정, 더블클릭 / Chỉnh sửa đặt sân, nhấp đúp`)}">${escape(representative)}</button></td>
       <td class="golf-cell-text" title="${escape(row.counterparty_name || "—")}">${escape(row.counterparty_name || "—")}</td>
       <td class="golf-cell-names" title="${escape(names)}">${escape(names)}</td>
       <td>${escape(row.pax)}</td>
@@ -167,8 +167,27 @@
     }
   }
 
+  function confirmAndOpenEdit(button) {
+    const href = clean(button?.dataset.editHref);
+    if (!href) return;
+    if (!global.confirm("이 예약을 수정하시겠습니까?\nBạn có muốn chỉnh sửa đặt sân này không?")) return;
+    global.location.assign(href);
+  }
+
   function bindEvents() {
     byId("reloadButton").addEventListener("click", () => loadRows());
+    const tableBody = byId("reservationTableBody");
+    tableBody.addEventListener("dblclick", (event) => {
+      const button = event.target.closest("button.golf-edit-link[data-edit-href]");
+      if (!button) return;
+      event.preventDefault();
+      confirmAndOpenEdit(button);
+    });
+    tableBody.addEventListener("click", (event) => {
+      if (event.detail !== 0) return;
+      const button = event.target.closest("button.golf-edit-link[data-edit-href]");
+      if (button) confirmAndOpenEdit(button);
+    });
     byId("clearFiltersButton").addEventListener("click", () => {
       byId("searchInput").value = "";
       byId("statusFilter").value = "all";
