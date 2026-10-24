@@ -398,7 +398,10 @@
       state.rows = reservations.map((row) => ({
         ...row,
         payments: paymentsByReservation.get(row.id) || []
-      }));
+      })).sort((a, b) =>
+        `${a.golf_date} ${a.golf_time} ${a.id}`
+          .localeCompare(`${b.golf_date} ${b.golf_time} ${b.id}`)
+      );
       render();
       QRStaff.connectionBadge("online", "연결됨");
       if (!options.quiet) setBanner("골프 예약 목록을 불러왔습니다. / Đã tải danh sách đặt sân.", "ok");
