@@ -31,7 +31,12 @@
     .golf-edit-link:hover,.golf-edit-link:focus-visible{color:#8a512f}
     .golf-sheet .golf-cell-names{max-width:340px;overflow:hidden;text-overflow:ellipsis}
     .golf-sheet tbody tr[data-status]{cursor:pointer}
-    .golf-sheet tbody tr.is-names-expanded .golf-cell-names{max-width:640px;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.45}
+    .golf-sheet .golf-roster-detail td{height:auto;padding:0;border-right:0;background:#fffaf0}
+    .golf-roster-panel{padding:13px 18px 15px;white-space:normal}
+    .golf-roster-title{display:block;margin-bottom:9px;color:#5a3927;font-size:14px;font-weight:1000}
+    .golf-roster-names{display:flex;flex-wrap:wrap;gap:7px}
+    .golf-roster-name{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #decba7;border-radius:9px;background:#fff;color:#36261d;font-weight:900}
+    .golf-roster-name b{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:999px;background:#795039;color:#fff;font-size:11px}
     .golf-sheet .golf-cell-money{text-align:right;font-variant-numeric:tabular-nums}
     .golf-sheet .golf-cell-empty{height:130px;text-align:center;color:var(--qr-sub);font-size:14px;font-weight:850}
     .golf-status-chip{display:inline-flex;align-items:center;justify-content:center;min-width:76px;padding:5px 8px;border-radius:999px;background:#f4dfaa;color:#684b17;font-size:11px;font-weight:1000}
@@ -131,6 +136,6 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-reserv-list.js?v=20261024-column-roster-1"></script>
+  <script src="assets/golf-reserv-list.js?v=20261024-roster-detail-1"></script>
 </body>
 </html>
