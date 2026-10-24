@@ -8,9 +8,9 @@
   <style>
     .locked .golf-app{pointer-events:none;user-select:none;filter:blur(2px)}
     .golf-app{transition:filter .15s ease}
-    .golf-layout{display:grid;grid-template-columns:minmax(360px,.9fr) minmax(560px,1.4fr);gap:14px;align-items:start}
-    .golf-form-card,.golf-list-card{min-width:0}
-    .golf-form-card{position:sticky;top:10px}
+    .golf-layout{display:flex;flex-direction:column;gap:14px;align-items:stretch}
+    .golf-form-card,.golf-list-card{width:100%;min-width:0}
+    .golf-form-card{position:static}
     .golf-form-section{margin-top:14px;padding-top:14px;border-top:1px dashed var(--qr-line)}
     .golf-form-section:first-of-type{margin-top:0;padding-top:0;border-top:0}
     .golf-form-section h3{margin:0 0 10px;font-size:14px;font-weight:1000}
@@ -40,7 +40,7 @@
     .golf-status-preview{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:11px;border:1px solid var(--qr-line);border-radius:12px;background:#fffaf0}
     .golf-status-preview strong{font-size:14px}
     .golf-count{color:var(--qr-sub);font-size:12px;font-weight:900}
-    @media(max-width:1050px){.golf-layout{grid-template-columns:1fr}.golf-form-card{position:static}.golf-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:1050px){.golf-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:680px){.golf-filters{grid-template-columns:1fr 1fr}.golf-filter-field:first-child{grid-column:1/-1}.golf-filter-apply{grid-column:1/-1}.golf-filter-apply .qr-btn{width:100%}.golf-money-preview{grid-template-columns:1fr}.golf-detail-grid{grid-template-columns:1fr 1fr}}
     @media(max-width:430px){.golf-detail-grid{grid-template-columns:1fr}.golf-row-head{flex-direction:column}.golf-row-actions{display:grid;grid-template-columns:1fr}.golf-row-actions .qr-btn{width:100%}}
   </style>
@@ -60,14 +60,6 @@
       </div>
     </header>
 
-    <div class="qr-banner" id="pageBanner">예약금은 0 VND도 등록할 수 있습니다. 최종 총입금액과 날짜를 입력하면 자동으로 완료됩니다. / Có thể đăng ký tiền cọc 0 VND.</div>
-
-    <section class="qr-summary" aria-label="예약 요약">
-      <div class="qr-card qr-summary-card"><div class="qr-summary-label">진행중 / Đang xử lý</div><div class="qr-summary-value" id="summaryProgress">0</div></div>
-      <div class="qr-card qr-summary-card"><div class="qr-summary-label">완료 / Hoàn tất</div><div class="qr-summary-value" id="summaryCompleted">0</div></div>
-      <div class="qr-card qr-summary-card"><div class="qr-summary-label">예약금 합계 / Tổng tiền cọc</div><div class="qr-summary-value" id="summaryDeposit">0</div></div>
-      <div class="qr-card qr-summary-card"><div class="qr-summary-label">총 수익 / Tổng lợi nhuận</div><div class="qr-summary-value" id="summaryProfit">0</div></div>
-    </section>
 
     <div class="golf-layout">
       <section class="qr-card qr-form golf-form-card" aria-labelledby="formTitle">
@@ -166,6 +158,6 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-reserv.js?v=20261024-counterparty-1"></script>
+  <script src="assets/golf-reserv.js?v=20261024-vertical-layout-1"></script>
 </body>
 </html>
