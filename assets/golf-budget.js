@@ -22,6 +22,9 @@
     paymentTo: "",
     chargeFrom: "",
     chargeTo: "",
+    pendingCourse: "all",
+    pendingFrom: "",
+    pendingTo: "",
     saving: false
   };
   const byId = (id) => document.getElementById(id);
@@ -152,6 +155,7 @@
 
   function expectedPaymentStats(course = null) {
     const rows = state.pendingReservations.filter((row) => {
+      if (row.status !== "in_progress") return false;
       if ((row.cost_settlement_type || "golf_course") !== "golf_course") return false;
       return !course || row.golf_course === course;
     });
@@ -257,6 +261,7 @@
     byId("printDepositCriteria").textContent = `조회 기간 / Kỳ tra cứu: ${paymentRangeLabel()}`;
     byId("printDepositGeneratedAt").textContent = `출력 일시 / Thời gian in: ${new Date().toLocaleString("ko-KR", { timeZone: TIME_ZONE })}`;
     byId("printDepositTotal").textContent = `합계 / Tổng cộng: ${moneyLabel(depositTotalOf(rows))}`;
+    document.body.classList.remove("print-budget-charges");
     document.body.classList.add("print-budget-payments");
     const cleanup = () => document.body.classList.remove("print-budget-payments");
     global.addEventListener("afterprint", cleanup, { once: true });
@@ -392,14 +397,27 @@
     return balances;
   }
 
-  function renderCharges() {
-    const balanceAfterCharge = chargeBalanceAfterMap();
+  function filteredCharges() {
     const periodCharges = state.charges.filter(chargeTouchesChargeRange);
-    const charges = (state.chargeCourse === "all"
+    return (state.chargeCourse === "all"
       ? periodCharges
       : periodCharges.filter((charge) => charge.golf_course === state.chargeCourse))
       .slice()
       .sort(compareChargesByGolfDate);
+  }
+
+  function chargeStatusLabel(charge) {
+    return charge.active === false
+      ? "복원됨 / Đã hoàn"
+      : charge.historical
+        ? "기존 완료·차감 / Đã trừ trước"
+        : "차감 중 / Đang trừ";
+  }
+
+  function renderCharges() {
+    const balanceAfterCharge = chargeBalanceAfterMap();
+    const periodCharges = state.charges.filter(chargeTouchesChargeRange);
+    const charges = filteredCharges();
     const filterLabel = state.chargeCourse === "all" ? "전체 / Tất cả" : state.chargeCourse;
     const activeCount = charges.filter((charge) => charge.active !== false).length;
     const activeTotal = charges
@@ -420,13 +438,8 @@
       ? charges.map((charge) => {
         const reservation = reservationForCharge(charge);
         const href = `golf_reserv.html?edit=${encodeURIComponent(charge.reservation_id)}`;
-        const active = charge.active !== false;
         const balanceAfter = balanceAfterCharge.get(charge.reservation_id);
-        const statusLabel = !active
-          ? "복원됨 / Đã hoàn"
-          : charge.historical
-            ? "기존 완료·차감 / Đã trừ trước"
-            : "차감 중 / Đang trừ";
+        const statusLabel = chargeStatusLabel(charge);
         return `<tr>
           <td><strong>${statusLabel}</strong></td>
           <td>${escape(dateTimeLabel(charge.charged_at))}</td>
@@ -449,11 +462,170 @@
     if (options.scroll) byId("chargeListTitle").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function filteredPendingReservations() {
+    return state.pendingReservations.filter((row) => {
+      if (row.status !== "in_progress" || (row.cost_settlement_type || "golf_course") !== "golf_course") return false;
+      if (state.pendingCourse !== "all" && row.golf_course !== state.pendingCourse) return false;
+      return (!state.pendingFrom && !state.pendingTo)
+        || dateInRange(String(row.golf_date || ""), state.pendingFrom, state.pendingTo);
+    }).slice().sort((left, right) =>
+      String(right.golf_date || "").localeCompare(String(left.golf_date || ""))
+      || String(right.golf_time || "").localeCompare(String(left.golf_time || ""))
+      || String(right.id || "").localeCompare(String(left.id || "")));
+  }
+
+  function pendingTotalOf(rows) {
+    return rows.reduce((total, row) => total + Number(row.course_total_vnd || 0), 0);
+  }
+
+  function pendingRangeLabel() {
+    return rangeLabel(state.pendingFrom, state.pendingTo);
+  }
+
+  function pendingCriteria(rows) {
+    const course = state.pendingCourse === "all" ? "전체 / Tất cả" : state.pendingCourse;
+    const missing = rows.filter((row) => row.course_total_vnd == null).length;
+    return `${pendingRangeLabel()} · ${course} · ${rows.length.toLocaleString("ko-KR")}건 / mục`
+      + (missing ? ` · 원가 미입력 / Chưa nhập giá vốn: ${missing.toLocaleString("ko-KR")}` : "");
+  }
+
+  function renderPendingReservations() {
+    const rows = filteredPendingReservations();
+    const allTime = !state.pendingFrom && !state.pendingTo;
+    byId("pendingCount").textContent = pendingCriteria(rows);
+    byId("pendingRangeStatus").textContent = `현재 조회 / Đang xem: ${pendingCriteria(rows)}`;
+    byId("pendingRangeAllButton").classList.toggle("is-active", allTime);
+    byId("pendingRangeAllButton").setAttribute("aria-pressed", String(allTime));
+    byId("pendingFilters").querySelectorAll("[data-pending-course]").forEach((button) => {
+      const active = button.dataset.pendingCourse === state.pendingCourse;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    byId("pendingTableTotal").textContent = moneyLabel(pendingTotalOf(rows));
+    byId("pendingTableBody").innerHTML = rows.length
+      ? rows.map((row) => `<tr>
+        <td><strong>차감 예정 / Chờ khấu trừ</strong></td>
+        <td><strong>${escape(row.golf_course)}</strong></td>
+        <td>${escape(dateLabel(row.golf_date))}</td>
+        <td>${escape(row.golf_time ? String(row.golf_time).slice(0, 5) : "—")}</td>
+        <td>${escape(row.counterparty_name || "—")}</td>
+        <td>${escape(row.representative_name || "—")}</td>
+        <td class="budget-money"><strong>${escape(moneyLabel(row.course_total_vnd))}</strong></td>
+        <td><a class="budget-edit-link" href="golf_reserv.html?edit=${escape(encodeURIComponent(row.id))}">예약 보기 / Xem</a></td>
+      </tr>`).join("")
+      : '<tr><td class="budget-empty" colspan="8">차감 예정 내역이 없습니다.<br />Không có khoản chờ khấu trừ.</td></tr>';
+  }
+
+  function printCharges() {
+    const charges = filteredCharges();
+    const pending = filteredPendingReservations();
+    if (!charges.length && !pending.length) {
+      QRStaff.toast("출력할 차감 내역이 없습니다. / Không có khoản khấu trừ để in.", "error");
+      return;
+    }
+    const course = state.chargeCourse === "all" ? "전체 / Tất cả" : state.chargeCourse;
+    byId("printChargeCriteria").textContent = `골프 날짜 / Ngày chơi golf: ${chargeRangeLabel()} · ${course} · ${charges.length.toLocaleString("ko-KR")}건 / mục`;
+    byId("printChargeGeneratedAt").textContent = `출력 일시 / Thời gian in: ${new Date().toLocaleString("ko-KR", { timeZone: TIME_ZONE })}`;
+    byId("printPendingCriteria").textContent = `골프 날짜 / Ngày chơi golf: ${pendingCriteria(pending)}`;
+    document.body.classList.remove("print-budget-payments");
+    document.body.classList.add("print-budget-charges");
+    const cleanup = () => document.body.classList.remove("print-budget-charges");
+    global.addEventListener("afterprint", cleanup, { once: true });
+    const startPrint = () => global.print();
+    if (typeof global.requestAnimationFrame === "function") global.requestAnimationFrame(startPrint);
+    else startPrint();
+  }
+
+  function chargeWorkbookOptions(charges, pending) {
+    const textCell = (value, style = "normal") => ({ value: String(value ?? ""), style });
+    const integerCell = (value, style = "integer") => {
+      if (value == null || value === "") return textCell("");
+      const number = Number(value);
+      if (!Number.isSafeInteger(number)) throw new Error("Invalid golf-course deduction amount");
+      return { value: number, style };
+    };
+    const generatedAt = new Date().toLocaleString("ko-KR", { timeZone: TIME_ZONE });
+    const balanceAfterCharge = chargeBalanceAfterMap();
+    const course = state.chargeCourse === "all" ? "전체 / Tất cả" : state.chargeCourse;
+    const completedHeaders = ["상태 / Trạng thái", "예산 차감 일시 / Thời điểm trừ", "골프장 / Sân", "골프 날짜 / Ngày chơi",
+      "거래처 / Đối tác", "예약자 대표 / Người đại diện", "골프장 원가·차감액(VND) / Giá vốn đã trừ", "예약 / Đặt sân",
+      "차감 후 잔액(VND) / Số dư sau khi trừ", "복원 일시 / Thời điểm hoàn"];
+    const pendingHeaders = ["상태 / Trạng thái", "골프장 / Sân", "골프 날짜 / Ngày chơi", "티오프 시간 / Giờ phát bóng",
+      "거래처 / Đối tác", "예약자 대표 / Người đại diện", "차감 예정액(VND) / Số tiền chờ khấu trừ", "예약 / Đặt sân"];
+    const reservationUrl = (id) => new URL(`golf_reserv.html?edit=${encodeURIComponent(id)}`, global.location.href).href;
+    const chargeRows = charges.map((charge) => {
+      const reservation = reservationForCharge(charge);
+      return [textCell(chargeStatusLabel(charge)), textCell(dateTimeLabel(charge.charged_at)), textCell(charge.golf_course),
+        textCell(charge.golf_date), textCell(reservation.counterparty_name), textCell(reservation.representative_name),
+        integerCell(charge.amount_vnd == null ? null : -Number(charge.amount_vnd)), textCell(reservationUrl(charge.reservation_id)),
+        integerCell(balanceAfterCharge.get(charge.reservation_id)), textCell(dateTimeLabel(charge.reversed_at))];
+    });
+    const pendingRows = pending.map((row) => [textCell("차감 예정 / Chờ khấu trừ"), textCell(row.golf_course), textCell(row.golf_date),
+      textCell(row.golf_time ? String(row.golf_time).slice(0, 5) : ""), textCell(row.counterparty_name), textCell(row.representative_name),
+      integerCell(row.course_total_vnd), textCell(reservationUrl(row.id))]);
+    const activeTotal = charges.filter((charge) => charge.active !== false).reduce((total, charge) => total + Number(charge.amount_vnd || 0), 0);
+    return {
+      filename: `HANA_Golf_Deductions_${todayYmd()}.xlsx`,
+      sheets: [
+        {
+          name: "완료 차감 내역",
+          rows: [
+            [textCell("완료 예약 자동 차감 상세 / Chi tiết khấu trừ đặt sân", "title")],
+            [textCell("골프 날짜 / Ngày chơi golf"), textCell(`${chargeRangeLabel()} · ${course}`)],
+            [textCell("생성 일시 / Thời gian xuất"), textCell(generatedAt)],
+            [], completedHeaders.map((label) => textCell(label, "header")), ...chargeRows,
+            ["", "", "", "", "", textCell("현재 차감 합계 / Tổng đang khấu trừ", "totalLabel"), integerCell(activeTotal, "totalNumber"), "", "", ""]
+          ],
+          columnWidths: [28,25,15,18,26,28,28,42,28,25], merges: ["A1:J1"], freezeRows: 5,
+          autoFilterRange: `A5:J${Math.max(5, 5 + chargeRows.length)}`
+        },
+        {
+          name: "차감 예정 내역",
+          rows: [
+            [textCell("차감 예정 내역 / Các khoản chờ khấu trừ", "title")],
+            [textCell("골프 날짜 / Ngày chơi golf"), textCell(pendingCriteria(pending))],
+            [textCell("생성 일시 / Thời gian xuất"), textCell(generatedAt)],
+            [textCell("예정 금액은 현재 잔액에 반영되지 않습니다. / Khoản dự kiến chưa được trừ vào số dư hiện tại.")],
+            pendingHeaders.map((label) => textCell(label, "header")), ...pendingRows,
+            ["", "", "", "", "", textCell("차감 예정 합계 / Tổng chờ khấu trừ", "totalLabel"), integerCell(pendingTotalOf(pending), "totalNumber"), ""]
+          ],
+          columnWidths: [28,15,18,22,26,28,30,42], merges: ["A1:H1", "A4:H4"], freezeRows: 5,
+          autoFilterRange: `A5:H${Math.max(5, 5 + pendingRows.length)}`
+        }
+      ]
+    };
+  }
+
+  function exportCharges() {
+    const button = byId("exportChargeButton");
+    if (button.disabled) return;
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = "생성 중… / Đang tạo…";
+    try {
+      const charges = filteredCharges();
+      const pending = filteredPendingReservations();
+      if (!charges.length && !pending.length) {
+        QRStaff.toast("엑셀로 생성할 차감 내역이 없습니다. / Không có khoản khấu trừ để xuất Excel.", "error");
+        return;
+      }
+      if (!global.DGV_XLSX?.downloadWorkbook) throw new Error("XLSX exporter is unavailable");
+      global.DGV_XLSX.downloadWorkbook(chargeWorkbookOptions(charges, pending));
+    } catch (error) {
+      console.error(error);
+      QRStaff.toast("엑셀 파일을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요. / Không thể tạo tệp Excel. Vui lòng thử lại sau.", "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    }
+  }
+
   function render() {
     renderSummary();
     renderCourseCards();
     renderDeposits();
     renderCharges();
+    renderPendingReservations();
   }
 
   function validatedRange(from, to) {
@@ -483,6 +655,15 @@
     byId("chargeRangeFrom").value = range.from;
     byId("chargeRangeTo").value = range.to;
     renderCharges();
+  }
+
+  function setPendingRange(from, to) {
+    const range = validatedRange(from, to);
+    state.pendingFrom = range.from;
+    state.pendingTo = range.to;
+    byId("pendingRangeFrom").value = range.from;
+    byId("pendingRangeTo").value = range.to;
+    renderPendingReservations();
   }
 
   function resetDepositForm(options = {}) {
@@ -561,7 +742,7 @@
         ),
         DGV.collectSupabasePages(
           () => sb.from("golf_reservations")
-            .select("id,golf_course,status,course_total_vnd,cost_settlement_type,cost_partner_name")
+            .select("id,golf_course,status,course_total_vnd,cost_settlement_type,cost_partner_name,golf_date,golf_time,counterparty_name,representative_name,pax")
             .eq("status", "in_progress")
             .eq("cost_settlement_type", "golf_course"),
           { pageSize: 500, order: [
@@ -682,8 +863,24 @@
       }
     });
     byId("chargeRangeAllButton").addEventListener("click", () => setChargeRange("", ""));
+    byId("pendingRangeApplyButton").addEventListener("click", () => {
+      try {
+        setPendingRange(byId("pendingRangeFrom").value, byId("pendingRangeTo").value);
+      } catch (error) {
+        QRStaff.toast(error.message, "error");
+      }
+    });
+    byId("pendingRangeAllButton").addEventListener("click", () => setPendingRange("", ""));
+    byId("pendingFilters").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-pending-course]");
+      if (!button) return;
+      state.pendingCourse = COURSES.includes(button.dataset.pendingCourse) ? button.dataset.pendingCourse : "all";
+      renderPendingReservations();
+    });
     byId("printDepositButton").addEventListener("click", printDeposits);
     byId("exportDepositButton").addEventListener("click", exportDeposits);
+    byId("printChargeButton").addEventListener("click", printCharges);
+    byId("exportChargeButton").addEventListener("click", exportCharges);
     byId("depositForm").addEventListener("submit", saveDeposit);
     byId("cancelDepositEditButton").addEventListener("click", () => resetDepositForm({ focus: true }));
     byId("depositAmount").addEventListener("input", () => formatMoneyInput(byId("depositAmount")));
@@ -732,6 +929,8 @@
     byId("paymentRangeTo").value = rangeEnd;
     byId("chargeRangeFrom").value = rangeStart;
     byId("chargeRangeTo").value = rangeEnd;
+    byId("pendingRangeFrom").value = "";
+    byId("pendingRangeTo").value = "";
     bindEvents();
     resetDepositForm();
     try {
@@ -747,4 +946,3 @@
 
   init();
 })(window);
-

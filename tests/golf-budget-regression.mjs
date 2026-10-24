@@ -19,7 +19,7 @@ const [page, source, migration, managerAccessMigration, editorPage, editorSource
 ]);
 
 // Manager/admin budget UI, independent daily-range filters and course-specific deduction detail.
-assert.match(page, /assets\/golf-budget\.js\?v=20261024-partner-1/);
+assert.match(page, /assets\/golf-budget\.js\?v=20261024-pending-report-1/);
 assert.match(page, /골프장별 현재 잔액 \/ Số dư theo sân/);
 assert.match(page, /href="golf_reserv\.html"[^>]*>예약 입력·수정 \/ Quản lý<\/a>/);
 assert.match(page, /href="golf_reserv_list\.html"[^>]*>한 줄 목록 \/ Bảng<\/a>/);
@@ -83,7 +83,7 @@ assert.match(source, /pendingReservations: \[\]/);
 assert.match(source, /function expectedPaymentStats\(course = null\)/);
 assert.match(source, /row\.course_total_vnd == null/);
 assert.match(source, /Number\(row\.course_total_vnd \|\| 0\)/);
-assert.match(source, /from\("golf_reservations"\)[\s\S]*\.select\("id,golf_course,status,course_total_vnd,cost_settlement_type,cost_partner_name"\)[\s\S]*\.eq\("status", "in_progress"\)[\s\S]*\.eq\("cost_settlement_type", "golf_course"\)/);
+assert.match(source, /from\("golf_reservations"\)[\s\S]*\.select\("id,golf_course,status,course_total_vnd,cost_settlement_type,cost_partner_name,golf_date,golf_time,counterparty_name,representative_name,pax"\)[\s\S]*\.eq\("status", "in_progress"\)[\s\S]*\.eq\("cost_settlement_type", "golf_course"\)/);
 assert.match(source, /\(row\.cost_settlement_type \|\| "golf_course"\) !== "golf_course"/);
 assert.match(source, /state\.pendingReservations = pendingReservations/);
 assert.match(source, /summaryExpectedCharges/);
@@ -181,4 +181,4 @@ assert.match(adminHome, /href="golf_budget\.html"/);
 assert.doesNotMatch(managerHome, /href="golf_budget\.html"/);
 
 console.log("Golf-course budget balance, transition ledger, course detail, security, and legacy preservation verified.");
-
+await import("./golf-budget-pending-regression.mjs");
