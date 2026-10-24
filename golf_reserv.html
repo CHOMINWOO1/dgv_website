@@ -84,8 +84,7 @@
           <div class="golf-form-section">
             <h3>고객 및 일정 / Khách hàng và lịch chơi</h3>
             <div class="qr-form-grid">
-              <label class="qr-field"><span class="qr-label">팀 번호<span class="golf-label-vi">Số đội</span></span><input class="qr-input" id="teamNo" type="number" min="1" max="999999" inputmode="numeric" required /></label>
-              <label class="qr-field"><span class="qr-label">예약자 대표<span class="golf-label-vi">Người đại diện đặt chỗ</span></span><input class="qr-input" id="representativeName" type="text" maxlength="200" required /></label>
+              <label class="qr-field"><span class="qr-label">예약자 대표(팀명)<span class="golf-label-vi">Người đại diện (tên đội)</span></span><input class="qr-input" id="representativeName" type="text" maxlength="200" required /></label>
               <label class="qr-field qr-field-wide"><span class="qr-label">전체 이름(영어, 한 줄에 한 명)<span class="golf-label-vi">Họ tên tất cả khách bằng tiếng Anh, mỗi người một dòng</span></span><textarea class="qr-textarea" id="playerNamesEn" maxlength="5000" placeholder="CHO MINWOO&#10;CHO GISANG" required></textarea></label>
               <label class="qr-field"><span class="qr-label">인원 (명단에서 자동 계산, 수정 가능)<span class="golf-label-vi">Số khách (tự đếm từ danh sách, có thể sửa)</span></span><input class="qr-input" id="pax" type="number" min="1" max="100" inputmode="numeric" required /></label>
               <label class="qr-field"><span class="qr-label">담당자<span class="golf-label-vi">Người phụ trách</span></span><input class="qr-input" id="coordinatorName" type="text" maxlength="200" placeholder="예: Chị Oanh" /></label>
@@ -143,7 +142,7 @@
           <button class="qr-btn qr-btn-small" type="button" data-status-filter="all" aria-pressed="false">전체 / Tất cả</button>
         </div>
         <div class="golf-filters">
-          <label class="golf-filter-field"><span class="qr-label">검색 / Tìm kiếm</span><input class="qr-input" id="searchInput" type="search" placeholder="팀, 대표자, 영문 이름, 골프장" /></label>
+          <label class="golf-filter-field"><span class="qr-label">검색 / Tìm kiếm</span><input class="qr-input" id="searchInput" type="search" placeholder="예약자 대표(팀명), 영문 이름, 골프장" /></label>
           <label class="golf-filter-field"><span class="qr-label">골프 시작일 / Từ ngày</span><input class="qr-input" id="filterFrom" type="date" /></label>
           <label class="golf-filter-field"><span class="qr-label">골프 종료일 / Đến ngày</span><input class="qr-input" id="filterTo" type="date" /></label>
           <div class="golf-filter-apply"><button class="qr-btn qr-btn-small" id="clearFiltersButton" type="button">검색 초기화 / Xóa lọc</button></div>
@@ -171,4 +170,3 @@
   <script src="assets/golf-reserv.js"></script>
 </body>
 </html>
-

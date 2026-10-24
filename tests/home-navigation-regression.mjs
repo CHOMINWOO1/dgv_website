@@ -144,4 +144,3 @@ for (const html of [staffHome, managerHome, adminHome]) {
 
 console.log("Staff, manager, and administrator home navigation/auth contracts verified.");
 
-

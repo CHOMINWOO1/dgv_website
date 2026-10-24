@@ -7,7 +7,6 @@ set lock_timeout = '5s';
 
 create table public.golf_reservations (
   id uuid primary key default gen_random_uuid(),
-  team_no integer not null,
   representative_name text not null,
   player_names_en text not null,
   pax integer not null,
@@ -56,8 +55,6 @@ create table public.golf_reservations (
   created_at timestamp with time zone not null default now(),
   updated_at timestamp with time zone not null default now(),
 
-  constraint golf_reservations_team_no_check
-    check (team_no between 1 and 999999),
   constraint golf_reservations_representative_name_check
     check (length(btrim(representative_name)) between 1 and 200),
   constraint golf_reservations_player_names_en_check
@@ -114,7 +111,7 @@ create table public.golf_reservations (
 );
 
 create index golf_reservations_status_golf_date_idx
-  on public.golf_reservations (status, golf_date, golf_time, team_no);
+  on public.golf_reservations (status, golf_date, golf_time);
 
 create index golf_reservations_booking_date_idx
   on public.golf_reservations (booking_date desc, created_at desc);
@@ -153,7 +150,6 @@ grant usage on schema public to authenticated, service_role;
 grant select on table public.golf_reservations to authenticated;
 
 grant insert (
-  team_no,
   representative_name,
   player_names_en,
   pax,
@@ -177,7 +173,6 @@ grant insert (
 ) on table public.golf_reservations to authenticated;
 
 grant update (
-  team_no,
   representative_name,
   player_names_en,
   pax,
@@ -244,7 +239,6 @@ comment on column public.golf_reservations.status is
 -- User-requested examples. They are isolated in this new table and marked in
 -- the note so managers can edit or delete them.
 insert into public.golf_reservations (
-  team_no,
   representative_name,
   player_names_en,
   pax,
@@ -269,7 +263,6 @@ insert into public.golf_reservations (
   updated_by
 ) values
 (
-  1,
   '조민우',
   E'CHO MINWOO\nCHO GISANG',
   2,
@@ -294,7 +287,6 @@ insert into public.golf_reservations (
   null
 ),
 (
-  2,
   '홍길동',
   E'HONG GILDONG\nHONG GILSU',
   2,
@@ -318,4 +310,3 @@ insert into public.golf_reservations (
   null,
   null
 );
-

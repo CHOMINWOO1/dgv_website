@@ -10,7 +10,7 @@
   const MAX_SAFE_MONEY = 9007199254740991;
   const GOLF_COURSES = new Set(["AT1200", "SAM", "PALACE"]);
   const COLUMNS = [
-    "id", "team_no", "representative_name", "player_names_en", "pax",
+    "id", "representative_name", "player_names_en", "pax",
     "coordinator_name", "booking_date", "golf_date", "golf_time",
     "golf_course", "holes", "guest_unit_price_vnd", "smart_cart_note",
     "guest_total_vnd", "course_unit_price_vnd", "course_total_vnd",
@@ -96,12 +96,11 @@
     byId("saveButton").textContent = "예약 저장 / Lưu đặt chỗ";
     byId("cancelEditButton").hidden = true;
     updatePreview();
-    if (options.focus !== false) byId("teamNo").focus();
+    if (options.focus !== false) byId("representativeName").focus();
   }
 
   function fillForm(row, options = {}) {
     byId("recordId").value = row.id;
-    byId("teamNo").value = row.team_no;
     byId("representativeName").value = row.representative_name || "";
     byId("playerNamesEn").value = row.player_names_en || "";
     byId("pax").value = row.pax || "";
@@ -122,7 +121,7 @@
     setMoneyInput("withdrawalAmount", row.withdrawal_amount_vnd);
     byId("withdrawalDate").value = row.withdrawal_date || "";
     byId("note").value = row.note || "";
-    byId("formTitle").textContent = `팀 ${row.team_no} 수정 / Chỉnh sửa đội ${row.team_no}`;
+    byId("formTitle").textContent = `${row.representative_name} 수정 / Chỉnh sửa ${row.representative_name}`;
     byId("editingHint").textContent = row.status === "completed"
       ? "완료 기록을 수정합니다. 최종 금액과 날짜를 모두 지우면 진행중으로 돌아갑니다."
       : "진행중 예약을 수정하거나 최종 입금 정보를 입력해 완료할 수 있습니다.";
@@ -136,7 +135,6 @@
   }
 
   function payloadFromForm() {
-    const teamNo = Number(byId("teamNo").value);
     const representativeName = clean(byId("representativeName").value);
     const playerNamesEn = clean(byId("playerNamesEn").value)
       .split(/[\n,;]+/).map((name) => name.trim()).filter(Boolean).join("\n");
@@ -155,7 +153,6 @@
     const withdrawalAmount = moneyNumber(byId("withdrawalAmount").value);
     const withdrawalDate = byId("withdrawalDate").value || null;
 
-    if (!Number.isInteger(teamNo) || teamNo < 1 || teamNo > 999999) throw new Error("팀 번호를 올바르게 입력해 주세요.");
     if (!representativeName) throw new Error("예약자 대표를 입력해 주세요.");
     if (!playerNamesEn) throw new Error("전체 영문 이름을 입력해 주세요.");
     if (!Number.isInteger(pax) || pax < 1 || pax > 100) throw new Error("인원을 1명 이상 100명 이하로 입력해 주세요.");
@@ -179,7 +176,7 @@
     if (!new Set(["individual", "company"]).has(byId("customerType").value)) throw new Error("개인 또는 회사를 선택해 주세요.");
 
     return {
-      team_no: teamNo, representative_name: representativeName, player_names_en: playerNamesEn, pax,
+      representative_name: representativeName, player_names_en: playerNamesEn, pax,
       coordinator_name: nullableText(byId("coordinatorName").value), booking_date: bookingDate,
       golf_date: golfDate, golf_time: golfTime, golf_course: golfCourse, holes,
       guest_unit_price_vnd: guestUnit, smart_cart_note: nullableText(byId("smartCartNote").value),
@@ -213,7 +210,7 @@
       if (from && row.golf_date < from) return false;
       if (to && row.golf_date > to) return false;
       if (!query) return true;
-      return [row.team_no, row.representative_name, row.player_names_en, row.golf_course, row.coordinator_name, row.note]
+      return [row.representative_name, row.player_names_en, row.golf_course, row.coordinator_name, row.note]
         .some((value) => String(value || "").toLocaleLowerCase().includes(query));
     });
   }
@@ -227,7 +224,7 @@
     return `
       <article class="golf-row" data-status="${escape(row.status)}">
         <div class="golf-row-head">
-          <div><div class="golf-row-title">팀 ${escape(row.team_no)} · ${escape(row.representative_name)}</div>
+          <div><div class="golf-row-title">${escape(row.representative_name)}</div>
           <div class="golf-row-sub">${escape(row.golf_course)} · ${escape(row.holes)}H · ${escape(row.pax)}명 · ${escape(customerLabel)}</div></div>
           <span class="qr-status" data-tone="${completed ? "ready" : "working"}">${escape(statusLabel)}</span>
         </div>
@@ -271,14 +268,14 @@
         () => sb.from("golf_reservations").select(COLUMNS),
         { pageSize: 500, order: [
           { column: "golf_date", ascending: true }, { column: "golf_time", ascending: true },
-          { column: "team_no", ascending: true }, { column: "id", ascending: true }
+          { column: "id", ascending: true }
         ] }
       );
       state.rows.sort((a, b) => {
         const statusOrder = Number(a.status === "completed") - Number(b.status === "completed");
         if (statusOrder) return statusOrder;
-        return `${a.golf_date} ${a.golf_time} ${String(a.team_no).padStart(8, "0")}`
-          .localeCompare(`${b.golf_date} ${b.golf_time} ${String(b.team_no).padStart(8, "0")}`);
+        return `${a.golf_date} ${a.golf_time} ${a.id}`
+          .localeCompare(`${b.golf_date} ${b.golf_time} ${b.id}`);
       });
       render();
       QRStaff.connectionBadge("online", "연결됨");
@@ -319,7 +316,7 @@
   }
 
   async function removeRow(row) {
-    if (!global.confirm(`팀 ${row.team_no} · ${row.representative_name} 예약을 삭제합니다. 삭제한 기록은 복구할 수 없습니다.\n\nBạn có chắc muốn xóa đặt sân này không?`)) return;
+    if (!global.confirm(`${row.representative_name} 예약을 삭제합니다. 삭제한 기록은 복구할 수 없습니다.\n\nBạn có chắc muốn xóa đặt sân này không?`)) return;
     try {
       const { data, error } = await sb.from("golf_reservations").delete().eq("id", row.id).select("id").single();
       if (error) throw error;
@@ -389,4 +386,3 @@
 
   init();
 })(window);
-

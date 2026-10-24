@@ -169,4 +169,3 @@ assert.match(codeAdmin, /if \(identity\.role === "admin"\) return true/);
 assert.match(codeAdmin, /DGV\.signInAs\("admin", pass\)/);
 
 console.log("Manager frontend role boundaries and password-entry contracts verified.");
-
