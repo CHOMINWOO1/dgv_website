@@ -18,14 +18,21 @@ const [page, source, migration, managerAccessMigration, editorPage, editorSource
   read("home_manager.html"),
 ]);
 
-// Manager/admin budget UI, month filtering and course-specific deduction detail.
-assert.match(page, /assets\/golf-budget\.js\?v=20261024-3/);
+// Manager/admin budget UI, independent daily-range filters and course-specific deduction detail.
+assert.match(page, /assets\/golf-budget\.js\?v=20261024-4/);
 assert.match(page, /골프장별 현재 잔액 \/ Số dư theo sân/);
-assert.match(page, /id="monthFilter"[^>]*type="month"/);
-assert.match(page, /id="allMonthsButton"/);
-for (const id of ["periodDeposits", "periodCharges", "periodRestorations", "periodNet"]) {
+for (const id of ["paymentRangeFrom", "paymentRangeTo", "chargeRangeFrom", "chargeRangeTo"]) {
+  assert.match(page, new RegExp(`id="${id}"[^>]*type="date"`));
+}
+for (const id of ["paymentRangeApplyButton", "paymentRangeAllButton", "paymentRangeStatus", "chargeRangeApplyButton", "chargeRangeAllButton", "chargeRangeStatus"]) {
   assert.match(page, new RegExp(`id="${id}"`));
 }
+assert.match(page, /골프장 기간 조회 \/ Tra cứu thời gian thanh toán sân/);
+assert.match(page, /자동 차감 기간 조회 \/ Tra cứu thời gian khấu trừ/);
+assert.match(page, /차감·복원 일자 기준 \/ Theo ngày trừ·hoàn/);
+assert.ok(page.indexOf('id="paymentRangeTitle"') < page.indexOf('id="depositFormTitle"'));
+assert.doesNotMatch(page, /id="monthFilter"|id="allMonthsButton"|type="month"/);
+assert.doesNotMatch(page, /id="periodDeposits"|id="periodCharges"|id="periodRestorations"|id="periodNet"/);
 assert.match(page, /골프장 결제 \/ Thanh toán sân golf/);
 assert.match(page, /완료 반영 현재 잔액 \/ Số dư sau hoàn tất/);
 assert.match(page, /추가 예상 결제금액 \/ Thanh toán dự kiến thêm/);
@@ -43,14 +50,19 @@ for (const course of ["AT1200", "SAM", "PALACE"]) {
 }
 assert.match(page, /상태[\s\S]*예산 차감 일시[\s\S]*복원 일시[\s\S]*골프 날짜[\s\S]*거래처[\s\S]*예약자 대표[\s\S]*골프장 원가·차감액/);
 assert.match(source, /QRStaff\.requireLogin\(\{ roles: \["manager", "admin"\], preferredRole: "manager" \}\)/);
-assert.match(source, /state\.selectedMonth = currentMonthKey\(\)/);
-assert.match(source, /String\(deposit\?\.deposit_date \|\| ""\)\.slice\(0, 7\) === state\.selectedMonth/);
-assert.match(source, /dateTimeMonthKey\(charge\?\.charged_at\) === state\.selectedMonth/);
-assert.match(source, /timeZone: TIME_ZONE[\s\S]*year: "numeric"[\s\S]*month: "2-digit"/);
-assert.match(source, /chargePostedInSelectedPeriod\(charge\) \|\| chargeRestoredInSelectedPeriod\(charge\)/);
-assert.match(source, /state\.deposits\.filter\(depositInSelectedPeriod\)/);
-assert.match(source, /state\.charges\.filter\(chargeTouchesSelectedPeriod\)/);
-assert.match(source, /setSelectedMonth\("all"\)/);
+assert.match(source, /paymentFrom: ""[\s\S]*paymentTo: ""[\s\S]*chargeFrom: ""[\s\S]*chargeTo: ""/);
+assert.match(source, /state\.paymentFrom = rangeStart[\s\S]*state\.paymentTo = rangeEnd[\s\S]*state\.chargeFrom = rangeStart[\s\S]*state\.chargeTo = rangeEnd/);
+assert.match(source, /function dateTimeYmd\(value\)[\s\S]*timeZone: TIME_ZONE[\s\S]*year: "numeric"[\s\S]*month: "2-digit"[\s\S]*day: "2-digit"/);
+assert.match(source, /dateInRange\(String\(deposit\?\.deposit_date \|\| ""\), state\.paymentFrom, state\.paymentTo\)/);
+assert.match(source, /dateInRange\(chargedDate, state\.chargeFrom, state\.chargeTo\)[\s\S]*dateInRange\(restoredDate, state\.chargeFrom, state\.chargeTo\)/);
+assert.match(source, /state\.deposits\.filter\(depositInPaymentRange\)/);
+assert.match(source, /state\.charges\.filter\(chargeTouchesChargeRange\)/);
+assert.match(source, /function setPaymentRange\(from, to\)[\s\S]*renderDeposits\(\);\s*}/);
+assert.match(source, /function setChargeRange\(from, to\)[\s\S]*renderCharges\(\);\s*}/);
+assert.match(source, /시작일은 종료일보다 늦을 수 없습니다\.[\s\S]*Ngày bắt đầu không được sau ngày kết thúc\./);
+assert.match(source, /paymentRangeAllButton"\)\.addEventListener\("click", \(\) => setPaymentRange\("", ""\)\)/);
+assert.match(source, /chargeRangeAllButton"\)\.addEventListener\("click", \(\) => setChargeRange\("", ""\)\)/);
+assert.doesNotMatch(source, /selectedMonth|setSelectedMonth|renderPeriodSummary|dateTimeMonthKey/);
 assert.match(source, /pendingReservations: \[\]/);
 assert.match(source, /function expectedPaymentStats\(course = null\)/);
 assert.match(source, /row\.course_total_vnd == null/);
@@ -64,6 +76,9 @@ assert.match(source, /document\.body\.classList\.add\("print-budget-payments"\)/
 assert.match(source, /global\.addEventListener\("afterprint", cleanup, \{ once: true \}\)/);
 assert.match(source, /function depositWorkbookOptions\(rows\)/);
 assert.match(source, /HANA_Golf_Course_Payments_\$\{filePeriod\}\.xlsx/);
+assert.match(source, /state\.paymentFrom && state\.paymentTo \? `\$\{state\.paymentFrom\}_\$\{state\.paymentTo\}` : "ALL"/);
+assert.match(source, /printDepositCriteria"\)\.textContent = `조회 기간 \/ Kỳ tra cứu: \$\{paymentRangeLabel\(\)\}`/);
+assert.match(source, /textCell\(paymentRangeLabel\(\)\)/);
 assert.match(source, /global\.DGV_XLSX\.downloadWorkbook\(depositWorkbookOptions\(rows\)\)/);
 assert.match(source, /printDepositButton"\)\.addEventListener\("click", printDeposits\)/);
 assert.match(source, /exportDepositButton"\)\.addEventListener\("click", exportDeposits\)/);
@@ -149,3 +164,4 @@ assert.match(adminHome, /href="golf_budget\.html"/);
 assert.doesNotMatch(managerHome, /href="golf_budget\.html"/);
 
 console.log("Golf-course budget balance, transition ledger, course detail, security, and legacy preservation verified.");
+

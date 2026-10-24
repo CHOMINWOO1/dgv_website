@@ -31,11 +31,11 @@
     .budget-opening-edit .qr-label{font-size:10px}
     .budget-form-grid{display:grid;grid-template-columns:minmax(150px,.7fr) minmax(145px,.7fr) minmax(180px,1fr) minmax(160px,.75fr);gap:10px}
     .budget-form-note{margin-top:10px}
-    .budget-month-panel{margin-bottom:14px}
-    .budget-month-controls{display:flex;flex-wrap:wrap;gap:9px;align-items:flex-end}
-    .budget-month-controls .qr-field{min-width:210px;max-width:300px;flex:1}
-    .budget-month-status{min-height:44px;display:flex;align-items:center;padding:0 12px;border-radius:10px;background:#fff7e9;color:#5b3525;font-weight:1000}
-    .budget-month-all.is-active{background:#5b3525;color:#fff;border-color:#5b3525}
+    .budget-range-panel{margin-bottom:14px}
+    .budget-range-controls{display:flex;flex-wrap:wrap;gap:9px;align-items:flex-end}
+    .budget-range-controls .qr-field{min-width:190px;max-width:260px;flex:1}
+    .budget-range-status{min-height:44px;display:flex;align-items:center;padding:0 12px;border-radius:10px;background:#fff7e9;color:#5b3525;font-weight:1000}
+    .budget-range-all.is-active{background:#5b3525;color:#fff;border-color:#5b3525}
     .budget-table-wrap{overflow:auto;border:1px solid var(--qr-line);border-radius:12px;background:#fff}
     .budget-table{width:100%;min-width:850px;border-collapse:collapse;font-size:14px}
     .budget-table th,.budget-table td{padding:11px;border-right:1px solid var(--qr-line);border-bottom:1px solid var(--qr-line);text-align:left;vertical-align:middle}
@@ -116,25 +116,20 @@
       <div class="qr-card qr-summary-card"><div class="qr-summary-label">추가 예상 결제금액 / Thanh toán dự kiến thêm</div><div class="qr-summary-value" id="summaryExpectedCharges">0 VND</div><div class="budget-expected-meta" id="summaryExpectedMeta">진행중 0건</div></div>
     </section>
 
-    <section class="qr-card qr-card-pad budget-month-panel" aria-labelledby="monthFilterTitle">
-      <div class="qr-section-head"><div><h2 class="qr-section-title" id="monthFilterTitle">월별 조회 / Xem theo tháng</h2><p class="budget-explainer">선택한 월의 골프장 결제와 자동 차감·복원 내역만 아래 목록에 표시합니다. 위 현재 잔액은 항상 전체 누계입니다.<br />Chỉ hiển thị thanh toán sân và lịch sử khấu trừ·hoàn trả của tháng đã chọn. Số dư hiện tại phía trên luôn là tổng lũy kế.</p></div></div>
-      <div class="budget-month-controls">
-        <label class="qr-field"><span class="qr-label">조회 월 / Tháng tra cứu</span><input class="qr-input" id="monthFilter" type="month" /></label>
-        <button class="qr-btn budget-month-all" id="allMonthsButton" type="button">전체 기간 / Toàn bộ</button>
-        <div class="budget-month-status" id="monthStatus" aria-live="polite">—</div>
-      </div>
-    </section>
-
-    <section class="qr-summary" aria-label="선택 기간 골프장 예산 증감 요약">
-      <div class="qr-card qr-summary-card"><div class="qr-summary-label">조회 기간 결제 / Thanh toán kỳ này</div><div class="qr-summary-value" id="periodDeposits">0 VND</div></div>
-      <div class="qr-card qr-summary-card"><div class="qr-summary-label">조회 기간 차감 / Khấu trừ kỳ này</div><div class="qr-summary-value" id="periodCharges">0 VND</div></div>
-      <div class="qr-card qr-summary-card"><div class="qr-summary-label">조회 기간 복원 / Hoàn trả kỳ này</div><div class="qr-summary-value" id="periodRestorations">0 VND</div></div>
-      <div class="qr-card qr-summary-card"><div class="qr-summary-label">조회 기간 순증감 / Biến động ròng</div><div class="qr-summary-value" id="periodNet">0 VND</div></div>
-    </section>
-
     <section aria-labelledby="courseBalanceTitle">
       <div class="qr-section-head"><div><h2 class="qr-section-title" id="courseBalanceTitle">골프장별 현재 잔액 / Số dư theo sân</h2></div></div>
       <div class="budget-course-grid" id="courseCards"><div class="qr-empty">잔액을 불러오는 중입니다.</div></div>
+    </section>
+
+    <section class="qr-card qr-card-pad budget-range-panel" aria-labelledby="paymentRangeTitle">
+      <div class="qr-section-head"><div><h2 class="qr-section-title" id="paymentRangeTitle">골프장 기간 조회 / Tra cứu thời gian thanh toán sân</h2><p class="budget-explainer">선택한 일자의 골프장 결제내역만 조회하며 출력과 엑셀에도 동일하게 적용됩니다. 현재 잔액과 예상 결제금액은 바뀌지 않습니다.<br />Chỉ lọc lịch sử thanh toán sân theo ngày và áp dụng cùng phạm vi khi in hoặc tạo Excel. Số dư hiện tại và khoản dự kiến không thay đổi.</p></div></div>
+      <div class="budget-range-controls">
+        <label class="qr-field"><span class="qr-label">시작일 / Từ ngày</span><input class="qr-input" id="paymentRangeFrom" type="date" /></label>
+        <label class="qr-field"><span class="qr-label">종료일 / Đến ngày</span><input class="qr-input" id="paymentRangeTo" type="date" /></label>
+        <button class="qr-btn qr-btn-primary" id="paymentRangeApplyButton" type="button">조회 / Tra cứu</button>
+        <button class="qr-btn budget-range-all" id="paymentRangeAllButton" type="button">전체 기간 / Toàn bộ</button>
+        <div class="budget-range-status" id="paymentRangeStatus" aria-live="polite">—</div>
+      </div>
     </section>
 
     <section class="qr-card qr-card-pad" aria-labelledby="depositFormTitle">
@@ -186,6 +181,14 @@
     <section class="qr-card qr-card-pad" aria-labelledby="chargeListTitle">
       <div class="qr-section-head"><div><h2 class="qr-section-title" id="chargeListTitle">완료 예약 자동 차감 상세 / Chi tiết khấu trừ đặt sân</h2><div class="qr-muted" id="chargeCount">0건</div></div></div>
       <p class="budget-explainer" style="margin-bottom:10px">기존 완료 예약과 이후 완료되는 예약을 모두 표시합니다. 원가가 없던 기존 완료 건은 원가 미입력으로 표시되며 현재잔액에는 영향을 주지 않습니다.<br />Hiển thị cả đặt sân đã hoàn tất trước đây và đặt sân hoàn tất sau này. Dữ liệu cũ chưa có giá vốn sẽ được đánh dấu chưa nhập và không làm thay đổi số dư hiện tại.</p>
+      <div class="budget-range-controls" aria-labelledby="chargeRangeTitle">
+        <div class="qr-field"><span class="qr-label" id="chargeRangeTitle">자동 차감 기간 조회 / Tra cứu thời gian khấu trừ</span><div class="budget-basis-date">차감·복원 일자 기준 / Theo ngày trừ·hoàn</div></div>
+        <label class="qr-field"><span class="qr-label">시작일 / Từ ngày</span><input class="qr-input" id="chargeRangeFrom" type="date" /></label>
+        <label class="qr-field"><span class="qr-label">종료일 / Đến ngày</span><input class="qr-input" id="chargeRangeTo" type="date" /></label>
+        <button class="qr-btn qr-btn-primary" id="chargeRangeApplyButton" type="button">조회 / Tra cứu</button>
+        <button class="qr-btn budget-range-all" id="chargeRangeAllButton" type="button">전체 기간 / Toàn bộ</button>
+        <div class="budget-range-status" id="chargeRangeStatus" aria-live="polite">—</div>
+      </div>
       <div class="budget-charge-filters" id="chargeFilters" aria-label="골프장별 자동 차감 상세 필터">
         <button class="qr-btn qr-btn-small budget-charge-filter is-active" type="button" data-charge-course="all">전체 / Tất cả</button>
         <button class="qr-btn qr-btn-small budget-charge-filter" type="button" data-charge-course="AT1200">AT1200</button>
@@ -217,6 +220,7 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
-  <script src="assets/golf-budget.js?v=20261024-3"></script>
+  <script src="assets/golf-budget.js?v=20261024-4"></script>
 </body>
 </html>
+

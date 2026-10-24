@@ -11,12 +11,24 @@
   const PAYMENT_METHODS = new Set(["bank", "cash", "card"]);
   const CASH_BANK_THRESHOLD = 5000000;
   const MAX_SAFE_MONEY = 9007199254740991;
-  const state = { identity: null, accounts: [], deposits: [], charges: [], pendingReservations: [], chargeCourse: "all", selectedMonth: null, saving: false };
+  const state = {
+    identity: null,
+    accounts: [],
+    deposits: [],
+    charges: [],
+    pendingReservations: [],
+    chargeCourse: "all",
+    paymentFrom: "",
+    paymentTo: "",
+    chargeFrom: "",
+    chargeTo: "",
+    saving: false
+  };
   const byId = (id) => document.getElementById(id);
   const escape = (value) => DGV.escapeHTML(value ?? "");
   const clean = (value) => String(value ?? "").trim();
   const todayYmd = () => DGV.formatYmdInTimeZone(new Date(), TIME_ZONE);
-  const currentMonthKey = () => todayYmd().slice(0, 7);
+  const currentMonthStart = () => `${todayYmd().slice(0, 7)}-01`;
 
   function moneyNumber(value) {
     const digits = String(value ?? "").replace(/[^0-9]/g, "");
@@ -52,41 +64,54 @@
     }).format(date);
   }
 
-  function dateTimeMonthKey(value) {
+  function dateTimeYmd(value) {
     if (!value) return "";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "";
-    const parts = new Intl.DateTimeFormat("en-US", {
+    const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: TIME_ZONE,
       year: "numeric",
-      month: "2-digit"
+      month: "2-digit",
+      day: "2-digit"
     }).formatToParts(date);
     const year = parts.find((part) => part.type === "year")?.value;
     const month = parts.find((part) => part.type === "month")?.value;
-    return year && month ? `${year}-${month}` : "";
+    const day = parts.find((part) => part.type === "day")?.value;
+    return year && month && day ? `${year}-${month}-${day}` : "";
   }
 
-  function periodLabel() {
-    if (state.selectedMonth === "all") return "전체 기간 / Toàn bộ";
-    const match = String(state.selectedMonth || "").match(/^(\d{4})-(\d{2})$/);
-    return match ? `${match[1]}년 ${Number(match[2])}월 / Tháng ${Number(match[2])}/${match[1]}` : "—";
+  function isYmd(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
   }
 
-  function depositInSelectedPeriod(deposit) {
-    return state.selectedMonth === "all" || String(deposit?.deposit_date || "").slice(0, 7) === state.selectedMonth;
+  function rangeLabel(from, to) {
+    if (!from && !to) return "전체 기간 / Toàn bộ";
+    if (from === to) return dateLabel(from);
+    return `${dateLabel(from)} ~ ${dateLabel(to)}`;
   }
 
-  function chargePostedInSelectedPeriod(charge) {
-    return state.selectedMonth === "all" || dateTimeMonthKey(charge?.charged_at) === state.selectedMonth;
+  function dateInRange(value, from, to) {
+    if (!value) return false;
+    return (!from || value >= from) && (!to || value <= to);
   }
 
-  function chargeRestoredInSelectedPeriod(charge) {
-    return Boolean(charge?.reversed_at)
-      && (state.selectedMonth === "all" || dateTimeMonthKey(charge.reversed_at) === state.selectedMonth);
+  function paymentRangeLabel() {
+    return rangeLabel(state.paymentFrom, state.paymentTo);
   }
 
-  function chargeTouchesSelectedPeriod(charge) {
-    return chargePostedInSelectedPeriod(charge) || chargeRestoredInSelectedPeriod(charge);
+  function chargeRangeLabel() {
+    return rangeLabel(state.chargeFrom, state.chargeTo);
+  }
+
+  function depositInPaymentRange(deposit) {
+    return dateInRange(String(deposit?.deposit_date || ""), state.paymentFrom, state.paymentTo);
+  }
+
+  function chargeTouchesChargeRange(charge) {
+    const chargedDate = dateTimeYmd(charge?.charged_at);
+    const restoredDate = dateTimeYmd(charge?.reversed_at);
+    return dateInRange(chargedDate, state.chargeFrom, state.chargeTo)
+      || dateInRange(restoredDate, state.chargeFrom, state.chargeTo);
   }
 
   function paymentMethodLabel(value) {
@@ -150,25 +175,6 @@
     byId("summaryExpectedMeta").textContent = `진행중 ${expected.count.toLocaleString("ko-KR")}건${expected.missing ? ` · 원가 미입력 ${expected.missing.toLocaleString("ko-KR")}건` : ""}`;
   }
 
-  function renderPeriodSummary() {
-    const deposits = state.deposits
-      .filter(depositInSelectedPeriod)
-      .reduce((total, deposit) => total + Number(deposit.amount_vnd || 0), 0);
-    const charges = state.charges
-      .filter(chargePostedInSelectedPeriod)
-      .reduce((total, charge) => total + Number(charge.amount_vnd || 0), 0);
-    const restorations = state.charges
-      .filter(chargeRestoredInSelectedPeriod)
-      .reduce((total, charge) => total + Number(charge.amount_vnd || 0), 0);
-    byId("periodDeposits").textContent = moneyLabel(deposits);
-    byId("periodCharges").textContent = moneyLabel(charges);
-    byId("periodRestorations").textContent = moneyLabel(restorations);
-    byId("periodNet").textContent = moneyLabel(deposits - charges + restorations);
-    byId("monthStatus").textContent = `현재 조회: ${periodLabel()}`;
-    byId("allMonthsButton").classList.toggle("is-active", state.selectedMonth === "all");
-    byId("allMonthsButton").setAttribute("aria-pressed", String(state.selectedMonth === "all"));
-  }
-
   function renderCourseCards() {
     byId("courseCards").innerHTML = COURSES.map((course) => {
       const account = accountFor(course);
@@ -206,12 +212,16 @@
   }
 
   function filteredDeposits() {
-    return state.deposits.filter(depositInSelectedPeriod);
+    return state.deposits.filter(depositInPaymentRange);
   }
 
   function renderDeposits() {
     const deposits = filteredDeposits();
-    byId("depositCount").textContent = `${periodLabel()} · ${deposits.length.toLocaleString("ko-KR")}건 / mục`;
+    const allTime = !state.paymentFrom && !state.paymentTo;
+    byId("paymentRangeStatus").textContent = `현재 조회 / Đang xem: ${paymentRangeLabel()} · ${deposits.length.toLocaleString("ko-KR")}건 / mục · ${moneyLabel(depositTotalOf(deposits))}`;
+    byId("paymentRangeAllButton").classList.toggle("is-active", allTime);
+    byId("paymentRangeAllButton").setAttribute("aria-pressed", String(allTime));
+    byId("depositCount").textContent = `${paymentRangeLabel()} · ${deposits.length.toLocaleString("ko-KR")}건 / mục`;
     byId("depositTableBody").innerHTML = deposits.length
       ? deposits.map((deposit) => `<tr>
         <td>${escape(dateLabel(deposit.deposit_date))}</td>
@@ -224,7 +234,7 @@
           <button class="qr-btn qr-btn-small qr-btn-danger" type="button" data-delete-deposit="${escape(deposit.id)}">삭제 / Xóa</button>
         </div></td>
       </tr>`).join("")
-      : `<tr><td class="budget-empty" colspan="6">${escape(periodLabel())} 골프장 결제 내역이 없습니다.<br />Không có lịch sử thanh toán sân golf trong kỳ này.</td></tr>`;
+      : `<tr><td class="budget-empty" colspan="6">${escape(paymentRangeLabel())} 골프장 결제 내역이 없습니다.<br />Không có lịch sử thanh toán sân golf trong kỳ này.</td></tr>`;
   }
 
   function depositTotalOf(rows) {
@@ -237,7 +247,7 @@
       QRStaff.toast("출력할 골프장 결제 내역이 없습니다. / Không có thanh toán sân golf để in.", "error");
       return;
     }
-    byId("printDepositCriteria").textContent = `조회 기간 / Kỳ tra cứu: ${periodLabel()}`;
+    byId("printDepositCriteria").textContent = `조회 기간 / Kỳ tra cứu: ${paymentRangeLabel()}`;
     byId("printDepositGeneratedAt").textContent = `출력 일시 / Thời gian in: ${new Date().toLocaleString("ko-KR", { timeZone: TIME_ZONE })}`;
     byId("printDepositTotal").textContent = `합계 / Tổng cộng: ${moneyLabel(depositTotalOf(rows))}`;
     document.body.classList.add("print-budget-payments");
@@ -271,14 +281,14 @@
       textCell(row.note, "wrapped")
     ]);
     const total = depositTotalOf(rows);
-    const filePeriod = state.selectedMonth === "all" ? "ALL" : state.selectedMonth;
+    const filePeriod = state.paymentFrom && state.paymentTo ? `${state.paymentFrom}_${state.paymentTo}` : "ALL";
     return {
       filename: `HANA_Golf_Course_Payments_${filePeriod}.xlsx`,
       sheets: [{
         name: "골프장 결제",
         rows: [
           [textCell("HANA 골프장 결제 내역 / Lịch sử thanh toán sân golf", "title"), "", "", "", ""],
-          [textCell("조회 기간 / Kỳ tra cứu"), textCell(periodLabel()), "", "", ""],
+          [textCell("조회 기간 / Kỳ tra cứu"), textCell(paymentRangeLabel()), "", "", ""],
           [textCell("생성 일시 / Thời gian xuất"), textCell(generatedAt), "", "", ""],
           [],
           headers.map((label) => textCell(label, "header")),
@@ -323,13 +333,17 @@
   }
 
   function renderCharges() {
-    const periodCharges = state.charges.filter(chargeTouchesSelectedPeriod);
+    const periodCharges = state.charges.filter(chargeTouchesChargeRange);
     const charges = state.chargeCourse === "all"
       ? periodCharges
       : periodCharges.filter((charge) => charge.golf_course === state.chargeCourse);
     const filterLabel = state.chargeCourse === "all" ? "전체 / Tất cả" : state.chargeCourse;
     const activeCount = charges.filter((charge) => charge.active !== false).length;
-    byId("chargeCount").textContent = `${periodLabel()} · ${filterLabel} · 현재 차감 ${activeCount.toLocaleString("ko-KR")}건 / tổng ${charges.length.toLocaleString("ko-KR")}건`;
+    const allTime = !state.chargeFrom && !state.chargeTo;
+    byId("chargeRangeStatus").textContent = `현재 조회 / Đang xem: ${chargeRangeLabel()} · ${periodCharges.length.toLocaleString("ko-KR")}건 / mục`;
+    byId("chargeRangeAllButton").classList.toggle("is-active", allTime);
+    byId("chargeRangeAllButton").setAttribute("aria-pressed", String(allTime));
+    byId("chargeCount").textContent = `${chargeRangeLabel()} · ${filterLabel} · 현재 차감 / Đang trừ ${activeCount.toLocaleString("ko-KR")}건 · 전체 / Tổng ${charges.length.toLocaleString("ko-KR")}건`;
     byId("chargeFilters").querySelectorAll("[data-charge-course]").forEach((button) => {
       const active = button.dataset.chargeCourse === state.chargeCourse;
       button.classList.toggle("is-active", active);
@@ -357,7 +371,7 @@
           <td><a class="budget-edit-link" href="${escape(href)}">예약 보기 / Xem</a></td>
         </tr>`;
       }).join("")
-      : `<tr><td class="budget-empty" colspan="9">${escape(periodLabel())} ${escape(filterLabel)} 자동 차감 내역이 없습니다.<br />Không có lịch sử khấu trừ tự động trong kỳ này.</td></tr>`;
+      : `<tr><td class="budget-empty" colspan="9">${escape(chargeRangeLabel())} ${escape(filterLabel)} 자동 차감 내역이 없습니다.<br />Không có lịch sử khấu trừ tự động trong kỳ này.</td></tr>`;
   }
 
   function showChargeCourse(course, options = {}) {
@@ -369,16 +383,36 @@
   function render() {
     renderSummary();
     renderCourseCards();
-    renderPeriodSummary();
     renderDeposits();
     renderCharges();
   }
 
-  function setSelectedMonth(value) {
-    state.selectedMonth = /^\d{4}-\d{2}$/.test(String(value || "")) ? value : "all";
-    byId("monthFilter").value = state.selectedMonth === "all" ? "" : state.selectedMonth;
-    renderPeriodSummary();
+  function validatedRange(from, to) {
+    if (!from && !to) return { from: "", to: "" };
+    if (!isYmd(from) || !isYmd(to)) {
+      throw new Error("시작일과 종료일을 모두 선택해 주세요. / Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc.");
+    }
+    if (from > to) {
+      throw new Error("시작일은 종료일보다 늦을 수 없습니다. / Ngày bắt đầu không được sau ngày kết thúc.");
+    }
+    return { from, to };
+  }
+
+  function setPaymentRange(from, to) {
+    const range = validatedRange(from, to);
+    state.paymentFrom = range.from;
+    state.paymentTo = range.to;
+    byId("paymentRangeFrom").value = range.from;
+    byId("paymentRangeTo").value = range.to;
     renderDeposits();
+  }
+
+  function setChargeRange(from, to) {
+    const range = validatedRange(from, to);
+    state.chargeFrom = range.from;
+    state.chargeTo = range.to;
+    byId("chargeRangeFrom").value = range.from;
+    byId("chargeRangeTo").value = range.to;
     renderCharges();
   }
 
@@ -524,8 +558,10 @@
       const { data, error } = await request.select("id").single();
       if (error) throw error;
       if (!data?.id) throw new Error("Saved deposit was not returned");
-      state.selectedMonth = payload.deposit_date.slice(0, 7);
-      byId("monthFilter").value = state.selectedMonth;
+      state.paymentFrom = payload.deposit_date;
+      state.paymentTo = payload.deposit_date;
+      byId("paymentRangeFrom").value = state.paymentFrom;
+      byId("paymentRangeTo").value = state.paymentTo;
       QRStaff.toast(id
         ? "결제 내역을 수정했습니다. / Đã sửa lịch sử thanh toán."
         : "결제 내역을 추가했습니다. / Đã thêm lịch sử thanh toán.", "ok");
@@ -559,10 +595,22 @@
 
   function bindEvents() {
     byId("reloadButton").addEventListener("click", () => loadData());
-    byId("monthFilter").addEventListener("change", (event) => {
-      if (event.target.value) setSelectedMonth(event.target.value);
+    byId("paymentRangeApplyButton").addEventListener("click", () => {
+      try {
+        setPaymentRange(byId("paymentRangeFrom").value, byId("paymentRangeTo").value);
+      } catch (error) {
+        QRStaff.toast(error.message, "error");
+      }
     });
-    byId("allMonthsButton").addEventListener("click", () => setSelectedMonth("all"));
+    byId("paymentRangeAllButton").addEventListener("click", () => setPaymentRange("", ""));
+    byId("chargeRangeApplyButton").addEventListener("click", () => {
+      try {
+        setChargeRange(byId("chargeRangeFrom").value, byId("chargeRangeTo").value);
+      } catch (error) {
+        QRStaff.toast(error.message, "error");
+      }
+    });
+    byId("chargeRangeAllButton").addEventListener("click", () => setChargeRange("", ""));
     byId("printDepositButton").addEventListener("click", printDeposits);
     byId("exportDepositButton").addEventListener("click", exportDeposits);
     byId("depositForm").addEventListener("submit", saveDeposit);
@@ -603,8 +651,16 @@
   }
 
   async function init() {
-    state.selectedMonth = currentMonthKey();
-    byId("monthFilter").value = state.selectedMonth;
+    const rangeStart = currentMonthStart();
+    const rangeEnd = todayYmd();
+    state.paymentFrom = rangeStart;
+    state.paymentTo = rangeEnd;
+    state.chargeFrom = rangeStart;
+    state.chargeTo = rangeEnd;
+    byId("paymentRangeFrom").value = rangeStart;
+    byId("paymentRangeTo").value = rangeEnd;
+    byId("chargeRangeFrom").value = rangeStart;
+    byId("chargeRangeTo").value = rangeEnd;
     bindEvents();
     resetDepositForm();
     try {
@@ -620,3 +676,4 @@
 
   init();
 })(window);
+
