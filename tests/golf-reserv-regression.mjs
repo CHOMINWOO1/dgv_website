@@ -8,7 +8,7 @@ const read = (file) => readFile(path.join(projectRoot, file), "utf8");
 
 const [
   page, source, migration, zeroDepositMigration, legacyCourseMigration,
-  counterpartyMigration, dropCoordinatorMigration, classifyMigration,
+  counterpartyMigration, dropCoordinatorMigration, classifyMigration, paymentMigration,
 ] = await Promise.all([
   read("golf_reserv.html"),
   read("assets/golf-reserv.js"),
@@ -18,6 +18,7 @@ const [
   read("supabase/migrations/20261024130000_golf_reservation_counterparty.sql"),
   read("supabase/migrations/20261024131000_drop_golf_reservation_coordinator.sql"),
   read("supabase/migrations/20261024132000_classify_golf_counterparties.sql"),
+  read("supabase/migrations/20261024062000_golf_reservation_multi_payments.sql"),
 ]);
 
 // The page is a single manager/admin workspace: create, filter, inspect, edit,
@@ -25,7 +26,7 @@ const [
 assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
-assert.match(page, /assets\/golf-reserv\.js\?v=20261024-customer-type-edit-1/);
+assert.match(page, /assets\/golf-reserv\.js\?v=20261024-multi-payments-1/);
 assert.match(page, /assets\/qr-staff\.css/);
 assert.match(page, /\.golf-layout\{display:flex;flex-direction:column/);
 assert.match(page, /\.golf-form-card\{position:static\}/);
@@ -52,8 +53,9 @@ assert.doesNotMatch(source, /byId\("homeLink"\)|byId\("reloadButton"\)/);
 for (const id of [
   "counterpartyName", "representativeName", "playerNamesEn", "pax", "golfDateTime", "golfCourse", "holes",
   "guestUnitPrice", "guestTotalPreview", "smartCartNote", "courseUnitPrice",
-  "courseTotalPreview", "depositAmount", "depositDate", "finalAmount",
-  "finalDate", "withdrawalAmount", "withdrawalDate", "customerType", "note",
+  "courseTotalPreview", "depositPayments", "receiptPayments", "withdrawalPayments",
+  "depositTotalPreview", "receivedTotalPreview", "withdrawalTotalPreview", "cashProfitPreview",
+  "paymentCompleted", "customerType", "note",
 ]) {
   assert.match(page, new RegExp(`id="${id}"`), `missing field #${id}`);
 }
@@ -88,7 +90,7 @@ assert.match(source, /`\$\{row\.representative_name\} 수정 \/ Chỉnh sửa \$
 assert.match(source, /\{ column: "id", ascending: true \}/);
 for (const label of [
   "Quản lý đặt sân golf", "Đối tác", "Người đại diện (tên đầu tiên)", "Ngày chơi và giờ phát bóng",
-  "Giá khách / người", "Tổng tiền đã nhận", "Cá nhân", "Công ty",
+  "Giá khách / người", "Tổng tiền khách đã trả", "Cá nhân", "Công ty",
 ]) assert.ok(page.includes(label), `missing bilingual label: ${label}`);
 
 const firstPlayerNameBody = source.match(/function firstPlayerName\(value\) \{([\s\S]*?)\n  \}/)?.[1];
@@ -137,26 +139,30 @@ assert.match(source, /const guestTotal = pax > 0[\s\S]*?pax \* guestUnit/);
 assert.match(source, /const courseTotal = pax > 0[\s\S]*?pax \* courseUnit/);
 assert.match(source, /completed \? "완료 \/ Hoàn tất" : "진행중 \/ Đang xử lý"/);
 
-// Both halves of paired financial events are required together. Clearing both
-// final-payment fields is intentionally valid and lets the generated status
-// return to in_progress.
-assert.match(source, /\(finalAmount == null\) !== \(finalDate == null\)/);
-assert.match(source, /함께 입력하거나 함께 비워 주세요/);
-assert.match(source, /\(withdrawalAmount == null\) !== \(withdrawalDate == null\)/);
-assert.match(source, /최종 금액과 날짜를 모두 지우면 진행중으로 돌아갑니다/);
-assert.match(source, /final_received_amount_vnd: finalAmount/);
-assert.match(source, /final_received_date: finalDate/);
-assert.match(page, /예약금 \(0 VND 가능\)/);
-assert.match(page, /Tiền đặt cọc \(chấp nhận 0 VND\)/);
-assert.match(source, /if \(depositAmount == null\)/);
-assert.doesNotMatch(source, /!depositAmount|depositAmount < 1/);
+// Multiple deposits, receipts, and withdrawals are stored as individual ledger rows.
+for (const kind of ["deposit", "receipt", "withdrawal"]) {
+  assert.match(page, new RegExp(`data-add-payment="${kind}"`));
+}
+for (const method of ["bank", "cash", "card"]) {
+  assert.match(source, new RegExp(`value="${method}"`));
+}
+assert.match(source, /function allPaymentDrafts\(\)/);
+assert.match(source, /function validatePayments\(payments\)/);
+assert.match(source, /payment_kind: payment\.payment_kind/);
+assert.match(source, /byId\("paymentCompleted"\)\.checked/);
+assert.match(source, /5,000,000 VND 이상은 은행 거래가 필요합니다/);
+assert.match(source, /Giao dịch từ 5\.000\.000 VND phải chuyển khoản ngân hàng/);
+assert.match(source, /payment\.payment_method === "cash" && payment\.amount_vnd >= CASH_BANK_THRESHOLD/);
+assert.doesNotMatch(page, /id="(?:depositAmount|depositDate|finalAmount|finalDate|withdrawalAmount|withdrawalDate)"/);
+assert.match(page, /비고/);
+assert.match(page, /Ghi chú/);
 
 // Reads are paginated and writes are limited to the dedicated table. There is
 // no service key or cross-feature table write in browser code.
 assert.match(source, /DGV\.collectSupabasePages\(/);
 assert.match(source, /from\("golf_reservations"\)\.select\(COLUMNS\)/);
-assert.match(source, /from\("golf_reservations"\)\.insert\(\[payload\]\)/);
-assert.match(source, /from\("golf_reservations"\)\.update\(payload\)\.eq\("id", id\)/);
+assert.match(source, /sb\.rpc\("save_golf_reservation_with_payments"/);
+assert.match(source, /from\("golf_reservation_payments"\)\.select\(PAYMENT_COLUMNS\)/);
 assert.match(source, /from\("golf_reservations"\)\.delete\(\)\.eq\("id", row\.id\)/);
 assert.doesNotMatch(source, /service[_-]?role|serviceRole/i);
 assert.doesNotMatch(source, /from\("(?:orders|reservations|restaurant_expenses|menu_items)"\)/);
@@ -268,5 +274,22 @@ assert.match(classifyMigration, /upper\(btrim\(counterparty_name\)\) = 'SEP'/i);
 assert.match(classifyMigration, /then 'individual'[\s\S]*else 'company'/i);
 assert.match(classifyMigration, /update public\.golf_reservations/i);
 assert.doesNotMatch(classifyMigration, /update\s+(?!public\.golf_reservations\b)/i);
+
+// The payment-ledger migration preserves parent rows, backfills blank legacy methods,
+// enforces manager/admin access, and blocks large cash transactions at the database layer.
+assert.match(paymentMigration, /create table if not exists public\.golf_reservation_payments/i);
+assert.match(paymentMigration, /payment_kind in \('deposit', 'receipt', 'withdrawal'\)/i);
+assert.match(paymentMigration, /payment_method is null or payment_method in \('bank', 'cash', 'card'\)/i);
+assert.match(paymentMigration, /payment_method = 'cash' and amount_vnd >= 5000000/i);
+assert.match(paymentMigration, /alter table public\.golf_reservation_payments enable row level security/i);
+for (const action of ["read", "insert", "update", "delete"]) {
+  assert.match(paymentMigration, new RegExp(`golf_reservation_payments_manager_admin_${action}`, "i"));
+}
+assert.match(paymentMigration, /security invoker/i);
+assert.match(paymentMigration, /save_golf_reservation_with_payments/i);
+assert.match(paymentMigration, /legacy_import/i);
+assert.match(paymentMigration, /gr\.final_received_amount_vnd - gr\.deposit_amount_vnd/i);
+assert.match(paymentMigration, /payment_method is not null and legacy_import/i);
+assert.doesNotMatch(paymentMigration, /update\s+public\.golf_reservations[\s\S]*?set\s+note\s*=\s*null/i);
 
 console.log("Golf reservation page, CRUD, workflow, bilingual UI, and schema contracts verified.");
