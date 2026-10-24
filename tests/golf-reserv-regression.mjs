@@ -29,6 +29,8 @@ assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
 assert.match(page, /assets\/golf-reserv\.js\?v=20261024-partner-1/);
+assert.match(page, /티업 시작일 \/ Từ ngày chơi/);
+assert.match(page, /티업 종료일 \/ Đến ngày chơi/);
 assert.match(page, /assets\/qr-staff\.css/);
 assert.match(page, /\.golf-layout\{display:flex;flex-direction:column/);
 assert.match(page, /\.golf-form-card\{position:static\}/);
@@ -152,6 +154,8 @@ assert.match(source, /const golfTime = golfHour[\s\S]*?`\$\{golfHour\}:\$\{golfM
 assert.match(source, /golf_date: golfDate,[\s\S]*golf_time: golfTime/);
 assert.match(source, /등록 일시 \/ Thời gian tạo/);
 assert.match(source, /golfDateLabel\(row\.golf_date\)/);
+assert.match(source, /state\.rows\.sort\(\(a, b\) => \{[\s\S]*a\.golf_date[\s\S]*b\.golf_date/);
+assert.doesNotMatch(source, /statusOrder = Number\(a\.status === "completed"\)/);
 assert.match(source, /Date\.UTC\(Number\(match\[1\]\), Number\(match\[2\]\) - 1, Number\(match\[3\]\)\)/);
 
 // PAX remains manually editable but follows the normalized English-name count
