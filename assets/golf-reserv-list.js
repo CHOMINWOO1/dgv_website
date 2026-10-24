@@ -106,11 +106,13 @@
     const names = oneLine(row.player_names_en);
     const note = oneLine(row.note);
     const cart = oneLine(row.smart_cart_note);
+    const representative = row.representative_name || "—";
+    const editHref = `golf_reserv.html?edit=${encodeURIComponent(String(row.id || ""))}`;
     return `<tr data-status="${escape(row.status)}">
       <td><span class="golf-status-chip${completed ? " is-completed" : ""}">${escape(statusLabel)}</span></td>
       <td>${escape(golfDateLabel(row.golf_date))}</td>
       <td>${escape(timeLabel(row.golf_time))}</td>
-      <td class="golf-cell-text" title="${escape(row.representative_name)}">${escape(row.representative_name)}</td>
+      <td class="golf-cell-text" title="${escape(representative)}"><a class="golf-edit-link" href="${escape(editHref)}">${escape(representative)}</a></td>
       <td class="golf-cell-text" title="${escape(row.counterparty_name || "—")}">${escape(row.counterparty_name || "—")}</td>
       <td class="golf-cell-names" title="${escape(names)}">${escape(names)}</td>
       <td>${escape(row.pax)}</td>
@@ -204,7 +206,6 @@
     bindEvents();
     try {
       state.identity = await QRStaff.requireLogin({ roles: ["manager", "admin"], preferredRole: "manager" });
-      byId("homeLink").href = state.identity.role === "admin" ? "home_admin.html" : "home_manager.html";
       document.body.classList.remove("locked");
       await loadRows({ quiet: true });
     } catch (error) {

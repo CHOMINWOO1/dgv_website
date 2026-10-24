@@ -22,6 +22,8 @@
     .golf-sheet tbody tr[data-status="completed"] td{background:#fbfffb}
     .golf-sheet tbody tr[data-status="completed"]:hover td{background:#f4fbf4}
     .golf-sheet .golf-cell-text{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+    .golf-edit-link{color:inherit;font-weight:1000;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+    .golf-edit-link:hover,.golf-edit-link:focus-visible{color:#8a512f}
     .golf-sheet .golf-cell-names{max-width:340px;overflow:hidden;text-overflow:ellipsis}
     .golf-sheet .golf-cell-money{text-align:right;font-variant-numeric:tabular-nums}
     .golf-sheet .golf-cell-empty{height:130px;text-align:center;color:var(--qr-sub);font-size:14px;font-weight:850}
@@ -41,7 +43,6 @@
       <div class="qr-header-actions">
         <span class="qr-pill"><span class="qr-dot is-connecting" id="connectionDot"></span><span id="connectionText">연결 중</span></span>
         <a class="qr-btn" href="golf_reserv.html">예약 입력·수정 / Quản lý</a>
-        <a class="qr-btn" id="homeLink" href="home_manager.html">홈 / Trang chủ</a>
         <button class="qr-btn" id="reloadButton" type="button">새로고침 / Làm mới</button>
       </div>
     </header>
@@ -123,6 +124,6 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-reserv-list.js?v=20261024-counterparty-1"></script>
+  <script src="assets/golf-reserv-list.js?v=20261024-edit-link-1"></script>
 </body>
 </html>
