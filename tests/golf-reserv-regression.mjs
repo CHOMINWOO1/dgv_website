@@ -125,7 +125,7 @@ assert.match(source, /const STANDARD_HOLES = new Set\(\[9, 18, 27, 26\]\)/);
 assert.match(source, /option\.dataset\.legacyHole = "true"/);
 assert.match(source, /unchangedLegacyHoles/);
 assert.match(source, /golfDateTime\.match\(\/\^\(\\d\{4\}-\\d\{2\}-\\d\{2\}\)T/);
-assert.match(source, /golf_date: golfDate, golf_time: golfTime/);
+assert.match(source, /golf_date: golfDate,[\s\S]*golf_time: golfTime/);
 assert.match(source, /등록 일시 \/ Thời gian tạo/);
 assert.match(source, /golfDateLabel\(row\.golf_date\)/);
 assert.match(source, /Date\.UTC\(Number\(match\[1\]\), Number\(match\[2\]\) - 1, Number\(match\[3\]\)\)/);
