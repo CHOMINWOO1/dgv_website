@@ -80,6 +80,24 @@
     banner.dataset.tone = tone;
   }
 
+  function clearLegacyCourseOption() {
+    const option = byId("golfCourse").querySelector("option[data-legacy-course]");
+    if (option) option.remove();
+  }
+
+  function setCourseValue(value) {
+    clearLegacyCourseOption();
+    const course = clean(value);
+    if (course && !GOLF_COURSES.has(course)) {
+      const option = document.createElement("option");
+      option.value = course;
+      option.textContent = `${course} (기존값 / Dữ liệu cũ)`;
+      option.dataset.legacyCourse = "true";
+      byId("golfCourse").append(option);
+    }
+    byId("golfCourse").value = course;
+  }
+
   function clearLegacyHoleOption() {
     const option = byId("holes").querySelector("option[data-legacy-hole]");
     if (option) option.remove();
@@ -117,6 +135,8 @@
     byId("reservationForm").reset();
     byId("recordId").value = "";
     byId("depositDate").value = todayYmd();
+    clearLegacyCourseOption();
+    byId("golfCourse").value = "";
     clearLegacyHoleOption();
     byId("holes").value = "18";
     byId("customerType").value = "individual";
@@ -137,7 +157,7 @@
     byId("golfDateTime").value = row.golf_date && row.golf_time
       ? `${row.golf_date}T${String(row.golf_time).slice(0, 5)}`
       : "";
-    byId("golfCourse").value = row.golf_course || "";
+    setCourseValue(row.golf_course);
     setHoleValue(row.holes);
     byId("smartCartNote").value = row.smart_cart_note || "";
     setMoneyInput("guestUnitPrice", row.guest_unit_price_vnd);
@@ -181,13 +201,16 @@
     const finalDate = byId("finalDate").value || null;
     const withdrawalAmount = moneyNumber(byId("withdrawalAmount").value);
     const withdrawalDate = byId("withdrawalDate").value || null;
+    const existingRow = state.rows.find((row) => row.id === byId("recordId").value);
 
     if (!representativeName) throw new Error("예약자 대표를 입력해 주세요.");
     if (!playerNamesEn) throw new Error("전체 영문 이름을 입력해 주세요.");
     if (!Number.isInteger(pax) || pax < 1 || pax > 100) throw new Error("인원을 1명 이상 100명 이하로 입력해 주세요.");
     if (!golfDate || !golfTime) throw new Error("골프 날짜와 티오프 시간을 선택해 주세요.");
-    if (!GOLF_COURSES.has(golfCourse)) throw new Error("골프장을 AT1200, SAM, PALACE 중에서 선택해 주세요.");
-    const existingRow = state.rows.find((row) => row.id === byId("recordId").value);
+    const unchangedLegacyCourse = existingRow && existingRow.golf_course === golfCourse;
+    if (!GOLF_COURSES.has(golfCourse) && !unchangedLegacyCourse) {
+      throw new Error("골프장을 AT1200, SAM, PALACE 중에서 선택해 주세요.");
+    }
     const unchangedLegacyHoles = existingRow && Number(existingRow.holes) === holes;
     if (!STANDARD_HOLES.has(holes) && !unchangedLegacyHoles) throw new Error("홀 수를 9, 18, 27, 26 중에서 선택해 주세요.");
     for (const [label, value, max] of [
@@ -415,3 +438,4 @@
 
   init();
 })(window);
+

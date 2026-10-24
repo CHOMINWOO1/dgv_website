@@ -6,11 +6,12 @@ import path from "node:path";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(projectRoot, file), "utf8");
 
-const [page, source, migration, zeroDepositMigration] = await Promise.all([
+const [page, source, migration, zeroDepositMigration, legacyCourseMigration] = await Promise.all([
   read("golf_reserv.html"),
   read("assets/golf-reserv.js"),
   read("supabase/migrations/20261024103000_golf_reservations.sql"),
   read("supabase/migrations/20261024114000_allow_zero_golf_deposit.sql"),
+  read("supabase/migrations/20261024120000_allow_legacy_golf_courses.sql"),
 ]);
 
 // The page is a single manager/admin workspace: create, filter, inspect, edit,
@@ -18,7 +19,7 @@ const [page, source, migration, zeroDepositMigration] = await Promise.all([
 assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
-assert.match(page, /assets\/golf-reserv\.js\?v=20261024-simplified-1/);
+assert.match(page, /assets\/golf-reserv\.js\?v=20261024-legacy-course-1/);
 assert.match(page, /assets\/qr-staff\.css/);
 assert.match(source, /QRStaff\.requireLogin\(\{ roles: \["manager", "admin"\], preferredRole: "manager" \}\)/);
 assert.match(source, /state\.identity\.role === "admin" \? "home_admin\.html" : "home_manager\.html"/);
@@ -62,6 +63,8 @@ for (const course of ["AT1200", "SAM", "PALACE"]) {
 }
 assert.doesNotMatch(page, /<input[^>]+id="golfCourse"/);
 assert.match(source, /new Set\(\["AT1200", "SAM", "PALACE"\]\)/);
+assert.match(source, /option\.dataset\.legacyCourse = "true"/);
+assert.match(source, /unchangedLegacyCourse/);
 
 // Date and tee time use one picker. New reservations use the requested hole
 // choices, while a legacy value remains selectable only when editing that row.
@@ -157,5 +160,10 @@ assert.doesNotMatch(
 assert.match(zeroDepositMigration, /drop constraint if exists golf_reservations_deposit_amount_check/i);
 assert.match(zeroDepositMigration, /deposit_amount_vnd between 0 and 9007199254740991/i);
 assert.doesNotMatch(zeroDepositMigration, /^\s*(?:insert|update|delete|truncate)\b/im);
+assert.match(legacyCourseMigration, /drop constraint if exists golf_reservations_golf_course_check/i);
+assert.match(legacyCourseMigration, /golf_course in \('AT1200', 'SAM', 'PALACE', 'KN', 'DB'\)/i);
+assert.match(legacyCourseMigration, /validate constraint golf_reservations_golf_course_check/i);
+assert.doesNotMatch(legacyCourseMigration, /^\s*(?:insert|update|delete|truncate)\b/im);
 
 console.log("Golf reservation page, CRUD, workflow, bilingual UI, and schema contracts verified.");
+
