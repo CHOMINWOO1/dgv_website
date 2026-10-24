@@ -7,8 +7,8 @@
   const QRStaff = global.QRStaff;
   const sb = DGV.supabase;
   const COLUMNS = [
-    "id", "representative_name", "player_names_en", "pax",
-    "coordinator_name", "booking_date", "golf_date", "golf_time",
+    "id", "counterparty_name", "representative_name", "player_names_en", "pax",
+    "booking_date", "golf_date", "golf_time",
     "golf_course", "holes", "guest_unit_price_vnd", "smart_cart_note",
     "guest_total_vnd", "course_unit_price_vnd", "course_total_vnd",
     "deposit_amount_vnd", "deposit_received_date",
@@ -24,6 +24,15 @@
   function dateLabel(value) {
     const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
     return match ? `${match[1]}.${match[2]}.${match[3]}` : "—";
+  }
+
+  function golfDateLabel(value) {
+    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return "—";
+    const weekday = ["일/CN", "월/T2", "화/T3", "수/T4", "목/T5", "금/T6", "토/T7"][
+      new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).getUTCDay()
+    ];
+    return match[1] + "." + match[2] + "." + match[3] + " (" + weekday + ")";
   }
 
   function dateTimeLabel(value) {
@@ -73,7 +82,7 @@
       if (to && row.golf_date > to) return false;
       if (!query) return true;
       return [
-        row.representative_name, row.player_names_en, row.coordinator_name,
+        row.counterparty_name, row.representative_name, row.player_names_en,
         row.golf_course, row.smart_cart_note, row.note
       ].some((value) => String(value || "").toLocaleLowerCase().includes(query));
     });
@@ -99,17 +108,15 @@
     const cart = oneLine(row.smart_cart_note);
     return `<tr data-status="${escape(row.status)}">
       <td><span class="golf-status-chip${completed ? " is-completed" : ""}">${escape(statusLabel)}</span></td>
-      <td>${escape(dateLabel(row.golf_date))}</td>
+      <td>${escape(golfDateLabel(row.golf_date))}</td>
       <td>${escape(timeLabel(row.golf_time))}</td>
       <td class="golf-cell-text" title="${escape(row.representative_name)}">${escape(row.representative_name)}</td>
+      <td class="golf-cell-text" title="${escape(row.counterparty_name || "—")}">${escape(row.counterparty_name || "—")}</td>
       <td class="golf-cell-names" title="${escape(names)}">${escape(names)}</td>
       <td>${escape(row.pax)}</td>
-      <td class="golf-cell-text" title="${escape(row.coordinator_name || "—")}">${escape(row.coordinator_name || "—")}</td>
       <td>${escape(row.golf_course)}</td>
       <td>${escape(row.holes)}</td>
       <td class="golf-cell-text" title="${escape(cart)}">${escape(cart)}</td>
-      <td>${escape(customerType)}</td>
-      <td>${escape(dateTimeLabel(row.created_at))}</td>
       <td class="golf-cell-money">${escape(moneyLabel(row.guest_unit_price_vnd))}</td>
       <td class="golf-cell-money">${escape(moneyLabel(row.guest_total_vnd))}</td>
       <td class="golf-cell-money">${escape(moneyLabel(row.course_unit_price_vnd))}</td>
@@ -121,6 +128,8 @@
       <td class="golf-cell-money">${escape(moneyLabel(row.withdrawal_amount_vnd))}</td>
       <td>${escape(dateLabel(row.withdrawal_date))}</td>
       <td class="golf-cell-money">${escape(moneyLabel(actualProfit(row)))}</td>
+      <td>${escape(customerType)}</td>
+      <td>${escape(dateTimeLabel(row.created_at))}</td>
       <td class="golf-cell-text" title="${escape(note)}">${escape(note)}</td>
       <td>${escape(dateTimeLabel(row.updated_at))}</td>
     </tr>`;
@@ -167,6 +176,28 @@
     });
     byId("searchInput").addEventListener("input", render);
     for (const id of ["statusFilter", "filterFrom", "filterTo"]) byId(id).addEventListener("change", render);
+
+    const sheet = document.querySelector(".golf-sheet-wrap");
+    let drag = null;
+    sheet.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "touch" || event.button !== 0) return;
+      if (event.target.closest("a, button, input, select, textarea")) return;
+      drag = { pointerId: event.pointerId, x: event.clientX, scrollLeft: sheet.scrollLeft };
+      sheet.setPointerCapture(event.pointerId);
+      sheet.classList.add("is-dragging");
+    });
+    sheet.addEventListener("pointermove", (event) => {
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      sheet.scrollLeft = drag.scrollLeft - (event.clientX - drag.x);
+      event.preventDefault();
+    });
+    const stopDrag = (event) => {
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      drag = null;
+      sheet.classList.remove("is-dragging");
+    };
+    sheet.addEventListener("pointerup", stopDrag);
+    sheet.addEventListener("pointercancel", stopDrag);
   }
 
   async function init() {
