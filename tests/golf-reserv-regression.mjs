@@ -29,6 +29,8 @@ assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
 assert.match(page, /assets\/golf-reserv\.js\?v=20261024-partner-1/);
+assert.match(page, /href="golf_reserv_list\.html"[^>]*>한 줄 목록 \/ Bảng<\/a>/);
+assert.match(page, /href="golf_budget\.html"[^>]*>골프장 예산 \/ Ngân sách<\/a>/);
 assert.match(page, /티업 시작일 \/ Từ ngày chơi/);
 assert.match(page, /티업 종료일 \/ Đến ngày chơi/);
 assert.match(page, /assets\/qr-staff\.css/);
