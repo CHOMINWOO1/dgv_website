@@ -19,7 +19,7 @@ const [page, source, migration, managerAccessMigration, editorPage, editorSource
 ]);
 
 // Manager/admin budget UI, independent daily-range filters and course-specific deduction detail.
-assert.match(page, /assets\/golf-budget\.js\?v=20261024-4/);
+assert.match(page, /assets\/golf-budget\.js\?v=20261024-5/);
 assert.match(page, /골프장별 현재 잔액 \/ Số dư theo sân/);
 for (const id of ["paymentRangeFrom", "paymentRangeTo", "chargeRangeFrom", "chargeRangeTo"]) {
   assert.match(page, new RegExp(`id="${id}"[^>]*type="date"`));
@@ -41,6 +41,8 @@ assert.match(page, /id="summaryExpectedMeta"/);
 assert.match(page, /id="printDepositButton"/);
 assert.match(page, /id="exportDepositButton"/);
 assert.match(page, /id="printDepositCriteria"/);
+assert.match(page, /조회 합계 \/ Tổng kỳ tra cứu[\s\S]*id="depositTableTotal"/);
+assert.match(page, /현재 차감 합계 \/ Tổng đang khấu trừ[\s\S]*id="chargeTableTotal"/);
 assert.match(page, /assets\/dgv-xlsx\.js/);
 assert.match(page, /@media print[\s\S]*body\.print-budget-payments[\s\S]*#depositListSection[\s\S]*\.budget-table th:last-child/);
 assert.doesNotMatch(page, /충전|Nạp thêm|nạp sân/);
@@ -57,6 +59,8 @@ assert.match(source, /dateInRange\(String\(deposit\?\.deposit_date \|\| ""\), st
 assert.match(source, /dateInRange\(chargedDate, state\.chargeFrom, state\.chargeTo\)[\s\S]*dateInRange\(restoredDate, state\.chargeFrom, state\.chargeTo\)/);
 assert.match(source, /state\.deposits\.filter\(depositInPaymentRange\)/);
 assert.match(source, /state\.charges\.filter\(chargeTouchesChargeRange\)/);
+assert.match(source, /depositTableTotal"\)\.textContent = moneyLabel\(depositTotalOf\(deposits\)\)/);
+assert.match(source, /activeTotal = charges[\s\S]*charge\.active !== false[\s\S]*chargeTableTotal"\)\.textContent = moneyLabel\(activeTotal\)/);
 assert.match(source, /function setPaymentRange\(from, to\)[\s\S]*renderDeposits\(\);\s*}/);
 assert.match(source, /function setChargeRange\(from, to\)[\s\S]*renderCharges\(\);\s*}/);
 assert.match(source, /시작일은 종료일보다 늦을 수 없습니다\.[\s\S]*Ngày bắt đầu không được sau ngày kết thúc\./);

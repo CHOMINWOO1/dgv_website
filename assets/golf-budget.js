@@ -222,6 +222,7 @@
     byId("paymentRangeAllButton").classList.toggle("is-active", allTime);
     byId("paymentRangeAllButton").setAttribute("aria-pressed", String(allTime));
     byId("depositCount").textContent = `${paymentRangeLabel()} · ${deposits.length.toLocaleString("ko-KR")}건 / mục`;
+    byId("depositTableTotal").textContent = moneyLabel(depositTotalOf(deposits));
     byId("depositTableBody").innerHTML = deposits.length
       ? deposits.map((deposit) => `<tr>
         <td>${escape(dateLabel(deposit.deposit_date))}</td>
@@ -339,11 +340,15 @@
       : periodCharges.filter((charge) => charge.golf_course === state.chargeCourse);
     const filterLabel = state.chargeCourse === "all" ? "전체 / Tất cả" : state.chargeCourse;
     const activeCount = charges.filter((charge) => charge.active !== false).length;
+    const activeTotal = charges
+      .filter((charge) => charge.active !== false)
+      .reduce((total, charge) => total + Number(charge.amount_vnd || 0), 0);
     const allTime = !state.chargeFrom && !state.chargeTo;
     byId("chargeRangeStatus").textContent = `현재 조회 / Đang xem: ${chargeRangeLabel()} · ${periodCharges.length.toLocaleString("ko-KR")}건 / mục`;
     byId("chargeRangeAllButton").classList.toggle("is-active", allTime);
     byId("chargeRangeAllButton").setAttribute("aria-pressed", String(allTime));
     byId("chargeCount").textContent = `${chargeRangeLabel()} · ${filterLabel} · 현재 차감 / Đang trừ ${activeCount.toLocaleString("ko-KR")}건 · 전체 / Tổng ${charges.length.toLocaleString("ko-KR")}건`;
+    byId("chargeTableTotal").textContent = moneyLabel(activeTotal);
     byId("chargeFilters").querySelectorAll("[data-charge-course]").forEach((button) => {
       const active = button.dataset.chargeCourse === state.chargeCourse;
       button.classList.toggle("is-active", active);
