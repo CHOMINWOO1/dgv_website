@@ -59,7 +59,7 @@
       </div>
     </header>
 
-    <div class="qr-banner" id="pageBanner">예약금이 입금된 예약을 등록하면 진행중으로 표시됩니다. 최종 총입금액과 날짜를 입력하면 자동으로 완료됩니다.</div>
+    <div class="qr-banner" id="pageBanner">예약금은 0 VND도 등록할 수 있습니다. 최종 총입금액과 날짜를 입력하면 자동으로 완료됩니다. / Có thể đăng ký tiền cọc 0 VND.</div>
 
     <section class="qr-summary" aria-label="예약 요약">
       <div class="qr-card qr-summary-card"><div class="qr-summary-label">진행중 / Đang xử lý</div><div class="qr-summary-value" id="summaryProgress">0</div></div>
@@ -73,7 +73,7 @@
         <div class="qr-section-head">
           <div>
             <h2 class="qr-section-title" id="formTitle">새 골프 예약 / Đặt sân mới</h2>
-            <div class="qr-hint" id="editingHint">예약금과 입금일을 입력해 진행중 예약을 등록합니다.</div>
+            <div class="qr-hint" id="editingHint">예약금(0 VND 가능)과 날짜를 입력해 진행중 예약을 등록합니다. / Có thể nhập tiền cọc 0 VND.</div>
           </div>
           <button class="qr-btn qr-btn-small" id="resetButton" type="button">새 입력 / Tạo mới</button>
         </div>
@@ -114,7 +114,7 @@
           <div class="golf-form-section">
             <h3>입출금 및 상태 / Thu chi và trạng thái</h3>
             <div class="qr-form-grid">
-              <label class="qr-field"><span class="qr-label">예약금 (VND)<span class="golf-label-vi">Tiền đặt cọc</span></span><input class="qr-input golf-money-input" id="depositAmount" type="text" inputmode="numeric" autocomplete="off" required /></label>
+              <label class="qr-field"><span class="qr-label">예약금 (0 VND 가능)<span class="golf-label-vi">Tiền đặt cọc (chấp nhận 0 VND)</span></span><input class="qr-input golf-money-input" id="depositAmount" type="text" inputmode="numeric" autocomplete="off" required /></label>
               <label class="qr-field"><span class="qr-label">예약금 입금일<span class="golf-label-vi">Ngày nhận tiền đặt cọc</span></span><input class="qr-input" id="depositDate" type="date" required /></label>
               <label class="qr-field"><span class="qr-label">최종 총입금액 (예약금 포함, VND)<span class="golf-label-vi">Tổng tiền đã nhận, gồm tiền cọc</span></span><input class="qr-input golf-money-input" id="finalAmount" type="text" inputmode="numeric" autocomplete="off" /></label>
               <label class="qr-field"><span class="qr-label">최종 입금일<span class="golf-label-vi">Ngày nhận đủ tiền</span></span><input class="qr-input" id="finalDate" type="date" /></label>

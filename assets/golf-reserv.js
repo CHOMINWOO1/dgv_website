@@ -92,7 +92,7 @@
     byId("holes").value = "18";
     byId("customerType").value = "individual";
     byId("formTitle").textContent = "새 골프 예약 / Đặt sân mới";
-    byId("editingHint").textContent = "예약금과 입금일을 입력해 진행중 예약을 등록합니다.";
+    byId("editingHint").textContent = "예약금(0 VND 가능)과 날짜를 입력해 진행중 예약을 등록합니다. / Có thể nhập tiền cọc 0 VND.";
     byId("saveButton").textContent = "예약 저장 / Lưu đặt chỗ";
     byId("cancelEditButton").hidden = true;
     updatePreview();
@@ -167,7 +167,7 @@
     ]) {
       if (Number.isNaN(value) || (value != null && (value < 0 || value > max))) throw new Error(`${label}을 올바르게 입력해 주세요.`);
     }
-    if (!depositAmount || depositAmount < 1) throw new Error("예약금을 1 VND 이상 입력해 주세요.");
+    if (depositAmount == null) throw new Error("예약금을 입력해 주세요. 0 VND도 입력할 수 있습니다.");
     if (!depositDate) throw new Error("예약금 입금일을 입력해 주세요.");
     if ((finalAmount == null) !== (finalDate == null)) throw new Error("최종 총입금액과 최종 입금일은 함께 입력하거나 함께 비워 주세요.");
     if (finalAmount != null && finalAmount < depositAmount) throw new Error("최종 총입금액은 예약금보다 작을 수 없습니다.");
