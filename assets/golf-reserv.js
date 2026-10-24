@@ -513,6 +513,28 @@
 
   function rowById(id) { return state.rows.find((row) => row.id === id) || null; }
 
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  function openRequestedEdit() {
+    const params = new URLSearchParams(global.location.search);
+    if (!params.has("edit")) return;
+    const rawId = clean(params.get("edit"));
+    params.delete("edit");
+    const query = params.toString();
+    const nextUrl = `${global.location.pathname}${query ? `?${query}` : ""}${global.location.hash}`;
+    global.history.replaceState(null, "", nextUrl);
+    if (!UUID_PATTERN.test(rawId)) {
+      QRStaff.toast("선택한 예약을 찾지 못했습니다. 목록에서 다시 선택해 주세요.", "error");
+      return;
+    }
+    const row = rowById(rawId);
+    if (!row) {
+      QRStaff.toast("선택한 예약을 찾지 못했습니다. 목록에서 다시 선택해 주세요.", "error");
+      return;
+    }
+    fillForm(row, { focusFinal: false });
+  }
+
   function bindEvents() {
     byId("reservationForm").addEventListener("submit", save);
     byId("resetButton").addEventListener("click", () => resetForm());
@@ -558,6 +580,7 @@
       state.identity = await QRStaff.requireLogin({ roles: ["manager", "admin"], preferredRole: "manager" });
       document.body.classList.remove("locked");
       await loadRows({ quiet: true });
+      openRequestedEdit();
     } catch (error) {
       console.error(error);
       QRStaff.connectionBadge("offline", "로그인 오류");
