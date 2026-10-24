@@ -21,6 +21,8 @@ const [page, source, migration, managerAccessMigration, editorPage, editorSource
 // Manager/admin budget UI, independent daily-range filters and course-specific deduction detail.
 assert.match(page, /assets\/golf-budget\.js\?v=20261024-partner-1/);
 assert.match(page, /골프장별 현재 잔액 \/ Số dư theo sân/);
+assert.match(page, /href="golf_reserv\.html"[^>]*>예약 입력·수정 \/ Quản lý<\/a>/);
+assert.match(page, /href="golf_reserv_list\.html"[^>]*>한 줄 목록 \/ Bảng<\/a>/);
 for (const id of ["paymentRangeFrom", "paymentRangeTo", "chargeRangeFrom", "chargeRangeTo"]) {
   assert.match(page, new RegExp(`id="${id}"[^>]*type="date"`));
 }
