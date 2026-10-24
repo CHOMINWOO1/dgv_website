@@ -14,7 +14,7 @@ const [page, source, editor, adminHome, managerHome] = await Promise.all([
 ]);
 
 assert.match(page, /<table class="golf-sheet">/);
-assert.match(page, /assets\/golf-reserv-list\.js\?v=20261024-counterparty-1/);
+assert.match(page, /assets\/golf-reserv-list\.js\?v=20261024-edit-link-1/);
 assert.match(page, /id="reservationTableBody"/);
 assert.match(page, /colspan="25"/);
 assert.match(page, /min-width:2860px/);
@@ -36,6 +36,11 @@ assert.match(source, /status !== "all"/);
 assert.match(source, /row\.golf_date < from/);
 assert.match(source, /row\.golf_date > to/);
 assert.match(source, /rows\.map\(renderRow\)/);
+assert.ok(source.includes('const editHref = `golf_reserv.html?edit=${encodeURIComponent(String(row.id || ""))}`;'));
+assert.ok(source.includes('<a class="golf-edit-link" href="${escape(editHref)}">'));
+assert.match(source, /event\.target\.closest\("a, button, input, select, textarea"\)/);
+assert.doesNotMatch(page, /id="homeLink"/);
+assert.doesNotMatch(source, /byId\("homeLink"\)/);
 assert.match(source, /DGV\.escapeHTML/);
 assert.match(source, /dateTimeLabel\(row\.created_at\)/);
 assert.match(source, /golfDateLabel\(row\.golf_date\)/);
