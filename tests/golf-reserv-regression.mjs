@@ -24,8 +24,19 @@ const [
 assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
-assert.match(page, /assets\/golf-reserv\.js\?v=20261024-counterparty-1/);
+assert.match(page, /assets\/golf-reserv\.js\?v=20261024-vertical-layout-1/);
 assert.match(page, /assets\/qr-staff\.css/);
+assert.match(page, /\.golf-layout\{display:flex;flex-direction:column/);
+assert.match(page, /\.golf-form-card\{position:static\}/);
+assert.doesNotMatch(page, /id="pageBanner"|class="qr-summary"|id="summary(?:Progress|Completed|Deposit|Profit)"/);
+assert.doesNotMatch(source, /function summary\(|summaryProgress|summaryCompleted|summaryDeposit|summaryProfit/);
+assert.doesNotMatch(source, /byId\("pageBanner"\)/);
+assert.match(source, /if \(tone === "error"\) QRStaff\.toast\(message, "error"\);/);
+assert.ok(
+  page.indexOf('class="qr-card qr-form golf-form-card"')
+    < page.indexOf('class="qr-card qr-card-pad golf-list-card"'),
+  "reservation form must render before the reservation list",
+);
 assert.match(source, /QRStaff\.requireLogin\(\{ roles: \["manager", "admin"\], preferredRole: "manager" \}\)/);
 assert.match(source, /state\.identity\.role === "admin" \? "home_admin\.html" : "home_manager\.html"/);
 
