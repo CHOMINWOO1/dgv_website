@@ -70,6 +70,7 @@
     }
     @page{size:A4 landscape;margin:10mm}
     @media print{
+      body.print-budget-payments>main.budget-app,body.print-budget-charges>main.budget-app{display:block!important;max-width:none!important;margin:0!important;padding:0!important;filter:none!important}
       body.print-budget-payments{background:#fff!important;color:#111!important;font-family:Arial,"Malgun Gothic",sans-serif!important}
       body.print-budget-payments .budget-app> *{display:none!important}
       body.print-budget-payments #depositListSection{display:block!important;padding:0!important;border:0!important;border-radius:0!important;background:#fff!important;box-shadow:none!important}
@@ -89,6 +90,22 @@
       body.print-budget-payments .budget-table th:nth-child(3),body.print-budget-payments .budget-table td:nth-child(3){width:20%}
       body.print-budget-payments .budget-table th:nth-child(4),body.print-budget-payments .budget-table td:nth-child(4){width:18%;text-align:right!important}
       body.print-budget-payments .budget-table th:nth-child(5),body.print-budget-payments .budget-table td:nth-child(5){width:34%}
+      body.print-budget-charges{background:#fff!important;color:#111!important;font-family:Arial,"Malgun Gothic",sans-serif!important}
+      body.print-budget-charges .budget-app> *{display:none!important}
+      body.print-budget-charges #chargeListSection,body.print-budget-charges #pendingListSection{display:block!important;padding:0!important;border:0!important;border-radius:0!important;background:#fff!important;box-shadow:none!important}
+      body.print-budget-charges #pendingListSection{break-before:page;page-break-before:always}
+      body.print-budget-charges .budget-print-head{display:block!important;margin:0 0 5mm}
+      body.print-budget-charges .budget-print-head h1{margin:0 0 2mm;font-size:17pt;line-height:1.3}
+      body.print-budget-charges .budget-print-head p{margin:1mm 0;font-size:9pt}
+      body.print-budget-charges .qr-section-head,body.print-budget-charges .budget-range-controls,body.print-budget-charges .budget-charge-filters,body.print-budget-charges .budget-explainer{display:none!important}
+      body.print-budget-charges .budget-table-wrap{display:block!important;overflow:visible!important;border:0!important;border-radius:0!important}
+      body.print-budget-charges .budget-table{display:table!important;width:100%!important;min-width:0!important;table-layout:fixed!important;border-collapse:collapse!important}
+      body.print-budget-charges .budget-table thead{display:table-header-group!important}
+      body.print-budget-charges .budget-table tfoot{display:table-row-group!important}
+      body.print-budget-charges .budget-table tr{break-inside:avoid;page-break-inside:avoid}
+      body.print-budget-charges .budget-table th,body.print-budget-charges .budget-table td{padding:2mm 1.5mm!important;border:1px solid #aaa!important;color:#111!important;background:#fff!important;font-size:8pt!important;vertical-align:top!important;overflow-wrap:anywhere!important;white-space:normal!important}
+      body.print-budget-charges .budget-edit-link{color:#111!important;text-decoration:none}
+      body.print-budget-charges .budget-table th.budget-money{font-size:9pt!important}
     }
   </style>
 </head>
@@ -183,8 +200,20 @@
       </div>
     </section>
 
-    <section class="qr-card qr-card-pad" aria-labelledby="chargeListTitle">
-      <div class="qr-section-head"><div><h2 class="qr-section-title" id="chargeListTitle">완료 예약 자동 차감 상세 / Chi tiết khấu trừ đặt sân</h2><div class="qr-muted" id="chargeCount">0건</div></div></div>
+    <section class="qr-card qr-card-pad" id="chargeListSection" aria-labelledby="chargeListTitle">
+      <div class="budget-print-head">
+        <h1>HANA 완료 예약 자동 차감 상세 / Chi tiết khấu trừ đặt sân</h1>
+        <p id="printChargeCriteria"></p>
+        <p id="printChargeGeneratedAt"></p>
+      </div>
+      <div class="qr-section-head">
+        <div><h2 class="qr-section-title" id="chargeListTitle">완료 예약 자동 차감 상세 / Chi tiết khấu trừ đặt sân</h2><div class="qr-muted" id="chargeCount">0건</div></div>
+        <div class="qr-button-row">
+          <button class="qr-btn" id="printChargeButton" type="button">출력 / In</button>
+          <button class="qr-btn qr-btn-primary" id="exportChargeButton" type="button">엑셀 출력 / Xuất Excel</button>
+        </div>
+      </div>
+      <p class="budget-explainer" style="margin-bottom:10px">출력·엑셀에는 현재 조회 중인 완료 내역과 아래 차감 예정 내역이 함께 포함됩니다.<br />Bản in và Excel bao gồm các khoản đã trừ và dự kiến đang được hiển thị.</p>
       <p class="budget-explainer" style="margin-bottom:10px">기존 완료 예약과 이후 완료되는 예약을 모두 표시합니다. 원가가 없던 기존 완료 건은 원가 미입력으로 표시되며 현재잔액에는 영향을 주지 않습니다.<br />Hiển thị cả đặt sân đã hoàn tất trước đây và đặt sân hoàn tất sau này. Dữ liệu cũ chưa có giá vốn sẽ được đánh dấu chưa nhập và không làm thay đổi số dư hiện tại.</p>
       <div class="budget-range-controls" aria-labelledby="chargeRangeTitle">
         <div class="qr-field"><span class="qr-label" id="chargeRangeTitle">자동 차감 기간 조회 / Tra cứu thời gian khấu trừ</span><div class="budget-basis-date">골프 날짜 기준 / Theo ngày chơi golf</div></div>
@@ -208,6 +237,36 @@
         </table>
       </div>
     </section>
+    <section class="qr-card qr-card-pad" id="pendingListSection" aria-labelledby="pendingListTitle">
+      <div class="budget-print-head">
+        <h1>HANA 차감 예정 내역 / Các khoản khấu trừ dự kiến</h1>
+        <p id="printPendingCriteria"></p>
+        <p>진행 중 예약의 골프장 원가이며 현재 잔액에서는 아직 차감되지 않았습니다.<br />Giá vốn sân của các đặt sân đang xử lý, chưa trừ vào số dư hiện tại.</p>
+      </div>
+      <div class="qr-section-head"><div><h2 class="qr-section-title" id="pendingListTitle">차감 예정 내역 / Các khoản khấu trừ dự kiến</h2><div class="qr-muted" id="pendingCount">0건</div></div></div>
+      <p class="budget-explainer" style="margin-bottom:10px">진행 중 예약이 완료되면 아래 골프장 원가가 차감됩니다. 거래처 보유분은 제외되며, 예정 금액은 현재 잔액에 영향을 주지 않습니다.<br />Giá vốn dưới đây sẽ được trừ khi đặt sân hoàn tất. Không bao gồm các đặt sân thanh toán với đối tác. Khoản dự kiến chưa ảnh hưởng đến số dư hiện tại.</p>
+      <div class="budget-range-controls" aria-labelledby="pendingRangeTitle">
+        <div class="qr-field"><span class="qr-label" id="pendingRangeTitle">차감 예정 기간 조회 / Tra cứu khoản dự kiến</span><div class="budget-basis-date">골프 날짜 기준 / Theo ngày chơi golf</div></div>
+        <label class="qr-field"><span class="qr-label">시작일 / Từ ngày</span><input class="qr-input" id="pendingRangeFrom" type="date" /></label>
+        <label class="qr-field"><span class="qr-label">종료일 / Đến ngày</span><input class="qr-input" id="pendingRangeTo" type="date" /></label>
+        <button class="qr-btn qr-btn-primary" id="pendingRangeApplyButton" type="button">조회 / Tra cứu</button>
+        <button class="qr-btn budget-range-all" id="pendingRangeAllButton" type="button">전체 기간 / Toàn bộ</button>
+        <div class="budget-range-status" id="pendingRangeStatus" aria-live="polite">—</div>
+      </div>
+      <div class="budget-charge-filters" id="pendingFilters" aria-label="골프장별 차감 예정 필터">
+        <button class="qr-btn qr-btn-small budget-charge-filter is-active" type="button" data-pending-course="all">전체 / Tất cả</button>
+        <button class="qr-btn qr-btn-small budget-charge-filter" type="button" data-pending-course="AT1200">AT1200</button>
+        <button class="qr-btn qr-btn-small budget-charge-filter" type="button" data-pending-course="SAM">SAM</button>
+        <button class="qr-btn qr-btn-small budget-charge-filter" type="button" data-pending-course="PALACE">PALACE</button>
+      </div>
+      <div class="budget-table-wrap">
+        <table class="budget-table">
+          <thead><tr><th>상태<br />Trạng thái</th><th>골프장<br />Sân</th><th>골프 날짜<br />Ngày chơi</th><th>티오프 시간<br />Giờ phát bóng</th><th>거래처<br />Đối tác</th><th>예약자 대표<br />Người đại diện</th><th>차감 예정 금액<br />Số tiền dự kiến trừ</th><th>예약<br />Đặt sân</th></tr></thead>
+          <tbody id="pendingTableBody"><tr><td class="budget-empty" colspan="8">차감 예정 내역을 불러오는 중입니다.</td></tr></tbody>
+          <tfoot><tr><th colspan="6">차감 예정 합계 / Tổng dự kiến khấu trừ</th><th class="budget-money" id="pendingTableTotal">0 VND</th><th></th></tr></tfoot>
+        </table>
+      </div>
+    </section>
   </main>
 
   <div class="qr-modal-back" id="loginModal" hidden>
@@ -226,7 +285,6 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
-  <script src="assets/golf-budget.js?v=20261024-partner-1"></script>
+  <script src="assets/golf-budget.js?v=20261024-pending-report-1"></script>
 </body>
 </html>
-
