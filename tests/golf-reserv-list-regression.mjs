@@ -15,6 +15,8 @@ const [page, source, editor, adminHome, managerHome] = await Promise.all([
 
 assert.match(page, /<table class="golf-sheet">/);
 assert.match(page, /assets\/golf-reserv-list\.js\?v=20261024-partner-1/);
+assert.match(page, /티업 시작일 \/ Từ ngày chơi/);
+assert.match(page, /티업 종료일 \/ Đến ngày chơi/);
 assert.match(page, /id="reservationTableBody"/);
 assert.match(page, /<script src="assets\/dgv-xlsx\.js"><\/script>/);
 assert.match(page, /id="printListButton"[^>]*>출력 \/ In<\/button>/);
@@ -52,6 +54,7 @@ assert.match(source, /row\.counterparty_name[\s\S]*row\.representative_name[\s\S
 assert.match(source, /status !== "all"/);
 assert.match(source, /row\.golf_date < from/);
 assert.match(source, /row\.golf_date > to/);
+assert.match(source, /state\.rows = reservations\.map\([\s\S]*\.sort\(\(a, b\) =>[\s\S]*a\.golf_date[\s\S]*b\.golf_date/);
 assert.match(source, /rows\.map\(renderRow\)/);
 assert.match(source, /function printList\(\)[\s\S]*const rows = filteredRows\(\)[\s\S]*global\.print\(\)/);
 assert.match(source, /function exportList\(\)[\s\S]*const rows = filteredRows\(\)[\s\S]*DGV_XLSX\.downloadWorkbook\(workbookOptions\(rows\)\)/);
