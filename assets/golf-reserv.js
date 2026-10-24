@@ -95,6 +95,15 @@
       .trim();
   }
 
+  function customerTypeForCounterparty(value) {
+    const normalized = clean(value).normalize("NFC").toLocaleLowerCase("vi-VN");
+    return normalized === "sếp" || normalized === "sep" ? "individual" : "company";
+  }
+
+  function syncCustomerType() {
+    byId("customerType").value = customerTypeForCounterparty(byId("counterpartyName").value);
+  }
+
   function setBanner(message, tone = "info") {
     if (tone === "error") QRStaff.toast(message, "error");
   }
@@ -158,7 +167,7 @@
     byId("golfCourse").value = "";
     clearLegacyHoleOption();
     byId("holes").value = "18";
-    byId("customerType").value = "individual";
+    syncCustomerType();
     byId("formTitle").textContent = "새 골프 예약 / Đặt sân mới";
     byId("editingHint").textContent = "예약금(0 VND 가능)과 날짜를 입력해 진행중 예약을 등록합니다. / Có thể nhập tiền cọc 0 VND.";
     byId("saveButton").textContent = "예약 저장 / Lưu đặt chỗ";
@@ -173,7 +182,7 @@
     byId("representativeName").value = row.representative_name || "";
     byId("playerNamesEn").value = row.player_names_en || "";
     byId("pax").value = row.pax || "";
-    byId("customerType").value = row.customer_type || "individual";
+    syncCustomerType();
     byId("golfDateTime").value = row.golf_date && row.golf_time
       ? `${row.golf_date}T${String(row.golf_time).slice(0, 5)}`
       : "";
@@ -223,6 +232,8 @@
     const withdrawalAmount = moneyNumber(byId("withdrawalAmount").value);
     const withdrawalDate = byId("withdrawalDate").value || null;
     const existingRow = state.rows.find((row) => row.id === byId("recordId").value);
+    const customerType = customerTypeForCounterparty(counterpartyName);
+    byId("customerType").value = customerType;
 
     if (!counterpartyName) throw new Error("거래처를 입력해 주세요.");
     if (!representativeName) throw new Error("첫 번째 예약자 이름을 확인해 주세요.");
@@ -248,7 +259,7 @@
     if (finalAmount != null && finalAmount < depositAmount) throw new Error("최종 총입금액은 예약금보다 작을 수 없습니다.");
     if (finalDate && finalDate < depositDate) throw new Error("최종 입금일은 예약금 입금일보다 빠를 수 없습니다.");
     if ((withdrawalAmount == null) !== (withdrawalDate == null)) throw new Error("출금액과 출금일은 함께 입력하거나 함께 비워 주세요.");
-    if (!new Set(["individual", "company"]).has(byId("customerType").value)) throw new Error("개인 또는 회사를 선택해 주세요.");
+    if (!new Set(["individual", "company"]).has(customerType)) throw new Error("개인 또는 회사를 선택해 주세요.");
 
     return {
       counterparty_name: counterpartyName, representative_name: representativeName, player_names_en: playerNamesEn, pax,
@@ -257,7 +268,7 @@
       course_unit_price_vnd: courseUnit, deposit_amount_vnd: depositAmount,
       deposit_received_date: depositDate, final_received_amount_vnd: finalAmount,
       final_received_date: finalDate, withdrawal_amount_vnd: withdrawalAmount,
-      withdrawal_date: withdrawalDate, customer_type: byId("customerType").value,
+      withdrawal_date: withdrawalDate, customer_type: customerType,
       note: nullableText(byId("note").value)
     };
   }
@@ -268,13 +279,115 @@
     const from = byId("filterFrom").value;
     const to = byId("filterTo").value;
     return state.rows.filter((row) => {
-      if (state.statusFilter !== "all" && row.status !== state.statusFilter) return false;
+      if (state.statusFilter === "receivable") {
+        if (row.customer_type !== "company") return false;
+      } else if (state.statusFilter !== "all" && row.status !== state.statusFilter) return false;
       if (from && row.golf_date < from) return false;
       if (to && row.golf_date > to) return false;
       if (!query) return true;
       return [row.counterparty_name, row.representative_name, row.player_names_en, row.golf_course, row.note]
         .some((value) => String(value || "").toLocaleLowerCase().includes(query));
     });
+  }
+
+  function receivedAmountForBooking(row) {
+    const value = row.final_received_amount_vnd == null
+      ? row.deposit_amount_vnd
+      : row.final_received_amount_vnd;
+    return Number(value) || 0;
+  }
+
+  function receivableBalanceForBooking(row) {
+    if (row.guest_total_vnd == null) return null;
+    return Number(row.guest_total_vnd) - receivedAmountForBooking(row);
+  }
+
+  function receivableGroups(rows) {
+    const groups = new Map();
+    for (const row of rows) {
+      const name = clean(row.counterparty_name) || "거래처 미입력";
+      const key = name.normalize("NFC").toLocaleLowerCase("vi-VN");
+      if (!groups.has(key)) {
+        groups.set(key, {
+          name, bookingCount: 0, expected: 0, received: 0,
+          receivable: 0, unsetExpected: 0, unpricedReceived: 0, bookings: []
+        });
+      }
+      const group = groups.get(key);
+      const received = receivedAmountForBooking(row);
+      const balance = receivableBalanceForBooking(row);
+      group.bookingCount += 1;
+      group.bookings.push({ row, received, balance });
+      if (balance == null) {
+        group.unsetExpected += 1;
+        group.unpricedReceived += received;
+      } else {
+        group.expected += Number(row.guest_total_vnd) || 0;
+        group.received += received;
+        group.receivable += balance;
+      }
+    }
+    for (const group of groups.values()) {
+      group.bookings.sort((a, b) =>
+        `${a.row.golf_date} ${a.row.golf_time} ${a.row.id}`
+          .localeCompare(`${b.row.golf_date} ${b.row.golf_time} ${b.row.id}`)
+      );
+    }
+    return [...groups.values()]
+      .sort((a, b) => b.receivable - a.receivable || a.name.localeCompare(b.name));
+  }
+
+  function renderReceivableBooking(item) {
+    const row = item.row;
+    const statusLabel = row.status === "completed" ? "완료 / Hoàn tất" : "진행중 / Đang xử lý";
+    const balanceLabel = item.balance == null
+      ? '<span class="golf-receivable-warning">금액 미설정 / Chưa đặt giá</span>'
+      : `<strong>${escape(moneyLabel(item.balance))}</strong>`;
+    return `<tr>
+      <td>${escape(golfDateLabel(row.golf_date))} ${escape(timeLabel(row.golf_time))}</td>
+      <td><strong>${escape(row.representative_name || "—")}</strong><span class="golf-receivable-warning">${escape(statusLabel)}</span></td>
+      <td>${escape(moneyLabel(row.guest_total_vnd))}</td>
+      <td>${escape(moneyLabel(item.received))}</td>
+      <td>${balanceLabel}</td>
+    </tr>`;
+  }
+
+  function renderReceivables(rows) {
+    const groups = receivableGroups(rows);
+    const totals = groups.reduce((sum, group) => ({
+      expected: sum.expected + group.expected,
+      received: sum.received + group.received,
+      receivable: sum.receivable + group.receivable,
+      unsetExpected: sum.unsetExpected + group.unsetExpected,
+      unpricedReceived: sum.unpricedReceived + group.unpricedReceived
+    }), { expected: 0, received: 0, receivable: 0, unsetExpected: 0, unpricedReceived: 0 });
+    byId("listCount").textContent =
+      `${groups.length.toLocaleString("ko-KR")}개 거래처 · ${rows.length.toLocaleString("ko-KR")}건`;
+    byId("receivablePanel").innerHTML = groups.length ? `
+      <div class="golf-receivable-total">
+        <div><span>원래 받을 금액 / Phải thu</span><strong>${escape(moneyLabel(totals.expected))}</strong></div>
+        <div><span>현재 받은 금액 / Đã nhận</span><strong>${escape(moneyLabel(totals.received))}</strong></div>
+        <div><span>미수금 잔액 / Công nợ ròng</span><strong>${escape(moneyLabel(totals.receivable))}</strong>
+          ${totals.unsetExpected ? `<span class="golf-receivable-warning">금액 미설정 ${escape(totals.unsetExpected)}건 · 별도 수령 ${escape(moneyLabel(totals.unpricedReceived))}</span>` : ""}</div>
+      </div>
+      <div class="golf-receivable-note">음수 금액은 초과 수령입니다. 업체별·전체 금액은 자동으로 상계됩니다. / Số âm là khoản thu vượt và được tự động bù trừ.</div>
+      <div class="golf-receivable-table-wrap"><table class="golf-receivable-table">
+        <thead><tr><th>거래처 / Đối tác</th><th>예약 / Đặt sân</th><th>원래 받을 금액 / Phải thu</th><th>받은 금액 / Đã nhận</th><th>미수금 잔액 / Công nợ ròng</th></tr></thead>
+        <tbody>${groups.map((group) => `
+          <tr><td><strong>${escape(group.name)}</strong>
+            ${group.unsetExpected ? `<span class="golf-receivable-warning">금액 미설정 ${escape(group.unsetExpected)}건 · 별도 수령 ${escape(moneyLabel(group.unpricedReceived))}</span>` : ""}</td>
+            <td>${escape(group.bookingCount)}건</td><td>${escape(moneyLabel(group.expected))}</td>
+            <td>${escape(moneyLabel(group.received))}</td><td><strong>${escape(moneyLabel(group.receivable))}</strong></td></tr>
+          <tr class="golf-receivable-detail-row"><td colspan="5">
+            <details class="golf-receivable-detail">
+              <summary>${escape(group.bookingCount)}건 건당 미수금 보기 / Xem công nợ từng đặt sân</summary>
+              <div class="golf-receivable-table-wrap"><table class="golf-receivable-table">
+                <thead><tr><th>골프 날짜 / Ngày chơi</th><th>예약자 / Khách</th><th>원래 받을 금액 / Phải thu</th><th>받은 금액 / Đã nhận</th><th>건당 미수금 / Công nợ</th></tr></thead>
+                <tbody>${group.bookings.map(renderReceivableBooking).join("")}</tbody>
+              </table></div>
+            </details>
+          </td></tr>`).join("")}</tbody>
+      </table></div>` : '<div class="qr-empty">선택한 기간에 회사 거래처의 미수금 내역이 없습니다.<br />Không có công nợ công ty trong khoảng thời gian đã chọn.</div>';
   }
 
   function renderRow(row) {
@@ -317,6 +430,13 @@
 
   function render() {
     const rows = filteredRows();
+    const receivableMode = state.statusFilter === "receivable";
+    byId("receivablePanel").hidden = !receivableMode;
+    byId("reservationList").hidden = receivableMode;
+    if (receivableMode) {
+      renderReceivables(rows);
+      return;
+    }
     byId("listCount").textContent = `${rows.length.toLocaleString("ko-KR")}건 / mục`;
     byId("reservationList").innerHTML = rows.length ? rows.map(renderRow).join("")
       : '<div class="qr-empty">조건에 맞는 골프 예약이 없습니다.<br />Không có đặt sân phù hợp.</div>';
@@ -397,7 +517,6 @@
     byId("reservationForm").addEventListener("submit", save);
     byId("resetButton").addEventListener("click", () => resetForm());
     byId("cancelEditButton").addEventListener("click", () => resetForm());
-    byId("reloadButton").addEventListener("click", () => loadRows());
     byId("clearFiltersButton").addEventListener("click", () => {
       byId("searchInput").value = ""; byId("filterFrom").value = ""; byId("filterTo").value = ""; render();
     });
@@ -406,6 +525,7 @@
       input.addEventListener("blur", () => formatMoneyInput(input));
     }
     byId("pax").addEventListener("input", updatePreview);
+    byId("counterpartyName").addEventListener("input", syncCustomerType);
     byId("playerNamesEn").addEventListener("input", () => {
       const count = namesCount(byId("playerNamesEn").value);
       if (count) byId("pax").value = String(count);
@@ -436,7 +556,6 @@
     resetForm({ focus: false });
     try {
       state.identity = await QRStaff.requireLogin({ roles: ["manager", "admin"], preferredRole: "manager" });
-      byId("homeLink").href = state.identity.role === "admin" ? "home_admin.html" : "home_manager.html";
       document.body.classList.remove("locked");
       await loadRows({ quiet: true });
     } catch (error) {
