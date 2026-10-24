@@ -14,6 +14,7 @@ const [page, source, editor, adminHome, managerHome] = await Promise.all([
 ]);
 
 assert.match(page, /<table class="golf-sheet">/);
+assert.match(page, /assets\/golf-reserv-list\.js\?v=20261024-list-1/);
 assert.match(page, /id="reservationTableBody"/);
 assert.match(page, /colspan="25"/);
 assert.match(page, /min-width:2860px/);
