@@ -21,7 +21,12 @@
     .golf-form-section:first-of-type{margin-top:0;padding-top:0;border-top:0}
     .golf-form-section h3{margin:0 0 10px;font-size:16px;font-weight:1000}
     .golf-label-vi{display:block;margin-top:2px;color:#8a7565;font-size:11px;font-weight:900}
-    .golf-datetime-guide{display:block;margin-top:5px;color:var(--qr-sub);font-size:12px;font-weight:950}
+    .golf-teeoff-field{min-width:0;margin:0;padding:0;border:0}
+    .golf-teeoff-controls{display:grid;grid-template-columns:minmax(150px,1fr) 78px 78px;gap:8px;align-items:end}
+    .golf-date-control,.golf-time-control{display:flex;min-width:0;flex-direction:column;gap:4px}
+    .golf-time-heading{display:block;color:#6d5848;font-size:11px;font-weight:1000;letter-spacing:.08em;text-align:center}
+    .golf-visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .golf-teeoff-controls .qr-input,.golf-teeoff-controls .qr-select{width:100%;min-width:0}
     .golf-money-preview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
     .golf-money-preview>div{padding:10px;border:1px solid var(--qr-line);border-radius:11px;background:#fffaf0}
     .golf-money-preview span{display:block;color:var(--qr-sub);font-size:11px;font-weight:950}
@@ -84,7 +89,7 @@
     @media(max-width:1050px){.golf-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:760px){.golf-payment-row{grid-template-columns:1fr 1fr}.golf-payment-row .golf-payment-delete{grid-column:1/-1}.golf-payment-summary{grid-template-columns:1fr 1fr}}
     @media(max-width:680px){.golf-filters{grid-template-columns:1fr 1fr}.golf-filter-field:first-child{grid-column:1/-1}.golf-filter-apply{grid-column:1/-1}.golf-filter-apply .qr-btn{width:100%}.golf-money-preview,.golf-receivable-total{grid-template-columns:1fr}.golf-detail-grid{grid-template-columns:1fr 1fr}}
-    @media(max-width:430px){.golf-payment-row,.golf-payment-summary{grid-template-columns:1fr}.golf-payment-row .golf-payment-delete{grid-column:auto}.golf-detail-grid{grid-template-columns:1fr}.golf-row-head{flex-direction:column}.golf-row-actions{display:grid;grid-template-columns:1fr}.golf-row-actions .qr-btn{width:100%}}
+    @media(max-width:430px){.golf-teeoff-controls{grid-template-columns:1fr 1fr}.golf-date-control{grid-column:1/-1}.golf-payment-row,.golf-payment-summary{grid-template-columns:1fr}.golf-payment-row .golf-payment-delete{grid-column:auto}.golf-detail-grid{grid-template-columns:1fr}.golf-row-head{flex-direction:column}.golf-row-actions{display:grid;grid-template-columns:1fr}.golf-row-actions .qr-btn{width:100%}}
   </style>
 </head>
 <body class="locked">
@@ -122,7 +127,7 @@
               <label class="qr-field qr-field-wide"><span class="qr-label">전체 이름(영어, 한 줄에 한 명)<span class="golf-label-vi">Họ tên tất cả khách bằng tiếng Anh, mỗi người một dòng</span></span><textarea class="qr-textarea" id="playerNamesEn" maxlength="5000" placeholder="CHO MINWOO&#10;CHO GISANG" required></textarea></label>
               <label class="qr-field"><span class="qr-label">인원 (명단에서 자동 계산, 수정 가능)<span class="golf-label-vi">Số khách (tự đếm từ danh sách, có thể sửa)</span></span><input class="qr-input" id="pax" type="number" min="1" max="100" inputmode="numeric" required /></label>
               <label class="qr-field"><span class="qr-label">개인 / 회사<span class="golf-label-vi">Cá nhân / Công ty</span></span><select class="qr-select" id="customerType" required><option value="individual">개인 / Cá nhân</option><option value="company" selected>회사 / Công ty</option></select></label>
-              <label class="qr-field"><span class="qr-label">골프 날짜·티오프<span class="golf-label-vi">Ngày chơi và giờ phát bóng</span></span><input class="qr-input" id="golfDateTime" type="datetime-local" step="300" required /><span class="golf-datetime-guide" id="golfDateTimeGuide">티오프 시간: 시(HH) : 분(MM) / Giờ phát bóng: giờ (HH) : phút (MM)</span></label>
+              <fieldset class="qr-field golf-teeoff-field"><legend class="qr-label">골프 날짜·티오프<span class="golf-label-vi">Ngày chơi và giờ phát bóng</span></legend><div class="golf-teeoff-controls"><label class="golf-date-control"><span class="golf-visually-hidden">골프 날짜 / Ngày chơi</span><input class="qr-input" id="golfDate" type="date" required /></label><label class="golf-time-control"><span class="golf-time-heading">TIME</span><select class="qr-select" id="golfHour" required aria-label="TIME / Giờ"><option value="" selected>--</option><option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option></select></label><label class="golf-time-control"><span class="golf-time-heading">MIN</span><select class="qr-select" id="golfMinute" required aria-label="MIN / Phút"><option value="00" selected>00</option><option value="05">05</option><option value="10">10</option><option value="15">15</option><option value="20">20</option><option value="25">25</option><option value="30">30</option><option value="35">35</option><option value="40">40</option><option value="45">45</option><option value="50">50</option><option value="55">55</option></select></label></div></fieldset>
               <label class="qr-field"><span class="qr-label">골프장<span class="golf-label-vi">Sân golf</span></span><select class="qr-select" id="golfCourse" required><option value="">선택 / Chọn</option><option value="AT1200">AT1200</option><option value="SAM">SAM</option><option value="PALACE">PALACE</option></select></label>
               <label class="qr-field"><span class="qr-label">홀 수<span class="golf-label-vi">Số hố</span></span><select class="qr-select" id="holes" required><option value="9">9</option><option value="18" selected>18</option><option value="27">27</option><option value="26">26</option></select></label>
               <label class="qr-field"><span class="qr-label">S-CART<span class="golf-label-vi">Ghi chú xe điện</span></span><input class="qr-input" id="smartCartNote" type="text" maxlength="300" /></label>
@@ -220,3 +225,4 @@
   <script src="assets/golf-reserv.js?v=20261024-multi-payments-1"></script>
 </body>
 </html>
+

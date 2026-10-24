@@ -21,6 +21,7 @@ assert.match(page, /id="printListButton"[^>]*>출력 \/ In<\/button>/);
 assert.match(page, /id="exportListButton"[^>]*>엑셀 생성 \/ Tạo Excel<\/button>/);
 assert.match(page, /id="golfPrintCriteria"/);
 assert.match(page, /@page\{size:A3 landscape/);
+assert.match(page, /body\s*>\s*\.golf-list-app\{display:block!important\}/);
 assert.match(page, /colspan="25"/);
 assert.match(page, /min-width:2860px/);
 assert.match(page, /overflow:auto/);
@@ -118,3 +119,4 @@ assert.match(adminHome, /href="golf_reserv_list\.html"/);
 assert.doesNotMatch(managerHome, /href="golf_reserv_list\.html"/);
 
 console.log("Golf reservation one-row list, filters, auth, read-only data access, and navigation verified.");
+
