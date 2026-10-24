@@ -9,6 +9,7 @@ const read = (file) => readFile(path.join(projectRoot, file), "utf8");
 const [
   page, source, migration, zeroDepositMigration, legacyCourseMigration,
   counterpartyMigration, dropCoordinatorMigration, classifyMigration, paymentMigration,
+  partnerSettlementMigration,
 ] = await Promise.all([
   read("golf_reserv.html"),
   read("assets/golf-reserv.js"),
@@ -19,6 +20,7 @@ const [
   read("supabase/migrations/20261024131000_drop_golf_reservation_coordinator.sql"),
   read("supabase/migrations/20261024132000_classify_golf_counterparties.sql"),
   read("supabase/migrations/20261024140000_golf_reservation_multi_payments.sql"),
+  read("supabase/migrations/20261024150000_add_golf_partner_settlement.sql"),
 ]);
 
 // The page is a single manager/admin workspace: create, filter, inspect, edit,
@@ -26,7 +28,9 @@ const [
 assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
-assert.match(page, /assets\/golf-reserv\.js\?v=20261024-budget-1/);
+assert.match(page, /assets\/golf-reserv\.js\?v=20261024-partner-1/);
+assert.match(page, /티업 시작일 \/ Từ ngày chơi/);
+assert.match(page, /티업 종료일 \/ Đến ngày chơi/);
 assert.match(page, /assets\/qr-staff\.css/);
 assert.match(page, /\.golf-layout\{display:flex;flex-direction:column/);
 assert.match(page, /\.golf-form-card\{position:static\}/);
@@ -52,7 +56,8 @@ assert.doesNotMatch(source, /byId\("homeLink"\)|byId\("reloadButton"\)/);
 // Every requested business field exists and user-facing headings are bilingual.
 for (const id of [
   "counterpartyName", "representativeName", "playerNamesEn", "pax", "golfDate", "golfHour", "golfMinute", "golfCourse", "holes",
-  "guestUnitPrice", "guestTotalPreview", "smartCartNote", "courseUnitPrice",
+  "guestUnitPrice", "guestTotalPreview", "smartCartNote", "costSettlementType",
+  "costPartnerField", "costPartnerName", "courseUnitPrice", "courseTotalLabel",
   "courseTotalPreview", "depositPayments", "receiptPayments",
   "depositTotalPreview", "receivedTotalPreview", "customerBalancePreview",
   "paymentCompleted", "customerType", "note",
@@ -94,7 +99,23 @@ assert.match(source, /\{ column: "id", ascending: true \}/);
 for (const label of [
   "Quản lý đặt sân golf", "Đối tác", "Người đại diện (tên đầu tiên)", "Ngày chơi và giờ phát bóng",
   "Giá khách / người", "Tổng tiền khách đã trả", "Cá nhân", "Công ty",
+  "Cách quyết toán giá vốn", "Sân golf trực tiếp", "Suất của đối tác", "Đối tác quyết toán",
 ]) assert.ok(page.includes(label), `missing bilingual label: ${label}`);
+
+const settlementTypeSelect = page.match(/<select[^>]+id="costSettlementType"[\s\S]*?<\/select>/)?.[0];
+assert.ok(settlementTypeSelect, "cost settlement route must be selectable");
+assert.match(settlementTypeSelect, /<option value="golf_course" selected>골프장 직접 \/ Sân golf trực tiếp<\/option>/);
+assert.match(settlementTypeSelect, /<option value="partner">거래처 보유분 \/ Suất của đối tác<\/option>/);
+assert.match(page, /id="costPartnerField" hidden/);
+assert.match(page, /id="costPartnerName"[\s\S]*?<option value="Chị Oanh">Chị Oanh<\/option>/);
+assert.match(source, /const COST_SETTLEMENT_TYPES = new Set\(\["golf_course", "partner"\]\)/);
+assert.match(source, /const PARTNER_NAMES = new Set\(\["Chị Oanh"\]\)/);
+assert.match(source, /function syncCostSettlementFields\(\)/);
+assert.match(source, /byId\("costPartnerField"\)\.hidden = !partnerSettlement/);
+assert.match(source, /byId\("costPartnerName"\)\.required = partnerSettlement/);
+assert.match(source, /row\.cost_settlement_type === "partner" \? "partner" : "golf_course"/);
+assert.match(source, /cost_settlement_type: costSettlementType/);
+assert.match(source, /cost_partner_name: costSettlementType === "partner" \? costPartnerName : null/);
 
 const firstPlayerNameBody = source.match(/function firstPlayerName\(value\) \{([\s\S]*?)\n  \}/)?.[1];
 assert.ok(firstPlayerNameBody, "first-player parser must remain testable");
@@ -133,6 +154,8 @@ assert.match(source, /const golfTime = golfHour[\s\S]*?`\$\{golfHour\}:\$\{golfM
 assert.match(source, /golf_date: golfDate,[\s\S]*golf_time: golfTime/);
 assert.match(source, /등록 일시 \/ Thời gian tạo/);
 assert.match(source, /golfDateLabel\(row\.golf_date\)/);
+assert.match(source, /state\.rows\.sort\(\(a, b\) => \{[\s\S]*a\.golf_date[\s\S]*b\.golf_date/);
+assert.doesNotMatch(source, /statusOrder = Number\(a\.status === "completed"\)/);
 assert.match(source, /Date\.UTC\(Number\(match\[1\]\), Number\(match\[2\]\) - 1, Number\(match\[3\]\)\)/);
 
 // PAX remains manually editable but follows the normalized English-name count
@@ -168,7 +191,7 @@ assert.match(source, /Giao dịch từ 5\.000\.000 VND phải chuyển khoản n
 assert.match(source, /payment\.payment_method === "cash" && payment\.amount_vnd >= CASH_BANK_THRESHOLD/);
 assert.match(source, /guestTotal == null \? null : guestTotal - totals\.received/);
 assert.match(source, /row\.course_total_vnd != null[\s\S]*rowTotals\.received[\s\S]*Number\(row\.course_total_vnd\)/);
-assert.match(source, /골프장 원가를 입력한 후 완료 처리해 주세요/);
+assert.match(source, /원가를 입력한 후 완료 처리해 주세요/);
 assert.doesNotMatch(page, /id="(?:depositAmount|depositDate|finalAmount|finalDate|withdrawalAmount|withdrawalDate)"/);
 assert.match(page, /비고/);
 assert.match(page, /Ghi chú/);
@@ -179,6 +202,7 @@ assert.match(source, /DGV\.collectSupabasePages\(/);
 assert.match(source, /from\("golf_reservations"\)\.select\(COLUMNS\)/);
 assert.match(source, /sb\.rpc\("save_golf_reservation_with_payments"/);
 assert.match(source, /from\("golf_reservation_payments"\)\.select\(PAYMENT_COLUMNS\)/);
+assert.match(source, /from\("golf_partner_reservation_offsets"\)\.select\(PARTNER_OFFSET_COLUMNS\)\.eq\("active", true\)/);
 assert.match(source, /from\("golf_reservations"\)\.delete\(\)\.eq\("id", row\.id\)/);
 assert.doesNotMatch(source, /service[_-]?role|serviceRole/i);
 assert.doesNotMatch(source, /from\("(?:orders|reservations|restaurant_expenses|menu_items)"\)/);
@@ -196,28 +220,89 @@ assert.doesNotMatch(source, /\.eq\("status",\s*"in_progress"\)/);
 for (const status of ["in_progress", "completed", "all", "receivable"]) {
   assert.match(page, new RegExp(`data-status-filter="${status}"`));
 }
-assert.match(source, /row\.golf_date < from/);
-assert.match(source, /row\.golf_date > to/);
+assert.match(source, /function dateInRange\(value, from, to\)/);
+assert.match(source, /!from \|\| date >= from/);
+assert.match(source, /!to \|\| date <= to/);
 assert.match(source, /row\.counterparty_name, row\.representative_name, row\.player_names_en, row\.golf_course/);
 assert.match(source, /DGV\.escapeHTML/);
 assert.match(page, /id="receivablePanel" hidden/);
 assert.match(source, /state\.statusFilter === "receivable"/);
-assert.match(source, /row\.customer_type !== "company"/);
+assert.match(source, /const salesInRange = row\.customer_type === "company" && rowInRange/);
+assert.match(source, /if \(!salesInRange && !partnerOffsets\.length\) return false/);
+assert.match(source, /function activePartnerOffsetsFor\(row, from = "", to = ""\)/);
+assert.match(source, /dateInRange\(offset\.golf_date, from, to\)/);
 assert.match(source, /function receivedAmountForBooking\(row\)/);
 assert.match(source, /function receivableBalanceForBooking\(row\)/);
-assert.match(source, /function receivableGroups\(rows\)/);
+assert.match(source, /function receivableGroups\(rows, from = "", to = ""\)/);
 assert.match(source, /group\.expected \+= Number\(row\.guest_total_vnd\) \|\| 0/);
 assert.match(source, /row\.final_received_amount_vnd == null/);
 assert.match(source, /\? row\.deposit_amount_vnd[\s\S]*: row\.final_received_amount_vnd/);
 assert.match(source, /group\.received \+= received/);
 assert.match(source, /group\.receivable \+= balance/);
+assert.match(source, /group\.partnerOffset \+= amount/);
+assert.match(source, /group\.receivable -= amount/);
+assert.match(source, /group\.partnerBookings\.push\(\{ row, offset, amount \}\)/);
 assert.match(source, /group\.unsetExpected \+= 1/);
 assert.match(source, /group\.unpricedReceived \+= received/);
 assert.match(source, /function renderReceivableBooking\(item\)/);
 assert.match(source, /건당 미수금 보기/);
 assert.match(source, /group\.bookings\.map\(renderReceivableBooking\)/);
+assert.match(source, /function renderPartnerOffsetBooking\(item\)/);
+assert.match(source, /group\.partnerBookings\.map\(renderPartnerOffsetBooking\)/);
+assert.match(source, /거래처 보유 티타임 차감/);
+assert.match(source, /우리가 지급할 금액 \/ Số tiền phải trả/);
+assert.match(source, /받을 금액 \/ Số tiền phải thu/);
+assert.match(source, /partnerOffset: sum\.partnerOffset \+ group\.partnerOffset/);
 assert.match(source, /byId\("receivablePanel"\)\.hidden = !receivableMode/);
 assert.match(source, /byId\("reservationList"\)\.hidden = receivableMode/);
+assert.match(source, /renderReceivables\(rows, byId\("filterFrom"\)\.value, byId\("filterTo"\)\.value\)/);
+
+const receivableSnippet = source.slice(
+  source.indexOf("  function dateInRange"),
+  source.indexOf("  function renderReceivableBooking"),
+);
+assert.ok(receivableSnippet.includes("function receivableGroups"), "receivable calculation must remain testable");
+const receivableHarness = new Function(
+  "state", "clean", "paymentRowsFor", "paymentTotals",
+  `${receivableSnippet}\nreturn receivableGroups;`,
+);
+const receivableState = {
+  partnerOffsets: [
+    { reservation_id: "row-1", partner_name: "Chị Oanh", golf_date: "2026-10-24", amount_vnd: 300, active: true },
+    { reservation_id: "row-2", partner_name: "Chị Oanh", golf_date: "2026-10-24", amount_vnd: 500, active: true },
+    { reservation_id: "row-3", partner_name: "Chị Oanh", golf_date: "2026-10-24", amount_vnd: 200, active: true },
+    { reservation_id: "row-1", partner_name: "Chị Oanh", golf_date: "2026-10-25", amount_vnd: 9999, active: true },
+    { reservation_id: "row-1", partner_name: "Chị Oanh", golf_date: "2026-10-24", amount_vnd: 8888, active: false },
+  ],
+};
+const receivableGroupsForTest = receivableHarness(
+  receivableState,
+  (value) => String(value ?? "").trim(),
+  (row) => row.payments || [],
+  (payments) => ({ received: payments.reduce((sum, payment) => sum + Number(payment.amount_vnd || 0), 0) }),
+);
+const calculatedGroups = receivableGroupsForTest([
+  { id: "row-1", counterparty_name: "Chị Oanh", customer_type: "company", guest_total_vnd: 1000, payments: [{ amount_vnd: 600 }], golf_date: "2026-10-24", golf_time: "07:00" },
+  { id: "row-2", counterparty_name: "다른 업체", customer_type: "company", guest_total_vnd: 800, payments: [{ amount_vnd: 800 }], golf_date: "2026-10-24", golf_time: "08:00" },
+  { id: "row-3", counterparty_name: "개인 손님", customer_type: "individual", guest_total_vnd: 700, payments: [{ amount_vnd: 700 }], golf_date: "2026-10-24", golf_time: "09:00" },
+], "2026-10-24", "2026-10-24");
+const oanhSettlement = calculatedGroups.find((group) => group.name === "Chị Oanh");
+assert.ok(oanhSettlement, "partner offset must be grouped under its partner, independent of the sales counterparty");
+assert.equal(oanhSettlement.expected, 1000);
+assert.equal(oanhSettlement.received, 600);
+assert.equal(oanhSettlement.partnerOffset, 1000, "inactive and out-of-range offsets must not be counted");
+assert.equal(oanhSettlement.receivable, -600, "partner tee-time offsets must reduce the net settlement below zero");
+assert.equal(oanhSettlement.partnerBookingCount, 3);
+
+const balanceFunctionText = source.match(/function settlementBalanceMarkup\(value\) \{[\s\S]*?\n  \}/)?.[0];
+assert.ok(balanceFunctionText, "settlement balance label must remain testable");
+const settlementBalanceMarkupForTest = new Function(
+  "escape", "moneyLabel", `${balanceFunctionText}\nreturn settlementBalanceMarkup;`,
+)((value) => String(value), (value) => `${Number(value).toLocaleString("ko-KR")} VND`);
+assert.match(settlementBalanceMarkupForTest(-5000), /우리가 지급할 금액[\s\S]*5,000 VND/);
+assert.doesNotMatch(settlementBalanceMarkupForTest(-5000), /-5,000 VND/);
+assert.match(settlementBalanceMarkupForTest(5000), /받을 금액[\s\S]*5,000 VND/);
+
 assert.match(source, /function openRequestedEdit\(\)/);
 assert.match(source, /new URLSearchParams\(global\.location\.search\)/);
 assert.match(source, /UUID_PATTERN\.test\(rawId\)/);
@@ -314,4 +399,21 @@ assert.match(paymentMigration, /select gr\.updated_at into v_current_updated_at[
 assert.match(paymentMigration, /existing\.payment_kind = p\.payment_kind[\s\S]*?existing\.amount_vnd = p\.amount_vnd[\s\S]*?existing\.payment_date = p\.payment_date/i);
 assert.doesNotMatch(paymentMigration, /update\s+public\.golf_reservations[\s\S]*?set\s+note\s*=\s*null/i);
 
+// Reservation cost can be routed either to a managed golf-course wallet or to
+// the supported settlement partner. Partner offsets are server-maintained and
+// exposed read-only to manager/admin clients for receivable reconciliation.
+assert.match(partnerSettlementMigration, /add column cost_settlement_type text not null default 'golf_course'/i);
+assert.match(partnerSettlementMigration, /add column cost_partner_name text/i);
+assert.match(partnerSettlementMigration, /cost_settlement_type in \('golf_course', 'partner'\)/i);
+assert.match(partnerSettlementMigration, /cost_settlement_type = 'partner' and cost_partner_name = 'Chị Oanh'/i);
+assert.match(partnerSettlementMigration, /create table public\.golf_partner_reservation_offsets/i);
+assert.match(partnerSettlementMigration, /reservation_id uuid primary key[\s\S]*references public\.golf_reservations \(id\) on delete cascade/i);
+assert.match(partnerSettlementMigration, /alter table public\.golf_partner_reservation_offsets enable row level security/i);
+assert.match(partnerSettlementMigration, /grant select on table public\.golf_partner_reservation_offsets to authenticated/i);
+assert.match(partnerSettlementMigration, /golf_partner_reservation_offsets_manager_admin_read/i);
+assert.match(partnerSettlementMigration, /create trigger golf_reservations_sync_partner_offset/i);
+assert.match(partnerSettlementMigration, /new\.status = 'completed' and new\.cost_settlement_type = 'partner'/i);
+assert.match(partnerSettlementMigration, /new\.course_total_vnd/i);
+
 console.log("Golf reservation page, CRUD, workflow, bilingual UI, and schema contracts verified.");
+

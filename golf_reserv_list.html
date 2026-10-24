@@ -17,7 +17,7 @@
     .golf-list-count{margin-top:9px;color:var(--qr-sub);font-size:13px;font-weight:1000}
     .golf-sheet-wrap{margin-top:12px;overflow:auto;max-height:calc(100vh - 315px);border:1px solid var(--qr-line);border-radius:12px;background:#fff;overscroll-behavior:contain;cursor:grab}
     .golf-sheet-wrap.is-dragging{cursor:grabbing;user-select:none}
-    .golf-sheet{width:max-content;min-width:2500px;border-collapse:separate;border-spacing:0;font-size:14px}
+    .golf-sheet{width:max-content;min-width:2860px;border-collapse:separate;border-spacing:0;font-size:14px}
     .golf-sheet th,.golf-sheet td{height:47px;padding:9px 11px;border-right:1px solid var(--qr-line);border-bottom:1px solid var(--qr-line);text-align:left;vertical-align:middle;white-space:nowrap}
     .golf-sheet th{position:sticky;top:0;z-index:3;background:#f7ead0;color:#4d392b;font-size:12px;font-weight:1000;line-height:1.25}
     .golf-sheet th:last-child,.golf-sheet td:last-child{border-right:0}
@@ -115,10 +115,10 @@
       </div>
 
       <div class="golf-list-tools">
-        <label class="golf-list-field"><span class="qr-label">검색 / Tìm kiếm</span><input class="qr-input" id="searchInput" type="search" placeholder="예약자 이름, 거래처, 영문 이름, 골프장, 비고" /></label>
+        <label class="golf-list-field"><span class="qr-label">검색 / Tìm kiếm</span><input class="qr-input" id="searchInput" type="search" placeholder="예약자 이름, 거래처, 영문 이름, 골프장, 정산 거래처, 비고" /></label>
         <label class="golf-list-field"><span class="qr-label">상태 / Trạng thái</span><select class="qr-select" id="statusFilter"><option value="all">전체 / Tất cả</option><option value="in_progress">진행중 / Đang xử lý</option><option value="completed">완료 / Hoàn tất</option></select></label>
-        <label class="golf-list-field"><span class="qr-label">골프 시작일 / Từ ngày</span><input class="qr-input" id="filterFrom" type="date" /></label>
-        <label class="golf-list-field"><span class="qr-label">골프 종료일 / Đến ngày</span><input class="qr-input" id="filterTo" type="date" /></label>
+        <label class="golf-list-field"><span class="qr-label">티업 시작일 / Từ ngày chơi</span><input class="qr-input" id="filterFrom" type="date" /></label>
+        <label class="golf-list-field"><span class="qr-label">티업 종료일 / Đến ngày chơi</span><input class="qr-input" id="filterTo" type="date" /></label>
         <div class="golf-list-apply"><button class="qr-btn qr-btn-small" id="clearFiltersButton" type="button">검색 초기화 / Xóa lọc</button></div>
       </div>
 
@@ -140,6 +140,8 @@
               <th>고객 합계<br />Tổng tiền khách</th>
               <th>1인 원가<br />Giá sân</th>
               <th>골프장 합계<br />Tổng tiền sân</th>
+              <th>원가 정산 방식<br />Phương thức quyết toán</th>
+              <th>정산 거래처<br />Đối tác quyết toán</th>
               <th>계약금 합계<br />Tổng tiền cọc</th>
               <th>계약금 수단<br />Phương thức cọc</th>
               <th>고객 총입금<br />Tổng tiền khách đã trả</th>
@@ -151,7 +153,7 @@
               <th>최종 수정<br />Cập nhật</th>
             </tr>
           </thead>
-          <tbody id="reservationTableBody"><tr><td class="golf-cell-empty" colspan="23">예약을 불러오는 중입니다.</td></tr></tbody>
+          <tbody id="reservationTableBody"><tr><td class="golf-cell-empty" colspan="25">예약을 불러오는 중입니다.</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -173,6 +175,7 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
-  <script src="assets/golf-reserv-list.js?v=20261024-budget-1"></script>
+  <script src="assets/golf-reserv-list.js?v=20261024-partner-1"></script>
 </body>
 </html>
+

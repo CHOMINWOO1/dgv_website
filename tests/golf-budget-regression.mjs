@@ -19,7 +19,7 @@ const [page, source, migration, managerAccessMigration, editorPage, editorSource
 ]);
 
 // Manager/admin budget UI, independent daily-range filters and course-specific deduction detail.
-assert.match(page, /assets\/golf-budget\.js\?v=20261024-6/);
+assert.match(page, /assets\/golf-budget\.js\?v=20261024-partner-1/);
 assert.match(page, /골프장별 현재 잔액 \/ Số dư theo sân/);
 for (const id of ["paymentRangeFrom", "paymentRangeTo", "chargeRangeFrom", "chargeRangeTo"]) {
   assert.match(page, new RegExp(`id="${id}"[^>]*type="date"`));
@@ -29,7 +29,7 @@ for (const id of ["paymentRangeApplyButton", "paymentRangeAllButton", "paymentRa
 }
 assert.match(page, /골프장 기간 조회 \/ Tra cứu thời gian thanh toán sân/);
 assert.match(page, /자동 차감 기간 조회 \/ Tra cứu thời gian khấu trừ/);
-assert.match(page, /차감·복원 일자 기준 \/ Theo ngày trừ·hoàn/);
+assert.match(page, /골프 날짜 기준 \/ Theo ngày chơi golf/);
 assert.ok(page.indexOf('id="paymentRangeTitle"') < page.indexOf('id="depositFormTitle"'));
 assert.doesNotMatch(page, /id="monthFilter"|id="allMonthsButton"|type="month"/);
 assert.doesNotMatch(page, /id="periodDeposits"|id="periodCharges"|id="periodRestorations"|id="periodNet"/);
@@ -57,9 +57,11 @@ assert.match(source, /paymentFrom: ""[\s\S]*paymentTo: ""[\s\S]*chargeFrom: ""[\
 assert.match(source, /state\.paymentFrom = rangeStart[\s\S]*state\.paymentTo = rangeEnd[\s\S]*state\.chargeFrom = rangeStart[\s\S]*state\.chargeTo = rangeEnd/);
 assert.match(source, /function dateTimeYmd\(value\)[\s\S]*timeZone: TIME_ZONE[\s\S]*year: "numeric"[\s\S]*month: "2-digit"[\s\S]*day: "2-digit"/);
 assert.match(source, /dateInRange\(String\(deposit\?\.deposit_date \|\| ""\), state\.paymentFrom, state\.paymentTo\)/);
-assert.match(source, /dateInRange\(chargedDate, state\.chargeFrom, state\.chargeTo\)[\s\S]*dateInRange\(restoredDate, state\.chargeFrom, state\.chargeTo\)/);
+assert.match(source, /dateInRange\(String\(charge\?\.golf_date \|\| ""\), state\.chargeFrom, state\.chargeTo\)/);
 assert.match(source, /state\.deposits\.filter\(depositInPaymentRange\)/);
 assert.match(source, /state\.charges\.filter\(chargeTouchesChargeRange\)/);
+assert.match(source, /function compareChargesByGolfDate\([\s\S]*right\?\.golf_date[\s\S]*left\?\.golf_date/);
+assert.match(source, /\.sort\(compareChargesByGolfDate\)/);
 assert.match(source, /depositTableTotal"\)\.textContent = moneyLabel\(depositTotalOf\(deposits\)\)/);
 assert.match(source, /activeTotal = charges[\s\S]*charge\.active !== false[\s\S]*chargeTableTotal"\)\.textContent = moneyLabel\(activeTotal\)/);
 assert.match(source, /function chargeBalanceAfterMap\(\)[\s\S]*state\.deposits\.forEach[\s\S]*state\.charges\.forEach[\s\S]*events\.sort/);
@@ -79,7 +81,8 @@ assert.match(source, /pendingReservations: \[\]/);
 assert.match(source, /function expectedPaymentStats\(course = null\)/);
 assert.match(source, /row\.course_total_vnd == null/);
 assert.match(source, /Number\(row\.course_total_vnd \|\| 0\)/);
-assert.match(source, /from\("golf_reservations"\)[\s\S]*\.select\("id,golf_course,status,course_total_vnd"\)[\s\S]*\.eq\("status", "in_progress"\)/);
+assert.match(source, /from\("golf_reservations"\)[\s\S]*\.select\("id,golf_course,status,course_total_vnd,cost_settlement_type,cost_partner_name"\)[\s\S]*\.eq\("status", "in_progress"\)[\s\S]*\.eq\("cost_settlement_type", "golf_course"\)/);
+assert.match(source, /\(row\.cost_settlement_type \|\| "golf_course"\) !== "golf_course"/);
 assert.match(source, /state\.pendingReservations = pendingReservations/);
 assert.match(source, /summaryExpectedCharges/);
 assert.match(source, /완료 반영 현재 잔액[\s\S]*추가 예상 결제금액/);
@@ -119,7 +122,7 @@ assert.match(source, /\.update\(\{ opening_balance_vnd: amount \}\)/);
 assert.doesNotMatch(source, /\.update\(\{[^}]*balance_as_of/);
 
 // Original golf-course cost remains visible and is used for receivables/profit and exports.
-assert.match(editorPage, /1인 골프장 원가/);
+assert.match(editorPage, /1인 원가 \(VND\)[\s\S]*Giá vốn \/ người/);
 assert.match(editorSource, /course_total_vnd/);
 assert.match(editorSource, /rowTotals\.received[\s\S]*Number\(row\.course_total_vnd\)/);
 assert.match(listPage, /1인 원가[\s\S]*골프장 합계/);

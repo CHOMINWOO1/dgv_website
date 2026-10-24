@@ -108,10 +108,13 @@
   }
 
   function chargeTouchesChargeRange(charge) {
-    const chargedDate = dateTimeYmd(charge?.charged_at);
-    const restoredDate = dateTimeYmd(charge?.reversed_at);
-    return dateInRange(chargedDate, state.chargeFrom, state.chargeTo)
-      || dateInRange(restoredDate, state.chargeFrom, state.chargeTo);
+    return dateInRange(String(charge?.golf_date || ""), state.chargeFrom, state.chargeTo);
+  }
+
+  function compareChargesByGolfDate(left, right) {
+    return String(right?.golf_date || "").localeCompare(String(left?.golf_date || ""))
+      || String(right?.charged_at || "").localeCompare(String(left?.charged_at || ""))
+      || String(right?.reservation_id || "").localeCompare(String(left?.reservation_id || ""));
   }
 
   function paymentMethodLabel(value) {
@@ -148,7 +151,10 @@
   }
 
   function expectedPaymentStats(course = null) {
-    const rows = state.pendingReservations.filter((row) => !course || row.golf_course === course);
+    const rows = state.pendingReservations.filter((row) => {
+      if ((row.cost_settlement_type || "golf_course") !== "golf_course") return false;
+      return !course || row.golf_course === course;
+    });
     return {
       count: rows.length,
       missing: rows.filter((row) => row.course_total_vnd == null).length,
@@ -389,9 +395,11 @@
   function renderCharges() {
     const balanceAfterCharge = chargeBalanceAfterMap();
     const periodCharges = state.charges.filter(chargeTouchesChargeRange);
-    const charges = state.chargeCourse === "all"
+    const charges = (state.chargeCourse === "all"
       ? periodCharges
-      : periodCharges.filter((charge) => charge.golf_course === state.chargeCourse);
+      : periodCharges.filter((charge) => charge.golf_course === state.chargeCourse))
+      .slice()
+      .sort(compareChargesByGolfDate);
     const filterLabel = state.chargeCourse === "all" ? "전체 / Tất cả" : state.chargeCourse;
     const activeCount = charges.filter((charge) => charge.active !== false).length;
     const activeTotal = charges
@@ -546,14 +554,16 @@
           () => sb.from("golf_course_budget_reservation_charges")
             .select("reservation_id,golf_course,golf_date,amount_vnd,active,historical,charged_at,reversed_at,updated_at,golf_reservations(counterparty_name,representative_name)"),
           { pageSize: 500, order: [
+            { column: "golf_date", ascending: false },
             { column: "charged_at", ascending: false },
             { column: "reservation_id", ascending: false }
           ] }
         ),
         DGV.collectSupabasePages(
           () => sb.from("golf_reservations")
-            .select("id,golf_course,status,course_total_vnd")
-            .eq("status", "in_progress"),
+            .select("id,golf_course,status,course_total_vnd,cost_settlement_type,cost_partner_name")
+            .eq("status", "in_progress")
+            .eq("cost_settlement_type", "golf_course"),
           { pageSize: 500, order: [
             { column: "golf_course", ascending: true },
             { column: "id", ascending: true }

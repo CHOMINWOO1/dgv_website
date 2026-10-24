@@ -14,7 +14,9 @@ const [page, source, editor, adminHome, managerHome] = await Promise.all([
 ]);
 
 assert.match(page, /<table class="golf-sheet">/);
-assert.match(page, /assets\/golf-reserv-list\.js\?v=20261024-budget-1/);
+assert.match(page, /assets\/golf-reserv-list\.js\?v=20261024-partner-1/);
+assert.match(page, /티업 시작일 \/ Từ ngày chơi/);
+assert.match(page, /티업 종료일 \/ Đến ngày chơi/);
 assert.match(page, /id="reservationTableBody"/);
 assert.match(page, /<script src="assets\/dgv-xlsx\.js"><\/script>/);
 assert.match(page, /id="printListButton"[^>]*>출력 \/ In<\/button>/);
@@ -22,14 +24,15 @@ assert.match(page, /id="exportListButton"[^>]*>엑셀 생성 \/ Tạo Excel<\/bu
 assert.match(page, /id="golfPrintCriteria"/);
 assert.match(page, /@page\{size:A3 landscape/);
 assert.match(page, /body\s*>\s*\.golf-list-app\{display:block!important\}/);
-assert.match(page, /colspan="23"/);
-assert.match(page, /min-width:2500px/);
+assert.match(page, /colspan="25"/);
+assert.match(page, /min-width:2860px/);
 assert.match(page, /overflow:auto/);
 assert.match(page, /position:sticky;top:0/);
 for (const label of [
   "상태", "골프 날짜", "티오프", "거래처", "예약자 대표", "전체 이름\\(영어\\)", "인원",
   "골프장", "홀", "S-CART", "1인 판매가", "고객 합계",
-  "1인 원가", "골프장 합계", "계약금 합계", "계약금 수단", "고객 총입금", "입금 수단",
+  "1인 원가", "골프장 합계", "원가 정산 방식", "정산 거래처",
+  "계약금 합계", "계약금 수단", "고객 총입금", "입금 수단",
   "실제 수익", "비고", "최종 수정"
 ]) assert.match(page, new RegExp(label));
 assert.doesNotMatch(page, /골프장 총출금|출금 수단|Tổng chi sân golf|Phương thức chi/);
@@ -43,6 +46,7 @@ assert.match(page, /\.golf-payment-detail-list\{display:flex;flex-wrap:wrap/);
 assert.match(source, /QRStaff\.requireLogin\(\{ roles: \["manager", "admin"\]/);
 assert.match(source, /DGV\.collectSupabasePages/);
 assert.match(source, /sb\.from\("golf_reservations"\)\.select\(COLUMNS\)/);
+assert.match(source, /"cost_settlement_type", "cost_partner_name"/);
 assert.match(source, /sb\.from\("golf_reservation_payments"\)\.select\(PAYMENT_COLUMNS\)/);
 assert.match(source, /paymentsByReservation/);
 assert.match(source, /pageSize: 500/);
@@ -50,18 +54,24 @@ assert.match(source, /row\.counterparty_name[\s\S]*row\.representative_name[\s\S
 assert.match(source, /status !== "all"/);
 assert.match(source, /row\.golf_date < from/);
 assert.match(source, /row\.golf_date > to/);
+assert.match(source, /state\.rows = reservations\.map\([\s\S]*\.sort\(\(a, b\) =>[\s\S]*a\.golf_date[\s\S]*b\.golf_date/);
 assert.match(source, /rows\.map\(renderRow\)/);
 assert.match(source, /function printList\(\)[\s\S]*const rows = filteredRows\(\)[\s\S]*global\.print\(\)/);
 assert.match(source, /function exportList\(\)[\s\S]*const rows = filteredRows\(\)[\s\S]*DGV_XLSX\.downloadWorkbook\(workbookOptions\(rows\)\)/);
 assert.match(source, /HANA_Golf_Reservations_[\s\S]*\.xlsx/);
-assert.match(source, /merges: \["A1:W1"\]/);
-assert.match(source, /autoFilterRange:[\s\S]*A5:W/);
+assert.match(source, /merges: \["A1:Y1"\]/);
+assert.match(source, /autoFilterRange:[\s\S]*A5:Y/);
 assert.match(source, /integerCell\(row\.guest_total_vnd\)/);
 assert.match(source, /name: "입금 내역"/);
 assert.match(source, /transactionHeaders/);
 assert.match(source, /paymentMethodLabel\(payment\.payment_method\)/);
 assert.match(source, /계약금 합계\(VND\) \/ Tổng tiền cọc/);
 assert.match(source, /고객 총입금\(VND\) \/ Tổng tiền khách đã trả/);
+assert.match(source, /원가 정산 방식 \/ Phương thức quyết toán/);
+assert.match(source, /정산 거래처 \/ Đối tác quyết toán/);
+assert.match(source, /거래처 보유분 \/ Suất của đối tác/);
+assert.match(source, /골프장 직접 \/ Sân golf trực tiếp/);
+assert.match(source, /textCell\(costSettlementTypeLabel\(row\)\), textCell\(costSettlementPartnerLabel\(row\)\)/);
 assert.doesNotMatch(source, /골프장 총출금|출금 상세|withdrawal/);
 assert.match(source, /row\.course_total_vnd == null/);
 assert.match(source, /Number\(row\.final_received_amount_vnd \|\| 0\) - Number\(row\.course_total_vnd\)/);
@@ -70,7 +80,7 @@ assert.match(source, /byId\("printListButton"\)\.addEventListener\("click", prin
 assert.match(source, /byId\("exportListButton"\)\.addEventListener\("click", exportList\)/);
 assert.match(source, /timeLabel\(row\.golf_time\)[\s\S]*row\.counterparty_name[\s\S]*class="golf-edit-link"[\s\S]*class="golf-cell-names"/);
 assert.match(source, /event\.target\.closest\("tr\[data-status\]"\)/);
-assert.match(source, /class="golf-roster-detail"[\s\S]*colspan="23"/);
+assert.match(source, /class="golf-roster-detail"[\s\S]*colspan="25"/);
 assert.match(source, /class="golf-roster-name"/);
 assert.match(source, /row\.nextElementSibling/);
 assert.match(source, /detailRow\?\.classList\.contains\("golf-roster-detail"\)/);
@@ -123,3 +133,4 @@ assert.match(adminHome, /href="golf_reserv_list\.html"/);
 assert.doesNotMatch(managerHome, /href="golf_reserv_list\.html"/);
 
 console.log("Golf reservation one-row list, filters, auth, read-only data access, and navigation verified.");
+

@@ -12,6 +12,7 @@
     "booking_date", "golf_date", "golf_time",
     "golf_course", "holes", "guest_unit_price_vnd", "smart_cart_note",
     "guest_total_vnd", "course_unit_price_vnd", "course_total_vnd",
+    "cost_settlement_type", "cost_partner_name",
     "deposit_amount_vnd", "deposit_received_date",
     "final_received_amount_vnd", "final_received_date", "customer_type", "note",
     "status", "created_at", "updated_at"
@@ -71,6 +72,16 @@
     return value === "deposit" ? "계약금 / Tiền cọc"
       : value === "receipt" ? "추가 입금 / Khoản thu thêm"
       : "";
+  }
+
+  function costSettlementTypeLabel(row) {
+    return row?.cost_settlement_type === "partner"
+      ? "거래처 보유분 / Suất của đối tác"
+      : "골프장 직접 / Sân golf trực tiếp";
+  }
+
+  function costSettlementPartnerLabel(row) {
+    return row?.cost_settlement_type === "partner" ? clean(row.cost_partner_name) || "—" : "—";
   }
 
   function paymentRowsFor(row) {
@@ -147,7 +158,8 @@
       if (!query) return true;
       return [
         row.counterparty_name, row.representative_name, row.player_names_en,
-        row.golf_course, row.smart_cart_note, row.note
+        row.golf_course, row.smart_cart_note, row.cost_settlement_type,
+        row.cost_partner_name, costSettlementTypeLabel(row), row.note
       ].some((value) => String(value || "").toLocaleLowerCase().includes(query));
     });
   }
@@ -191,7 +203,8 @@
       "예약자 대표 / Người đại diện", "전체 이름(영어) / Họ tên tiếng Anh", "인원 / Số khách",
       "골프장 / Sân golf", "홀 / Số hố", "S-CART", "1인 판매가(VND) / Giá khách",
       "고객 합계(VND) / Tổng tiền khách", "1인 원가(VND) / Giá sân",
-      "골프장 합계(VND) / Tổng tiền sân", "계약금 합계(VND) / Tổng tiền cọc", "계약금 상세 / Chi tiết tiền cọc",
+      "골프장 합계(VND) / Tổng tiền sân", "원가 정산 방식 / Phương thức quyết toán",
+      "정산 거래처 / Đối tác quyết toán", "계약금 합계(VND) / Tổng tiền cọc", "계약금 상세 / Chi tiết tiền cọc",
       "고객 총입금(VND) / Tổng tiền khách đã trả", "입금 상세 / Chi tiết khoản thu",
       "실제 수익(VND) / Lợi nhuận", "구분 / Loại khách",
       "등록 일시 / Thời gian tạo", "비고 / Ghi chú", "최종 수정 / Cập nhật"
@@ -206,6 +219,7 @@
         textCell(row.golf_course), integerCell(row.holes), textCell(row.smart_cart_note, "wrapped"),
         integerCell(row.guest_unit_price_vnd), integerCell(row.guest_total_vnd),
         integerCell(row.course_unit_price_vnd), integerCell(row.course_total_vnd),
+        textCell(costSettlementTypeLabel(row)), textCell(costSettlementPartnerLabel(row)),
         integerCell(depositTotal), textCell(depositTotal == null ? "" : paymentDetailText(row, "deposit"), "wrapped"),
         integerCell(receivedTotal), textCell(receivedTotal == null ? "" : paymentDetailText(row, ["deposit", "receipt"]), "wrapped"),
         integerCell(actualProfit(row)),
@@ -233,17 +247,17 @@
       sheets: [{
         name: "골프 예약",
         rows: [
-          [textCell("HANA 골프 예약 목록 / Danh sách đặt sân golf", "title"), ...Array(22).fill("")],
-          [textCell("조회 기준 / Điều kiện lọc"), textCell(filterDescription()), ...Array(21).fill("")],
-          [textCell("생성 일시 / Thời gian xuất"), textCell(generatedAt), ...Array(21).fill("")],
+          [textCell("HANA 골프 예약 목록 / Danh sách đặt sân golf", "title"), ...Array(24).fill("")],
+          [textCell("조회 기준 / Điều kiện lọc"), textCell(filterDescription()), ...Array(23).fill("")],
+          [textCell("생성 일시 / Thời gian xuất"), textCell(generatedAt), ...Array(23).fill("")],
           [],
           headers.map((label) => textCell(label, "header")),
           ...dataRows
         ],
-        columnWidths: [17,16,10,20,22,34,9,13,8,18,18,20,18,20,18,34,20,38,20,16,20,30,20],
-        merges: ["A1:W1"],
+        columnWidths: [17,16,10,20,22,34,9,13,8,18,18,20,18,20,25,20,18,34,20,38,20,16,20,30,20],
+        merges: ["A1:Y1"],
         freezeRows: 5,
-        autoFilterRange: `A5:W${Math.max(5, 5 + dataRows.length)}`
+        autoFilterRange: `A5:Y${Math.max(5, 5 + dataRows.length)}`
       }, {
         name: "입금 내역",
         rows: [
@@ -326,6 +340,8 @@
       <td class="golf-cell-money">${escape(moneyLabel(row.guest_total_vnd))}</td>
       <td class="golf-cell-money">${escape(moneyLabel(row.course_unit_price_vnd))}</td>
       <td class="golf-cell-money">${escape(moneyLabel(row.course_total_vnd))}</td>
+      <td class="golf-cell-text" title="${escape(costSettlementTypeLabel(row))}">${escape(costSettlementTypeLabel(row))}</td>
+      <td class="golf-cell-text" title="${escape(costSettlementPartnerLabel(row))}">${escape(costSettlementPartnerLabel(row))}</td>
       <td class="golf-cell-money">${escape(moneyLabel(depositTotal))}</td>
       <td class="golf-cell-text golf-cell-payments" title="${escape(paymentDetailText(row, "deposit"))}"><span class="golf-payment-screen-summary">${escape(paymentMethodSummary(row, "deposit"))}</span><span class="golf-payment-print-detail">${escape(paymentDetailText(row, "deposit"))}</span></td>
       <td class="golf-cell-money">${escape(moneyLabel(receivedTotal))}</td>
@@ -337,7 +353,7 @@
       <td>${escape(dateTimeLabel(row.updated_at))}</td>
     </tr>
     <tr class="golf-roster-detail" data-roster-for="${escape(String(row.id || ""))}" hidden aria-hidden="true">
-      <td colspan="23"><div class="golf-roster-panel"><div class="golf-expanded-grid">
+      <td colspan="25"><div class="golf-roster-panel"><div class="golf-expanded-grid">
         <section class="golf-expanded-section"><strong class="golf-roster-title">예약자 명단 ${rosterNames.length.toLocaleString("ko-KR")}명 / Danh sách khách</strong><div class="golf-roster-names">${rosterMarkup}</div></section>
         <section class="golf-expanded-section"><strong class="golf-roster-title">고객 입금 상세 / Chi tiết khoản thu</strong><div class="golf-payment-detail-groups">${paymentDetailMarkup(row)}</div></section>
       </div></div></td>
@@ -350,7 +366,7 @@
     byId("listCount").textContent = `${rows.length.toLocaleString("ko-KR")}건 / mục`;
     byId("reservationTableBody").innerHTML = rows.length
       ? rows.map(renderRow).join("")
-      : '<tr><td class="golf-cell-empty" colspan="23">조건에 맞는 골프 예약이 없습니다. / Không có đặt sân phù hợp.</td></tr>';
+      : '<tr><td class="golf-cell-empty" colspan="25">조건에 맞는 골프 예약이 없습니다. / Không có đặt sân phù hợp.</td></tr>';
   }
 
   async function loadRows(options = {}) {
@@ -382,7 +398,10 @@
       state.rows = reservations.map((row) => ({
         ...row,
         payments: paymentsByReservation.get(row.id) || []
-      }));
+      })).sort((a, b) =>
+        `${a.golf_date} ${a.golf_time} ${a.id}`
+          .localeCompare(`${b.golf_date} ${b.golf_time} ${b.id}`)
+      );
       render();
       QRStaff.connectionBadge("online", "연결됨");
       if (!options.quiet) setBanner("골프 예약 목록을 불러왔습니다. / Đã tải danh sách đặt sân.", "ok");
@@ -488,3 +507,4 @@
 
   init();
 })(window);
+

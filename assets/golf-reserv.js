@@ -13,13 +13,17 @@
   const PAYMENT_KINDS = new Set(["deposit", "receipt", "withdrawal"]);
   const VISIBLE_PAYMENT_KINDS = ["deposit", "receipt"];
   const PAYMENT_METHODS = new Set(["bank", "cash", "card"]);
+  const COST_SETTLEMENT_TYPES = new Set(["golf_course", "partner"]);
+  const PARTNER_NAMES = new Set(["Chị Oanh"]);
   const CASH_BANK_THRESHOLD = 5000000;
   const PAYMENT_COLUMNS = "id,reservation_id,payment_kind,amount_vnd,payment_date,payment_method,completes_booking,sort_order,legacy_import";
+  const PARTNER_OFFSET_COLUMNS = "reservation_id,partner_name,golf_date,amount_vnd,active,applied_at,reversed_at,updated_at";
   const COLUMNS = [
     "id", "counterparty_name", "representative_name", "player_names_en", "pax",
     "booking_date", "golf_date", "golf_time",
     "golf_course", "holes", "guest_unit_price_vnd", "smart_cart_note",
     "guest_total_vnd", "course_unit_price_vnd", "course_total_vnd",
+    "cost_settlement_type", "cost_partner_name",
     "deposit_amount_vnd", "deposit_received_date",
     "final_received_amount_vnd", "final_received_date",
     "withdrawal_amount_vnd", "withdrawal_date", "customer_type", "note",
@@ -27,7 +31,7 @@
   ].join(",");
 
   const state = {
-    identity: null, rows: [], statusFilter: "in_progress", saving: false,
+    identity: null, rows: [], partnerOffsets: [], statusFilter: "in_progress", saving: false,
     paymentDrafts: { deposit: [], receipt: [], withdrawal: [] }, paymentSequence: 0
   };
   const byId = (id) => document.getElementById(id);
@@ -328,7 +332,21 @@
     ).join("\n");
   }
 
+  function syncCostSettlementFields() {
+    const partnerSettlement = byId("costSettlementType").value === "partner";
+    byId("costPartnerField").hidden = !partnerSettlement;
+    byId("costPartnerName").required = partnerSettlement;
+    if (partnerSettlement && !PARTNER_NAMES.has(byId("costPartnerName").value)) {
+      byId("costPartnerName").value = "Chị Oanh";
+    }
+    if (!partnerSettlement) byId("costPartnerName").value = "";
+    byId("courseTotalLabel").textContent = partnerSettlement
+      ? "거래처 정산 예정 합계 / Tổng tiền quyết toán đối tác"
+      : "골프장 지급 예정 합계 / Tổng tiền sân";
+  }
+
   function updatePreview() {
+    syncCostSettlementFields();
     const pax = Number(byId("pax").value || 0);
     const guestUnit = moneyNumber(byId("guestUnitPrice").value);
     const courseUnit = moneyNumber(byId("courseUnitPrice").value);
@@ -357,6 +375,8 @@
     clearLegacyHoleOption();
     byId("holes").value = "18";
     byId("customerType").value = "company";
+    byId("costSettlementType").value = "golf_course";
+    byId("costPartnerName").value = "";
     byId("golfDate").value = "";
     byId("golfHour").value = "";
     byId("golfMinute").value = "00";
@@ -391,6 +411,10 @@
     byId("smartCartNote").value = row.smart_cart_note || "";
     setMoneyInput("guestUnitPrice", row.guest_unit_price_vnd);
     setMoneyInput("courseUnitPrice", row.course_unit_price_vnd);
+    byId("costSettlementType").value = row.cost_settlement_type === "partner" ? "partner" : "golf_course";
+    byId("costPartnerName").value = row.cost_settlement_type === "partner"
+      ? (row.cost_partner_name || "Chị Oanh")
+      : "";
     byId("paymentCompleted").checked = row.status === "completed";
     setPaymentDrafts(paymentRowsFor(row));
     byId("note").value = row.note || "";
@@ -420,6 +444,8 @@
     const courseUnit = moneyNumber(byId("courseUnitPrice").value);
     const existingRow = state.rows.find((row) => row.id === byId("recordId").value);
     const customerType = clean(byId("customerType").value);
+    const costSettlementType = clean(byId("costSettlementType").value);
+    const costPartnerName = nullableText(byId("costPartnerName").value);
     const payments = validatePayments(allPaymentDrafts());
 
     if (!counterpartyName) throw new Error("거래처를 입력해 주세요. / Vui lòng nhập đối tác.");
@@ -433,13 +459,19 @@
     }
     const unchangedLegacyHoles = existingRow && Number(existingRow.holes) === holes;
     if (!STANDARD_HOLES.has(holes) && !unchangedLegacyHoles) throw new Error("홀 수를 9, 18, 27, 26 중에서 선택해 주세요. / Chọn số hố 9, 18, 27 hoặc 26.");
-    for (const [label, value] of [["1인 판매가", guestUnit], ["1인 골프장 원가", courseUnit]]) {
+    for (const [label, value] of [["1인 판매가", guestUnit], ["1인 원가", courseUnit]]) {
       if (Number.isNaN(value) || (value != null && (value < 0 || value > 1000000000000))) throw new Error(`${label}을 올바르게 입력해 주세요.`);
     }
     if (byId("paymentCompleted").checked && courseUnit == null) {
-      throw new Error("골프장 원가를 입력한 후 완료 처리해 주세요. / Vui lòng nhập giá sân trước khi hoàn tất.");
+      throw new Error("원가를 입력한 후 완료 처리해 주세요. / Vui lòng nhập giá vốn trước khi hoàn tất.");
     }
     if (!new Set(["individual", "company"]).has(customerType)) throw new Error("개인 또는 회사를 선택해 주세요. / Chọn cá nhân hoặc công ty.");
+    if (!COST_SETTLEMENT_TYPES.has(costSettlementType)) {
+      throw new Error("원가 정산 방식을 선택해 주세요. / Vui lòng chọn cách quyết toán giá vốn.");
+    }
+    if (costSettlementType === "partner" && !PARTNER_NAMES.has(costPartnerName)) {
+      throw new Error("정산 거래처로 Chị Oanh을 선택해 주세요. / Vui lòng chọn Chị Oanh làm đối tác quyết toán.");
+    }
 
     return {
       reservation: {
@@ -454,6 +486,8 @@
         guest_unit_price_vnd: guestUnit,
         smart_cart_note: nullableText(byId("smartCartNote").value),
         course_unit_price_vnd: courseUnit,
+        cost_settlement_type: costSettlementType,
+        cost_partner_name: costSettlementType === "partner" ? costPartnerName : null,
         customer_type: customerType,
         note: nullableText(byId("note").value),
         expected_updated_at: existingRow?.updated_at || null
@@ -476,15 +510,32 @@
     const from = byId("filterFrom").value;
     const to = byId("filterTo").value;
     return state.rows.filter((row) => {
+      const rowInRange = dateInRange(row.golf_date, from, to);
+      const partnerOffsets = activePartnerOffsetsFor(row, from, to);
       if (state.statusFilter === "receivable") {
-        if (row.customer_type !== "company") return false;
+        const salesInRange = row.customer_type === "company" && rowInRange;
+        if (!salesInRange && !partnerOffsets.length) return false;
       } else if (state.statusFilter !== "all" && row.status !== state.statusFilter) return false;
-      if (from && row.golf_date < from) return false;
-      if (to && row.golf_date > to) return false;
+      if (state.statusFilter !== "receivable" && !rowInRange) return false;
       if (!query) return true;
-      return [row.counterparty_name, row.representative_name, row.player_names_en, row.golf_course, row.note]
+      return [
+        row.counterparty_name, row.representative_name, row.player_names_en, row.golf_course,
+        row.cost_partner_name, ...partnerOffsets.map((offset) => offset.partner_name), row.note
+      ]
         .some((value) => String(value || "").toLocaleLowerCase().includes(query));
     });
+  }
+
+  function dateInRange(value, from, to) {
+    const date = clean(value);
+    return Boolean(date) && (!from || date >= from) && (!to || date <= to);
+  }
+
+  function activePartnerOffsetsFor(row, from = "", to = "") {
+    return state.partnerOffsets.filter((offset) =>
+      offset.reservation_id === row.id && offset.active !== false &&
+      dateInRange(offset.golf_date, from, to)
+    );
   }
 
   function receivedAmountForBooking(row) {
@@ -501,33 +552,51 @@
     return Number(row.guest_total_vnd) - receivedAmountForBooking(row);
   }
 
-  function receivableGroups(rows) {
+  function receivableGroups(rows, from = "", to = "") {
     const groups = new Map();
-    for (const row of rows) {
-      const name = clean(row.counterparty_name) || "거래처 미입력";
+    const getGroup = (rawName) => {
+      const name = clean(rawName) || "거래처 미입력";
       const key = name.normalize("NFC").toLocaleLowerCase("vi-VN");
       if (!groups.has(key)) {
         groups.set(key, {
-          name, bookingCount: 0, expected: 0, received: 0,
-          receivable: 0, unsetExpected: 0, unpricedReceived: 0, bookings: []
+          name, bookingCount: 0, partnerBookingCount: 0, expected: 0, received: 0,
+          partnerOffset: 0, receivable: 0, unsetExpected: 0, unpricedReceived: 0,
+          bookings: [], partnerBookings: []
         });
       }
-      const group = groups.get(key);
-      const received = receivedAmountForBooking(row);
-      const balance = receivableBalanceForBooking(row);
-      group.bookingCount += 1;
-      group.bookings.push({ row, received, balance });
-      if (balance == null) {
-        group.unsetExpected += 1;
-        group.unpricedReceived += received;
-      } else {
-        group.expected += Number(row.guest_total_vnd) || 0;
-        group.received += received;
-        group.receivable += balance;
+      return groups.get(key);
+    };
+    for (const row of rows) {
+      if (row.customer_type === "company" && dateInRange(row.golf_date, from, to)) {
+        const group = getGroup(row.counterparty_name);
+        const received = receivedAmountForBooking(row);
+        const balance = receivableBalanceForBooking(row);
+        group.bookingCount += 1;
+        group.bookings.push({ row, received, balance });
+        if (balance == null) {
+          group.unsetExpected += 1;
+          group.unpricedReceived += received;
+        } else {
+          group.expected += Number(row.guest_total_vnd) || 0;
+          group.received += received;
+          group.receivable += balance;
+        }
+      }
+      for (const offset of activePartnerOffsetsFor(row, from, to)) {
+        const group = getGroup(offset.partner_name);
+        const amount = Number(offset.amount_vnd) || 0;
+        group.partnerBookingCount += 1;
+        group.partnerOffset += amount;
+        group.receivable -= amount;
+        group.partnerBookings.push({ row, offset, amount });
       }
     }
     for (const group of groups.values()) {
       group.bookings.sort((a, b) =>
+        `${a.row.golf_date} ${a.row.golf_time} ${a.row.id}`
+          .localeCompare(`${b.row.golf_date} ${b.row.golf_time} ${b.row.id}`)
+      );
+      group.partnerBookings.sort((a, b) =>
         `${a.row.golf_date} ${a.row.golf_time} ${a.row.id}`
           .localeCompare(`${b.row.golf_date} ${b.row.golf_time} ${b.row.id}`)
       );
@@ -551,48 +620,85 @@
     </tr>`;
   }
 
-  function renderReceivables(rows) {
-    const groups = receivableGroups(rows);
+  function settlementBalanceMarkup(value) {
+    const amount = Number(value) || 0;
+    if (amount < 0) {
+      return `<strong>우리가 지급할 금액 / Số tiền phải trả: ${escape(moneyLabel(Math.abs(amount)))}</strong>`;
+    }
+    if (amount > 0) {
+      return `<strong>받을 금액 / Số tiền phải thu: ${escape(moneyLabel(amount))}</strong>`;
+    }
+    return '<strong>정산 잔액 / Số dư quyết toán: 0 VND</strong>';
+  }
+
+  function renderPartnerOffsetBooking(item) {
+    const row = item.row;
+    return `<tr>
+      <td>${escape(golfDateLabel(row.golf_date))} ${escape(timeLabel(row.golf_time))}</td>
+      <td><strong>${escape(row.representative_name || "—")}</strong><span class="golf-receivable-warning">${escape(row.golf_course || "—")} · ${escape(row.holes || "—")}H · ${escape(row.pax || "—")}명</span></td>
+      <td>${escape(item.offset.partner_name || row.cost_partner_name || "—")}</td>
+      <td><strong>${escape(moneyLabel(item.amount))}</strong></td>
+      <td>${escape(dateTimeLabel(item.offset.applied_at))}</td>
+    </tr>`;
+  }
+
+  function renderReceivables(rows, from = "", to = "") {
+    const groups = receivableGroups(rows, from, to);
     const totals = groups.reduce((sum, group) => ({
       expected: sum.expected + group.expected,
       received: sum.received + group.received,
+      partnerOffset: sum.partnerOffset + group.partnerOffset,
       receivable: sum.receivable + group.receivable,
       unsetExpected: sum.unsetExpected + group.unsetExpected,
-      unpricedReceived: sum.unpricedReceived + group.unpricedReceived
-    }), { expected: 0, received: 0, receivable: 0, unsetExpected: 0, unpricedReceived: 0 });
+      unpricedReceived: sum.unpricedReceived + group.unpricedReceived,
+      bookingCount: sum.bookingCount + group.bookingCount,
+      partnerBookingCount: sum.partnerBookingCount + group.partnerBookingCount
+    }), { expected: 0, received: 0, partnerOffset: 0, receivable: 0, unsetExpected: 0, unpricedReceived: 0, bookingCount: 0, partnerBookingCount: 0 });
     byId("listCount").textContent =
-      `${groups.length.toLocaleString("ko-KR")}개 거래처 · ${rows.length.toLocaleString("ko-KR")}건`;
+      `${groups.length.toLocaleString("ko-KR")}개 거래처 · 매출 ${totals.bookingCount.toLocaleString("ko-KR")}건 · 보유분 ${totals.partnerBookingCount.toLocaleString("ko-KR")}건`;
     byId("receivablePanel").innerHTML = groups.length ? `
       <div class="golf-receivable-total">
         <div><span>원래 받을 금액 / Phải thu</span><strong>${escape(moneyLabel(totals.expected))}</strong></div>
         <div><span>현재 받은 금액 / Đã nhận</span><strong>${escape(moneyLabel(totals.received))}</strong></div>
-        <div><span>미수금 잔액 / Công nợ ròng</span><strong>${escape(moneyLabel(totals.receivable))}</strong>
+        <div><span>거래처 보유 티타임 차감 / Khấu trừ suất tee</span><strong>−${escape(moneyLabel(totals.partnerOffset))}</strong></div>
+        <div><span>순 정산 잔액 / Số dư quyết toán ròng</span>${settlementBalanceMarkup(totals.receivable)}
           ${totals.unsetExpected ? `<span class="golf-receivable-warning">금액 미설정 ${escape(totals.unsetExpected)}건 · 별도 수령 ${escape(moneyLabel(totals.unpricedReceived))}</span>` : ""}</div>
       </div>
-      <div class="golf-receivable-note">음수 금액은 초과 수령입니다. 업체별·전체 금액은 자동으로 상계됩니다. / Số âm là khoản thu vượt và được tự động bù trừ.</div>
+      <div class="golf-receivable-note">순 정산 잔액은 판매 미수금에서 거래처 보유 티타임 원가를 차감해 계산합니다. 음수이면 우리가 거래처에 지급할 금액입니다. / Số dư ròng bằng công nợ bán hàng trừ giá vốn suất tee của đối tác; số âm là khoản chúng ta phải trả.</div>
       <div class="golf-receivable-table-wrap"><table class="golf-receivable-table">
-        <thead><tr><th>거래처 / Đối tác</th><th>예약 / Đặt sân</th><th>원래 받을 금액 / Phải thu</th><th>받은 금액 / Đã nhận</th><th>미수금 잔액 / Công nợ ròng</th></tr></thead>
+        <thead><tr><th>거래처 / Đối tác</th><th>예약 / Đặt sân</th><th>원래 받을 금액 / Phải thu</th><th>받은 금액 / Đã nhận</th><th>보유분 차감 / Khấu trừ</th><th>순 정산 / Quyết toán ròng</th></tr></thead>
         <tbody>${groups.map((group) => `
           <tr><td><strong>${escape(group.name)}</strong>
             ${group.unsetExpected ? `<span class="golf-receivable-warning">금액 미설정 ${escape(group.unsetExpected)}건 · 별도 수령 ${escape(moneyLabel(group.unpricedReceived))}</span>` : ""}</td>
-            <td>${escape(group.bookingCount)}건</td><td>${escape(moneyLabel(group.expected))}</td>
-            <td>${escape(moneyLabel(group.received))}</td><td><strong>${escape(moneyLabel(group.receivable))}</strong></td></tr>
-          <tr class="golf-receivable-detail-row"><td colspan="5">
-            <details class="golf-receivable-detail">
+            <td>매출 ${escape(group.bookingCount)}건 · 보유분 ${escape(group.partnerBookingCount)}건</td><td>${escape(moneyLabel(group.expected))}</td>
+            <td>${escape(moneyLabel(group.received))}</td><td>−${escape(moneyLabel(group.partnerOffset))}</td><td>${settlementBalanceMarkup(group.receivable)}</td></tr>
+          <tr class="golf-receivable-detail-row"><td colspan="6">
+            ${group.bookings.length ? `<details class="golf-receivable-detail">
               <summary>${escape(group.bookingCount)}건 건당 미수금 보기 / Xem công nợ từng đặt sân</summary>
               <div class="golf-receivable-table-wrap"><table class="golf-receivable-table">
                 <thead><tr><th>골프 날짜 / Ngày chơi</th><th>예약자 / Khách</th><th>원래 받을 금액 / Phải thu</th><th>받은 금액 / Đã nhận</th><th>건당 미수금 / Công nợ</th></tr></thead>
                 <tbody>${group.bookings.map(renderReceivableBooking).join("")}</tbody>
               </table></div>
-            </details>
+            </details>` : ""}
+            ${group.partnerBookings.length ? `<details class="golf-receivable-detail">
+              <summary>${escape(group.partnerBookingCount)}건 거래처 보유 티타임 차감 보기 / Xem khấu trừ suất tee của đối tác</summary>
+              <div class="golf-receivable-table-wrap"><table class="golf-receivable-table">
+                <thead><tr><th>골프 날짜 / Ngày chơi</th><th>예약자 / Khách</th><th>정산 거래처 / Đối tác</th><th>차감액 / Khấu trừ</th><th>반영 일시 / Thời điểm</th></tr></thead>
+                <tbody>${group.partnerBookings.map(renderPartnerOffsetBooking).join("")}</tbody>
+              </table></div>
+            </details>` : ""}
           </td></tr>`).join("")}</tbody>
-      </table></div>` : '<div class="qr-empty">선택한 기간에 회사 거래처의 미수금 내역이 없습니다.<br />Không có công nợ công ty trong khoảng thời gian đã chọn.</div>';
+      </table></div>` : '<div class="qr-empty">선택한 기간에 미수금 또는 거래처 보유 티타임 정산 내역이 없습니다.<br />Không có công nợ hoặc khoản quyết toán suất tee trong khoảng thời gian đã chọn.</div>';
   }
 
   function renderRow(row) {
     const completed = row.status === "completed";
     const statusLabel = completed ? "완료 / Hoàn tất" : "진행중 / Đang xử lý";
     const customerLabel = row.customer_type === "company" ? "회사 / Công ty" : "개인 / Cá nhân";
+    const partnerSettlement = row.cost_settlement_type === "partner";
+    const costSettlementLabel = partnerSettlement
+      ? `거래처 보유분 / Suất của đối tác · ${row.cost_partner_name || "Chị Oanh"}`
+      : "골프장 직접 / Sân golf trực tiếp";
     const rowPayments = paymentRowsFor(row);
     const rowTotals = paymentTotals(rowPayments);
     const actualProfit = completed && row.course_total_vnd != null
@@ -613,8 +719,9 @@
 
             <div class="golf-detail"><span>1인 판매가 / Giá khách mỗi người</span><strong>${escape(moneyLabel(row.guest_unit_price_vnd))}</strong></div>
             <div class="golf-detail"><span>고객 합계 / Tổng tiền khách</span><strong>${escape(moneyLabel(row.guest_total_vnd))}</strong></div>
-            <div class="golf-detail"><span>1인 골프장 원가 / Giá sân mỗi người</span><strong>${escape(moneyLabel(row.course_unit_price_vnd))}</strong></div>
-            <div class="golf-detail"><span>골프장 합계 / Tổng tiền sân</span><strong>${escape(moneyLabel(row.course_total_vnd))}</strong></div>
+            <div class="golf-detail"><span>원가 정산 방식 / Cách quyết toán</span><strong>${escape(costSettlementLabel)}</strong></div>
+            <div class="golf-detail"><span>1인 원가 / Giá vốn mỗi người</span><strong>${escape(moneyLabel(row.course_unit_price_vnd))}</strong></div>
+            <div class="golf-detail"><span>${partnerSettlement ? "거래처 정산 합계 / Tổng quyết toán đối tác" : "골프장 합계 / Tổng tiền sân"}</span><strong>${escape(moneyLabel(row.course_total_vnd))}</strong></div>
             <div class="golf-detail"><span>S-CART</span><strong>${escape(row.smart_cart_note || "—")}</strong></div>
             <div class="golf-detail"><span>계약금 내역 / Chi tiết tiền cọc</span><strong>${escape(paymentDetailText(row, "deposit"))}</strong></div>
             <div class="golf-detail"><span>고객 총입금 / Tổng tiền khách đã trả</span><strong>${escape(moneyLabel(rowTotals.received))}\n${escape(paymentDetailText(row, "receipt"))}</strong></div>
@@ -636,7 +743,7 @@
     byId("receivablePanel").hidden = !receivableMode;
     byId("reservationList").hidden = receivableMode;
     if (receivableMode) {
-      renderReceivables(rows);
+      renderReceivables(rows, byId("filterFrom").value, byId("filterTo").value);
       return;
     }
     byId("listCount").textContent = `${rows.length.toLocaleString("ko-KR")}건 / mục`;
@@ -647,7 +754,7 @@
   async function loadRows(options = {}) {
     QRStaff.connectionBadge("connecting", "불러오는 중");
     try {
-      const [reservations, payments] = await Promise.all([
+      const [reservations, payments, partnerOffsets] = await Promise.all([
         DGV.collectSupabasePages(
           () => sb.from("golf_reservations").select(COLUMNS),
           { pageSize: 500, order: [
@@ -661,6 +768,12 @@
             { column: "payment_date", ascending: true }, { column: "sort_order", ascending: true },
             { column: "id", ascending: true }
           ] }
+        ),
+        DGV.collectSupabasePages(
+          () => sb.from("golf_partner_reservation_offsets").select(PARTNER_OFFSET_COLUMNS).eq("active", true),
+          { pageSize: 500, order: [
+            { column: "golf_date", ascending: true }, { column: "reservation_id", ascending: true }
+          ] }
         )
       ]);
       const paymentsByReservation = new Map();
@@ -672,9 +785,8 @@
         ...row,
         payments: paymentsByReservation.get(row.id) || []
       }));
+      state.partnerOffsets = partnerOffsets;
       state.rows.sort((a, b) => {
-        const statusOrder = Number(a.status === "completed") - Number(b.status === "completed");
-        if (statusOrder) return statusOrder;
         return `${a.golf_date} ${a.golf_time} ${a.id}`
           .localeCompare(`${b.golf_date} ${b.golf_time} ${b.id}`);
       });
@@ -828,6 +940,7 @@
       input.addEventListener("blur", () => formatMoneyInput(input));
     }
     byId("pax").addEventListener("input", updatePreview);
+    byId("costSettlementType").addEventListener("change", updatePreview);
     byId("playerNamesEn").addEventListener("input", () => {
       const count = namesCount(byId("playerNamesEn").value);
       if (count) byId("pax").value = String(count);
@@ -870,3 +983,4 @@
 
   init();
 })(window);
+
