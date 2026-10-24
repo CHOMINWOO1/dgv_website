@@ -104,7 +104,7 @@
               <label class="qr-field"><span class="qr-label">예약자 대표(첫 번째 이름)<span class="golf-label-vi">Người đại diện (tên đầu tiên)</span></span><input class="qr-input" id="representativeName" type="text" maxlength="200" readonly aria-readonly="true" /></label>
               <label class="qr-field qr-field-wide"><span class="qr-label">전체 이름(영어, 한 줄에 한 명)<span class="golf-label-vi">Họ tên tất cả khách bằng tiếng Anh, mỗi người một dòng</span></span><textarea class="qr-textarea" id="playerNamesEn" maxlength="5000" placeholder="CHO MINWOO&#10;CHO GISANG" required></textarea></label>
               <label class="qr-field"><span class="qr-label">인원 (명단에서 자동 계산, 수정 가능)<span class="golf-label-vi">Số khách (tự đếm từ danh sách, có thể sửa)</span></span><input class="qr-input" id="pax" type="number" min="1" max="100" inputmode="numeric" required /></label>
-              <label class="qr-field"><span class="qr-label">개인 / 회사<span class="golf-label-vi">Cá nhân / Công ty</span></span><select class="qr-select" id="customerType" disabled aria-disabled="true"><option value="individual">개인 / Cá nhân</option><option value="company">회사 / Công ty</option></select><span class="golf-label-vi">Sếp/SEP는 개인, 그 외 거래처는 회사로 자동 분류됩니다.</span></label>
+              <label class="qr-field"><span class="qr-label">개인 / 회사<span class="golf-label-vi">Cá nhân / Công ty</span></span><select class="qr-select" id="customerType" required><option value="individual">개인 / Cá nhân</option><option value="company" selected>회사 / Công ty</option></select></label>
               <label class="qr-field"><span class="qr-label">골프 날짜·티오프<span class="golf-label-vi">Ngày chơi và giờ phát bóng</span></span><input class="qr-input" id="golfDateTime" type="datetime-local" step="300" required /><span class="golf-datetime-guide" id="golfDateTimeGuide">티오프 시간: 시(HH) : 분(MM) / Giờ phát bóng: giờ (HH) : phút (MM)</span></label>
               <label class="qr-field"><span class="qr-label">골프장<span class="golf-label-vi">Sân golf</span></span><select class="qr-select" id="golfCourse" required><option value="">선택 / Chọn</option><option value="AT1200">AT1200</option><option value="SAM">SAM</option><option value="PALACE">PALACE</option></select></label>
               <label class="qr-field"><span class="qr-label">홀 수<span class="golf-label-vi">Số hố</span></span><select class="qr-select" id="holes" required><option value="9">9</option><option value="18" selected>18</option><option value="27">27</option><option value="26">26</option></select></label>
@@ -183,6 +183,6 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-reserv.js?v=20261024-deep-edit-1"></script>
+  <script src="assets/golf-reserv.js?v=20261024-customer-type-edit-1"></script>
 </body>
 </html>
