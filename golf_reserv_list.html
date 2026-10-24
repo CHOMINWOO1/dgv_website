@@ -15,6 +15,8 @@
     .golf-list-tools{display:grid;grid-template-columns:minmax(210px,1fr) minmax(150px,.45fr) repeat(2,minmax(150px,.45fr)) auto;gap:8px;align-items:end}
     .golf-list-field{display:flex;flex-direction:column;gap:5px;min-width:0}
     .golf-list-count{margin-top:9px;color:var(--qr-sub);font-size:13px;font-weight:1000}
+    .golf-list-section-head{align-items:flex-start}
+    .golf-list-title-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
     .golf-sheet-wrap{margin-top:12px;overflow:auto;max-height:calc(100vh - 315px);border:1px solid var(--qr-line);border-radius:12px;background:#fff;overscroll-behavior:contain;cursor:grab}
     .golf-sheet-wrap.is-dragging{cursor:grabbing;user-select:none}
     .golf-sheet{width:max-content;min-width:2860px;border-collapse:separate;border-spacing:0;font-size:14px}
@@ -72,7 +74,7 @@
       .golf-status-chip{min-width:0;padding:0;background:transparent!important;color:#000!important;font-size:6px}
     }
     @media(max-width:900px){.golf-expanded-grid{grid-template-columns:1fr}.golf-list-tools{grid-template-columns:1fr 1fr}.golf-list-field:first-child{grid-column:1/-1}.golf-list-apply{grid-column:1/-1}.golf-list-apply .qr-btn{width:100%}.golf-sheet-wrap{max-height:none}}
-    @media(max-width:520px){.golf-list-tools{grid-template-columns:1fr}.golf-list-field:first-child{grid-column:auto}.golf-list-apply{grid-column:auto}.qr-header-actions{width:100%}.qr-header-actions .qr-btn{flex:1}}
+    @media(max-width:520px){.golf-list-tools{grid-template-columns:1fr}.golf-list-field:first-child{grid-column:auto}.golf-list-apply{grid-column:auto}.qr-header-actions{width:100%}.qr-header-actions .qr-btn{flex:1}.golf-list-section-head{align-items:stretch;flex-direction:column}.golf-list-title-actions{width:100%;justify-content:flex-start}.golf-list-title-actions .qr-btn{flex:1 1 140px}}
   </style>
 </head>
 <body class="locked">
@@ -85,9 +87,8 @@
       <div class="qr-header-actions">
         <span class="qr-pill"><span class="qr-dot is-connecting" id="connectionDot"></span><span id="connectionText">연결 중</span></span>
         <a class="qr-btn" href="golf_reserv.html">예약 입력·수정 / Quản lý</a>
+        <a class="qr-btn" href="golf_budget.html">골프장 예산 / Ngân sách</a>
         <button class="qr-btn" id="reloadButton" type="button">새로고침 / Làm mới</button>
-        <button class="qr-btn" id="printListButton" type="button">출력 / In</button>
-        <button class="qr-btn qr-btn-primary" id="exportListButton" type="button">엑셀 생성 / Tạo Excel</button>
       </div>
     </header>
 
@@ -101,10 +102,14 @@
     </section>
 
     <section class="qr-card qr-card-pad" aria-labelledby="listTitle">
-      <div class="qr-section-head">
+      <div class="qr-section-head golf-list-section-head">
         <div>
           <h2 class="qr-section-title" id="listTitle">전체 예약 / Tất cả đặt sân</h2>
           <div class="golf-list-count" id="listCount" aria-live="polite">0건</div>
+        </div>
+        <div class="golf-list-title-actions" aria-label="목록 출력 및 엑셀">
+          <button class="qr-btn qr-btn-small" id="printListButton" type="button">출력 / In</button>
+          <button class="qr-btn qr-btn-small qr-btn-primary" id="exportListButton" type="button">엑셀 생성 / Tạo Excel</button>
         </div>
       </div>
 
