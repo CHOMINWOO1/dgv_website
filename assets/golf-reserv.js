@@ -95,15 +95,6 @@
       .trim();
   }
 
-  function customerTypeForCounterparty(value) {
-    const normalized = clean(value).normalize("NFC").toLocaleLowerCase("vi-VN");
-    return normalized === "sếp" || normalized === "sep" ? "individual" : "company";
-  }
-
-  function syncCustomerType() {
-    byId("customerType").value = customerTypeForCounterparty(byId("counterpartyName").value);
-  }
-
   function setBanner(message, tone = "info") {
     if (tone === "error") QRStaff.toast(message, "error");
   }
@@ -167,7 +158,7 @@
     byId("golfCourse").value = "";
     clearLegacyHoleOption();
     byId("holes").value = "18";
-    syncCustomerType();
+    byId("customerType").value = "company";
     byId("formTitle").textContent = "새 골프 예약 / Đặt sân mới";
     byId("editingHint").textContent = "예약금(0 VND 가능)과 날짜를 입력해 진행중 예약을 등록합니다. / Có thể nhập tiền cọc 0 VND.";
     byId("saveButton").textContent = "예약 저장 / Lưu đặt chỗ";
@@ -182,7 +173,7 @@
     byId("representativeName").value = row.representative_name || "";
     byId("playerNamesEn").value = row.player_names_en || "";
     byId("pax").value = row.pax || "";
-    syncCustomerType();
+    byId("customerType").value = row.customer_type === "individual" ? "individual" : "company";
     byId("golfDateTime").value = row.golf_date && row.golf_time
       ? `${row.golf_date}T${String(row.golf_time).slice(0, 5)}`
       : "";
@@ -232,8 +223,7 @@
     const withdrawalAmount = moneyNumber(byId("withdrawalAmount").value);
     const withdrawalDate = byId("withdrawalDate").value || null;
     const existingRow = state.rows.find((row) => row.id === byId("recordId").value);
-    const customerType = customerTypeForCounterparty(counterpartyName);
-    byId("customerType").value = customerType;
+    const customerType = clean(byId("customerType").value);
 
     if (!counterpartyName) throw new Error("거래처를 입력해 주세요.");
     if (!representativeName) throw new Error("첫 번째 예약자 이름을 확인해 주세요.");
@@ -549,7 +539,6 @@
       input.addEventListener("blur", () => formatMoneyInput(input));
     }
     byId("pax").addEventListener("input", updatePreview);
-    byId("counterpartyName").addEventListener("input", syncCustomerType);
     byId("playerNamesEn").addEventListener("input", () => {
       const count = namesCount(byId("playerNamesEn").value);
       if (count) byId("pax").value = String(count);
