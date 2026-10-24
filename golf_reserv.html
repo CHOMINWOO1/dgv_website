@@ -15,6 +15,7 @@
     .golf-form-section:first-of-type{margin-top:0;padding-top:0;border-top:0}
     .golf-form-section h3{margin:0 0 10px;font-size:14px;font-weight:1000}
     .golf-label-vi{display:block;margin-top:2px;color:#8a7565;font-size:10px;font-weight:800}
+    .golf-datetime-guide{display:block;margin-top:5px;color:var(--qr-sub);font-size:11px;font-weight:900}
     .golf-money-preview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
     .golf-money-preview>div{padding:10px;border:1px solid var(--qr-line);border-radius:11px;background:#fffaf0}
     .golf-money-preview span{display:block;color:var(--qr-sub);font-size:10px;font-weight:900}
@@ -53,6 +54,11 @@
     .golf-receivable-table tbody tr:last-child td{border-bottom:0}
     .golf-receivable-table td{font-size:13px;font-weight:850}
     .golf-receivable-warning{display:block;margin-top:3px;color:#a15c2b;font-size:10px;font-weight:900}
+    .golf-receivable-note{padding:9px 11px;border-radius:10px;background:#f7f3ea;color:var(--qr-sub);font-size:11px;font-weight:900}
+    .golf-receivable-detail-row>td{text-align:left!important;white-space:normal!important;background:#fffdf8}
+    .golf-receivable-detail summary{cursor:pointer;color:#765137;font-size:12px;font-weight:1000}
+    .golf-receivable-detail .golf-receivable-table-wrap{margin-top:8px}
+    .golf-receivable-detail .golf-receivable-table{min-width:680px}
     @media(max-width:1050px){.golf-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:680px){.golf-filters{grid-template-columns:1fr 1fr}.golf-filter-field:first-child{grid-column:1/-1}.golf-filter-apply{grid-column:1/-1}.golf-filter-apply .qr-btn{width:100%}.golf-money-preview,.golf-receivable-total{grid-template-columns:1fr}.golf-detail-grid{grid-template-columns:1fr 1fr}}
     @media(max-width:430px){.golf-detail-grid{grid-template-columns:1fr}.golf-row-head{flex-direction:column}.golf-row-actions{display:grid;grid-template-columns:1fr}.golf-row-actions .qr-btn{width:100%}}
@@ -93,7 +99,7 @@
               <label class="qr-field qr-field-wide"><span class="qr-label">전체 이름(영어, 한 줄에 한 명)<span class="golf-label-vi">Họ tên tất cả khách bằng tiếng Anh, mỗi người một dòng</span></span><textarea class="qr-textarea" id="playerNamesEn" maxlength="5000" placeholder="CHO MINWOO&#10;CHO GISANG" required></textarea></label>
               <label class="qr-field"><span class="qr-label">인원 (명단에서 자동 계산, 수정 가능)<span class="golf-label-vi">Số khách (tự đếm từ danh sách, có thể sửa)</span></span><input class="qr-input" id="pax" type="number" min="1" max="100" inputmode="numeric" required /></label>
               <label class="qr-field"><span class="qr-label">개인 / 회사<span class="golf-label-vi">Cá nhân / Công ty</span></span><select class="qr-select" id="customerType" disabled aria-disabled="true"><option value="individual">개인 / Cá nhân</option><option value="company">회사 / Công ty</option></select><span class="golf-label-vi">Sếp/SEP는 개인, 그 외 거래처는 회사로 자동 분류됩니다.</span></label>
-              <label class="qr-field"><span class="qr-label">골프 날짜·티오프<span class="golf-label-vi">Ngày chơi và giờ phát bóng</span></span><input class="qr-input" id="golfDateTime" type="datetime-local" step="300" required /></label>
+              <label class="qr-field"><span class="qr-label">골프 날짜·티오프<span class="golf-label-vi">Ngày chơi và giờ phát bóng</span></span><input class="qr-input" id="golfDateTime" type="datetime-local" step="300" required /><span class="golf-datetime-guide" id="golfDateTimeGuide">티오프 시간: 시(HH) : 분(MM) / Giờ phát bóng: giờ (HH) : phút (MM)</span></label>
               <label class="qr-field"><span class="qr-label">골프장<span class="golf-label-vi">Sân golf</span></span><select class="qr-select" id="golfCourse" required><option value="">선택 / Chọn</option><option value="AT1200">AT1200</option><option value="SAM">SAM</option><option value="PALACE">PALACE</option></select></label>
               <label class="qr-field"><span class="qr-label">홀 수<span class="golf-label-vi">Số hố</span></span><select class="qr-select" id="holes" required><option value="9">9</option><option value="18" selected>18</option><option value="27">27</option><option value="26">26</option></select></label>
               <label class="qr-field"><span class="qr-label">S-CART<span class="golf-label-vi">Ghi chú xe điện</span></span><input class="qr-input" id="smartCartNote" type="text" maxlength="300" /></label>
