@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HANA 골프 예약 관리</title>
+  <link rel="stylesheet" href="assets/qr-staff.css" />
+  <style>
+    .locked .golf-app{pointer-events:none;user-select:none;filter:blur(2px)}
+    .golf-app{transition:filter .15s ease}
+    .golf-layout{display:grid;grid-template-columns:minmax(360px,.9fr) minmax(560px,1.4fr);gap:14px;align-items:start}
+    .golf-form-card,.golf-list-card{min-width:0}
+    .golf-form-card{position:sticky;top:10px}
+    .golf-form-section{margin-top:14px;padding-top:14px;border-top:1px dashed var(--qr-line)}
+    .golf-form-section:first-of-type{margin-top:0;padding-top:0;border-top:0}
+    .golf-form-section h3{margin:0 0 10px;font-size:14px;font-weight:1000}
+    .golf-label-vi{display:block;margin-top:2px;color:#8a7565;font-size:10px;font-weight:800}
+    .golf-money-preview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+    .golf-money-preview>div{padding:10px;border:1px solid var(--qr-line);border-radius:11px;background:#fffaf0}
+    .golf-money-preview span{display:block;color:var(--qr-sub);font-size:10px;font-weight:900}
+    .golf-money-preview strong{display:block;margin-top:4px;font-size:14px;font-weight:1000;overflow-wrap:anywhere}
+    .golf-filter-tabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+    .golf-filter-tabs .qr-btn[aria-pressed="true"]{border-color:var(--qr-gold);background:#f3d995;color:#4c3511}
+    .golf-filters{display:grid;grid-template-columns:minmax(180px,1fr) repeat(2,minmax(145px,.55fr)) auto;gap:8px;align-items:end;margin-bottom:12px}
+    .golf-filter-field{display:flex;flex-direction:column;gap:5px}
+    .golf-list{display:flex;flex-direction:column;gap:10px}
+    .golf-row{overflow:hidden;border:1px solid var(--qr-line);border-left:5px solid #d1b36b;border-radius:14px;background:#fff;box-shadow:0 5px 14px rgba(58,42,31,.06)}
+    .golf-row[data-status="completed"]{border-left-color:#7caf88;background:#fcfffc}
+    .golf-row-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 13px;border-bottom:1px dashed var(--qr-line)}
+    .golf-row-title{font-size:18px;font-weight:1000}
+    .golf-row-sub{margin-top:3px;color:var(--qr-sub);font-size:12px;font-weight:800}
+    .golf-row-body{padding:12px 13px}
+    .golf-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+    .golf-detail{min-width:0;padding:8px;border-radius:10px;background:#fffaf0}
+    .golf-detail span{display:block;color:var(--qr-sub);font-size:10px;font-weight:900}
+    .golf-detail strong{display:block;margin-top:3px;font-size:13px;font-weight:950;white-space:pre-wrap;overflow-wrap:anywhere}
+    .golf-row-names{margin-top:9px;padding:10px;border:1px solid var(--qr-line);border-radius:10px;background:#fff;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;font-weight:850}
+    .golf-row-note{margin-top:9px;color:var(--qr-sub);font-size:12px;font-weight:800;white-space:pre-wrap;overflow-wrap:anywhere}
+    .golf-row-actions{display:flex;justify-content:flex-end;gap:8px;padding:0 13px 13px}
+    .golf-status-preview{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:11px;border:1px solid var(--qr-line);border-radius:12px;background:#fffaf0}
+    .golf-status-preview strong{font-size:14px}
+    .golf-count{color:var(--qr-sub);font-size:12px;font-weight:900}
+    @media(max-width:1050px){.golf-layout{grid-template-columns:1fr}.golf-form-card{position:static}.golf-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:680px){.golf-filters{grid-template-columns:1fr 1fr}.golf-filter-field:first-child{grid-column:1/-1}.golf-filter-apply{grid-column:1/-1}.golf-filter-apply .qr-btn{width:100%}.golf-money-preview{grid-template-columns:1fr}.golf-detail-grid{grid-template-columns:1fr 1fr}}
+    @media(max-width:430px){.golf-detail-grid{grid-template-columns:1fr}.golf-row-head{flex-direction:column}.golf-row-actions{display:grid;grid-template-columns:1fr}.golf-row-actions .qr-btn{width:100%}}
+  </style>
+</head>
+<body class="locked">
+  <main class="qr-shell golf-app">
+    <header class="qr-header">
+      <div>
+        <h1 class="qr-brand-title">골프 예약 관리</h1>
+        <p class="qr-brand-subtitle">Quản lý đặt sân golf</p>
+      </div>
+      <div class="qr-header-actions">
+        <span class="qr-pill"><span class="qr-dot is-connecting" id="connectionDot"></span><span id="connectionText">연결 중</span></span>
+        <a class="qr-btn" id="homeLink" href="home_manager.html">홈 / Trang chủ</a>
+        <button class="qr-btn" id="reloadButton" type="button">새로고침 / Làm mới</button>
+      </div>
+    </header>
+
+    <div class="qr-banner" id="pageBanner">예약금이 입금된 예약을 등록하면 진행중으로 표시됩니다. 최종 총입금액과 날짜를 입력하면 자동으로 완료됩니다.</div>
+
+    <section class="qr-summary" aria-label="예약 요약">
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">진행중 / Đang xử lý</div><div class="qr-summary-value" id="summaryProgress">0</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">완료 / Hoàn tất</div><div class="qr-summary-value" id="summaryCompleted">0</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">예약금 합계 / Tổng tiền cọc</div><div class="qr-summary-value" id="summaryDeposit">0</div></div>
+      <div class="qr-card qr-summary-card"><div class="qr-summary-label">총 수익 / Tổng lợi nhuận</div><div class="qr-summary-value" id="summaryProfit">0</div></div>
+    </section>
+
+    <div class="golf-layout">
+      <section class="qr-card qr-form golf-form-card" aria-labelledby="formTitle">
+        <div class="qr-section-head">
+          <div>
+            <h2 class="qr-section-title" id="formTitle">새 골프 예약 / Đặt sân mới</h2>
+            <div class="qr-hint" id="editingHint">예약금과 입금일을 입력해 진행중 예약을 등록합니다.</div>
+          </div>
+          <button class="qr-btn qr-btn-small" id="resetButton" type="button">새 입력 / Tạo mới</button>
+        </div>
+
+        <form id="reservationForm" novalidate>
+          <input id="recordId" type="hidden" />
+
+          <div class="golf-form-section">
+            <h3>고객 및 일정 / Khách hàng và lịch chơi</h3>
+            <div class="qr-form-grid">
+              <label class="qr-field"><span class="qr-label">예약자 대표(팀명)<span class="golf-label-vi">Người đại diện (tên đội)</span></span><input class="qr-input" id="representativeName" type="text" maxlength="200" required /></label>
+              <label class="qr-field qr-field-wide"><span class="qr-label">전체 이름(영어, 한 줄에 한 명)<span class="golf-label-vi">Họ tên tất cả khách bằng tiếng Anh, mỗi người một dòng</span></span><textarea class="qr-textarea" id="playerNamesEn" maxlength="5000" placeholder="CHO MINWOO&#10;CHO GISANG" required></textarea></label>
+              <label class="qr-field"><span class="qr-label">인원 (명단에서 자동 계산, 수정 가능)<span class="golf-label-vi">Số khách (tự đếm từ danh sách, có thể sửa)</span></span><input class="qr-input" id="pax" type="number" min="1" max="100" inputmode="numeric" required /></label>
+              <label class="qr-field"><span class="qr-label">담당자<span class="golf-label-vi">Người phụ trách</span></span><input class="qr-input" id="coordinatorName" type="text" maxlength="200" placeholder="예: Chị Oanh" /></label>
+              <label class="qr-field"><span class="qr-label">개인 / 회사<span class="golf-label-vi">Cá nhân / Công ty</span></span><select class="qr-select" id="customerType"><option value="individual">개인 / Cá nhân</option><option value="company">회사 / Công ty</option></select></label>
+              <label class="qr-field"><span class="qr-label">예약 날짜<span class="golf-label-vi">Ngày đặt chỗ</span></span><input class="qr-input" id="bookingDate" type="date" required /></label>
+              <label class="qr-field"><span class="qr-label">골프 날짜<span class="golf-label-vi">Ngày chơi golf</span></span><input class="qr-input" id="golfDate" type="date" required /></label>
+              <label class="qr-field"><span class="qr-label">티오프 시간<span class="golf-label-vi">Giờ phát bóng</span></span><input class="qr-input" id="golfTime" type="time" required /></label>
+              <label class="qr-field"><span class="qr-label">골프장<span class="golf-label-vi">Sân golf</span></span><select class="qr-select" id="golfCourse" required><option value="">선택 / Chọn</option><option value="AT1200">AT1200</option><option value="SAM">SAM</option><option value="PALACE">PALACE</option></select></label>
+              <label class="qr-field"><span class="qr-label">홀 수<span class="golf-label-vi">Số hố</span></span><input class="qr-input" id="holes" type="number" min="1" max="72" inputmode="numeric" value="18" required /></label>
+              <label class="qr-field"><span class="qr-label">S-CART<span class="golf-label-vi">Ghi chú xe điện</span></span><input class="qr-input" id="smartCartNote" type="text" maxlength="300" /></label>
+            </div>
+          </div>
+
+          <div class="golf-form-section">
+            <h3>판매 및 원가 / Giá bán và giá sân</h3>
+            <div class="qr-form-grid">
+              <label class="qr-field"><span class="qr-label">1인 판매가 (VND)<span class="golf-label-vi">Giá khách / người</span></span><input class="qr-input golf-money-input" id="guestUnitPrice" type="text" inputmode="numeric" autocomplete="off" /></label>
+              <label class="qr-field"><span class="qr-label">1인 골프장 원가 (VND)<span class="golf-label-vi">Giá sân / người</span></span><input class="qr-input golf-money-input" id="courseUnitPrice" type="text" inputmode="numeric" autocomplete="off" /></label>
+            </div>
+            <div class="golf-money-preview">
+              <div><span>고객 결제 예정 합계 / Tổng tiền khách</span><strong id="guestTotalPreview">—</strong></div>
+              <div><span>골프장 지급 예정 합계 / Tổng tiền sân</span><strong id="courseTotalPreview">—</strong></div>
+              <div><span>예상 차액 / Chênh lệch dự kiến</span><strong id="marginPreview">—</strong></div>
+            </div>
+          </div>
+
+          <div class="golf-form-section">
+            <h3>입출금 및 상태 / Thu chi và trạng thái</h3>
+            <div class="qr-form-grid">
+              <label class="qr-field"><span class="qr-label">예약금 (VND)<span class="golf-label-vi">Tiền đặt cọc</span></span><input class="qr-input golf-money-input" id="depositAmount" type="text" inputmode="numeric" autocomplete="off" required /></label>
+              <label class="qr-field"><span class="qr-label">예약금 입금일<span class="golf-label-vi">Ngày nhận tiền đặt cọc</span></span><input class="qr-input" id="depositDate" type="date" required /></label>
+              <label class="qr-field"><span class="qr-label">최종 총입금액 (예약금 포함, VND)<span class="golf-label-vi">Tổng tiền đã nhận, gồm tiền cọc</span></span><input class="qr-input golf-money-input" id="finalAmount" type="text" inputmode="numeric" autocomplete="off" /></label>
+              <label class="qr-field"><span class="qr-label">최종 입금일<span class="golf-label-vi">Ngày nhận đủ tiền</span></span><input class="qr-input" id="finalDate" type="date" /></label>
+              <label class="qr-field"><span class="qr-label">출금액 (VND)<span class="golf-label-vi">Số tiền chi ra</span></span><input class="qr-input golf-money-input" id="withdrawalAmount" type="text" inputmode="numeric" autocomplete="off" /></label>
+              <label class="qr-field"><span class="qr-label">출금일<span class="golf-label-vi">Ngày chi tiền</span></span><input class="qr-input" id="withdrawalDate" type="date" /></label>
+              <label class="qr-field qr-field-wide"><span class="qr-label">비고<span class="golf-label-vi">Ghi chú</span></span><textarea class="qr-textarea" id="note" maxlength="5000"></textarea></label>
+            </div>
+            <div class="golf-status-preview"><span>저장 후 상태 / Trạng thái sau khi lưu</span><strong id="statusPreview">진행중 / Đang xử lý</strong></div>
+          </div>
+
+          <div class="qr-form-actions">
+            <button class="qr-btn" id="cancelEditButton" type="button" hidden>수정 취소 / Hủy sửa</button>
+            <button class="qr-btn qr-btn-primary" id="saveButton" type="submit">예약 저장 / Lưu đặt chỗ</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="qr-card qr-card-pad golf-list-card" aria-labelledby="listTitle">
+        <div class="qr-section-head">
+          <div><h2 class="qr-section-title" id="listTitle">예약 목록 / Danh sách đặt sân</h2><div class="golf-count" id="listCount">0건</div></div>
+        </div>
+        <div class="golf-filter-tabs" aria-label="상태 필터">
+          <button class="qr-btn qr-btn-small" type="button" data-status-filter="in_progress" aria-pressed="true">진행중 / Đang xử lý</button>
+          <button class="qr-btn qr-btn-small" type="button" data-status-filter="completed" aria-pressed="false">완료 / Hoàn tất</button>
+          <button class="qr-btn qr-btn-small" type="button" data-status-filter="all" aria-pressed="false">전체 / Tất cả</button>
+        </div>
+        <div class="golf-filters">
+          <label class="golf-filter-field"><span class="qr-label">검색 / Tìm kiếm</span><input class="qr-input" id="searchInput" type="search" placeholder="예약자 대표(팀명), 영문 이름, 골프장" /></label>
+          <label class="golf-filter-field"><span class="qr-label">골프 시작일 / Từ ngày</span><input class="qr-input" id="filterFrom" type="date" /></label>
+          <label class="golf-filter-field"><span class="qr-label">골프 종료일 / Đến ngày</span><input class="qr-input" id="filterTo" type="date" /></label>
+          <div class="golf-filter-apply"><button class="qr-btn qr-btn-small" id="clearFiltersButton" type="button">검색 초기화 / Xóa lọc</button></div>
+        </div>
+        <div class="golf-list" id="reservationList"><div class="qr-empty">예약을 불러오는 중입니다.</div></div>
+      </section>
+    </div>
+  </main>
+
+  <div class="qr-modal-back" id="loginModal" hidden>
+    <form class="qr-modal" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="loginTitle" aria-describedby="loginDescription">
+      <h2 id="loginTitle">매니저·관리자 로그인</h2>
+      <p id="loginDescription">매니저 또는 관리자 비밀번호를 입력해 주세요.<br />Vui lòng nhập mật khẩu quản lý hoặc quản trị viên.</p>
+      <label class="qr-label" for="loginPassword">비밀번호 / Mật khẩu</label>
+      <input class="qr-input" id="loginPassword" type="password" autocomplete="current-password" required />
+      <div class="qr-button-row" style="margin-top:12px;justify-content:flex-end"><button class="qr-btn qr-btn-primary" id="loginConfirm" type="submit">입장 / Đăng nhập</button></div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/dgv-data.js"></script>
+  <script src="assets/supabase-client.js"></script>
+  <script src="assets/qr-staff.js"></script>
+  <script src="assets/golf-reserv.js"></script>
+</body>
+</html>

@@ -9,7 +9,7 @@ const read = (file) => readFile(path.join(projectRoot, file), "utf8");
 
 const [config, client, staffUi, home, managerHome, adminHome, calc, admin,
   menuAdminHtml, menuAdminSource, inboxHtml, inboxSource, reservCheck,
-  reservation, reservAdmin, notice, expense, hiddenSales, hiddenReservCheck,
+  reservation, reservAdmin, golfReserv, notice, expense, hiddenSales, hiddenReservCheck,
   hiddenReservAdmin, report, codeAdmin] = await Promise.all([
   read("assets/supabase-config.js"),
   read("assets/supabase-client.js"),
@@ -26,6 +26,7 @@ const [config, client, staffUi, home, managerHome, adminHome, calc, admin,
   read("reserv_check.html"),
   read("reservation.html"),
   read("reserv_admin.html"),
+  read("golf_reserv.html"),
   read("notice.html"),
   read("expense.html"),
   read("hana_admin_hidden.html"),
@@ -149,6 +150,10 @@ assert.match(reservCheck, /ORIGINAL_VIEW \? \["admin"\] : \["staff", "manager", 
 assert.match(reservCheck, /DGV\.signInAsAny\(loginRoles, code\.trim\(\)\)/);
 assert.match(reservation, /DGV\.signInAsAny\(\["manager", "admin"\], pass\)/);
 assert.match(reservAdmin, /DGV\.signInAsAny\(\["manager", "admin"\], pw\)/);
+assert.match(golfReserv, /assets\/golf-reserv\.js/);
+assert.match(golfReserv, /id="loginForm"/);
+assert.doesNotMatch(managerHome, /href="golf_reserv\.html"/);
+assert.match(adminHome, /href="golf_reserv\.html"/);
 assert.match(notice, /DGV\.signInAsAny\(\["manager", "admin"\], password\)/);
 assert.match(expense, /DGV\.signInAsAny\(\["manager", "admin"\], password\)/);
 
