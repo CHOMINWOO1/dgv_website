@@ -280,7 +280,7 @@
     const to = byId("filterTo").value;
     return state.rows.filter((row) => {
       if (state.statusFilter === "receivable") {
-        if (row.status !== "in_progress" || row.customer_type !== "company") return false;
+        if (row.customer_type !== "company") return false;
       } else if (state.statusFilter !== "all" && row.status !== state.statusFilter) return false;
       if (from && row.golf_date < from) return false;
       if (to && row.golf_date > to) return false;
@@ -303,7 +303,10 @@
       }
       const group = groups.get(key);
       group.bookingCount += 1;
-      group.received += Number(row.deposit_amount_vnd) || 0;
+      const received = row.final_received_amount_vnd == null
+        ? row.deposit_amount_vnd
+        : row.final_received_amount_vnd;
+      group.received += Number(received) || 0;
       if (row.guest_total_vnd == null) {
         group.unsetExpected += 1;
       } else {
@@ -340,7 +343,7 @@
           ${group.unsetExpected ? `<span class="golf-receivable-warning">금액 미설정 ${escape(group.unsetExpected)}건</span>` : ""}</td>
           <td>${escape(group.bookingCount)}건</td><td>${escape(moneyLabel(group.expected))}</td>
           <td>${escape(moneyLabel(group.received))}</td><td><strong>${escape(moneyLabel(group.receivable))}</strong></td></tr>`).join("")}</tbody>
-      </table></div>` : '<div class="qr-empty">선택한 기간에 회사 거래처의 진행중 미수금이 없습니다.<br />Không có công nợ công ty trong khoảng thời gian đã chọn.</div>';
+      </table></div>` : '<div class="qr-empty">선택한 기간에 회사 거래처의 미수금 내역이 없습니다.<br />Không có công nợ công ty trong khoảng thời gian đã chọn.</div>';
   }
 
   function renderRow(row) {
