@@ -33,8 +33,12 @@ for (const kind of ["charge", "pending"]) {
   });
   byId(`${kind}Filters`).querySelectorAll = () => buttons;
 }
+const viewButtons = ["all", "completed", "pending"].map((view) => {
+  const button = element(`view-${view}`); button.dataset.reservationView = view; button.closest = () => button; return button;
+});
+byId("reservationViewFilters").querySelectorAll = () => viewButtons;
 const body = { classList: classList() };
-const toasts = [], exported = [], printModes = [], queries = [];
+const toasts = [], exported = [], printModes = [], printedSections = [], queries = [];
 const globalEvents = new Map(), fixtureTables = new Map();
 const supabase = {
   from(table) {
@@ -53,7 +57,10 @@ const window = {
   },
   QRStaff: { toast: (...args) => toasts.push(args), connectionBadge() {}, messageOf: (error) => error.message },
   DGV_XLSX: { downloadWorkbook: (options) => exported.push(options) }, requestAnimationFrame: (fn) => fn(),
-  print: () => printModes.push({ payments: body.classList.contains("print-budget-payments"), charges: body.classList.contains("print-budget-charges") }),
+  print: () => {
+    printModes.push({ payments: body.classList.contains("print-budget-payments"), charges: body.classList.contains("print-budget-charges") });
+    printedSections.push({ completed: !byId("chargeListSection").hidden, pending: !byId("pendingListSection").hidden });
+  },
   addEventListener(type, fn) { const list = globalEvents.get(type) || []; list.push(fn); globalEvents.set(type, list); },
 };
 assert.match(source, /\n  init\(\);\s*}\)\(window\);/);
@@ -64,11 +71,16 @@ const plain = (v) => JSON.parse(JSON.stringify(v));
 const click = (id, event = {}) => { const fn = byId(id).listeners.get("click"); assert.equal(typeof fn, "function", `Missing handler: ${id}`); return fn(event); };
 const afterPrint = () => { for (const fn of globalEvents.get("afterprint") || []) fn(); globalEvents.delete("afterprint"); };
 const courseClick = (kind, course) => click(`${kind}Filters`, { target: byId(`${kind}Filters`).querySelectorAll().find((b) => b.dataset[`${kind}Course`] === course) });
+const viewClick = (view) => click("reservationViewFilters", { target: viewButtons.find((b) => b.dataset.reservationView === view) || { dataset: { reservationView: view }, closest() { return this; } } });
 
 assert.equal(state.pendingFrom, ""); assert.equal(state.pendingTo, ""); assert.equal(state.pendingCourse, "all");
+assert.equal(state.reservationView, "all");
 assert.ok(page.indexOf('id="chargeListSection"') < page.indexOf('id="pendingListSection"'));
+assert.ok(page.indexOf('id="printChargeButton"') < page.indexOf('id="chargeListSection"'), "Shared report actions must stay available in pending-only view");
 assert.match(page, /body\.print-budget-charges[\s\S]*#chargeListSection/);
 assert.match(page, /body\.print-budget-charges[\s\S]*#pendingListSection/);
+assert.match(page, /body\.print-budget-charges #chargeListSection\[hidden\],body\.print-budget-charges #pendingListSection\[hidden\]\{display:none!important\}/);
+assert.match(page, /#chargeListSection\[hidden\]\+#pendingListSection\{break-before:auto;page-break-before:auto\}/);
 assert.match(page, /body\.print-budget-payments>main\.budget-app[\s\S]*body\.print-budget-charges>main\.budget-app\{display:block!important/);
 state.accounts = [{ golf_course: "SAM", opening_balance_vnd: 1000 }, { golf_course: "AT1200", opening_balance_vnd: 2000 }];
 state.deposits = [{ id: "deposit", golf_course: "SAM", amount_vnd: 200, deposit_date: "2026-10-01", payment_method: "bank" }];
@@ -87,6 +99,7 @@ state.pendingReservations = [
   { ...base, id: "completed", golf_date: "2026-12-01", status: "completed", course_total_vnd: 9000 },
 ];
 api.bindEvents(); api.render();
+assert.equal(byId("chargeListSection").hidden, false); assert.equal(byId("pendingListSection").hidden, false);
 assert.deepEqual(plain(api.filteredPendingReservations().map((r) => r.id)), ["future", "missing", "october", "other"]);
 assert.match(byId("pendingTableBody").innerHTML, /2026\. 11\. 02/);
 assert.match(byId("pendingTableBody").innerHTML, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
@@ -153,6 +166,58 @@ const query = queries.find((q) => q.table === "golf_reservations");
 for (const c of ["id", "golf_course", "status", "course_total_vnd", "cost_settlement_type", "golf_date", "golf_time", "counterparty_name", "representative_name"]) assert.ok(query.columns.split(",").includes(c), `Missing query column ${c}`);
 assert.deepEqual(plain(query.filters), [["status", "in_progress"], ["cost_settlement_type", "golf_course"]]);
 assert.equal(api.courseBalance("SAM"), 900);
+// View selection only changes visibility and report scope, never filters or balances.
+const selectedFilters = () => [state.chargeFrom, state.chargeTo, state.chargeCourse, state.pendingFrom, state.pendingTo, state.pendingCourse];
+const filtersBeforeViews = selectedFilters();
+for (const view of ["completed", "pending", "all"]) {
+  viewClick(view);
+  assert.equal(state.reservationView, view);
+  assert.equal(byId("chargeListSection").hidden, view === "pending");
+  assert.equal(byId("pendingListSection").hidden, view === "completed");
+  assert.deepEqual(selectedFilters(), filtersBeforeViews);
+  assert.equal(byId("chargeTableTotal").textContent, "300 VND");
+  assert.equal(byId("pendingTableTotal").textContent, "600 VND");
+  assert.equal(api.courseBalance("SAM"), 900);
+  assert.equal(byId("summaryBalance").textContent, "2,800 VND");
+  for (const button of viewButtons) {
+    assert.equal(button.attributes["aria-pressed"], String(button.dataset.reservationView === view));
+  }
+  click("exportChargeButton");
+  const sheets = exported.at(-1).sheets;
+  assert.equal(sheets.length, view === "all" ? 2 : 1);
+  assert.deepEqual(plain(sheets.map((sheet) => sheet.name)), view === "completed" ? ["완료 차감 내역"] : view === "pending" ? ["차감 예정 내역"] : ["완료 차감 내역", "차감 예정 내역"]);
+  click("printChargeButton");
+  assert.deepEqual(printedSections.at(-1), { completed: view !== "pending", pending: view !== "completed" });
+  afterPrint();
+}
+viewClick("invalid");
+assert.equal(state.reservationView, "all", "Invalid view falls back to all");
+assert.equal(byId("chargeListSection").hidden, false); assert.equal(byId("pendingListSection").hidden, false);
+assert.deepEqual(selectedFilters(), filtersBeforeViews);
+
+viewClick("pending");
+const detailButton = { dataset: { showChargeCourse: "SAM" } };
+click("courseCards", { target: { closest: (selector) => selector === "[data-show-charge-course]" ? detailButton : null } });
+assert.equal(state.reservationView, "completed", "Course detail link must reveal completed history when it was hidden");
+assert.equal(byId("chargeListSection").hidden, false);
+viewClick("all");
+
+// A hidden list with data must not bypass the empty selected-view guard.
+for (const view of ["completed", "pending"]) {
+  viewClick(view);
+  const kind = view === "completed" ? "charge" : "pending";
+  const savedFrom = byId(`${kind}RangeFrom`).value, savedTo = byId(`${kind}RangeTo`).value;
+  byId(`${kind}RangeFrom`).value = "2099-01-01"; byId(`${kind}RangeTo`).value = "2099-01-02";
+  click(`${kind}RangeApplyButton`);
+  const exportsBefore = exported.length, printsBefore = printModes.length;
+  click("exportChargeButton"); click("printChargeButton");
+  assert.equal(exported.length, exportsBefore, `Empty ${view} view must not export hidden other rows`);
+  assert.equal(printModes.length, printsBefore, `Empty ${view} view must not print hidden other rows`);
+  assert.equal(byId("exportChargeButton").disabled, false);
+  byId(`${kind}RangeFrom`).value = savedFrom; byId(`${kind}RangeTo`).value = savedTo;
+  click(`${kind}RangeApplyButton`);
+}
+viewClick("all");
 for (const kind of ["pending", "charge"]) {
   byId(`${kind}RangeFrom`).value = "2099-01-01"; byId(`${kind}RangeTo`).value = "2099-01-02";
   click(`${kind}RangeApplyButton`);

@@ -17,6 +17,7 @@
     deposits: [],
     charges: [],
     pendingReservations: [],
+    reservationView: "all",
     chargeCourse: "all",
     paymentFrom: "",
     paymentTo: "",
@@ -458,6 +459,7 @@
 
   function showChargeCourse(course, options = {}) {
     state.chargeCourse = COURSES.includes(course) ? course : "all";
+    if (state.reservationView === "pending") setReservationView("completed");
     renderCharges();
     if (options.scroll) byId("chargeListTitle").scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -516,9 +518,30 @@
       : '<tr><td class="budget-empty" colspan="8">차감 예정 내역이 없습니다.<br />Không có khoản chờ khấu trừ.</td></tr>';
   }
 
+  function renderReservationView() {
+    byId("chargeListSection").hidden = state.reservationView === "pending";
+    byId("pendingListSection").hidden = state.reservationView === "completed";
+    byId("reservationViewFilters").querySelectorAll("[data-reservation-view]").forEach((button) => {
+      const active = button.dataset.reservationView === state.reservationView;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+  }
+
+  function setReservationView(view) {
+    state.reservationView = ["all", "completed", "pending"].includes(view) ? view : "all";
+    renderReservationView();
+  }
+
+  function selectedReservationRows() {
+    return {
+      charges: state.reservationView === "pending" ? [] : filteredCharges(),
+      pending: state.reservationView === "completed" ? [] : filteredPendingReservations()
+    };
+  }
+
   function printCharges() {
-    const charges = filteredCharges();
-    const pending = filteredPendingReservations();
+    const { charges, pending } = selectedReservationRows();
     if (!charges.length && !pending.length) {
       QRStaff.toast("출력할 차감 내역이 없습니다. / Không có khoản khấu trừ để in.", "error");
       return;
@@ -526,7 +549,9 @@
     const course = state.chargeCourse === "all" ? "전체 / Tất cả" : state.chargeCourse;
     byId("printChargeCriteria").textContent = `골프 날짜 / Ngày chơi golf: ${chargeRangeLabel()} · ${course} · ${charges.length.toLocaleString("ko-KR")}건 / mục`;
     byId("printChargeGeneratedAt").textContent = `출력 일시 / Thời gian in: ${new Date().toLocaleString("ko-KR", { timeZone: TIME_ZONE })}`;
+    byId("printPendingGeneratedAt").textContent = byId("printChargeGeneratedAt").textContent;
     byId("printPendingCriteria").textContent = `골프 날짜 / Ngày chơi golf: ${pendingCriteria(pending)}`;
+    renderReservationView();
     document.body.classList.remove("print-budget-payments");
     document.body.classList.add("print-budget-charges");
     const cleanup = () => document.body.classList.remove("print-budget-charges");
@@ -592,7 +617,8 @@
           columnWidths: [28,15,18,22,26,28,30,42], merges: ["A1:H1", "A4:H4"], freezeRows: 5,
           autoFilterRange: `A5:H${Math.max(5, 5 + pendingRows.length)}`
         }
-      ]
+      ].filter((sheet, index) => state.reservationView === "all"
+        || (state.reservationView === "completed" ? index === 0 : index === 1))
     };
   }
 
@@ -603,8 +629,7 @@
     button.disabled = true;
     button.textContent = "생성 중… / Đang tạo…";
     try {
-      const charges = filteredCharges();
-      const pending = filteredPendingReservations();
+      const { charges, pending } = selectedReservationRows();
       if (!charges.length && !pending.length) {
         QRStaff.toast("엑셀로 생성할 차감 내역이 없습니다. / Không có khoản khấu trừ để xuất Excel.", "error");
         return;
@@ -626,6 +651,7 @@
     renderDeposits();
     renderCharges();
     renderPendingReservations();
+    renderReservationView();
   }
 
   function validatedRange(from, to) {
@@ -846,6 +872,10 @@
   }
 
   function bindEvents() {
+    byId("reservationViewFilters").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-reservation-view]");
+      if (button) setReservationView(button.dataset.reservationView);
+    });
     byId("reloadButton").addEventListener("click", () => loadData());
     byId("paymentRangeApplyButton").addEventListener("click", () => {
       try {
