@@ -108,12 +108,12 @@
     const cart = oneLine(row.smart_cart_note);
     const representative = row.representative_name || "—";
     const editHref = `golf_reserv.html?edit=${encodeURIComponent(String(row.id || ""))}`;
-    return `<tr data-status="${escape(row.status)}">
+    return `<tr data-status="${escape(row.status)}" aria-expanded="false">
       <td><span class="golf-status-chip${completed ? " is-completed" : ""}">${escape(statusLabel)}</span></td>
       <td>${escape(golfDateLabel(row.golf_date))}</td>
       <td>${escape(timeLabel(row.golf_time))}</td>
-      <td class="golf-cell-text" title="${escape(representative)}"><button class="golf-edit-link" type="button" data-edit-href="${escape(editHref)}" title="더블클릭하여 수정 / Nhấp đúp để chỉnh sửa" aria-label="${escape(`${representative} 예약 수정, 더블클릭 / Chỉnh sửa đặt sân, nhấp đúp`)}">${escape(representative)}</button></td>
       <td class="golf-cell-text" title="${escape(row.counterparty_name || "—")}">${escape(row.counterparty_name || "—")}</td>
+      <td class="golf-cell-text" title="${escape(representative)}"><button class="golf-edit-link" type="button" data-edit-href="${escape(editHref)}" title="더블클릭하여 수정 / Nhấp đúp để chỉnh sửa" aria-label="${escape(`${representative} 예약 수정, 더블클릭 / Chỉnh sửa đặt sân, nhấp đúp`)}">${escape(representative)}</button></td>
       <td class="golf-cell-names" title="${escape(names)}">${escape(names)}</td>
       <td>${escape(row.pax)}</td>
       <td>${escape(row.golf_course)}</td>
@@ -183,10 +183,18 @@
       event.preventDefault();
       confirmAndOpenEdit(button);
     });
+    let suppressRowClickUntil = 0;
     tableBody.addEventListener("click", (event) => {
-      if (event.detail !== 0) return;
       const button = event.target.closest("button.golf-edit-link[data-edit-href]");
-      if (button) confirmAndOpenEdit(button);
+      if (button) {
+        if (event.detail === 0) confirmAndOpenEdit(button);
+        return;
+      }
+      if (event.detail !== 1 || Date.now() < suppressRowClickUntil) return;
+      const row = event.target.closest("tr[data-status]");
+      if (!row) return;
+      const expanded = row.classList.toggle("is-names-expanded");
+      row.setAttribute("aria-expanded", String(expanded));
     });
     byId("clearFiltersButton").addEventListener("click", () => {
       byId("searchInput").value = "";
@@ -203,17 +211,19 @@
     sheet.addEventListener("pointerdown", (event) => {
       if (event.pointerType === "touch" || event.button !== 0) return;
       if (event.target.closest("a, button, input, select, textarea")) return;
-      drag = { pointerId: event.pointerId, x: event.clientX, scrollLeft: sheet.scrollLeft };
+      drag = { pointerId: event.pointerId, x: event.clientX, scrollLeft: sheet.scrollLeft, moved: false };
       sheet.setPointerCapture(event.pointerId);
       sheet.classList.add("is-dragging");
     });
     sheet.addEventListener("pointermove", (event) => {
       if (!drag || drag.pointerId !== event.pointerId) return;
+      if (Math.abs(event.clientX - drag.x) > 5) drag.moved = true;
       sheet.scrollLeft = drag.scrollLeft - (event.clientX - drag.x);
       event.preventDefault();
     });
     const stopDrag = (event) => {
       if (!drag || drag.pointerId !== event.pointerId) return;
+      if (drag.moved) suppressRowClickUntil = Date.now() + 250;
       drag = null;
       sheet.classList.remove("is-dragging");
     };
