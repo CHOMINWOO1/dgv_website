@@ -19,7 +19,7 @@ const [page, source, migration, managerAccessMigration, editorPage, editorSource
 ]);
 
 // Manager/admin budget UI, independent daily-range filters and course-specific deduction detail.
-assert.match(page, /assets\/golf-budget\.js\?v=20261024-6/);
+assert.match(page, /assets\/golf-budget\.js\?v=20261024-partner-1/);
 assert.match(page, /골프장별 현재 잔액 \/ Số dư theo sân/);
 for (const id of ["paymentRangeFrom", "paymentRangeTo", "chargeRangeFrom", "chargeRangeTo"]) {
   assert.match(page, new RegExp(`id="${id}"[^>]*type="date"`));
@@ -79,7 +79,8 @@ assert.match(source, /pendingReservations: \[\]/);
 assert.match(source, /function expectedPaymentStats\(course = null\)/);
 assert.match(source, /row\.course_total_vnd == null/);
 assert.match(source, /Number\(row\.course_total_vnd \|\| 0\)/);
-assert.match(source, /from\("golf_reservations"\)[\s\S]*\.select\("id,golf_course,status,course_total_vnd"\)[\s\S]*\.eq\("status", "in_progress"\)/);
+assert.match(source, /from\("golf_reservations"\)[\s\S]*\.select\("id,golf_course,status,course_total_vnd,cost_settlement_type,cost_partner_name"\)[\s\S]*\.eq\("status", "in_progress"\)[\s\S]*\.eq\("cost_settlement_type", "golf_course"\)/);
+assert.match(source, /\(row\.cost_settlement_type \|\| "golf_course"\) !== "golf_course"/);
 assert.match(source, /state\.pendingReservations = pendingReservations/);
 assert.match(source, /summaryExpectedCharges/);
 assert.match(source, /완료 반영 현재 잔액[\s\S]*추가 예상 결제금액/);
@@ -119,7 +120,7 @@ assert.match(source, /\.update\(\{ opening_balance_vnd: amount \}\)/);
 assert.doesNotMatch(source, /\.update\(\{[^}]*balance_as_of/);
 
 // Original golf-course cost remains visible and is used for receivables/profit and exports.
-assert.match(editorPage, /1인 골프장 원가/);
+assert.match(editorPage, /1인 원가 \(VND\)[\s\S]*Giá vốn \/ người/);
 assert.match(editorSource, /course_total_vnd/);
 assert.match(editorSource, /rowTotals\.received[\s\S]*Number\(row\.course_total_vnd\)/);
 assert.match(listPage, /1인 원가[\s\S]*골프장 합계/);
