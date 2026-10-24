@@ -12,6 +12,7 @@ create table public.golf_reservations (
   pax integer not null,
   coordinator_name text,
   booking_date date not null
+    default ((now() at time zone 'Asia/Ho_Chi_Minh')::date)
     default ((now() at time zone 'Asia/Ho_Chi_Minh')::date),
   golf_date date not null,
   golf_time time without time zone not null,

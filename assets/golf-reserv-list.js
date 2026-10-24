@@ -109,7 +109,7 @@
       <td>${escape(row.holes)}</td>
       <td class="golf-cell-text" title="${escape(cart)}">${escape(cart)}</td>
       <td>${escape(customerType)}</td>
-      <td>${escape(dateLabel(row.booking_date))}</td>
+      <td>${escape(dateTimeLabel(row.created_at))}</td>
       <td class="golf-cell-money">${escape(moneyLabel(row.guest_unit_price_vnd))}</td>
       <td class="golf-cell-money">${escape(moneyLabel(row.guest_total_vnd))}</td>
       <td class="golf-cell-money">${escape(moneyLabel(row.course_unit_price_vnd))}</td>
