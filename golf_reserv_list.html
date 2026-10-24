@@ -30,6 +30,8 @@
     .golf-edit-link{display:inline;appearance:none;margin:0;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-weight:1000;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;cursor:pointer;user-select:none}
     .golf-edit-link:hover,.golf-edit-link:focus-visible{color:#8a512f}
     .golf-sheet .golf-cell-names{max-width:340px;overflow:hidden;text-overflow:ellipsis}
+    .golf-sheet tbody tr[data-status]{cursor:pointer}
+    .golf-sheet tbody tr.is-names-expanded .golf-cell-names{max-width:640px;white-space:normal;overflow:visible;text-overflow:clip;line-height:1.45}
     .golf-sheet .golf-cell-money{text-align:right;font-variant-numeric:tabular-nums}
     .golf-sheet .golf-cell-empty{height:130px;text-align:center;color:var(--qr-sub);font-size:14px;font-weight:850}
     .golf-status-chip{display:inline-flex;align-items:center;justify-content:center;min-width:76px;padding:5px 8px;border-radius:999px;background:#f4dfaa;color:#684b17;font-size:11px;font-weight:1000}
@@ -52,7 +54,7 @@
       </div>
     </header>
 
-    <div class="qr-banner" id="pageBanner">저장된 골프 예약을 예약 1건당 한 줄로 표시합니다. / Mỗi đặt sân được hiển thị trên một dòng.<br />예약자 대표를 더블클릭하면 수정할 수 있습니다. / Nhấp đúp vào người đại diện để chỉnh sửa.</div>
+    <div class="qr-banner" id="pageBanner">저장된 골프 예약을 예약 1건당 한 줄로 표시합니다. / Mỗi đặt sân được hiển thị trên một dòng.<br />행을 한 번 클릭하면 전체 예약자 명단이 펼쳐집니다. / Nhấp một lần vào dòng để xem đầy đủ danh sách khách.<br />예약자 대표를 더블클릭하면 수정할 수 있습니다. / Nhấp đúp vào người đại diện để chỉnh sửa.</div>
 
     <section class="qr-summary" aria-label="예약 요약">
       <div class="qr-card qr-summary-card"><div class="qr-summary-label">진행중 / Đang xử lý</div><div class="qr-summary-value" id="summaryProgress">0</div></div>
@@ -84,8 +86,8 @@
               <th>상태<br />Trạng thái</th>
               <th>골프 날짜<br />Ngày chơi</th>
               <th>티오프<br />Giờ</th>
-              <th>예약자 대표<br />Người đại diện</th>
               <th>거래처<br />Đối tác</th>
+              <th>예약자 대표<br />Người đại diện</th>
               <th>전체 이름(영어)<br />Họ tên tiếng Anh</th>
               <th>인원<br />Số khách</th>
               <th>골프장<br />Sân golf</th>
@@ -129,6 +131,6 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-reserv-list.js?v=20261024-double-edit-1"></script>
+  <script src="assets/golf-reserv-list.js?v=20261024-column-roster-1"></script>
 </body>
 </html>
