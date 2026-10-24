@@ -69,7 +69,7 @@
     .golf-cash-rule{margin-top:9px;color:#9b4a2a;font-size:12px;font-weight:1000}
     .golf-count{color:var(--qr-sub);font-size:13px;font-weight:1000}
     .golf-receivable-panel{display:flex;flex-direction:column;gap:10px}
-    .golf-receivable-total{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .golf-receivable-total{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
     .golf-receivable-total>div{padding:11px;border:1px solid var(--qr-line);border-radius:11px;background:#fffaf0}
     .golf-receivable-total span{display:block;color:var(--qr-sub);font-size:11px;font-weight:950}
     .golf-receivable-total strong{display:block;margin-top:4px;font-size:17px;font-weight:1000;overflow-wrap:anywhere}
@@ -84,6 +84,7 @@
     .golf-receivable-note{padding:9px 11px;border-radius:10px;background:#f7f3ea;color:var(--qr-sub);font-size:12px;font-weight:950}
     .golf-receivable-detail-row>td{text-align:left!important;white-space:normal!important;background:#fffdf8}
     .golf-receivable-detail summary{cursor:pointer;color:#765137;font-size:13px;font-weight:1000}
+    .golf-receivable-detail+.golf-receivable-detail{margin-top:8px}
     .golf-receivable-detail .golf-receivable-table-wrap{margin-top:8px}
     .golf-receivable-detail .golf-receivable-table{min-width:680px}
     @media(max-width:1050px){.golf-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -138,11 +139,13 @@
             <h3>판매 및 원가 / Giá bán và giá sân</h3>
             <div class="qr-form-grid">
               <label class="qr-field"><span class="qr-label">1인 판매가 (VND)<span class="golf-label-vi">Giá khách / người</span></span><input class="qr-input golf-money-input" id="guestUnitPrice" type="text" inputmode="numeric" autocomplete="off" /></label>
-              <label class="qr-field"><span class="qr-label">1인 골프장 원가 (VND)<span class="golf-label-vi">Giá sân / người</span></span><input class="qr-input golf-money-input" id="courseUnitPrice" type="text" inputmode="numeric" autocomplete="off" /></label>
+              <label class="qr-field"><span class="qr-label">원가 정산 방식<span class="golf-label-vi">Cách quyết toán giá vốn</span></span><select class="qr-select" id="costSettlementType" required><option value="golf_course" selected>골프장 직접 / Sân golf trực tiếp</option><option value="partner">거래처 보유분 / Suất của đối tác</option></select></label>
+              <label class="qr-field" id="costPartnerField" hidden><span class="qr-label">정산 거래처<span class="golf-label-vi">Đối tác quyết toán</span></span><select class="qr-select" id="costPartnerName"><option value="">선택 / Chọn</option><option value="Chị Oanh">Chị Oanh</option></select></label>
+              <label class="qr-field"><span class="qr-label">1인 원가 (VND)<span class="golf-label-vi">Giá vốn / người</span></span><input class="qr-input golf-money-input" id="courseUnitPrice" type="text" inputmode="numeric" autocomplete="off" /></label>
             </div>
             <div class="golf-money-preview">
               <div><span>고객 결제 예정 합계 / Tổng tiền khách</span><strong id="guestTotalPreview">—</strong></div>
-              <div><span>골프장 지급 예정 합계 / Tổng tiền sân</span><strong id="courseTotalPreview">—</strong></div>
+              <div><span id="courseTotalLabel">골프장 지급 예정 합계 / Tổng tiền sân</span><strong id="courseTotalPreview">—</strong></div>
               <div><span>예상 차액 / Chênh lệch dự kiến</span><strong id="marginPreview">—</strong></div>
             </div>
           </div>
@@ -216,6 +219,7 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-reserv.js?v=20261024-budget-1"></script>
+  <script src="assets/golf-reserv.js?v=20261024-partner-1"></script>
 </body>
 </html>
+
