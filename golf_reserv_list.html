@@ -41,6 +41,24 @@
     .golf-sheet .golf-cell-empty{height:130px;text-align:center;color:var(--qr-sub);font-size:14px;font-weight:850}
     .golf-status-chip{display:inline-flex;align-items:center;justify-content:center;min-width:76px;padding:5px 8px;border-radius:999px;background:#f4dfaa;color:#684b17;font-size:11px;font-weight:1000}
     .golf-status-chip.is-completed{background:#dcefe1;color:#285c35}
+    .golf-print-only{display:none}
+    @media print{
+      @page{size:A3 landscape;margin:8mm}
+      body{background:#fff}
+      .golf-list-app{max-width:none!important;padding:0!important;font-size:8px}
+      .qr-header,.qr-banner,.qr-summary,.qr-section-head,.golf-list-tools,.golf-roster-detail{display:none!important}
+      .golf-list-app>.qr-card{border:0!important;box-shadow:none!important;padding:0!important}
+      .golf-print-only{display:block!important;margin:0 0 8px}
+      .golf-print-only h1{margin:0 0 4px;font-size:18px}
+      .golf-print-only p{margin:2px 0;font-size:9px;font-weight:800}
+      .golf-sheet-wrap{margin:0;max-height:none;overflow:visible;border:0;border-radius:0}
+      .golf-sheet{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;font-size:6px}
+      .golf-sheet th,.golf-sheet td{height:auto;padding:3px 2px;border:1px solid #777;white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;vertical-align:top}
+      .golf-sheet th{position:static;background:#eee!important;color:#000;font-size:6px}
+      .golf-sheet td{font-weight:700}
+      .golf-sheet .golf-cell-text,.golf-sheet .golf-cell-names{max-width:none}
+      .golf-status-chip{min-width:0;padding:0;background:transparent!important;color:#000!important;font-size:6px}
+    }
     @media(max-width:900px){.golf-list-tools{grid-template-columns:1fr 1fr}.golf-list-field:first-child{grid-column:1/-1}.golf-list-apply{grid-column:1/-1}.golf-list-apply .qr-btn{width:100%}.golf-sheet-wrap{max-height:none}}
     @media(max-width:520px){.golf-list-tools{grid-template-columns:1fr}.golf-list-field:first-child{grid-column:auto}.golf-list-apply{grid-column:auto}.qr-header-actions{width:100%}.qr-header-actions .qr-btn{flex:1}}
   </style>
@@ -56,6 +74,8 @@
         <span class="qr-pill"><span class="qr-dot is-connecting" id="connectionDot"></span><span id="connectionText">연결 중</span></span>
         <a class="qr-btn" href="golf_reserv.html">예약 입력·수정 / Quản lý</a>
         <button class="qr-btn" id="reloadButton" type="button">새로고침 / Làm mới</button>
+        <button class="qr-btn" id="printListButton" type="button">출력 / In</button>
+        <button class="qr-btn qr-btn-primary" id="exportListButton" type="button">엑셀 생성 / Tạo Excel</button>
       </div>
     </header>
 
@@ -74,6 +94,12 @@
           <h2 class="qr-section-title" id="listTitle">전체 예약 / Tất cả đặt sân</h2>
           <div class="golf-list-count" id="listCount" aria-live="polite">0건</div>
         </div>
+      </div>
+
+      <div class="golf-print-only" aria-hidden="true">
+        <h1>HANA 골프 예약 목록 / Danh sách đặt sân golf</h1>
+        <p id="golfPrintCriteria"></p>
+        <p id="golfPrintGeneratedAt"></p>
       </div>
 
       <div class="golf-list-tools">
@@ -136,6 +162,7 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-reserv-list.js?v=20261024-roster-detail-1"></script>
+  <script src="assets/dgv-xlsx.js"></script>
+  <script src="assets/golf-reserv-list.js?v=20261024-list-export-1"></script>
 </body>
 </html>
