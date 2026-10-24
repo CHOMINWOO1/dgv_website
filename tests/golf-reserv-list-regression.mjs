@@ -14,7 +14,7 @@ const [page, source, editor, adminHome, managerHome] = await Promise.all([
 ]);
 
 assert.match(page, /<table class="golf-sheet">/);
-assert.match(page, /assets\/golf-reserv-list\.js\?v=20261024-column-roster-1/);
+assert.match(page, /assets\/golf-reserv-list\.js\?v=20261024-roster-detail-1/);
 assert.match(page, /id="reservationTableBody"/);
 assert.match(page, /colspan="25"/);
 assert.match(page, /min-width:2860px/);
@@ -28,7 +28,8 @@ for (const label of [
 ]) assert.match(page, new RegExp(label));
 assert.match(page, /<thead>[\s\S]*티오프[\s\S]*거래처[\s\S]*예약자 대표[\s\S]*전체 이름\(영어\)[\s\S]*<\/thead>/);
 assert.match(page, /행을 한 번 클릭하면 전체 예약자 명단이 펼쳐집니다/);
-assert.match(page, /tr\.is-names-expanded \.golf-cell-names\{max-width:640px;white-space:normal;overflow:visible;text-overflow:clip/);
+assert.match(page, /\.golf-sheet \.golf-roster-detail td\{height:auto;padding:0/);
+assert.match(page, /\.golf-roster-names\{display:flex;flex-wrap:wrap/);
 
 assert.match(source, /QRStaff\.requireLogin\(\{ roles: \["manager", "admin"\]/);
 assert.match(source, /DGV\.collectSupabasePages/);
@@ -41,9 +42,17 @@ assert.match(source, /row\.golf_date > to/);
 assert.match(source, /rows\.map\(renderRow\)/);
 assert.match(source, /timeLabel\(row\.golf_time\)[\s\S]*row\.counterparty_name[\s\S]*class="golf-edit-link"[\s\S]*class="golf-cell-names"/);
 assert.match(source, /event\.target\.closest\("tr\[data-status\]"\)/);
-assert.match(source, /classList\.toggle\("is-names-expanded"\)/);
+assert.match(source, /class="golf-roster-detail"[\s\S]*colspan="25"/);
+assert.match(source, /class="golf-roster-name"/);
+assert.match(source, /row\.nextElementSibling/);
+assert.match(source, /detailRow\?\.classList\.contains\("golf-roster-detail"\)/);
+assert.match(source, /detailRow\.hidden = !expanded/);
+assert.match(source, /detailRow\.setAttribute\("aria-hidden", String\(!expanded\)\)/);
+assert.match(source, /classList\.toggle\("is-names-expanded", expanded\)/);
 assert.match(source, /row\.setAttribute\("aria-expanded", String\(expanded\)\)/);
-assert.match(source, /Math\.abs\(event\.clientX - drag\.x\) > 5/);
+assert.match(source, /Math\.abs\(deltaX\) <= 5/);
+assert.match(source, /if \(!drag\.moved\) \{[\s\S]*sheet\.setPointerCapture\(event\.pointerId\)/);
+assert.match(source, /sheet\.releasePointerCapture\(event\.pointerId\)/);
 assert.match(source, /suppressRowClickUntil = Date\.now\(\) \+ 250/);
 assert.ok(source.includes('const editHref = `golf_reserv.html?edit=${encodeURIComponent(String(row.id || ""))}`;'));
 assert.ok(source.includes('<button class="golf-edit-link" type="button" data-edit-href="${escape(editHref)}"'));
