@@ -169,11 +169,13 @@ assert.match(source, /row\.counterparty_name, row\.representative_name, row\.pla
 assert.match(source, /DGV\.escapeHTML/);
 assert.match(page, /id="receivablePanel" hidden/);
 assert.match(source, /state\.statusFilter === "receivable"/);
-assert.match(source, /row\.status !== "in_progress" \|\| row\.customer_type !== "company"/);
+assert.match(source, /row\.customer_type !== "company"/);
 assert.match(source, /function receivableGroups\(rows\)/);
 assert.match(source, /group\.expected \+= Number\(row\.guest_total_vnd\) \|\| 0/);
-assert.match(source, /group\.received \+= Number\(row\.deposit_amount_vnd\) \|\| 0/);
-assert.match(source, /Math\.max\(group\.expected - group\.received, 0\)/);
+assert.match(source, /row\.final_received_amount_vnd == null/);
+assert.match(source, /\? row\.deposit_amount_vnd[\s\S]*: row\.final_received_amount_vnd/);
+assert.match(source, /group\.received \+= Number\(received\) \|\| 0/);
+assert.match(source, /group\.receivable = group\.expected - group\.received/);
 assert.match(source, /group\.unsetExpected \+= 1/);
 assert.match(source, /byId\("receivablePanel"\)\.hidden = !receivableMode/);
 assert.match(source, /byId\("reservationList"\)\.hidden = receivableMode/);
