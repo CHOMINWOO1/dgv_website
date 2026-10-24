@@ -1,0 +1,122 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const read = (file) => readFile(path.join(projectRoot, file), "utf8");
+
+const [page, source, migration] = await Promise.all([
+  read("golf_reserv.html"),
+  read("assets/golf-reserv.js"),
+  read("supabase/migrations/20261024103000_golf_reservations.sql"),
+]);
+
+// The page is a single manager/admin workspace: create, filter, inspect, edit,
+// complete, reopen, and delete are available without a second detail page.
+assert.match(page, /<form id="reservationForm"/);
+assert.match(page, /id="reservationList"/);
+assert.match(page, /id="loginForm"/);
+assert.match(page, /assets\/golf-reserv\.js/);
+assert.match(page, /assets\/qr-staff\.css/);
+assert.match(source, /QRStaff\.requireLogin\(\{ roles: \["manager", "admin"\], preferredRole: "manager" \}\)/);
+assert.match(source, /state\.identity\.role === "admin" \? "home_admin\.html" : "home_manager\.html"/);
+
+// Every requested business field exists and user-facing headings are bilingual.
+for (const id of [
+  "teamNo", "representativeName", "playerNamesEn", "pax", "coordinatorName",
+  "bookingDate", "golfDate", "golfTime", "golfCourse", "holes",
+  "guestUnitPrice", "guestTotalPreview", "smartCartNote", "courseUnitPrice",
+  "courseTotalPreview", "depositAmount", "depositDate", "finalAmount",
+  "finalDate", "withdrawalAmount", "withdrawalDate", "customerType", "note",
+]) {
+  assert.match(page, new RegExp(`id="${id}"`), `missing field #${id}`);
+}
+for (const label of [
+  "Quản lý đặt sân golf", "Người đại diện đặt chỗ", "Ngày chơi golf",
+  "Giá khách / người", "Tổng tiền đã nhận", "Cá nhân", "Công ty",
+]) assert.match(page, new RegExp(label));
+
+// Course names are constrained at the UI and database layers. Free-text course
+// names would make filtering and future reporting unreliable.
+const courseSelect = page.match(/<select[^>]+id="golfCourse"[\s\S]*?<\/select>/)?.[0];
+assert.ok(courseSelect, "golf course must be a select");
+for (const course of ["AT1200", "SAM", "PALACE"]) {
+  assert.match(courseSelect, new RegExp(`<option value="${course}">${course}<\\/option>`));
+}
+assert.doesNotMatch(page, /<input[^>]+id="golfCourse"/);
+assert.match(source, /new Set\(\["AT1200", "SAM", "PALACE"\]\)/);
+
+// PAX remains manually editable but follows the normalized English-name count
+// as names are entered. Price totals and workflow state are calculated live.
+assert.match(page, /id="pax"[^>]+type="number"/);
+assert.match(source, /namesCount\(byId\("playerNamesEn"\)\.value\)/);
+assert.match(source, /byId\("pax"\)\.value = String\(count\)/);
+assert.match(source, /const guestTotal = pax > 0[\s\S]*?pax \* guestUnit/);
+assert.match(source, /const courseTotal = pax > 0[\s\S]*?pax \* courseUnit/);
+assert.match(source, /completed \? "완료 \/ Hoàn tất" : "진행중 \/ Đang xử lý"/);
+
+// Both halves of paired financial events are required together. Clearing both
+// final-payment fields is intentionally valid and lets the generated status
+// return to in_progress.
+assert.match(source, /\(finalAmount == null\) !== \(finalDate == null\)/);
+assert.match(source, /함께 입력하거나 함께 비워 주세요/);
+assert.match(source, /\(withdrawalAmount == null\) !== \(withdrawalDate == null\)/);
+assert.match(source, /최종 금액과 날짜를 모두 지우면 진행중으로 돌아갑니다/);
+assert.match(source, /final_received_amount_vnd: finalAmount/);
+assert.match(source, /final_received_date: finalDate/);
+
+// Reads are paginated and writes are limited to the dedicated table. There is
+// no service key or cross-feature table write in browser code.
+assert.match(source, /DGV\.collectSupabasePages\(/);
+assert.match(source, /from\("golf_reservations"\)\.select\(COLUMNS\)/);
+assert.match(source, /from\("golf_reservations"\)\.insert\(\[payload\]\)/);
+assert.match(source, /from\("golf_reservations"\)\.update\(payload\)\.eq\("id", id\)/);
+assert.match(source, /from\("golf_reservations"\)\.delete\(\)\.eq\("id", row\.id\)/);
+assert.doesNotMatch(source, /service[_-]?role|serviceRole/i);
+assert.doesNotMatch(source, /from\("(?:orders|reservations|restaurant_expenses|menu_items)"\)/);
+
+// All statuses remain editable and deletable. No status guard hides actions on
+// completed rows, and destructive actions require explicit confirmation.
+assert.match(source, /data-action="edit"/);
+assert.match(source, /data-action="delete"/);
+assert.match(source, /global\.confirm\(/);
+assert.doesNotMatch(source, /if\s*\(\s*row\.status\s*===\s*"completed"\s*\)\s*return/);
+assert.doesNotMatch(source, /\.eq\("status",\s*"in_progress"\)/);
+
+// List tools cover the two states, all records, free-text lookup, and golf-date
+// ranges. Dynamic values are escaped before being written as HTML.
+for (const status of ["in_progress", "completed", "all"]) {
+  assert.match(page, new RegExp(`data-status-filter="${status}"`));
+}
+assert.match(source, /row\.golf_date < from/);
+assert.match(source, /row\.golf_date > to/);
+assert.match(source, /representative_name, row\.player_names_en, row\.golf_course/);
+assert.match(source, /DGV\.escapeHTML/);
+
+// The additive migration is isolated from the restaurant data model, computes
+// totals/status server-side, and grants manager/admin CRUD only through RLS.
+assert.match(migration, /create table public\.golf_reservations\s*\(/i);
+assert.match(migration, /guest_total_vnd bigint generated always as/i);
+assert.match(migration, /course_total_vnd bigint generated always as/i);
+assert.match(migration, /status text generated always as/i);
+assert.match(migration, /when final_received_amount_vnd is not null[\s\S]*?and final_received_date is not null[\s\S]*?then 'completed'/i);
+assert.match(migration, /golf_course in \('AT1200', 'SAM', 'PALACE'\)/i);
+assert.match(migration, /golf_reservations_final_pair_check/i);
+assert.match(migration, /golf_reservations_withdrawal_pair_check/i);
+assert.match(migration, /alter table public\.golf_reservations enable row level security/i);
+for (const action of ["read", "insert", "update", "delete"]) {
+  assert.match(migration, new RegExp(`create policy golf_reservations_manager_admin_${action}`, "i"));
+}
+assert.ok((migration.match(/in \('manager', 'admin'\)/gi) || []).length >= 4);
+assert.match(migration, /grant delete on table public\.golf_reservations to authenticated/i);
+assert.match(migration, /'완료 예시 \/ Ví dụ hoàn tất'/);
+assert.match(migration, /'진행중 예시 \/ Ví dụ đang xử lý'/);
+assert.doesNotMatch(
+  migration,
+  /^\s*(?:update|delete\s+from|truncate)\s+(?!public\.golf_reservations\b)/im,
+  "golf migration must not mutate an existing business table",
+);
+
+console.log("Golf reservation page, CRUD, workflow, bilingual UI, and schema contracts verified.");
+

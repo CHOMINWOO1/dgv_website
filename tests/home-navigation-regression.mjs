@@ -34,7 +34,7 @@ assert.deepEqual(
   ["calc.html", "order_inbox.html", "reserv_check.html", "notice.html", "expense.html"],
   "staff home must expose only the five approved staff destinations",
 );
-assert.doesNotMatch(staffHome, /href="(?:admin|menu_admin|hana_[^"]+|reservation|reserv_admin|report|code_admin)\.html"/);
+assert.doesNotMatch(staffHome, /href="(?:admin|menu_admin|hana_[^"]+|reservation|reserv_admin|golf_reserv|report|code_admin)\.html"/);
 
 assert.match(managerHome, /<body class="locked">/);
 assert.match(
@@ -91,6 +91,7 @@ const requiredAdminDestinations = [
   "hana_reserv_check_hidden.html",
   "reservation.html",
   "reserv_admin.html",
+  "golf_reserv.html",
   "hana_reserv_admin_hidden.html",
   "notice.html",
   "code_admin.html",
@@ -117,6 +118,7 @@ assert.deepEqual(
     "hana_admin_hidden.html",
     "reservation.html",
     "reserv_admin.html",
+    "golf_reserv.html",
     "hana_reserv_admin_hidden.html",
     "report.html",
   ],
@@ -124,6 +126,8 @@ assert.deepEqual(
 );
 assert.match(adminHome, /href="hana_admin_hidden\.html"[\s\S]*?<span class="name">매출 원본 조회 · Hidden<\/span>/);
 assert.match(adminHome, /href="report\.html"[\s\S]*?<span class="name">월간 정산 · KB<\/span>/);
+assert.match(adminHome, /href="golf_reserv\.html"[\s\S]*?<span class="name">골프 예약 관리<\/span>/);
+assert.doesNotMatch(managerHome, /href="golf_reserv\.html"/, "manager home must not expose golf reservation management");
 assert.doesNotMatch(adminHome, /href="menu\.html"/, "tokenized customer menu must not be linked without a QR token");
 
 for (const html of [staffHome, managerHome, adminHome]) {
@@ -139,4 +143,5 @@ for (const html of [staffHome, managerHome, adminHome]) {
 }
 
 console.log("Staff, manager, and administrator home navigation/auth contracts verified.");
+
 
