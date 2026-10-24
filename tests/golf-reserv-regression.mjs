@@ -6,10 +6,11 @@ import path from "node:path";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(projectRoot, file), "utf8");
 
-const [page, source, migration] = await Promise.all([
+const [page, source, migration, zeroDepositMigration] = await Promise.all([
   read("golf_reserv.html"),
   read("assets/golf-reserv.js"),
   read("supabase/migrations/20261024103000_golf_reservations.sql"),
+  read("supabase/migrations/20261024114000_allow_zero_golf_deposit.sql"),
 ]);
 
 // The page is a single manager/admin workspace: create, filter, inspect, edit,
@@ -75,6 +76,10 @@ assert.match(source, /\(withdrawalAmount == null\) !== \(withdrawalDate == null\
 assert.match(source, /최종 금액과 날짜를 모두 지우면 진행중으로 돌아갑니다/);
 assert.match(source, /final_received_amount_vnd: finalAmount/);
 assert.match(source, /final_received_date: finalDate/);
+assert.match(page, /예약금 \(0 VND 가능\)/);
+assert.match(page, /Tiền đặt cọc \(chấp nhận 0 VND\)/);
+assert.match(source, /if \(depositAmount == null\)/);
+assert.doesNotMatch(source, /!depositAmount|depositAmount < 1/);
 
 // Reads are paginated and writes are limited to the dedicated table. There is
 // no service key or cross-feature table write in browser code.
@@ -114,6 +119,7 @@ assert.match(migration, /when final_received_amount_vnd is not null[\s\S]*?and f
 assert.match(migration, /golf_course in \('AT1200', 'SAM', 'PALACE'\)/i);
 assert.match(migration, /golf_reservations_final_pair_check/i);
 assert.match(migration, /golf_reservations_withdrawal_pair_check/i);
+assert.match(migration, /deposit_amount_vnd between 0 and 9007199254740991/i);
 assert.match(migration, /alter table public\.golf_reservations enable row level security/i);
 for (const action of ["read", "insert", "update", "delete"]) {
   assert.match(migration, new RegExp(`create policy golf_reservations_manager_admin_${action}`, "i"));
@@ -127,5 +133,8 @@ assert.doesNotMatch(
   /^\s*(?:update|delete\s+from|truncate)\s+(?!public\.golf_reservations\b)/im,
   "golf migration must not mutate an existing business table",
 );
+assert.match(zeroDepositMigration, /drop constraint if exists golf_reservations_deposit_amount_check/i);
+assert.match(zeroDepositMigration, /deposit_amount_vnd between 0 and 9007199254740991/i);
+assert.doesNotMatch(zeroDepositMigration, /^\s*(?:insert|update|delete|truncate)\b/im);
 
 console.log("Golf reservation page, CRUD, workflow, bilingual UI, and schema contracts verified.");

@@ -76,7 +76,7 @@ create table public.golf_reservations (
   constraint golf_reservations_smart_cart_note_check
     check (smart_cart_note is null or length(btrim(smart_cart_note)) between 1 and 300),
   constraint golf_reservations_deposit_amount_check
-    check (deposit_amount_vnd between 1 and 9007199254740991),
+    check (deposit_amount_vnd between 0 and 9007199254740991),
   constraint golf_reservations_final_pair_check
     check (
       (final_received_amount_vnd is null and final_received_date is null)
