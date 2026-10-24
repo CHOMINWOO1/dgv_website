@@ -56,6 +56,7 @@
     .budget-explainer{margin:0;color:var(--qr-sub);font-size:13px;font-weight:900;line-height:1.6}
     .budget-edit-link{color:#6f452e;font-weight:1000;text-underline-offset:3px}
     .budget-print-head{display:none}
+    .budget-app #chargeListSection[hidden],.budget-app #pendingListSection[hidden]{display:none!important}
     @media(max-width:900px){
       .budget-overall-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
       .budget-course-grid{grid-template-columns:1fr}
@@ -106,6 +107,8 @@
       body.print-budget-charges .budget-table th,body.print-budget-charges .budget-table td{padding:2mm 1.5mm!important;border:1px solid #aaa!important;color:#111!important;background:#fff!important;font-size:8pt!important;vertical-align:top!important;overflow-wrap:anywhere!important;white-space:normal!important}
       body.print-budget-charges .budget-edit-link{color:#111!important;text-decoration:none}
       body.print-budget-charges .budget-table th.budget-money{font-size:9pt!important}
+      body.print-budget-charges #chargeListSection[hidden],body.print-budget-charges #pendingListSection[hidden]{display:none!important}
+      body.print-budget-charges #chargeListSection[hidden]+#pendingListSection{break-before:auto;page-break-before:auto}
     }
   </style>
 </head>
@@ -200,6 +203,22 @@
       </div>
     </section>
 
+    <section class="qr-card qr-card-pad" id="reservationViewSection" aria-labelledby="reservationViewTitle">
+      <div class="qr-section-head">
+        <h2 class="qr-section-title" id="reservationViewTitle">예약 차감 내역 / Khấu trừ theo đặt sân</h2>
+        <div class="qr-button-row">
+          <button class="qr-btn" id="printChargeButton" type="button">출력 / In</button>
+          <button class="qr-btn qr-btn-primary" id="exportChargeButton" type="button">엑셀 출력 / Xuất Excel</button>
+        </div>
+      </div>
+      <div class="budget-charge-filters" id="reservationViewFilters" aria-label="예약 상태 선택 / Chọn trạng thái">
+        <button class="qr-btn budget-charge-filter is-active" type="button" data-reservation-view="all" aria-pressed="true">전체 / Tất cả</button>
+        <button class="qr-btn budget-charge-filter" type="button" data-reservation-view="completed" aria-pressed="false">완료 / Hoàn tất</button>
+        <button class="qr-btn budget-charge-filter" type="button" data-reservation-view="pending" aria-pressed="false">진행 중 / Đang xử lý</button>
+      </div>
+      <p class="budget-explainer">선택한 상태와 각 목록의 조회 조건에 맞는 내역만 출력·엑셀에 포함됩니다.<br />Bản in và Excel chỉ bao gồm các mục theo trạng thái và bộ lọc đã chọn.</p>
+    </section>
+
     <section class="qr-card qr-card-pad" id="chargeListSection" aria-labelledby="chargeListTitle">
       <div class="budget-print-head">
         <h1>HANA 완료 예약 자동 차감 상세 / Chi tiết khấu trừ đặt sân</h1>
@@ -208,12 +227,7 @@
       </div>
       <div class="qr-section-head">
         <div><h2 class="qr-section-title" id="chargeListTitle">완료 예약 자동 차감 상세 / Chi tiết khấu trừ đặt sân</h2><div class="qr-muted" id="chargeCount">0건</div></div>
-        <div class="qr-button-row">
-          <button class="qr-btn" id="printChargeButton" type="button">출력 / In</button>
-          <button class="qr-btn qr-btn-primary" id="exportChargeButton" type="button">엑셀 출력 / Xuất Excel</button>
-        </div>
       </div>
-      <p class="budget-explainer" style="margin-bottom:10px">출력·엑셀에는 현재 조회 중인 완료 내역과 아래 차감 예정 내역이 함께 포함됩니다.<br />Bản in và Excel bao gồm các khoản đã trừ và dự kiến đang được hiển thị.</p>
       <p class="budget-explainer" style="margin-bottom:10px">기존 완료 예약과 이후 완료되는 예약을 모두 표시합니다. 원가가 없던 기존 완료 건은 원가 미입력으로 표시되며 현재잔액에는 영향을 주지 않습니다.<br />Hiển thị cả đặt sân đã hoàn tất trước đây và đặt sân hoàn tất sau này. Dữ liệu cũ chưa có giá vốn sẽ được đánh dấu chưa nhập và không làm thay đổi số dư hiện tại.</p>
       <div class="budget-range-controls" aria-labelledby="chargeRangeTitle">
         <div class="qr-field"><span class="qr-label" id="chargeRangeTitle">자동 차감 기간 조회 / Tra cứu thời gian khấu trừ</span><div class="budget-basis-date">골프 날짜 기준 / Theo ngày chơi golf</div></div>
@@ -241,6 +255,7 @@
       <div class="budget-print-head">
         <h1>HANA 차감 예정 내역 / Các khoản khấu trừ dự kiến</h1>
         <p id="printPendingCriteria"></p>
+        <p id="printPendingGeneratedAt"></p>
         <p>진행 중 예약의 골프장 원가이며 현재 잔액에서는 아직 차감되지 않았습니다.<br />Giá vốn sân của các đặt sân đang xử lý, chưa trừ vào số dư hiện tại.</p>
       </div>
       <div class="qr-section-head"><div><h2 class="qr-section-title" id="pendingListTitle">차감 예정 내역 / Các khoản khấu trừ dự kiến</h2><div class="qr-muted" id="pendingCount">0건</div></div></div>
@@ -285,6 +300,6 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
-  <script src="assets/golf-budget.js?v=20261024-pending-report-1"></script>
+  <script src="assets/golf-budget.js?v=20261024-pending-report-2"></script>
 </body>
 </html>
