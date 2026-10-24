@@ -7,19 +7,25 @@
   <link rel="stylesheet" href="assets/qr-staff.css" />
   <style>
     .locked .golf-app{pointer-events:none;user-select:none;filter:blur(2px)}
-    .golf-app{transition:filter .15s ease}
+    .golf-app{transition:filter .15s ease;font-size:15px;font-weight:750}
+    .golf-app .qr-brand-subtitle{font-size:13px;font-weight:1000}
+    .golf-app .qr-banner{font-size:14px;font-weight:950}
+    .golf-app .qr-section-title{font-size:17px}
+    .golf-app .qr-label{font-size:14px;font-weight:1000}
+    .golf-app .qr-input,.golf-app .qr-select,.golf-app .qr-textarea{font-size:16px;font-weight:900}
+    .golf-app .qr-btn-small{font-size:14px;font-weight:1000}
     .golf-layout{display:flex;flex-direction:column;gap:14px;align-items:stretch}
     .golf-form-card,.golf-list-card{width:100%;min-width:0}
     .golf-form-card{position:static}
     .golf-form-section{margin-top:14px;padding-top:14px;border-top:1px dashed var(--qr-line)}
     .golf-form-section:first-of-type{margin-top:0;padding-top:0;border-top:0}
-    .golf-form-section h3{margin:0 0 10px;font-size:14px;font-weight:1000}
-    .golf-label-vi{display:block;margin-top:2px;color:#8a7565;font-size:10px;font-weight:800}
-    .golf-datetime-guide{display:block;margin-top:5px;color:var(--qr-sub);font-size:11px;font-weight:900}
+    .golf-form-section h3{margin:0 0 10px;font-size:16px;font-weight:1000}
+    .golf-label-vi{display:block;margin-top:2px;color:#8a7565;font-size:11px;font-weight:900}
+    .golf-datetime-guide{display:block;margin-top:5px;color:var(--qr-sub);font-size:12px;font-weight:950}
     .golf-money-preview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
     .golf-money-preview>div{padding:10px;border:1px solid var(--qr-line);border-radius:11px;background:#fffaf0}
-    .golf-money-preview span{display:block;color:var(--qr-sub);font-size:10px;font-weight:900}
-    .golf-money-preview strong{display:block;margin-top:4px;font-size:14px;font-weight:1000;overflow-wrap:anywhere}
+    .golf-money-preview span{display:block;color:var(--qr-sub);font-size:11px;font-weight:950}
+    .golf-money-preview strong{display:block;margin-top:4px;font-size:15px;font-weight:1000;overflow-wrap:anywhere}
     .golf-filter-tabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
     .golf-filter-tabs .qr-btn[aria-pressed="true"]{border-color:var(--qr-gold);background:#f3d995;color:#4c3511}
     .golf-filters{display:grid;grid-template-columns:minmax(180px,1fr) repeat(2,minmax(145px,.55fr)) auto;gap:8px;align-items:end;margin-bottom:12px}
@@ -29,34 +35,34 @@
     .golf-row[data-status="completed"]{border-left-color:#7caf88;background:#fcfffc}
     .golf-row-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 13px;border-bottom:1px dashed var(--qr-line)}
     .golf-row-title{font-size:18px;font-weight:1000}
-    .golf-row-sub{margin-top:3px;color:var(--qr-sub);font-size:12px;font-weight:800}
+    .golf-row-sub{margin-top:3px;color:var(--qr-sub);font-size:13px;font-weight:900}
     .golf-row-body{padding:12px 13px}
     .golf-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
     .golf-detail{min-width:0;padding:8px;border-radius:10px;background:#fffaf0}
-    .golf-detail span{display:block;color:var(--qr-sub);font-size:10px;font-weight:900}
-    .golf-detail strong{display:block;margin-top:3px;font-size:13px;font-weight:950;white-space:pre-wrap;overflow-wrap:anywhere}
-    .golf-row-names{margin-top:9px;padding:10px;border:1px solid var(--qr-line);border-radius:10px;background:#fff;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;font-weight:850}
-    .golf-row-note{margin-top:9px;color:var(--qr-sub);font-size:12px;font-weight:800;white-space:pre-wrap;overflow-wrap:anywhere}
+    .golf-detail span{display:block;color:var(--qr-sub);font-size:11px;font-weight:950}
+    .golf-detail strong{display:block;margin-top:3px;font-size:14px;font-weight:1000;white-space:pre-wrap;overflow-wrap:anywhere}
+    .golf-row-names{margin-top:9px;padding:10px;border:1px solid var(--qr-line);border-radius:10px;background:#fff;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;font-weight:900}
+    .golf-row-note{margin-top:9px;color:var(--qr-sub);font-size:13px;font-weight:900;white-space:pre-wrap;overflow-wrap:anywhere}
     .golf-row-actions{display:flex;justify-content:flex-end;gap:8px;padding:0 13px 13px}
     .golf-status-preview{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:11px;border:1px solid var(--qr-line);border-radius:12px;background:#fffaf0}
-    .golf-status-preview strong{font-size:14px}
-    .golf-count{color:var(--qr-sub);font-size:12px;font-weight:900}
+    .golf-status-preview strong{font-size:15px;font-weight:1000}
+    .golf-count{color:var(--qr-sub);font-size:13px;font-weight:1000}
     .golf-receivable-panel{display:flex;flex-direction:column;gap:10px}
     .golf-receivable-total{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
     .golf-receivable-total>div{padding:11px;border:1px solid var(--qr-line);border-radius:11px;background:#fffaf0}
-    .golf-receivable-total span{display:block;color:var(--qr-sub);font-size:10px;font-weight:900}
-    .golf-receivable-total strong{display:block;margin-top:4px;font-size:16px;font-weight:1000;overflow-wrap:anywhere}
+    .golf-receivable-total span{display:block;color:var(--qr-sub);font-size:11px;font-weight:950}
+    .golf-receivable-total strong{display:block;margin-top:4px;font-size:17px;font-weight:1000;overflow-wrap:anywhere}
     .golf-receivable-table-wrap{overflow-x:auto;border:1px solid var(--qr-line);border-radius:12px;background:#fff}
     .golf-receivable-table{width:100%;min-width:760px;border-collapse:collapse}
     .golf-receivable-table th,.golf-receivable-table td{padding:10px;border-bottom:1px solid var(--qr-line);text-align:right;white-space:nowrap}
-    .golf-receivable-table th{background:#fffaf0;color:var(--qr-sub);font-size:11px;font-weight:1000}
+    .golf-receivable-table th{background:#fffaf0;color:var(--qr-sub);font-size:12px;font-weight:1000}
     .golf-receivable-table th:first-child,.golf-receivable-table td:first-child{text-align:left}
     .golf-receivable-table tbody tr:last-child td{border-bottom:0}
-    .golf-receivable-table td{font-size:13px;font-weight:850}
-    .golf-receivable-warning{display:block;margin-top:3px;color:#a15c2b;font-size:10px;font-weight:900}
-    .golf-receivable-note{padding:9px 11px;border-radius:10px;background:#f7f3ea;color:var(--qr-sub);font-size:11px;font-weight:900}
+    .golf-receivable-table td{font-size:14px;font-weight:900}
+    .golf-receivable-warning{display:block;margin-top:3px;color:#a15c2b;font-size:11px;font-weight:950}
+    .golf-receivable-note{padding:9px 11px;border-radius:10px;background:#f7f3ea;color:var(--qr-sub);font-size:12px;font-weight:950}
     .golf-receivable-detail-row>td{text-align:left!important;white-space:normal!important;background:#fffdf8}
-    .golf-receivable-detail summary{cursor:pointer;color:#765137;font-size:12px;font-weight:1000}
+    .golf-receivable-detail summary{cursor:pointer;color:#765137;font-size:13px;font-weight:1000}
     .golf-receivable-detail .golf-receivable-table-wrap{margin-top:8px}
     .golf-receivable-detail .golf-receivable-table{min-width:680px}
     @media(max-width:1050px){.golf-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
