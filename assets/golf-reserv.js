@@ -787,8 +787,6 @@
       }));
       state.partnerOffsets = partnerOffsets;
       state.rows.sort((a, b) => {
-        const statusOrder = Number(a.status === "completed") - Number(b.status === "completed");
-        if (statusOrder) return statusOrder;
         return `${a.golf_date} ${a.golf_time} ${a.id}`
           .localeCompare(`${b.golf_date} ${b.golf_time} ${b.id}`);
       });
