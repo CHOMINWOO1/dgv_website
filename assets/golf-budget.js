@@ -333,7 +333,61 @@
     return relation || {};
   }
 
+  function depositEventTime(value) {
+    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return NaN;
+    return Date.parse(`${match[1]}-${match[2]}-${match[3]}T00:00:00+07:00`);
+  }
+
+  function chargeBalanceAfterMap() {
+    const running = new Map(COURSES.map((course) => [course, Number(accountFor(course)?.opening_balance_vnd || 0)]));
+    const balances = new Map();
+    const events = [];
+
+    state.deposits.forEach((deposit) => {
+      const at = depositEventTime(deposit.deposit_date);
+      if (!COURSES.includes(deposit.golf_course) || !Number.isFinite(at)) return;
+      events.push({
+        at,
+        order: `0:${deposit.id || ""}`,
+        golfCourse: deposit.golf_course,
+        delta: Number(deposit.amount_vnd || 0)
+      });
+    });
+
+    state.charges.forEach((charge) => {
+      const chargedAt = new Date(charge.charged_at).getTime();
+      if (!COURSES.includes(charge.golf_course) || !Number.isFinite(chargedAt)) return;
+      const amount = Number(charge.amount_vnd || 0);
+      events.push({
+        at: chargedAt,
+        order: `1:${charge.reservation_id || ""}`,
+        golfCourse: charge.golf_course,
+        delta: -amount,
+        reservationId: charge.reservation_id
+      });
+      const reversedAt = charge.reversed_at ? new Date(charge.reversed_at).getTime() : NaN;
+      if (Number.isFinite(reversedAt)) {
+        events.push({
+          at: reversedAt,
+          order: `2:${charge.reservation_id || ""}`,
+          golfCourse: charge.golf_course,
+          delta: amount
+        });
+      }
+    });
+
+    events.sort((left, right) => left.at - right.at || left.order.localeCompare(right.order));
+    events.forEach((event) => {
+      const nextBalance = Number(running.get(event.golfCourse) || 0) + event.delta;
+      running.set(event.golfCourse, nextBalance);
+      if (event.reservationId) balances.set(event.reservationId, nextBalance);
+    });
+    return balances;
+  }
+
   function renderCharges() {
+    const balanceAfterCharge = chargeBalanceAfterMap();
     const periodCharges = state.charges.filter(chargeTouchesChargeRange);
     const charges = state.chargeCourse === "all"
       ? periodCharges
@@ -359,6 +413,7 @@
         const reservation = reservationForCharge(charge);
         const href = `golf_reserv.html?edit=${encodeURIComponent(charge.reservation_id)}`;
         const active = charge.active !== false;
+        const balanceAfter = balanceAfterCharge.get(charge.reservation_id);
         const statusLabel = !active
           ? "복원됨 / Đã hoàn"
           : charge.historical
@@ -374,9 +429,10 @@
           <td>${escape(reservation.representative_name || "—")}</td>
           <td class="budget-money"><strong>−${escape(moneyLabel(charge.amount_vnd))}</strong></td>
           <td><a class="budget-edit-link" href="${escape(href)}">예약 보기 / Xem</a></td>
+          <td class="budget-money${Number(balanceAfter) < 0 ? " is-negative" : ""}"><strong>${escape(moneyLabel(balanceAfter))}</strong></td>
         </tr>`;
       }).join("")
-      : `<tr><td class="budget-empty" colspan="9">${escape(chargeRangeLabel())} ${escape(filterLabel)} 자동 차감 내역이 없습니다.<br />Không có lịch sử khấu trừ tự động trong kỳ này.</td></tr>`;
+      : `<tr><td class="budget-empty" colspan="10">${escape(chargeRangeLabel())} ${escape(filterLabel)} 자동 차감 내역이 없습니다.<br />Không có lịch sử khấu trừ tự động trong kỳ này.</td></tr>`;
   }
 
   function showChargeCourse(course, options = {}) {
