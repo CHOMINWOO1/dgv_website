@@ -29,7 +29,7 @@ for (const id of ["paymentRangeApplyButton", "paymentRangeAllButton", "paymentRa
 }
 assert.match(page, /골프장 기간 조회 \/ Tra cứu thời gian thanh toán sân/);
 assert.match(page, /자동 차감 기간 조회 \/ Tra cứu thời gian khấu trừ/);
-assert.match(page, /차감·복원 일자 기준 \/ Theo ngày trừ·hoàn/);
+assert.match(page, /골프 날짜 기준 \/ Theo ngày chơi golf/);
 assert.ok(page.indexOf('id="paymentRangeTitle"') < page.indexOf('id="depositFormTitle"'));
 assert.doesNotMatch(page, /id="monthFilter"|id="allMonthsButton"|type="month"/);
 assert.doesNotMatch(page, /id="periodDeposits"|id="periodCharges"|id="periodRestorations"|id="periodNet"/);
@@ -57,9 +57,11 @@ assert.match(source, /paymentFrom: ""[\s\S]*paymentTo: ""[\s\S]*chargeFrom: ""[\
 assert.match(source, /state\.paymentFrom = rangeStart[\s\S]*state\.paymentTo = rangeEnd[\s\S]*state\.chargeFrom = rangeStart[\s\S]*state\.chargeTo = rangeEnd/);
 assert.match(source, /function dateTimeYmd\(value\)[\s\S]*timeZone: TIME_ZONE[\s\S]*year: "numeric"[\s\S]*month: "2-digit"[\s\S]*day: "2-digit"/);
 assert.match(source, /dateInRange\(String\(deposit\?\.deposit_date \|\| ""\), state\.paymentFrom, state\.paymentTo\)/);
-assert.match(source, /dateInRange\(chargedDate, state\.chargeFrom, state\.chargeTo\)[\s\S]*dateInRange\(restoredDate, state\.chargeFrom, state\.chargeTo\)/);
+assert.match(source, /dateInRange\(String\(charge\?\.golf_date \|\| ""\), state\.chargeFrom, state\.chargeTo\)/);
 assert.match(source, /state\.deposits\.filter\(depositInPaymentRange\)/);
 assert.match(source, /state\.charges\.filter\(chargeTouchesChargeRange\)/);
+assert.match(source, /function compareChargesByGolfDate\([\s\S]*right\?\.golf_date[\s\S]*left\?\.golf_date/);
+assert.match(source, /\.sort\(compareChargesByGolfDate\)/);
 assert.match(source, /depositTableTotal"\)\.textContent = moneyLabel\(depositTotalOf\(deposits\)\)/);
 assert.match(source, /activeTotal = charges[\s\S]*charge\.active !== false[\s\S]*chargeTableTotal"\)\.textContent = moneyLabel\(activeTotal\)/);
 assert.match(source, /function chargeBalanceAfterMap\(\)[\s\S]*state\.deposits\.forEach[\s\S]*state\.charges\.forEach[\s\S]*events\.sort/);
