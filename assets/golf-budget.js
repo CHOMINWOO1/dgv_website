@@ -422,7 +422,6 @@
         return `<tr>
           <td><strong>${statusLabel}</strong></td>
           <td>${escape(dateTimeLabel(charge.charged_at))}</td>
-          <td>${escape(dateTimeLabel(charge.reversed_at))}</td>
           <td><strong>${escape(charge.golf_course)}</strong></td>
           <td>${escape(dateLabel(charge.golf_date))}</td>
           <td>${escape(reservation.counterparty_name || "—")}</td>
@@ -430,6 +429,7 @@
           <td class="budget-money"><strong>−${escape(moneyLabel(charge.amount_vnd))}</strong></td>
           <td><a class="budget-edit-link" href="${escape(href)}">예약 보기 / Xem</a></td>
           <td class="budget-money${Number(balanceAfter) < 0 ? " is-negative" : ""}"><strong>${escape(moneyLabel(balanceAfter))}</strong></td>
+          <td>${escape(dateTimeLabel(charge.reversed_at))}</td>
         </tr>`;
       }).join("")
       : `<tr><td class="budget-empty" colspan="10">${escape(chargeRangeLabel())} ${escape(filterLabel)} 자동 차감 내역이 없습니다.<br />Không có lịch sử khấu trừ tự động trong kỳ này.</td></tr>`;
