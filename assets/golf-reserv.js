@@ -51,51 +51,84 @@
     const params = new URLSearchParams(global.location.search);
     const requestedRecordId = clean(params.get("edit"));
     const token = clean(params.get("editorToken"));
-    if (params.get("embedded") !== "1" || !UUID_PATTERN.test(requestedRecordId) || !UUID_PATTERN.test(token)) return null;
-    return { token, requestedRecordId, ready: false, saved: false, allowedRoundIds: new Set([requestedRecordId]) };
+    if (params.get("embedded") !== "1" || !UUID_PATTERN.test(token)) return null;
+    const createMode = params.get("create") === "1";
+    if (createMode ? params.has("edit") : !UUID_PATTERN.test(requestedRecordId)) return null;
+    return { mode: createMode ? "create" : "edit", token, requestedRecordId: createMode ? null : requestedRecordId,
+      ready: false, saved: false, closing: false, createUncertain: false, allowedRoundIds: new Set(createMode ? [] : [requestedRecordId]) };
   }
 
-  function sendEditorMessage(type, recordId) {
+  function sendEditorMessage(type, recordId, bookingGroupId) {
     if (!embeddedEditor) return;
-    const payload = { type, token: embeddedEditor.token, recordId: recordId || byId("recordId").value || embeddedEditor.requestedRecordId };
-    if (type === "golf-editor-error") payload.message = "예약 수정 화면을 불러오지 못했습니다. 다시 열어 주세요. / Không mở được trình sửa đặt sân. Vui lòng mở lại.";
+    const payload = { type, mode: embeddedEditor.mode, token: embeddedEditor.token,
+      recordId: embeddedEditor.mode === "create" ? (type === "golf-editor-saved" ? recordId : null)
+        : recordId || byId("recordId").value || embeddedEditor.requestedRecordId };
+    if (type === "golf-editor-saved" && UUID_PATTERN.test(bookingGroupId || "")) payload.bookingGroupId = bookingGroupId;
+    if (type === "golf-editor-close" && embeddedEditor.mode === "create" && embeddedEditor.createUncertain) payload.refreshRequired = true;
+    if (type === "golf-editor-error") payload.message = "예약 화면을 불러오지 못했습니다. 다시 열어 주세요. / Không mở được màn hình đặt sân. Vui lòng mở lại.";
     global.parent.postMessage(payload, global.location.origin);
   }
 
   function requestEmbeddedClose() {
     if (!embeddedEditor) return;
+    if (embeddedEditor.createUncertain) {
+      if (state.saving || !global.confirm("저장 결과가 불확실합니다. 중복 등록을 피하려면 창을 닫고 목록에서 저장 여부를 먼저 확인해 주세요. 닫으시겠습니까?\nChưa rõ kết quả lưu. Hãy đóng cửa sổ và kiểm tra danh sách trước để tránh tạo trùng. Bạn có muốn đóng?")) {
+        sendEditorMessage("golf-editor-close-blocked"); return;
+      }
+      state.formDirty = false;
+      embeddedEditor.closing = true;
+      sendEditorMessage("golf-editor-close");
+      return;
+    }
     if (!canLeaveEditedBooking()) { sendEditorMessage("golf-editor-close-blocked"); return; }
     state.formDirty = false;
+    embeddedEditor.closing = true;
     sendEditorMessage("golf-editor-close");
   }
 
   function handleEditorMessage(event) {
     if (!embeddedEditor || event.origin !== global.location.origin || event.source !== global.parent) return;
     const message = event.data;
-    if (!message || message.token !== embeddedEditor.token || message.type !== "golf-editor-request-close") return;
+    const modeMatches = message?.mode === embeddedEditor.mode || (embeddedEditor.mode === "edit" && message?.mode == null);
+    if (!message || message.token !== embeddedEditor.token || !modeMatches || message.type !== "golf-editor-request-close") return;
     requestEmbeddedClose();
   }
 
   function configureEmbeddedEditor() {
     if (!embeddedEditor) return;
     document.body.classList.add("golf-embedded");
+    document.body.classList.add(`golf-embedded-${embeddedEditor.mode}`);
     byId("reservationForm").setAttribute("aria-busy", "true");
   }
 
   function completeEmbeddedLoad() {
     if (!embeddedEditor) return;
     const row = rowById(byId("recordId").value);
-    if (!row || row.id !== embeddedEditor.requestedRecordId) {
+    if (embeddedEditor.mode === "create" ? Boolean(byId("recordId").value) : !row || row.id !== embeddedEditor.requestedRecordId) {
       setCreateLocked(true);
       sendEditorMessage("golf-editor-error");
       return;
     }
-    embeddedEditor.allowedRoundIds = new Set(row.booking ? row.booking.rounds.map((round) => round.id) : [row.id]);
+    embeddedEditor.allowedRoundIds = new Set(row ? (row.booking ? row.booking.rounds.map((round) => round.id) : [row.id]) : []);
     embeddedEditor.ready = true;
     setCreateLocked(false);
     byId("reservationForm").setAttribute("aria-busy", "false");
     document.body.classList.add("golf-embedded-ready");
-    sendEditorMessage("golf-editor-ready", row.id);
+    sendEditorMessage("golf-editor-ready", row?.id);
+  }
+
+  function finishEmbeddedSave(saved) {
+    if (!embeddedEditor) return;
+    if (!UUID_PATTERN.test(saved?.saved_id || "")) throw new Error("저장 응답을 확인하지 못했습니다. / Chưa xác nhận được kết quả lưu.");
+    embeddedEditor.saved = true;
+    embeddedEditor.createUncertain = false;
+    state.formDirty = false;
+    setCreateLocked(true);
+    sendEditorMessage("golf-editor-saved", saved.saved_id, saved.booking_group_id);
+  }
+
+  function embeddedCreationBlocked() {
+    return Boolean(embeddedEditor && (embeddedEditor.mode !== "create" || !embeddedEditor.ready || embeddedEditor.saved || embeddedEditor.closing || embeddedEditor.createUncertain || byId("recordId").value));
   }
 
   function dateLabel(value) {
@@ -501,7 +534,7 @@
   }
 
   function changeBookingMode() {
-    if (embeddedEditor) return;
+    if (embeddedCreationBlocked()) return;
     const groupMode = byId("bookingMode").value === "group";
     if (groupMode === state.createGroupMode) return;
     if (state.saving || state.createAttempt?.uncertain) { byId("bookingMode").value = state.createGroupMode ? "group" : "single"; return; }
@@ -522,7 +555,7 @@
   }
 
   function addCreateRound() {
-    if (embeddedEditor) return;
+    if (embeddedCreationBlocked()) return;
     if (!state.createGroupMode || state.saving || state.createAttempt?.uncertain) return;
     if (state.createRounds.length >= 30) { QRStaff.toast("최대 30개 일정까지 추가할 수 있습니다. / Tối đa 30 lịch.", "error"); return; }
     captureCreateRound();
@@ -539,6 +572,7 @@
   }
 
   function switchCreateRound(index) {
+    if (embeddedCreationBlocked()) return;
     if (!state.createGroupMode || state.saving || state.createAttempt?.uncertain || !state.createRounds[index] || index === state.createRoundIndex) return;
     captureCreateRound();
     state.createRoundIndex = index;
@@ -548,7 +582,7 @@
   }
 
   function removeCreateRound() {
-    if (embeddedEditor) return;
+    if (embeddedCreationBlocked()) return;
     if (!state.createGroupMode || state.saving || state.createAttempt?.uncertain || state.createRounds.length <= 1) return;
     if (!global.confirm(`${state.createRoundIndex + 1}번째 임시 일정을 삭제하시겠습니까? 공통 입금은 유지됩니다.\nXóa lịch nháp ${state.createRoundIndex + 1}? Khoản thu chung vẫn được giữ.`)) return;
     state.createRounds.splice(state.createRoundIndex, 1);
@@ -601,7 +635,7 @@
   }
 
   async function saveCreatedGroup() {
-    if (embeddedEditor) return;
+    if (embeddedCreationBlocked() || state.saving) return;
     let payload;
     const retryingUncertain = Boolean(state.createAttempt?.uncertain);
     let confirmed = false;
@@ -617,14 +651,16 @@
       const { data, error } = await sb.rpc("create_golf_booking_group", state.createAttempt.payload);
       if (error) throw error;
       if (!Array.isArray(data) || !data[0]?.saved_id || !data[0]?.booking_group_id) throw new Error("저장 응답을 확인하지 못했습니다. / Chưa xác nhận được kết quả lưu.");
+      if (embeddedEditor && (!UUID_PATTERN.test(data[0].saved_id) || !UUID_PATTERN.test(data[0].booking_group_id))) throw new Error("저장 응답을 확인하지 못했습니다. / Chưa xác nhận được kết quả lưu.");
       confirmed = true;
-      setCreateLocked(false);
       QRStaff.toast("묶음예약과 모든 일정을 함께 저장했습니다. / Đã lưu nhóm đặt sân cùng toàn bộ lịch.", "ok");
+      if (embeddedEditor) { finishEmbeddedSave(data[0]); return; }
+      setCreateLocked(false);
       resetForm({ focus: false });
       await loadRows({ quiet: true });
     } catch (error) {
       if (confirmed) {
-        setCreateLocked(false);
+        if (!embeddedEditor?.saved) setCreateLocked(false);
         QRStaff.toast("예약은 저장되었지만 화면을 갱신하지 못했습니다. 새로고침해 주세요. / Đã lưu đặt sân nhưng chưa cập nhật màn hình. Vui lòng tải lại.", "error");
       } else if (!retryingUncertain && isDefiniteCreateRejection(error)) {
         state.createAttempt = null;
@@ -636,10 +672,12 @@
       }
       renderCreateSchedules();
     } finally {
-      state.saving = false;
-      QRStaff.setBusy(byId("saveButton"), false);
-      renderCreateSchedules();
-      byId("saveButton").textContent = state.createAttempt?.uncertain ? "동일 내용 재시도 / Thử lại cùng nội dung" : state.createGroupMode ? "묶음예약 저장 / Lưu nhóm đặt sân" : "예약 저장 / Lưu đặt chỗ";
+      state.saving = Boolean(embeddedEditor?.saved);
+      QRStaff.setBusy(byId("saveButton"), state.saving, state.saving ? "저장 완료 / Đã lưu" : undefined);
+      if (!state.saving) {
+        renderCreateSchedules();
+        byId("saveButton").textContent = state.createAttempt?.uncertain ? "동일 내용 재시도 / Thử lại cùng nội dung" : state.createGroupMode ? "묶음예약 저장 / Lưu nhóm đặt sân" : "예약 저장 / Lưu đặt chỗ";
+      }
     }
   }
 
@@ -755,7 +793,7 @@
   }
 
   function fillForm(row, options = {}) {
-    if (embeddedEditor?.saved || (embeddedEditor?.ready && !embeddedEditor.allowedRoundIds.has(row.id))) return;
+    if (embeddedEditor?.mode === "create" || embeddedEditor?.saved || (embeddedEditor?.ready && !embeddedEditor.allowedRoundIds.has(row.id))) return;
     clearCreateState();
     state.editingGroupVersion = row.booking?.version ?? null;
     byId("recordId").value = row.id;
@@ -1267,7 +1305,8 @@
   async function save(event) {
     event.preventDefault();
     if (state.saving) return;
-    if (embeddedEditor && (!embeddedEditor.ready || embeddedEditor.saved || !embeddedEditor.allowedRoundIds.has(byId("recordId").value))) return;
+    if (embeddedEditor && (!embeddedEditor.ready || embeddedEditor.saved || embeddedEditor.closing || embeddedEditor.createUncertain
+      || (embeddedEditor.mode === "create" ? Boolean(byId("recordId").value) : !embeddedEditor.allowedRoundIds.has(byId("recordId").value)))) return;
     if (state.createGroupMode) { await saveCreatedGroup(); return; }
     let payload;
     try { payload = payloadFromForm(); }
@@ -1297,25 +1336,27 @@
           p_payments: payload.payments
         });
       if (error) throw error;
-      if (!Array.isArray(data) || !data[0]?.saved_id) throw new Error("저장된 예약을 확인하지 못했습니다.");
+      if (!Array.isArray(data) || !data[0]?.saved_id || (embeddedEditor && !UUID_PATTERN.test(data[0].saved_id))) throw new Error("저장된 예약을 확인하지 못했습니다.");
       QRStaff.toast(booking ? "일정과 묶음 전체 입금·상태를 저장했습니다. / Đã lưu lịch và khoản thu, trạng thái của cả nhóm." : id ? "골프 예약을 수정했습니다." : "골프 예약을 등록했습니다.", "ok");
       if (embeddedEditor) {
-        embeddedEditor.saved = true;
-        state.formDirty = false;
-        setCreateLocked(true);
-        sendEditorMessage("golf-editor-saved", data[0].saved_id);
+        finishEmbeddedSave(data[0]);
         return;
       }
       resetForm({ focus: false });
       await loadRows({ quiet: true });
     } catch (error) {
       console.error(error);
-      QRStaff.toast(QRStaff.messageOf(error, "골프 예약을 저장하지 못했습니다. 입력 내용을 확인해 주세요."), "error");
+      if (embeddedEditor?.mode === "create" && !embeddedEditor.saved && !isDefiniteCreateRejection(error)) {
+        embeddedEditor.createUncertain = true;
+        const warning = "저장 결과를 확인하지 못했습니다. 중복 등록 방지를 위해 재저장을 막았습니다. 창을 닫고 목록에서 저장 여부를 먼저 확인해 주세요. / Chưa xác nhận kết quả lưu. Đã khóa lưu lại để tránh trùng; hãy đóng cửa sổ và kiểm tra danh sách trước.";
+        setBanner(warning, "error");
+        QRStaff.toast(warning, "error");
+      } else QRStaff.toast(QRStaff.messageOf(error, "골프 예약을 저장하지 못했습니다. 입력 내용을 확인해 주세요."), "error");
     } finally {
       state.saving = Boolean(embeddedEditor?.saved);
-      if (embeddedEditor && !embeddedEditor.saved) setCreateLocked(false);
-      QRStaff.setBusy(byId("saveButton"), state.saving, state.saving ? "저장 완료 / Đã lưu" : undefined);
-      if (!state.saving) byId("saveButton").textContent = byId("recordId").value ? "변경 저장 / Lưu thay đổi" : "예약 저장 / Lưu đặt chỗ";
+      if (embeddedEditor && !embeddedEditor.saved && !embeddedEditor.createUncertain) setCreateLocked(false);
+      QRStaff.setBusy(byId("saveButton"), state.saving || Boolean(embeddedEditor?.createUncertain), state.saving ? "저장 완료 / Đã lưu" : embeddedEditor?.createUncertain ? "목록에서 저장 여부 확인 / Kiểm tra danh sách" : undefined);
+      if (!state.saving && !embeddedEditor?.createUncertain) byId("saveButton").textContent = byId("recordId").value ? "변경 저장 / Lưu thay đổi" : "예약 저장 / Lưu đặt chỗ";
     }
   }
 
@@ -1381,6 +1422,7 @@
   }
 
   function openRequestedEdit() {
+    if (embeddedEditor?.mode === "create") return;
     const params = new URLSearchParams(global.location.search);
     if (!params.has("edit")) return;
     const rawId = clean(params.get("edit"));
@@ -1472,8 +1514,9 @@
       }, true);
     }
     global.addEventListener("beforeunload", (event) => {
+      if (embeddedEditor?.saved || embeddedEditor?.closing) return;
       if (state.createAttempt?.uncertain || (state.createGroupMode && (state.formDirty || state.saving))
-        || (embeddedEditor?.ready && !embeddedEditor.saved && (state.formDirty || state.saving))) {
+        || (embeddedEditor?.ready && !embeddedEditor.saved && !embeddedEditor.closing && (state.formDirty || state.saving || embeddedEditor.createUncertain))) {
         event.preventDefault();
         event.returnValue = "";
       }
