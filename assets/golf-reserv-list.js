@@ -323,10 +323,10 @@
     const receivedTotal = paymentTotal(row, ["deposit", "receipt"]);
     return `<tr data-status="${escape(row.status)}" data-reservation-id="${escape(row.id)}">
       <td><button class="golf-detail-toggle" type="button" aria-haspopup="dialog" aria-controls="reservationDetailDialog" aria-label="${escape(`${representative} 예약 상세 보기 / Xem chi tiết đặt sân`)}" title="상세 보기 / Xem chi tiết">ⓘ</button><span class="golf-status-chip${completed ? " is-completed" : ""}">${escape(statusLabel)}</span></td>
-      <td><button class="golf-edit-link" type="button" data-edit-href="${escape(editHref)}" title="더블클릭하여 수정 / Nhấp đúp để chỉnh sửa" aria-label="${escape(`${golfDateLabel(row.golf_date)} 예약 수정, 더블클릭 또는 키보드로 선택 / Chỉnh sửa, nhấp đúp hoặc dùng bàn phím`)}">${escape(golfDateLabel(row.golf_date))}</button></td>
+      <td>${escape(golfDateLabel(row.golf_date))}</td>
       <td>${escape(timeLabel(row.golf_time))}</td>
       <td class="golf-cell-text" title="${escape(row.counterparty_name || "—")}">${escape(row.counterparty_name || "—")}</td>
-      <td class="golf-cell-text golf-screen-hidden" title="${escape(representative)}">${escape(representative)}</td>
+      <td class="golf-cell-text" title="${escape(representative)}"><button class="golf-edit-link" type="button" data-edit-href="${escape(editHref)}" title="더블클릭하여 수정 / Nhấp đúp để chỉnh sửa" aria-label="${escape(`${representative} 예약 수정, 더블클릭 또는 키보드로 선택 / Chỉnh sửa, nhấp đúp hoặc dùng bàn phím`)}">${escape(representative)}</button></td>
       <td class="golf-cell-names" title="${escape(names)}"><span class="golf-screen-text">${escape(names)}</span><span class="golf-print-text">${escape(clean(row.player_names_en) || "—")}</span></td>
       <td>${escape(row.pax)}</td>
       <td>${escape(row.golf_course)}</td>
@@ -554,4 +554,3 @@
 
   init();
 })(window);
-

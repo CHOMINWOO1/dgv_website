@@ -60,9 +60,9 @@ const markup = api.renderRow(fixture), cells = [...markup.matchAll(/<td\b([^>]*)
 const headers = [...page.match(/<thead>([\s\S]*?)<\/thead>/)[1].matchAll(/<th\b([^>]*)>([\s\S]*?)<\/th>/g)];
 assert.equal(cells.length, 25); assert.equal(headers.length, 25, "Printed table header/data column counts must match");
 const visible = cells.map((m, i) => m[1].includes("golf-screen-hidden") ? null : i).filter((i) => i != null);
-assert.deepEqual(visible, [0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11], "Compact screen ends at customer total, skips representative");
+assert.deepEqual(visible, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], "Compact screen ends at customer total and preserves representative");
 assert.deepEqual(headers.map((m, i) => m[1].includes("golf-screen-hidden") ? null : i).filter((i) => i != null), visible);
-assert.match(cells[1][2], /golf-edit-link/); assert.doesNotMatch(cells[4][2], /button|golf-edit-link/);
+assert.match(cells[4][2], /golf-edit-link/); assert.doesNotMatch(cells[1][2], /button|golf-edit-link/);
 assert.match(cells[5][2], /golf-print-text/); assert.match(cells[5][2], /FIRST PERSON\nSECOND PERSON/);
 assert.equal(cells[23][2], escapeHTML(fixture.note), "Full multiline notes remain in print cells");
 assert.match(page, /<h1 class="qr-brand-title">골프 예약 현황<\/h1>/);
@@ -75,25 +75,25 @@ assert.doesNotMatch(markup, /<img\b|<script\b/);
 
 const tableBody = byId("reservationTableBody"), dialog = byId("reservationDetailDialog");
 const row = { dataset: { reservationId: fixture.id } };
-const dateButton = { dataset: { editHref: `golf_reserv.html?edit=${encodeURIComponent(fixture.id)}` } };
+const representativeButton = { dataset: { editHref: `golf_reserv.html?edit=${encodeURIComponent(fixture.id)}` } };
 const target = (kind) => ({ closest(selector) {
-  if (selector === "button.golf-edit-link[data-edit-href]") return kind === "date" ? dateButton : null;
+  if (selector === "button.golf-edit-link[data-edit-href]") return kind === "representative" ? representativeButton : null;
   if (selector === "tr[data-reservation-id]") return row;
   if (selector === "a, button, input, select, textarea") return kind === "cell" ? null : {};
   return null;
 } });
-dispatch(tableBody, "click", { target: target("date"), detail: 1 });
-dispatch(tableBody, "click", { target: target("date"), detail: 2 });
-assert.equal(dialog.open, false); assert.equal(confirms.length, 0, "Date clicks must not preempt native double-click");
-dispatch(tableBody, "dblclick", { target: target("date"), detail: 2 });
+dispatch(tableBody, "click", { target: target("representative"), detail: 1 });
+dispatch(tableBody, "click", { target: target("representative"), detail: 2 });
+assert.equal(dialog.open, false); assert.equal(confirms.length, 0, "Representative clicks must not preempt native double-click");
+dispatch(tableBody, "dblclick", { target: target("representative"), detail: 2 });
 assert.equal(confirms.length, 1); assert.equal(navigations.length, 1, "One double-click asks and navigates exactly once");
 assert.match(confirms[0], /수정하시겠습니까\?[\s\S]*Bạn có muốn chỉnh sửa đặt sân này không\?/);
-assert.equal(navigations[0], dateButton.dataset.editHref);
+assert.equal(navigations[0], representativeButton.dataset.editHref);
 confirmResult = false;
-dispatch(tableBody, "dblclick", { target: target("date"), detail: 2 });
+dispatch(tableBody, "dblclick", { target: target("representative"), detail: 2 });
 assert.equal(navigations.length, 1, "Cancel must never navigate");
 confirmResult = true;
-dispatch(tableBody, "click", { target: target("date"), detail: 0 });
+dispatch(tableBody, "click", { target: target("representative"), detail: 0 });
 assert.equal(navigations.length, 2, "Keyboard activation retains accessible edit confirmation");
 
 dispatch(tableBody, "click", { target: target("cell"), detail: 1 });
@@ -137,4 +137,4 @@ assert.equal(workbook.sheets.length, 2); assert.equal(workbook.sheets[1].rows.le
 assert.equal(workbook.sheets[1].rows[5][6].value, 100000); assert.equal(workbook.sheets[1].rows[6][6].value, 300000); assert.equal(workbook.sheets[1].rows[7][6].value, 500000);
 assert.equal(JSON.stringify(fixture), original, "Rendering, detail, print and export remain read-only");
 assert.doesNotMatch(source, /\.insert\(|\.update\(|\.delete\(/);
-console.log("Compact 11-column screen/full 25-column reports, native details popup, payment summaries, XSS, edit confirmation, keyboard/touch, and drag suppression verified (no database writes).");
+console.log("Compact 12-column screen/full 25-column reports, representative retained, native details popup, payment summaries, XSS, edit confirmation, keyboard/touch, and drag suppression verified (no database writes).");

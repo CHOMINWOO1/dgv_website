@@ -89,7 +89,7 @@ assert.match(source, /Number\(row\.final_received_amount_vnd \|\| 0\) - Number\(
 assert.match(source, /textCell\(row\.player_names_en, "wrapped"\)/);
 assert.match(source, /byId\("printListButton"\)\.addEventListener\("click", printList\)/);
 assert.match(source, /byId\("exportListButton"\)\.addEventListener\("click", exportList\)/);
-assert.match(source, /class="golf-edit-link"[\s\S]*golfDateLabel\(row\.golf_date\)[\s\S]*timeLabel\(row\.golf_time\)[\s\S]*row\.counterparty_name[\s\S]*class="golf-cell-names"/);
+assert.match(source, /golfDateLabel\(row\.golf_date\)[\s\S]*timeLabel\(row\.golf_time\)[\s\S]*row\.counterparty_name[\s\S]*class="golf-edit-link"[\s\S]*escape\(representative\)[\s\S]*class="golf-cell-names"/);
 assert.match(source, /event\.target\.closest\("tr\[data-reservation-id\]"\)/);
 assert.match(source, /function reservationDetailMarkup\(row\)/);
 assert.match(source, /class="golf-roster-name"/);
@@ -108,7 +108,7 @@ assert.match(source, /tableBody\.addEventListener\("dblclick"/);
 assert.match(source, /event\.detail === 0/);
 assert.match(source, /이 예약을 수정하시겠습니까\?\\nBạn có muốn chỉnh sửa đặt sân này không\?/);
 assert.match(source, /if \(!global\.confirm\([\s\S]*\)\) return;[\s\S]*global\.location\.assign\(href\)/);
-assert.match(page, /골프 날짜는 더블클릭하면 확인 후 수정 화면으로 이동/);
+assert.match(page, /예약자 대표 이름은 더블클릭하면 확인 후 수정 화면으로 이동/);
 assert.match(page, /\.golf-list-app\{[^}]*font-size:16px;font-weight:750\}/);
 assert.match(page, /\.golf-list-app \.qr-label\{font-size:13px;font-weight:1000\}/);
 assert.match(page, /\.golf-sheet\{[^}]*font-size:14px\}/);
