@@ -108,6 +108,11 @@
     return String(value || "").split(/[\n,;]+/).map((name) => name.trim()).filter(Boolean).length;
   }
 
+  function paxFromForm() {
+    const entered = clean(byId("pax").value);
+    return entered ? Number(entered) : namesCount(byId("playerNamesEn").value);
+  }
+
   function firstPlayerName(value) {
     const first = String(value || "").replace(/\r/g, "").split(/[\n,;]+/)
       .map((name) => name.trim()).find(Boolean) || "";
@@ -360,7 +365,7 @@
 
   function updatePreview() {
     syncCostSettlementFields();
-    const pax = Number(byId("pax").value || 0);
+    const pax = paxFromForm();
     const guestUnit = moneyNumber(byId("guestUnitPrice").value);
     const courseUnit = moneyNumber(byId("courseUnitPrice").value);
     const cartAmount = smartCartAmount(byId("smartCartNote").value);
@@ -403,7 +408,7 @@
     byId("paymentCompleted").checked = false;
     setPaymentDrafts([]);
     byId("formTitle").textContent = "새 골프 예약 / Đặt sân mới";
-    byId("editingHint").textContent = "계약금과 고객 입금 내역을 건별로 입력합니다. / Nhập riêng từng khoản khách thanh toán.";
+    byId("editingHint").textContent = "고객과 일정을 먼저 등록하고 가격·입금 내역은 나중에 추가할 수 있습니다. / Có thể đăng ký khách và lịch chơi trước, bổ sung giá và các khoản thu sau.";
     byId("saveButton").textContent = "예약 저장 / Lưu đặt chỗ";
     byId("cancelEditButton").hidden = true;
     updatePreview();
@@ -453,7 +458,7 @@
       .split(/[\n,;]+/).map((name) => name.trim()).filter(Boolean).join("\n");
     const counterpartyName = clean(byId("counterpartyName").value);
     const representativeName = firstPlayerName(playerNamesEn);
-    const pax = Number(byId("pax").value);
+    const pax = paxFromForm();
     const golfDate = byId("golfDate").value;
     const golfHour = byId("golfHour").value;
     const golfMinute = byId("golfMinute").value || "00";
@@ -470,8 +475,8 @@
     const payments = validatePayments(allPaymentDrafts());
 
     if (!counterpartyName) throw new Error("거래처를 입력해 주세요. / Vui lòng nhập đối tác.");
+    if (!playerNamesEn) throw new Error("고객명을 영어로 입력해 주세요. / Vui lòng nhập họ tên khách bằng tiếng Anh.");
     if (!representativeName) throw new Error("첫 번째 예약자 이름을 확인해 주세요. / Vui lòng kiểm tra tên người đại diện.");
-    if (!playerNamesEn) throw new Error("전체 영문 이름을 입력해 주세요. / Vui lòng nhập danh sách tên tiếng Anh.");
     if (!Number.isInteger(pax) || pax < 1 || pax > 100) throw new Error("인원을 1명 이상 100명 이하로 입력해 주세요. / Nhập từ 1 đến 100 khách.");
     if (!golfDate || !golfTime) throw new Error("골프 날짜와 티오프 시간을 선택해 주세요. / Chọn ngày chơi và giờ phát bóng.");
     const unchangedLegacyCourse = existingRow && existingRow.golf_course === golfCourse;

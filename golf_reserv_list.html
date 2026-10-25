@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>HANA 골프 예약 한 줄 목록</title>
+  <title>HANA 골프 예약 현황</title>
   <link rel="stylesheet" href="assets/qr-staff.css" />
   <style>
     .locked .golf-list-app{pointer-events:none;user-select:none;filter:blur(2px)}
@@ -19,7 +19,7 @@
     .golf-list-title-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
     .golf-sheet-wrap{margin-top:12px;overflow:auto;max-height:calc(100vh - 315px);border:1px solid var(--qr-line);border-radius:12px;background:#fff;overscroll-behavior:contain;cursor:grab}
     .golf-sheet-wrap.is-dragging{cursor:grabbing;user-select:none}
-    .golf-sheet{width:max-content;min-width:2860px;border-collapse:separate;border-spacing:0;font-size:14px}
+    .golf-sheet{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
     .golf-sheet th,.golf-sheet td{height:47px;padding:9px 11px;border-right:1px solid var(--qr-line);border-bottom:1px solid var(--qr-line);text-align:left;vertical-align:middle;white-space:nowrap}
     .golf-sheet th{position:sticky;top:0;z-index:3;background:#f7ead0;color:#4d392b;font-size:12px;font-weight:1000;line-height:1.25}
     .golf-sheet th:last-child,.golf-sheet td:last-child{border-right:0}
@@ -32,22 +32,36 @@
     .golf-sheet .golf-cell-payments{max-width:360px;white-space:pre-line;line-height:1.35}
     .golf-edit-link{display:inline;appearance:none;margin:0;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-weight:1000;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;cursor:pointer;user-select:none}
     .golf-edit-link:hover,.golf-edit-link:focus-visible{color:#8a512f}
+    .golf-sheet .golf-screen-hidden{display:none}
+    .golf-detail-toggle{appearance:none;display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;margin-right:5px;padding:0;border:1px solid #decba7;border-radius:7px;background:#fffaf0;color:#5a3927;font:inherit;font-weight:1000;cursor:pointer}
+    .golf-detail-toggle:focus-visible{outline:2px solid #795039;outline-offset:2px}
+    .golf-detail-toggle:hover{background:#f4dfaa}
     .golf-sheet .golf-cell-names{max-width:340px;overflow:hidden;text-overflow:ellipsis}
     .golf-sheet tbody tr[data-status]{cursor:pointer}
-    .golf-sheet .golf-roster-detail td{height:auto;padding:0;border-right:0;background:#fffaf0}
-    .golf-roster-panel{padding:13px 18px 15px;white-space:normal}
+    .golf-detail-dialog{width:min(920px,calc(100vw - 24px));max-height:calc(100dvh - 32px);padding:0;border:1px solid var(--qr-line);border-radius:16px;background:var(--qr-bg,#fffaf0);color:var(--qr-text,#36261d);box-shadow:0 20px 70px #0005;overflow:auto}
+    .golf-detail-dialog::backdrop{background:rgba(34,25,19,.6)}
+    .golf-detail-dialog-head{position:sticky;top:0;z-index:1;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--qr-line);background:#fffaf0}
+    .golf-detail-dialog-head h2{margin:0;font-size:20px;color:#4d392b}
+    .golf-detail-dialog-head p{margin:5px 0 0;color:#6a4935;font-size:13px;font-weight:800}
+    .golf-detail-dialog-close{flex:none;min-width:44px;min-height:44px;cursor:pointer}
+    .golf-detail-content{padding:16px 18px 20px;white-space:normal;overflow-wrap:anywhere}
     .golf-roster-title{display:block;margin-bottom:9px;color:#5a3927;font-size:14px;font-weight:1000}
     .golf-roster-names{display:flex;flex-wrap:wrap;gap:7px}
     .golf-roster-name{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #decba7;border-radius:9px;background:#fff;color:#36261d;font-weight:900}
     .golf-roster-name b{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:999px;background:#795039;color:#fff;font-size:11px}
     .golf-expanded-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:14px}
     .golf-expanded-section{min-width:0;padding:11px;border:1px solid var(--qr-line);border-radius:10px;background:#fff}
+    .golf-detail-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0}
+    .golf-detail-values div{min-width:0}
+    .golf-detail-values dt{margin-bottom:4px;color:#6a4935;font-size:12px;font-weight:1000}
+    .golf-detail-values dd{margin:0;color:#36261d;white-space:pre-wrap;overflow-wrap:anywhere;font-weight:900}
+    .golf-detail-wide{grid-column:1/-1}
     .golf-payment-detail-groups{display:grid;gap:9px}
     .golf-payment-detail-group strong{display:block;margin-bottom:5px;color:#6a4935;font-size:12px;font-weight:1000}
     .golf-payment-detail-list{display:flex;flex-wrap:wrap;gap:6px}
     .golf-payment-detail-item{padding:7px 9px;border:1px solid #decba7;border-radius:8px;background:#fffaf0;color:#36261d;font-weight:900}
     .golf-payment-screen-summary{display:inline}
-    .golf-payment-print-detail{display:none}
+    .golf-payment-print-detail,.golf-print-text{display:none}
     .golf-sheet .golf-cell-money{text-align:right;font-variant-numeric:tabular-nums}
     .golf-sheet .golf-cell-empty{height:130px;text-align:center;color:var(--qr-sub);font-size:14px;font-weight:850}
     .golf-status-chip{display:inline-flex;align-items:center;justify-content:center;min-width:76px;padding:5px 8px;border-radius:999px;background:#f4dfaa;color:#684b17;font-size:11px;font-weight:1000}
@@ -58,7 +72,7 @@
       body{background:#fff}
       body > .golf-list-app{display:block!important}
       .golf-list-app{max-width:none!important;padding:0!important;font-size:8px}
-      .qr-header,.qr-banner,.qr-summary,.qr-section-head,.golf-list-tools,.golf-roster-detail{display:none!important}
+      .qr-header,.qr-banner,.qr-summary,.qr-section-head,.golf-list-tools,.golf-detail-dialog{display:none!important}
       .golf-list-app>.qr-card{border:0!important;box-shadow:none!important;padding:0!important}
       .golf-print-only{display:block!important;margin:0 0 8px}
       .golf-print-only h1{margin:0 0 4px;font-size:18px}
@@ -68,6 +82,11 @@
       .golf-sheet th,.golf-sheet td{height:auto;padding:3px 2px;border:1px solid #777;white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;vertical-align:top}
       .golf-sheet th{position:static;background:#eee!important;color:#000;font-size:6px}
       .golf-sheet td{font-weight:700}
+      .golf-sheet .golf-screen-hidden{display:table-cell!important}
+      .golf-detail-toggle,.golf-screen-text{display:none!important}
+      .golf-print-text{display:inline!important;white-space:pre-line}
+      .golf-cell-note{white-space:pre-line!important}
+      .golf-edit-link{text-decoration:none;cursor:default}
       .golf-sheet .golf-cell-text,.golf-sheet .golf-cell-names{max-width:none}
       .golf-payment-screen-summary{display:none}
       .golf-payment-print-detail{display:inline;white-space:pre-line}
@@ -81,8 +100,8 @@
   <main class="qr-shell golf-list-app">
     <header class="qr-header">
       <div>
-        <h1 class="qr-brand-title">골프 예약 한 줄 목록</h1>
-        <p class="qr-brand-subtitle">Danh sách đặt sân golf theo từng dòng</p>
+        <h1 class="qr-brand-title">골프 예약 현황</h1>
+        <p class="qr-brand-subtitle">Tình hình đặt sân golf</p>
       </div>
       <div class="qr-header-actions">
         <span class="qr-pill"><span class="qr-dot is-connecting" id="connectionDot"></span><span id="connectionText">연결 중</span></span>
@@ -92,7 +111,7 @@
       </div>
     </header>
 
-    <div class="qr-banner" id="pageBanner">저장된 골프 예약을 예약 1건당 한 줄로 표시합니다. / Mỗi đặt sân được hiển thị trên một dòng.<br />행을 한 번 클릭하면 전체 예약자 명단과 고객 입금 상세가 펼쳐집니다. / Nhấp một lần vào dòng để xem đầy đủ danh sách khách và chi tiết khoản thu.<br />예약자 대표를 더블클릭하면 수정할 수 있습니다. / Nhấp đúp vào người đại diện để chỉnh sửa.</div>
+    <div class="qr-banner" id="pageBanner">행 또는 상세보기 버튼을 누르면 예약 정보와 입금 내역을 별도 창에서 확인할 수 있습니다. / Nhấp vào dòng hoặc nút chi tiết để xem thông tin đặt sân và các khoản thu.<br />예약자 대표 이름은 더블클릭하면 확인 후 수정 화면으로 이동합니다. / Nhấp đúp vào tên người đại diện, sau đó xác nhận để chỉnh sửa.</div>
 
     <section class="qr-summary" aria-label="예약 요약">
       <div class="qr-card qr-summary-card"><div class="qr-summary-label">진행중 / Đang xử lý</div><div class="qr-summary-value" id="summaryProgress">0</div></div>
@@ -114,7 +133,7 @@
       </div>
 
       <div class="golf-print-only" aria-hidden="true">
-        <h1>HANA 골프 예약 목록 / Danh sách đặt sân golf</h1>
+        <h1>HANA 골프 예약 현황 / Tình hình đặt sân golf</h1>
         <p id="golfPrintCriteria"></p>
         <p id="golfPrintGeneratedAt"></p>
       </div>
@@ -127,7 +146,7 @@
         <div class="golf-list-apply"><button class="qr-btn qr-btn-small" id="clearFiltersButton" type="button">검색 초기화 / Xóa lọc</button></div>
       </div>
 
-      <div class="golf-sheet-wrap" tabindex="0" aria-label="골프 예약 한 줄 표, 좌우로 스크롤할 수 있습니다">
+      <div class="golf-sheet-wrap" tabindex="0" aria-label="골프 예약 현황 표, 행을 누르면 상세를 볼 수 있습니다">
         <table class="golf-sheet">
           <thead>
             <tr>
@@ -143,19 +162,19 @@
               <th>S-CART</th>
               <th>1인 판매가<br />Giá khách</th>
               <th>고객 합계<br />Tổng tiền khách</th>
-              <th>1인 원가<br />Giá sân</th>
-              <th>골프장 합계<br />Tổng tiền sân</th>
-              <th>원가 정산 방식<br />Phương thức quyết toán</th>
-              <th>정산 거래처<br />Đối tác quyết toán</th>
-              <th>계약금 합계<br />Tổng tiền cọc</th>
-              <th>계약금 수단<br />Phương thức cọc</th>
-              <th>고객 총입금<br />Tổng tiền khách đã trả</th>
-              <th>입금 수단<br />Phương thức thu</th>
-              <th>실제 수익<br />Lợi nhuận</th>
-              <th>구분<br />Loại khách</th>
-              <th>등록 일시<br />Thời gian tạo</th>
-              <th>비고<br />Ghi chú</th>
-              <th>최종 수정<br />Cập nhật</th>
+              <th class="golf-screen-hidden">1인 원가<br />Giá sân</th>
+              <th class="golf-screen-hidden">골프장 합계<br />Tổng tiền sân</th>
+              <th class="golf-screen-hidden">원가 정산 방식<br />Phương thức quyết toán</th>
+              <th class="golf-screen-hidden">정산 거래처<br />Đối tác quyết toán</th>
+              <th class="golf-screen-hidden">계약금 합계<br />Tổng tiền cọc</th>
+              <th class="golf-screen-hidden">계약금 수단<br />Phương thức cọc</th>
+              <th class="golf-screen-hidden">고객 총입금<br />Tổng tiền khách đã trả</th>
+              <th class="golf-screen-hidden">입금 수단<br />Phương thức thu</th>
+              <th class="golf-screen-hidden">실제 수익<br />Lợi nhuận</th>
+              <th class="golf-screen-hidden">구분<br />Loại khách</th>
+              <th class="golf-screen-hidden">등록 일시<br />Thời gian tạo</th>
+              <th class="golf-screen-hidden">비고<br />Ghi chú</th>
+              <th class="golf-screen-hidden">최종 수정<br />Cập nhật</th>
             </tr>
           </thead>
           <tbody id="reservationTableBody"><tr><td class="golf-cell-empty" colspan="25">예약을 불러오는 중입니다.</td></tr></tbody>
@@ -163,6 +182,14 @@
       </div>
     </section>
   </main>
+
+  <dialog class="golf-detail-dialog" id="reservationDetailDialog" aria-labelledby="reservationDetailTitle" aria-describedby="reservationDetailSubtitle">
+    <header class="golf-detail-dialog-head">
+      <div><h2 id="reservationDetailTitle">예약 상세 / Chi tiết đặt sân</h2><p id="reservationDetailSubtitle"></p></div>
+      <button class="qr-btn golf-detail-dialog-close" id="closeReservationDetail" type="button" aria-label="상세 닫기 / Đóng chi tiết" autofocus>✕</button>
+    </header>
+    <div class="golf-detail-content" id="reservationDetailContent"></div>
+  </dialog>
 
   <div class="qr-modal-back" id="loginModal" hidden>
     <form class="qr-modal" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="loginTitle" aria-describedby="loginDescription">
@@ -180,7 +207,6 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
-  <script src="assets/golf-reserv-list.js?v=20261025-scart-1"></script>
+  <script src="assets/golf-reserv-list.js?v=20261025-compact-1"></script>
 </body>
 </html>
-
