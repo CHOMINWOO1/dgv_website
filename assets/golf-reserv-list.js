@@ -320,7 +320,7 @@
       ? rosterNames.map((name, index) => `<span class="golf-roster-name"><b>${index + 1}</b>${escape(name)}</span>`).join("")
       : '<span class="golf-roster-name">예약자 명단이 없습니다. / Không có danh sách khách.</span>';
     const note = oneLine(row.note);
-    const cart = oneLine(row.smart_cart_note);
+    const cart = clean(row.smart_cart_note) || "—";
     const representative = row.representative_name || "—";
     const editHref = `golf_reserv.html?edit=${encodeURIComponent(String(row.id || ""))}`;
     const depositTotal = paymentTotal(row, "deposit");
