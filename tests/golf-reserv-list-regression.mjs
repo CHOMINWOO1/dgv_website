@@ -15,6 +15,16 @@ const [page, source, editor, adminHome, managerHome] = await Promise.all([
 ]);
 
 assert.match(page, /<table class="golf-sheet">/);
+assert.match(page, /\.golf-list-app > \.qr-summary,\.golf-list-app > #summaryScopeNote\{display:none!important\}/,
+  "Summary cards and the otherwise orphaned scope note stay hidden even when grouped rendering updates them");
+const hiddenSummary = page.match(/<section class="qr-summary"[^>]*>[\s\S]*?<\/section>/)?.[0] || "";
+for (const id of ["summaryProgress", "summaryCompleted", "summaryDeposit", "summaryProfit"]) {
+  assert.ok(hiddenSummary.includes(`id="${id}"`), `Keep ${id} for existing calculation/report compatibility`);
+}
+for (const id of ["addReservationButton", "searchInput", "statusFilter", "filterFrom", "filterTo", "printListButton", "exportListButton", "reservationTableBody"]) {
+  assert.ok(page.includes(`id="${id}"`), `Keep list control ${id}`);
+  assert.ok(!hiddenSummary.includes(`id="${id}"`), `${id} must not move into the hidden summary`);
+}
 assert.match(page, /assets\/golf-reserv-list\.js\?v=20261025-inline-create-1/);
 assert.match(page, /티업 시작일 \/ Từ ngày chơi/);
 assert.match(page, /티업 종료일 \/ Đến ngày chơi/);
