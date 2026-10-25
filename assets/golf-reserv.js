@@ -33,8 +33,11 @@
 
   const state = {
     identity: null, rows: [], partnerOffsets: [], statusFilter: "in_progress", saving: false,
-    paymentDrafts: { deposit: [], receipt: [], withdrawal: [] }, paymentSequence: 0, formDirty: false
+    paymentDrafts: { deposit: [], receipt: [], withdrawal: [] }, paymentSequence: 0, formDirty: false,
+    createGroupMode: false, createRounds: [], createRoundIndex: 0,
+    createRequestId: null, createAttempt: null, createLockedControls: [], editingGroupVersion: null
   };
+  const CREATE_ROUND_FIELDS = ["playerNamesEn", "pax", "golfDate", "golfHour", "golfMinute", "golfCourse", "holes", "smartCartNote", "guestUnitPrice", "courseUnitPrice", "costSettlementType", "costPartnerName", "note"];
   const byId = (id) => document.getElementById(id);
   const escape = (value) => DGV.escapeHTML(value ?? "");
   const clean = (value) => String(value ?? "").trim();
@@ -368,6 +371,220 @@
     return rowById(byId("recordId").value)?.booking || null;
   }
 
+  function readCreateRoundValues() {
+    return Object.fromEntries(CREATE_ROUND_FIELDS.map((id) => [id, byId(id).value]));
+  }
+
+  function captureCreateRound() {
+    if (state.createGroupMode && state.createRounds[state.createRoundIndex]) {
+      state.createRounds[state.createRoundIndex].values = readCreateRoundValues();
+    }
+  }
+
+  function applyCreateRound(values) {
+    for (const id of CREATE_ROUND_FIELDS) byId(id).value = values[id] ?? "";
+    byId("representativeName").value = firstPlayerName(values.playerNamesEn);
+  }
+
+  function createRoundTotal(values, priceField) {
+    const pax = Number(values.pax || namesCount(values.playerNamesEn));
+    const price = moneyNumber(values[priceField]);
+    const cart = smartCartAmount(values.smartCartNote);
+    return Number.isInteger(pax) && pax > 0 && price != null && Number.isFinite(price) && Number.isFinite(cart)
+      ? pax * price + cart : null;
+  }
+
+  function createGroupTotal(priceField) {
+    const totals = state.createRounds.map((round, index) => createRoundTotal(index === state.createRoundIndex ? readCreateRoundValues() : round.values, priceField));
+    return !totals.length || totals.some((total) => total == null) ? null : totals.reduce((sum, total) => sum + total, 0);
+  }
+
+  function createRoundLabel(values, index) {
+    const pax = values.pax || namesCount(values.playerNamesEn) || "—";
+    return `${index + 1}. ${values.golfDate ? dateLabel(values.golfDate) : "날짜 선택 / Chọn ngày"} · ${values.golfCourse || "—"} · ${pax}명 / khách`;
+  }
+
+  function refreshCreateRoundLabel() {
+    if (!state.createGroupMode || state.createAttempt?.uncertain) return;
+    const button = byId("createGroupSchedules").querySelector(`[data-create-round-index="${state.createRoundIndex}"]`);
+    if (button) button.textContent = createRoundLabel(readCreateRoundValues(), state.createRoundIndex);
+  }
+
+  function renderCreateSchedules() {
+    if (!state.createGroupMode) return;
+    byId("createGroupSchedules").innerHTML = state.createRounds.map((round, index) => {
+      const values = index === state.createRoundIndex ? readCreateRoundValues() : round.values;
+      return `<button class="qr-btn qr-btn-small golf-booking-round${index === state.createRoundIndex ? " is-current" : ""}" type="button" data-create-round-index="${index}" aria-pressed="${index === state.createRoundIndex}"${state.saving || state.createAttempt?.uncertain ? " disabled" : ""}>${escape(createRoundLabel(values, index))}</button>`;
+    }).join("");
+    byId("addCreateRoundButton").disabled = state.createRounds.length >= 30 || Boolean(state.createAttempt?.uncertain);
+    byId("removeCreateRoundButton").disabled = state.createRounds.length <= 1 || Boolean(state.createAttempt?.uncertain);
+    byId("createGroupStatus").textContent = state.createAttempt?.uncertain
+      ? "저장 결과를 확인하지 못했습니다. 입력은 잠겼으며, 아래 동일 내용 재시도를 눌러 결과를 확인해 주세요. / Chưa xác nhận kết quả lưu. Dữ liệu đã khóa; vui lòng thử lại cùng nội dung bên dưới."
+      : `${state.createRounds.length}개 일정 · ${state.createRoundIndex + 1}번째 일정 입력 중 / ${state.createRounds.length} lịch · Đang nhập lịch ${state.createRoundIndex + 1}`;
+  }
+
+  function syncCreateContext() {
+    byId("bookingModeField").hidden = Boolean(byId("recordId").value);
+    byId("bookingMode").value = state.createGroupMode ? "group" : "single";
+    byId("createGroupPanel").hidden = !state.createGroupMode;
+    if (state.createGroupMode) {
+      byId("customerPaymentsTitle").textContent = "묶음 전체 입금 및 상태 / Khoản thu và trạng thái của cả nhóm";
+      byId("paymentScopeHint").hidden = false;
+      byId("completionLabel").textContent = "묶음 전체 입금 완료 처리 / Hoàn tất thanh toán cả nhóm";
+      byId("completionHelp").textContent = "저장하면 모든 일정이 함께 완료됩니다. 모든 일정의 원가와 공통 입금내역을 먼저 입력해 주세요. / Khi lưu, tất cả lịch cùng hoàn tất. Hãy nhập giá vốn từng lịch và khoản thu chung trước.";
+      renderCreateSchedules();
+      if (!state.saving) byId("saveButton").textContent = "묶음예약 저장 / Lưu nhóm đặt sân";
+    } else if (!byId("recordId").value && !state.saving) byId("saveButton").textContent = "예약 저장 / Lưu đặt chỗ";
+  }
+
+  function clearCreateState() {
+    setCreateLocked(false);
+    state.createGroupMode = false;
+    state.createRounds = [];
+    state.createRoundIndex = 0;
+    state.createRequestId = null;
+    state.createAttempt = null;
+  }
+
+  function changeBookingMode() {
+    const groupMode = byId("bookingMode").value === "group";
+    if (groupMode === state.createGroupMode) return;
+    if (state.saving || state.createAttempt?.uncertain) { byId("bookingMode").value = state.createGroupMode ? "group" : "single"; return; }
+    if (!groupMode && !global.confirm("묶음 작성을 취소하고 현재 일정만 단일 예약으로 남기시겠습니까? 다른 임시 일정은 삭제됩니다.\nHủy nhóm và chỉ giữ lịch đang nhập làm đặt sân đơn? Các lịch nháp khác sẽ bị bỏ.")) {
+      byId("bookingMode").value = "group"; return;
+    }
+    if (groupMode) {
+      state.createGroupMode = true;
+      state.createRounds = [{ values: readCreateRoundValues() }];
+      state.createRoundIndex = 0;
+      state.createRequestId = global.crypto.randomUUID();
+      state.createAttempt = null;
+    } else clearCreateState();
+    state.formDirty = true;
+    syncBookingContext();
+    syncCreateContext();
+    updatePreview();
+  }
+
+  function addCreateRound() {
+    if (!state.createGroupMode || state.saving || state.createAttempt?.uncertain) return;
+    if (state.createRounds.length >= 30) { QRStaff.toast("최대 30개 일정까지 추가할 수 있습니다. / Tối đa 30 lịch.", "error"); return; }
+    captureCreateRound();
+    const previous = state.createRounds[state.createRoundIndex].values;
+    const values = Object.fromEntries(CREATE_ROUND_FIELDS.map((id) => [id, ""]));
+    Object.assign(values, { playerNamesEn: previous.playerNamesEn, pax: previous.pax, golfMinute: "00", holes: "18", costSettlementType: "golf_course" });
+    state.createRounds.push({ values });
+    state.createRoundIndex = state.createRounds.length - 1;
+    applyCreateRound(values);
+    state.formDirty = true;
+    renderCreateSchedules();
+    updatePreview();
+    byId("golfDate").focus();
+  }
+
+  function switchCreateRound(index) {
+    if (!state.createGroupMode || state.saving || state.createAttempt?.uncertain || !state.createRounds[index] || index === state.createRoundIndex) return;
+    captureCreateRound();
+    state.createRoundIndex = index;
+    applyCreateRound(state.createRounds[index].values);
+    renderCreateSchedules();
+    updatePreview();
+  }
+
+  function removeCreateRound() {
+    if (!state.createGroupMode || state.saving || state.createAttempt?.uncertain || state.createRounds.length <= 1) return;
+    if (!global.confirm(`${state.createRoundIndex + 1}번째 임시 일정을 삭제하시겠습니까? 공통 입금은 유지됩니다.\nXóa lịch nháp ${state.createRoundIndex + 1}? Khoản thu chung vẫn được giữ.`)) return;
+    state.createRounds.splice(state.createRoundIndex, 1);
+    state.createRoundIndex = Math.min(state.createRoundIndex, state.createRounds.length - 1);
+    applyCreateRound(state.createRounds[state.createRoundIndex].values);
+    state.formDirty = true;
+    renderCreateSchedules();
+    updatePreview();
+  }
+
+  function collectCreatePayload() {
+    if (state.createRounds.length < 2 || state.createRounds.length > 30) throw new Error("묶음예약은 2~30개 일정이 필요합니다. / Đặt sân gộp cần từ 2 đến 30 lịch.");
+    captureCreateRound();
+    const activeIndex = state.createRoundIndex;
+    const rounds = [];
+    let payments;
+    try {
+      for (let index = 0; index < state.createRounds.length; index += 1) {
+        applyCreateRound(state.createRounds[index].values);
+        try {
+          const payload = payloadFromForm();
+          const { expected_updated_at, ...reservation } = payload.reservation;
+          rounds.push(reservation);
+          payments = payload.payments;
+        } catch (error) { throw new Error(`${index + 1}번째 일정 / Lịch ${index + 1}: ${error.message}`); }
+      }
+    } finally {
+      applyCreateRound(state.createRounds[activeIndex].values);
+      updatePreview();
+    }
+    const label = clean(byId("createGroupLabel").value) || `${rounds[0].representative_name.slice(0, 140)} · ${rounds[0].golf_date}`;
+    if (label.length > 160) throw new Error("묶음 이름은 160자 이내로 입력해 주세요. / Tên nhóm tối đa 160 ký tự.");
+    return { p_request_id: state.createRequestId, p_label: label, p_rounds: rounds, p_payments: payments };
+  }
+
+  function setCreateLocked(locked) {
+    if (locked) {
+      if (state.createLockedControls.length) return;
+      const controls = [...byId("reservationForm").querySelectorAll("input,select,textarea,button"), byId("resetButton")];
+      state.createLockedControls = controls.filter((element) => element.id !== "saveButton").map((element) => ({ element, disabled: element.disabled }));
+      for (const { element } of state.createLockedControls) element.disabled = true;
+    } else {
+      for (const { element, disabled } of state.createLockedControls) element.disabled = disabled;
+      state.createLockedControls = [];
+    }
+  }
+
+  function isDefiniteCreateRejection(error) {
+    return /^(?:22|23|40|42|P0)[A-Z0-9]{3}$/.test(String(error?.code || "")) || /^PGRST(?:202|301|302)$/.test(String(error?.code || ""));
+  }
+
+  async function saveCreatedGroup() {
+    let payload;
+    const retryingUncertain = Boolean(state.createAttempt?.uncertain);
+    let confirmed = false;
+    try { payload = state.createAttempt?.uncertain ? state.createAttempt.payload : collectCreatePayload(); }
+    catch (error) { QRStaff.toast(error.message, "error"); return; }
+    if (!state.createAttempt?.uncertain && byId("paymentCompleted").checked
+      && !global.confirm(`${payload.p_rounds.length}개 일정 전체를 함께 완료하고 골프장별 원가를 차감하거나 정산 거래처에 반영하시겠습니까?\nHoàn tất toàn bộ ${payload.p_rounds.length} lịch, khấu trừ giá vốn theo từng sân hoặc ghi nhận cho đối tác quyết toán?`)) return;
+    state.createAttempt = { payload: JSON.parse(JSON.stringify(payload)), uncertain: false };
+    state.saving = true;
+    setCreateLocked(true);
+    QRStaff.setBusy(byId("saveButton"), true, "저장 중… / Đang lưu…");
+    try {
+      const { data, error } = await sb.rpc("create_golf_booking_group", state.createAttempt.payload);
+      if (error) throw error;
+      if (!Array.isArray(data) || !data[0]?.saved_id || !data[0]?.booking_group_id) throw new Error("저장 응답을 확인하지 못했습니다. / Chưa xác nhận được kết quả lưu.");
+      confirmed = true;
+      setCreateLocked(false);
+      QRStaff.toast("묶음예약과 모든 일정을 함께 저장했습니다. / Đã lưu nhóm đặt sân cùng toàn bộ lịch.", "ok");
+      resetForm({ focus: false });
+      await loadRows({ quiet: true });
+    } catch (error) {
+      if (confirmed) {
+        setCreateLocked(false);
+        QRStaff.toast("예약은 저장되었지만 화면을 갱신하지 못했습니다. 새로고침해 주세요. / Đã lưu đặt sân nhưng chưa cập nhật màn hình. Vui lòng tải lại.", "error");
+      } else if (!retryingUncertain && isDefiniteCreateRejection(error)) {
+        state.createAttempt = null;
+        setCreateLocked(false);
+        QRStaff.toast(QRStaff.messageOf(error, "묶음예약을 저장하지 못했습니다. / Không lưu được nhóm đặt sân."), "error");
+      } else {
+        state.createAttempt.uncertain = true;
+        QRStaff.toast("저장 결과가 불확실합니다. 내용을 변경하지 않고 동일 내용 재시도를 눌러 확인해 주세요. / Chưa rõ kết quả lưu; vui lòng thử lại đúng nội dung để xác nhận.", "error");
+      }
+      renderCreateSchedules();
+    } finally {
+      state.saving = false;
+      QRStaff.setBusy(byId("saveButton"), false);
+      renderCreateSchedules();
+      byId("saveButton").textContent = state.createAttempt?.uncertain ? "동일 내용 재시도 / Thử lại cùng nội dung" : state.createGroupMode ? "묶음예약 저장 / Lưu nhóm đặt sân" : "예약 저장 / Lưu đặt chỗ";
+    }
+  }
+
   function bookingDraftTotal(booking, field, currentTotal) {
     if (!booking) return currentTotal;
     const id = byId("recordId").value;
@@ -426,8 +643,14 @@
     byId("marginPreview").textContent = moneyLabel(margin);
     const totals = paymentTotals(allPaymentDrafts());
     const booking = editingBooking();
-    const bookingGuestTotal = bookingDraftTotal(booking, "guest_total_vnd", guestTotal);
-    const bookingCostTotal = bookingDraftTotal(booking, "course_total_vnd", courseTotal);
+    const bookingGuestTotal = state.createGroupMode ? createGroupTotal("guestUnitPrice") : bookingDraftTotal(booking, "guest_total_vnd", guestTotal);
+    const bookingCostTotal = state.createGroupMode ? createGroupTotal("courseUnitPrice") : bookingDraftTotal(booking, "course_total_vnd", courseTotal);
+    if (state.createGroupMode) {
+      byId("createGroupGuestTotal").textContent = moneyLabel(bookingGuestTotal);
+      byId("createGroupCostTotal").textContent = moneyLabel(bookingCostTotal);
+      byId("createGroupReceivedTotal").textContent = moneyLabel(totals.received);
+      byId("createGroupBalance").textContent = moneyLabel(bookingGuestTotal == null ? null : bookingGuestTotal - totals.received);
+    }
     if (booking) {
       byId("bookingGroupGuestTotal").textContent = moneyLabel(bookingGuestTotal);
       byId("bookingGroupCostTotal").textContent = moneyLabel(bookingCostTotal);
@@ -445,9 +668,12 @@
   }
 
   function resetForm(options = {}) {
+    clearCreateState();
+    state.editingGroupVersion = null;
     byId("reservationForm").reset();
     byId("recordId").value = "";
     syncBookingContext();
+    syncCreateContext();
     clearLegacyCourseOption();
     byId("golfCourse").value = "";
     clearLegacyHoleOption();
@@ -470,8 +696,11 @@
   }
 
   function fillForm(row, options = {}) {
+    clearCreateState();
+    state.editingGroupVersion = row.booking?.version ?? null;
     byId("recordId").value = row.id;
     syncBookingContext(row);
+    syncCreateContext();
     byId("counterpartyName").value = row.counterparty_name || "";
     byId("representativeName").value = row.representative_name || "";
     byId("playerNamesEn").value = row.player_names_en || "";
@@ -897,7 +1126,7 @@
         </details>
         <div class="golf-group-rounds">${rounds.map((round) => renderGroupedRound(round, matchedRoundIds.has(round.id))).join("")}</div>
       </div>
-      <div class="golf-row-actions"><button class="qr-btn qr-btn-small qr-btn-primary" type="button" data-action="edit" data-id="${escape(row.id)}">묶음 입금·완료 처리 / Thu tiền · Hoàn tất cả nhóm</button></div>
+      <div class="golf-row-actions"><button class="qr-btn qr-btn-small qr-btn-primary" type="button" data-action="edit" data-id="${escape(row.id)}">묶음 입금·완료 처리 / Thu tiền · Hoàn tất cả nhóm</button><button class="qr-btn qr-btn-small qr-btn-danger" type="button" data-action="delete-group" data-id="${escape(row.id)}">묶음 전체 삭제 / Xóa toàn bộ nhóm</button></div>
     </article>`;
   }
 
@@ -978,11 +1207,13 @@
   async function save(event) {
     event.preventDefault();
     if (state.saving) return;
+    if (state.createGroupMode) { await saveCreatedGroup(); return; }
     let payload;
     try { payload = payloadFromForm(); }
     catch (error) { QRStaff.toast(error.message, "error"); return; }
     const id = byId("recordId").value;
-    const booking = rowById(id)?.booking || null;
+    const loadedBooking = rowById(id)?.booking || null;
+    const booking = loadedBooking ? { ...loadedBooking, version: state.editingGroupVersion ?? loadedBooking.version } : null;
     if (booking && Boolean(booking.completed_at) !== byId("paymentCompleted").checked) {
       const verb = byId("paymentCompleted").checked
         ? "모든 일정을 완료하고 일정별 원가를 정산합니다. / Hoàn tất tất cả lịch và ghi nhận giá vốn."
@@ -1038,11 +1269,42 @@
     }
   }
 
+  async function deleteBookingGroup(booking) {
+    if (!booking || !canLeaveEditedBooking()) return;
+    const totals = paymentTotals(booking.payments);
+    const warning = `${booking.label}\n전체 ${booking.rounds.length}개 일정 / Toàn bộ ${booking.rounds.length} lịch\n계약금 / Tiền cọc: ${moneyLabel(totals.deposit)}\n추가 입금·잔금 / Khoản thu thêm: ${moneyLabel(totals.receipt)}\n\n묶음의 모든 일정과 공통 입금 내역이 삭제되며 복구할 수 없습니다. 활성 골프장 차감과 거래처 정산 차감은 복원됩니다.\nXóa toàn bộ lịch và sổ thu chung của nhóm, không thể khôi phục. Các khoản khấu trừ đang hiệu lực của sân và đối tác sẽ được hoàn lại.\n\n입금 기록만 삭제되며 실제 고객 환불은 처리되지 않습니다.\nChỉ xóa bản ghi khoản thu, không thực hiện hoàn tiền thực tế cho khách.\n\n정말 묶음 전체를 삭제하시겠습니까? / Bạn có chắc muốn xóa toàn bộ nhóm?`;
+    if (!global.confirm(warning)) return;
+    const editingThisGroup = editingBooking()?.id === booking.id;
+    state.saving = true;
+    setCreateLocked(true);
+    try {
+      const { data, error } = await sb.rpc("delete_golf_booking_group", {
+        p_group_id: booking.id, p_expected_version: booking.version
+      });
+      if (error) throw error;
+      if (data !== booking.id) throw new Error("삭제 응답을 확인하지 못했습니다. / Chưa xác nhận kết quả xóa.");
+      if (editingThisGroup) resetForm({ focus: false });
+      QRStaff.toast("묶음 전체와 공통 입금 내역을 삭제했습니다. / Đã xóa toàn bộ nhóm và sổ thu chung.", "ok");
+      await loadRows({ quiet: true });
+    } catch (error) {
+      QRStaff.toast(QRStaff.messageOf(error, "묶음 삭제 결과를 확인하지 못했습니다. 새로고침 후 확인해 주세요. / Chưa xác nhận kết quả xóa nhóm; vui lòng tải lại để kiểm tra."), "error");
+      const loaded = await loadRows({ quiet: true });
+      if (loaded && editingThisGroup && !state.rows.some((row) => row.booking?.id === booking.id)) resetForm({ focus: false });
+    } finally {
+      state.saving = false;
+      setCreateLocked(false);
+    }
+  }
+
   function rowById(id) { return state.rows.find((row) => row.id === id) || null; }
 
   function canLeaveEditedBooking() {
     if (state.saving) return false;
-    if (!editingBooking() || !state.formDirty) return true;
+    if (state.createAttempt?.uncertain) {
+      QRStaff.toast("먼저 동일 내용 재시도로 저장 결과를 확인해 주세요. / Vui lòng thử lại cùng nội dung để xác nhận kết quả trước.", "error");
+      return false;
+    }
+    if ((!editingBooking() && !state.createGroupMode) || !state.formDirty) return true;
     return global.confirm("저장하지 않은 일정·묶음 입금 변경사항을 버리고 이동하시겠습니까?\nBạn có muốn bỏ các thay đổi chưa lưu của lịch và khoản thu chung để chuyển mục?");
   }
 
@@ -1125,6 +1387,21 @@
   }
 
   function bindEvents() {
+    global.addEventListener("beforeunload", (event) => {
+      if (state.createAttempt?.uncertain || (state.createGroupMode && (state.formDirty || state.saving))) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    });
+    byId("bookingMode").addEventListener("change", changeBookingMode);
+    byId("addCreateRoundButton").addEventListener("click", addCreateRound);
+    byId("removeCreateRoundButton").addEventListener("click", removeCreateRound);
+    byId("createGroupSchedules").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-create-round-index]");
+      if (button) switchCreateRound(Number(button.dataset.createRoundIndex));
+    });
+    byId("reservationForm").addEventListener("input", refreshCreateRoundLabel);
+    byId("reservationForm").addEventListener("change", refreshCreateRoundLabel);
     byId("reservationForm").addEventListener("submit", save);
     byId("reservationForm").addEventListener("click", handlePaymentClick);
     byId("reservationForm").addEventListener("input", handlePaymentFieldEvent);
@@ -1172,6 +1449,7 @@
       if (!row) { QRStaff.toast("선택한 예약을 찾지 못했습니다. 목록을 새로고침해 주세요.", "error"); return; }
       if (button.dataset.action === "edit" && canLeaveEditedBooking()) fillForm(row, { focusFinal: row.status === "in_progress" });
       if (button.dataset.action === "delete" && canLeaveEditedBooking()) removeRow(row);
+      if (button.dataset.action === "delete-group") deleteBookingGroup(row.booking);
     });
   }
 

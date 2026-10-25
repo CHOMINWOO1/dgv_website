@@ -69,6 +69,8 @@
     .golf-booking-totals>div{padding:9px;border:1px solid var(--qr-line);border-radius:9px;background:#fff}
     .golf-booking-totals span{display:block;color:var(--qr-sub);font-size:12px}
     .golf-booking-totals strong{display:block;margin-top:4px;overflow-wrap:anywhere}
+    .golf-create-tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+    .golf-create-status{margin-top:10px;font-size:13px;font-weight:950;line-height:1.5;color:#68432d}
     .golf-group-filter-scope{margin:0 0 12px;padding:9px;border-radius:9px;background:#fff0c9;font-size:12px;font-weight:900;line-height:1.5}
     .golf-group-rounds{display:grid;gap:12px;margin-top:14px}
     .golf-group-round{padding:12px;border:1px solid var(--qr-line);border-left:4px solid #b59557;border-radius:10px;background:#fffdf8}
@@ -142,6 +144,21 @@
 
         <form id="reservationForm" novalidate>
           <input id="recordId" type="hidden" />
+          <label class="qr-field" id="bookingModeField" style="margin-bottom:12px"><span class="qr-label">예약 방식 / Loại đặt sân</span><select class="qr-select" id="bookingMode"><option value="single" selected>단일예약 / Một lịch</option><option value="group">묶음예약 · 여러 일정 / Nhóm nhiều lịch</option></select></label>
+          <section class="golf-booking-panel" id="createGroupPanel" aria-labelledby="createGroupTitle" hidden>
+            <h3 id="createGroupTitle">새 묶음예약 / Tạo nhóm đặt sân</h3>
+            <label class="qr-field"><span class="qr-label">묶음 이름 (선택) / Tên nhóm (tùy chọn)</span><input class="qr-input" id="createGroupLabel" type="text" maxlength="160" placeholder="비우면 첫 대표자·날짜 / Để trống: tên đại diện và ngày" /></label>
+            <p class="qr-hint">2~30개 일정을 한 번에 저장합니다. 날짜·시간·골프장·명단·인원·가격은 일정마다 따로 입력하고, 거래처·개인/회사·계약금·입금·완료 처리는 묶음 전체가 공유합니다. 일정 추가 시 명단·인원만 복사되며 날짜·시간은 새로 선택해 주세요.<br />Lưu từ 2 đến 30 lịch cùng lúc. Mỗi lịch có ngày giờ, sân, danh sách khách, số khách và giá riêng. Đối tác, loại khách, tiền cọc, khoản thu và hoàn tất dùng chung. Thêm lịch chỉ sao chép danh sách và số khách; hãy chọn lại ngày giờ.</p>
+            <div class="golf-booking-schedules" id="createGroupSchedules" aria-label="작성 중 일정 / Các lịch đang soạn"></div>
+            <div class="golf-create-tools"><button class="qr-btn qr-btn-small" id="addCreateRoundButton" type="button">+ 일정 추가 / Thêm lịch</button><button class="qr-btn qr-btn-small qr-btn-danger" id="removeCreateRoundButton" type="button">이 임시 일정 삭제 / Xóa lịch nháp này</button></div>
+            <div class="golf-create-status" id="createGroupStatus" role="status"></div>
+            <div class="golf-booking-totals" aria-live="polite">
+              <div><span>묶음 판매 합계 / Tổng tiền khách cả nhóm</span><strong id="createGroupGuestTotal">—</strong></div>
+              <div><span>묶음 원가 합계 / Tổng giá vốn cả nhóm</span><strong id="createGroupCostTotal">—</strong></div>
+              <div><span>묶음 총입금 / Tổng đã thu cả nhóm</span><strong id="createGroupReceivedTotal">0 VND</strong></div>
+              <div><span>묶음 미수금 / Công nợ cả nhóm</span><strong id="createGroupBalance">—</strong></div>
+            </div>
+          </section>
           <section class="golf-booking-panel" id="bookingGroupPanel" aria-labelledby="bookingGroupTitle" hidden>
             <h3 id="bookingGroupTitle">묶음예약 / Đặt sân gộp</h3>
             <p class="qr-hint">선택한 일정의 고객 명단·인원·날짜·가격만 수정합니다. 첫날 7명, 다음 날 8명처럼 일정마다 다르게 입력할 수 있습니다. 거래처·개인/회사 구분은 공통이며, 계약금·입금·완료 처리는 묶음 전체에 한 번만 적용됩니다.<br />Danh sách khách, số khách, ngày chơi và giá được sửa riêng theo lịch đang chọn. Mỗi lịch có thể có số khách khác nhau, ví dụ ngày đầu 7 khách, ngày sau 8 khách. Đối tác và loại khách dùng chung; tiền cọc, khoản thu và trạng thái hoàn tất áp dụng một lần cho cả nhóm.</p>
@@ -166,7 +183,7 @@
               <fieldset class="qr-field golf-teeoff-field"><legend class="qr-label"><span class="golf-required-mark" aria-hidden="true">*</span>골프 날짜·티오프<span class="golf-label-vi">Ngày chơi và giờ phát bóng</span></legend><div class="golf-teeoff-controls"><label class="golf-date-control"><span class="golf-visually-hidden">골프 날짜 / Ngày chơi</span><input class="qr-input" id="golfDate" type="date" required /></label><label class="golf-time-control"><span class="golf-time-heading">TIME</span><select class="qr-select" id="golfHour" required aria-label="TIME / Giờ"><option value="" selected>--</option><option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option></select></label><label class="golf-time-control"><span class="golf-time-heading">MIN</span><select class="qr-select" id="golfMinute" required aria-label="MIN / Phút"><option value="00" selected>00</option><option value="05">05</option><option value="10">10</option><option value="15">15</option><option value="20">20</option><option value="25">25</option><option value="30">30</option><option value="35">35</option><option value="40">40</option><option value="45">45</option><option value="50">50</option><option value="55">55</option></select></label></div></fieldset>
               <label class="qr-field"><span class="qr-label"><span class="golf-required-mark" aria-hidden="true">*</span>골프장<span class="golf-label-vi">Sân golf</span></span><select class="qr-select" id="golfCourse" required><option value="">선택 / Chọn</option><option value="AT1200">AT1200</option><option value="SAM">SAM</option><option value="PALACE">PALACE</option></select></label>
               <label class="qr-field"><span class="qr-label"><span class="golf-required-mark" aria-hidden="true">*</span>홀 수<span class="golf-label-vi">Số hố</span></span><select class="qr-select" id="holes" required><option value="9">9</option><option value="18" selected>18</option><option value="27">27</option><option value="26">26</option></select></label>
-              <label class="qr-field"><span class="qr-label">S-CART 금액 (예약 전체, VND)<span class="golf-label-vi">Tiền S-CART cho cả đặt sân (VND)</span></span><input class="qr-input" id="smartCartNote" type="text" inputmode="numeric" autocomplete="off" maxlength="300" placeholder="400,000 VND" aria-describedby="smartCartHint smartCartError" /><span class="qr-hint" id="smartCartHint">예약 전체 금액을 한 번만 입력합니다. 고객 합계와 원가에 동일하게 더해지며 수익은 늘지 않습니다. 고객이 골프장에 직접 결제하면 비워두거나 0을 입력해 주세요.<br />Nhập tổng tiền một lần cho cả đặt sân. Khoản này được cộng bằng nhau vào tiền khách và giá vốn, không làm tăng lợi nhuận. Nếu khách trả trực tiếp cho sân, để trống hoặc nhập 0.</span><span class="qr-hint golf-cart-error" id="smartCartError" role="status" hidden></span></label>
+              <label class="qr-field"><span class="qr-label">S-CART 금액 (선택한 일정 전체, VND)<span class="golf-label-vi">Tiền S-CART của lịch đang chọn (VND)</span></span><input class="qr-input" id="smartCartNote" type="text" inputmode="numeric" autocomplete="off" maxlength="300" placeholder="400,000 VND" aria-describedby="smartCartHint smartCartError" /><span class="qr-hint" id="smartCartHint">선택한 일정의 금액만 한 번 입력합니다. 묶음 전체 금액이 아닙니다. 고객 합계와 원가에 동일하게 더해지며 수익은 늘지 않습니다. 고객이 골프장에 직접 결제하면 비워두거나 0을 입력해 주세요.<br />Nhập tổng S-CART một lần cho lịch đang chọn, không phải cho cả nhóm. Khoản này được cộng bằng nhau vào tiền khách và giá vốn, không làm tăng lợi nhuận. Nếu khách trả trực tiếp cho sân, để trống hoặc nhập 0.</span><span class="qr-hint golf-cart-error" id="smartCartError" role="status" hidden></span></label>
             </div>
           </div>
 
@@ -256,6 +273,6 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/golf-bookings.js?v=20261025-group-1"></script>
-  <script src="assets/golf-reserv.js?v=20261025-group-1"></script>
+  <script src="assets/golf-reserv.js?v=20261025-create-group-1"></script>
 </body>
 </html>
