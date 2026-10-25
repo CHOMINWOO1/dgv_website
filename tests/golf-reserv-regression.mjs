@@ -28,7 +28,9 @@ const [
 assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
-assert.match(page, /assets\/golf-reserv\.js\?v=20261025-required-fields-1/);
+assert.match(page, /assets\/golf-reserv\.js\?v=20261025-group-1/);
+assert.match(page, /assets\/golf-bookings\.js\?v=20261025-group-1/);
+assert.ok(page.indexOf('assets/golf-bookings.js') < page.indexOf('assets/golf-reserv.js'), "group helper must load before the editor");
 assert.match(page, /href="golf_reserv_list\.html"[^>]*>한 줄 목록 \/ Bảng<\/a>/);
 assert.match(page, /href="golf_budget\.html"[^>]*>골프장 예산 \/ Ngân sách<\/a>/);
 assert.match(page, /티업 시작일 \/ Từ ngày chơi/);
@@ -191,7 +193,8 @@ assert.match(source, /byId\("paymentCompleted"\)\.checked/);
 assert.match(source, /5,000,000 VND 이상은 은행 거래가 필요합니다/);
 assert.match(source, /Giao dịch từ 5\.000\.000 VND phải chuyển khoản ngân hàng/);
 assert.match(source, /payment\.payment_method === "cash" && payment\.amount_vnd >= CASH_BANK_THRESHOLD/);
-assert.match(source, /guestTotal == null \? null : guestTotal - totals\.received/);
+assert.match(source, /const bookingGuestTotal = bookingDraftTotal\(booking, "guest_total_vnd", guestTotal\)/);
+assert.match(source, /bookingGuestTotal == null \? null : bookingGuestTotal - totals\.received/);
 assert.match(source, /row\.course_total_vnd != null[\s\S]*rowTotals\.received[\s\S]*Number\(row\.course_total_vnd\)/);
 assert.match(source, /원가를 입력한 후 완료 처리해 주세요/);
 assert.doesNotMatch(page, /id="(?:depositAmount|depositDate|finalAmount|finalDate|withdrawalAmount|withdrawalDate)"/);
@@ -236,7 +239,9 @@ assert.match(source, /dateInRange\(offset\.golf_date, from, to\)/);
 assert.match(source, /function receivedAmountForBooking\(row\)/);
 assert.match(source, /function receivableBalanceForBooking\(row\)/);
 assert.match(source, /function receivableGroups\(rows, from = "", to = ""\)/);
-assert.match(source, /group\.expected \+= Number\(row\.guest_total_vnd\) \|\| 0/);
+assert.match(source, /const expected = row\.booking \? row\.booking\.guest_total_vnd : row\.guest_total_vnd/);
+assert.match(source, /group\.expected \+= Number\(expected\) \|\| 0/);
+assert.match(source, /!countedBookings\.has\(bookingKey\)/);
 assert.match(source, /row\.final_received_amount_vnd == null/);
 assert.match(source, /\? row\.deposit_amount_vnd[\s\S]*: row\.final_received_amount_vnd/);
 assert.match(source, /group\.received \+= received/);
@@ -280,7 +285,7 @@ const receivableState = {
 const receivableGroupsForTest = receivableHarness(
   receivableState,
   (value) => String(value ?? "").trim(),
-  (row) => row.payments || [],
+  (row) => row.booking ? row.booking.payments : row.payments || [],
   (payments) => ({ received: payments.reduce((sum, payment) => sum + Number(payment.amount_vnd || 0), 0) }),
 );
 const calculatedGroups = receivableGroupsForTest([
@@ -295,6 +300,29 @@ assert.equal(oanhSettlement.received, 600);
 assert.equal(oanhSettlement.partnerOffset, 1000, "inactive and out-of-range offsets must not be counted");
 assert.equal(oanhSettlement.receivable, -600, "partner tee-time offsets must reduce the net settlement below zero");
 assert.equal(oanhSettlement.partnerBookingCount, 3);
+
+// A booking that spans several dates owns exactly one payment ledger. A date
+// filter selects the booking, not a fabricated per-round payment allocation.
+const groupedBooking = { id: "group-1", guest_total_vnd: 3000, payments: [{ amount_vnd: 1800 }] };
+const groupedRounds = [
+  { id: "group-round-1", booking: groupedBooking, counterparty_name: "Grouped agency", customer_type: "company", golf_date: "2027-01-06", golf_time: "07:00", guest_total_vnd: 1000 },
+  { id: "group-round-2", booking: groupedBooking, counterparty_name: "Grouped agency", customer_type: "company", golf_date: "2027-01-09", golf_time: "08:00", guest_total_vnd: 2000 },
+];
+for (const [from, to] of [["", ""], ["2027-01-09", "2027-01-09"]]) {
+  const [group] = receivableGroupsForTest(groupedRounds, from, to);
+  assert.equal(group.bookingCount, 1);
+  assert.equal(group.expected, 3000);
+  assert.equal(group.received, 1800);
+  assert.equal(group.receivable, 1200);
+}
+groupedBooking.payments = [];
+groupedRounds[0].final_received_amount_vnd = 9999;
+assert.equal(receivableGroupsForTest(groupedRounds)[0].received, 0, "empty shared ledger must not fall back to old child money");
+groupedBooking.guest_total_vnd = null;
+groupedBooking.payments = [{ amount_vnd: 200 }];
+const [unknownGroup] = receivableGroupsForTest(groupedRounds);
+assert.equal(unknownGroup.unsetExpected, 1);
+assert.equal(unknownGroup.unpricedReceived, 200);
 
 const balanceFunctionText = source.match(/function settlementBalanceMarkup\(value\) \{[\s\S]*?\n  \}/)?.[0];
 assert.ok(balanceFunctionText, "settlement balance label must remain testable");
@@ -418,4 +446,3 @@ assert.match(partnerSettlementMigration, /new\.status = 'completed' and new\.cos
 assert.match(partnerSettlementMigration, /new\.course_total_vnd/i);
 
 console.log("Golf reservation page, CRUD, workflow, bilingual UI, and schema contracts verified.");
-

@@ -58,6 +58,26 @@
     .golf-payment-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
     .golf-payment-head h4{margin:0;font-size:15px;font-weight:1000}
     .golf-payment-help{margin:0 0 9px;color:var(--qr-sub);font-size:12px;font-weight:900}
+    .golf-booking-badge{display:inline-block;margin-top:6px;padding:5px 8px;border:1px solid #bb9b58;border-radius:8px;background:#fff0c9;color:#654922;font-size:12px;font-weight:1000}
+    .golf-booking-panel{margin-bottom:15px;padding:13px;border:2px solid #bb9b58;border-radius:12px;background:#fffaf0}
+    .golf-booking-panel[hidden]{display:none}
+    .golf-booking-panel h3{margin:0 0 7px;font-size:17px}
+    .golf-booking-schedules{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+    .golf-booking-round{white-space:normal;text-align:left}
+    .golf-booking-round.is-current{background:#68432d;border-color:#68432d;color:#fff}
+    .golf-booking-totals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+    .golf-booking-totals>div{padding:9px;border:1px solid var(--qr-line);border-radius:9px;background:#fff}
+    .golf-booking-totals span{display:block;color:var(--qr-sub);font-size:12px}
+    .golf-booking-totals strong{display:block;margin-top:4px;overflow-wrap:anywhere}
+    .golf-group-filter-scope{margin:0 0 12px;padding:9px;border-radius:9px;background:#fff0c9;font-size:12px;font-weight:900;line-height:1.5}
+    .golf-group-rounds{display:grid;gap:12px;margin-top:14px}
+    .golf-group-round{padding:12px;border:1px solid var(--qr-line);border-left:4px solid #b59557;border-radius:10px;background:#fffdf8}
+    .golf-group-round.is-outside-filter{border-left-color:#b2aca2}
+    .golf-group-round-heading{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:15px}
+    .golf-group-round-heading>span{font-size:11px;color:var(--qr-sub)}
+    .golf-group-round-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;margin-top:10px}
+    .golf-group-payments{margin-top:12px}
+    .golf-group-payments>summary{cursor:pointer;font-size:14px;color:#68432d;font-weight:1000}
     .golf-payment-rows{display:flex;flex-direction:column;gap:8px}
     .golf-payment-row{display:grid;grid-template-columns:minmax(145px,1fr) minmax(145px,.75fr) minmax(165px,.8fr) auto;gap:8px;align-items:end;padding:9px;border-radius:10px;background:#fff8e9}
     .golf-payment-row .qr-label{font-size:11px}
@@ -122,6 +142,17 @@
 
         <form id="reservationForm" novalidate>
           <input id="recordId" type="hidden" />
+          <section class="golf-booking-panel" id="bookingGroupPanel" aria-labelledby="bookingGroupTitle" hidden>
+            <h3 id="bookingGroupTitle">묶음예약 / Đặt sân gộp</h3>
+            <p class="qr-hint">선택한 일정의 고객 명단·인원·날짜·가격만 수정합니다. 첫날 7명, 다음 날 8명처럼 일정마다 다르게 입력할 수 있습니다. 거래처·개인/회사 구분은 공통이며, 계약금·입금·완료 처리는 묶음 전체에 한 번만 적용됩니다.<br />Danh sách khách, số khách, ngày chơi và giá được sửa riêng theo lịch đang chọn. Mỗi lịch có thể có số khách khác nhau, ví dụ ngày đầu 7 khách, ngày sau 8 khách. Đối tác và loại khách dùng chung; tiền cọc, khoản thu và trạng thái hoàn tất áp dụng một lần cho cả nhóm.</p>
+            <div class="golf-booking-schedules" id="bookingGroupSchedules" aria-label="묶음 일정 선택 / Chọn lịch trong nhóm"></div>
+            <div class="golf-booking-totals" aria-live="polite">
+              <div><span>묶음 판매 합계 / Tổng tiền khách cả nhóm</span><strong id="bookingGroupGuestTotal">—</strong></div>
+              <div><span>묶음 원가 합계 / Tổng giá vốn cả nhóm</span><strong id="bookingGroupCostTotal">—</strong></div>
+              <div><span>묶음 총입금 / Tổng đã thu cả nhóm</span><strong id="bookingGroupReceivedTotal">0 VND</strong></div>
+              <div><span>묶음 미수금 / Công nợ cả nhóm</span><strong id="bookingGroupBalance">—</strong></div>
+            </div>
+          </section>
           <p class="qr-hint" id="requiredFieldsHint"><span class="golf-required-mark" aria-hidden="true">*</span>표시 항목은 필수입니다. 가격·S-CART·계약금·입금은 비워두고 진행 중으로 저장할 수 있습니다.<br />Các mục có dấu * là bắt buộc. Có thể để trống giá, S-CART, tiền cọc và khoản thu khi lưu đặt sân đang xử lý.</p>
 
           <div class="golf-form-section">
@@ -155,7 +186,8 @@
           </div>
 
           <div class="golf-form-section">
-            <h3>고객 입금 및 상태 / Thu tiền khách và trạng thái</h3>
+            <h3 id="customerPaymentsTitle">고객 입금 및 상태 / Thu tiền khách và trạng thái</h3>
+            <p class="golf-payment-help" id="paymentScopeHint" hidden>아래 계약금·입금은 선택한 하루가 아닌 묶음 전체 금액입니다. 어느 일정에서 수정하더라도 같은 입금 내역에 반영됩니다. / Tiền cọc và khoản thu dưới đây dùng chung cho cả nhóm, không phải riêng một ngày. Chỉnh sửa từ bất kỳ lịch nào đều cập nhật cùng một sổ thu.</p>
             <div class="golf-payment-ledgers">
               <section class="golf-payment-group" aria-labelledby="depositPaymentsTitle">
                 <div class="golf-payment-head"><h4 id="depositPaymentsTitle">계약금·예약금 / Tiền cọc</h4><button class="qr-btn qr-btn-small" type="button" data-add-payment="deposit">계약금 추가 / Thêm tiền cọc</button></div>
@@ -173,7 +205,7 @@
               <div><span>고객 총입금 / Tổng tiền khách đã trả</span><strong id="receivedTotalPreview">0 VND</strong></div>
               <div><span>고객 미수금 / Công nợ khách hàng</span><strong id="customerBalancePreview">—</strong></div>
             </div>
-            <label class="golf-complete-toggle"><input id="paymentCompleted" type="checkbox" /><span>입금 완료 처리 / Đánh dấu đã nhận đủ tiền<span class="golf-label-vi">체크하면 현재 고객 총입금액과 마지막 입금일로 완료 처리됩니다. / Khi chọn, tổng tiền đã nhận và ngày thu cuối sẽ được dùng để hoàn tất.</span></span></label>
+            <label class="golf-complete-toggle"><input id="paymentCompleted" type="checkbox" /><span><span id="completionLabel">입금 완료 처리 / Đánh dấu đã nhận đủ tiền</span><span class="golf-label-vi" id="completionHelp">체크하면 현재 고객 총입금액과 마지막 입금일로 완료 처리됩니다. / Khi chọn, tổng tiền đã nhận và ngày thu cuối sẽ được dùng để hoàn tất.</span></span></label>
             <div class="golf-cash-rule">5,000,000 VND 이상은 현금으로 저장할 수 없습니다. 은행 또는 카드를 선택해 주세요. / Giao dịch từ 5.000.000 VND không được dùng tiền mặt. Vui lòng chọn chuyển khoản hoặc thẻ.</div>
             <label class="qr-field" style="margin-top:12px"><span class="qr-label">비고<span class="golf-label-vi">Ghi chú</span></span><textarea class="qr-textarea" id="note" maxlength="5000"></textarea></label>
             <div class="golf-status-preview"><span>저장 후 상태 / Trạng thái sau khi lưu</span><strong id="statusPreview">진행중 / Đang xử lý</strong></div>
@@ -223,7 +255,7 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-reserv.js?v=20261025-required-fields-1"></script>
+  <script src="assets/golf-bookings.js?v=20261025-group-1"></script>
+  <script src="assets/golf-reserv.js?v=20261025-group-1"></script>
 </body>
 </html>
-

@@ -35,6 +35,7 @@ const externalScripts = [
   "assets/menu-admin.js",
   "assets/admin-tax-report.js",
   "assets/reservation-visibility.js",
+  "assets/golf-bookings.js",
   "assets/golf-reserv.js",
   "assets/golf-reserv-list.js",
   "assets/golf-budget.js",
