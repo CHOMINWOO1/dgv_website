@@ -17,7 +17,8 @@
     "final_received_amount_vnd", "final_received_date", "customer_type", "note",
     "status", "created_at", "updated_at", "booking_group_id"
   ].join(",");
-  const state = { identity: null, rows: [] };
+  const state = { identity: null, rows: [], detailId: null, editor: null, refreshingEdit: false };
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const byId = (id) => document.getElementById(id);
   const escape = (value) => DGV.escapeHTML(value ?? "");
   const clean = (value) => String(value ?? "").trim();
@@ -131,11 +132,11 @@
       <div><strong>${index + 1}. ${escape(golfDateLabel(round.golf_date))} ${escape(timeLabel(round.golf_time))} · ${escape(round.golf_course)}</strong>
       <span>${escape(round.holes)}H · ${escape(round.pax)}명 / khách · ${escape(round.representative_name || "—")}</span>
       <span>판매 / Tiền khách: ${escape(moneyLabel(round.guest_total_vnd))} · 원가 / Giá vốn: ${escape(moneyLabel(round.course_total_vnd))}</span></div>
-      <a class="qr-btn qr-btn-small" href="golf_reserv.html?edit=${escape(encodeURIComponent(round.id))}">일정 수정 / Sửa lịch</a>
+      <button class="qr-btn qr-btn-small" type="button" data-edit-round="${escape(round.id)}">일정 수정 / Sửa lịch</button>
     </article>`).join("");
     return `<div class="golf-booking-detail">${bookingReportMarkup(booking, booking.rounds)}
       <h3 class="golf-roster-title">묶음 전체 일정 / Tất cả lịch trong đặt chung</h3><div class="golf-booking-schedules">${schedules}</div>
-      <a class="qr-btn qr-btn-primary" href="golf_reserv.html?edit=${escape(encodeURIComponent(row.id))}">묶음 입금·완료 처리 / Thu tiền · Hoàn tất đặt chung</a>
+      <button class="qr-btn qr-btn-primary" type="button" data-edit-round="${escape(row.id)}">묶음 입금·완료 처리 / Thu tiền · Hoàn tất đặt chung</button>
       <h3 class="golf-roster-title golf-selected-round-title">선택한 일정 상세 / Chi tiết lịch đã chọn</h3></div>`;
   }
 
@@ -415,15 +416,14 @@
     const note = clean(row.note) || "—";
     const cart = clean(row.smart_cart_note) || "—";
     const representative = row.representative_name || "—";
-    const editHref = `golf_reserv.html?edit=${encodeURIComponent(String(row.id || ""))}`;
     const depositTotal = paymentTotal(row, "deposit");
     const receivedTotal = paymentTotal(row, ["deposit", "receipt"]);
-    return `<tr data-status="${escape(row.status)}" data-reservation-id="${escape(row.id)}" class="${row.booking ? "golf-group-member-row" : "golf-standalone-row"}">
-      <td><button class="golf-detail-toggle" type="button" aria-haspopup="dialog" aria-controls="reservationDetailDialog" aria-label="${escape(`${representative} 예약 상세 보기 / Xem chi tiết đặt sân`)}" title="상세 보기 / Xem chi tiết">ⓘ</button><span class="golf-status-chip${completed ? " is-completed" : ""}">${escape(statusLabel)}</span>${row.booking ? "" : '<span class="golf-standalone-label">개별 예약 / Đặt riêng</span>'}</td>
+    return `<tr data-status="${escape(row.status)}" data-reservation-id="${escape(row.id)}">
+      <td><button class="golf-detail-toggle" type="button" aria-haspopup="dialog" aria-controls="reservationDetailDialog" aria-label="${escape(`${representative} 예약 상세 보기 / Xem chi tiết đặt sân`)}" title="상세 보기 / Xem chi tiết">ⓘ</button><span class="golf-status-chip${completed ? " is-completed" : ""}">${escape(statusLabel)}</span></td>
       <td>${escape(golfDateLabel(row.golf_date))}</td>
       <td>${escape(timeLabel(row.golf_time))}</td>
       <td class="golf-cell-text" title="${escape(row.counterparty_name || "—")}">${escape(row.counterparty_name || "—")}</td>
-      <td class="golf-cell-text" title="${escape(representative)}"><button class="golf-edit-link" type="button" data-edit-href="${escape(editHref)}" title="더블클릭하여 수정 / Nhấp đúp để chỉnh sửa" aria-label="${escape(`${representative} 예약 수정, 더블클릭 또는 키보드로 선택 / Chỉnh sửa, nhấp đúp hoặc dùng bàn phím`)}">${escape(representative)}</button></td>
+      <td class="golf-cell-text" title="${escape(representative)}"><button class="golf-edit-link" type="button" aria-haspopup="dialog" aria-controls="reservationDetailDialog" title="상세 보기 / Xem chi tiết" aria-label="${escape(`${representative} 예약 상세 보기 / Xem chi tiết đặt sân`)}">${escape(representative)}</button></td>
       <td class="golf-cell-names" title="${escape(names)}"><span class="golf-screen-text">${escape(names)}</span><span class="golf-print-text">${escape(clean(row.player_names_en) || "—")}</span></td>
       <td>${escape(row.pax)}</td>
       <td>${escape(row.golf_course)}</td>
@@ -496,44 +496,29 @@
 
   function openReservationDetail(row) {
     if (!row) return;
+    state.detailId = row.id;
     const dialog = byId("reservationDetailDialog");
     byId("reservationDetailTitle").textContent = row.booking ? bookingLabel(row.booking) : "예약 상세 / Chi tiết đặt sân";
     byId("reservationDetailSubtitle").textContent = `${row.status === "completed" ? "완료 / Hoàn tất" : "진행중 / Đang xử lý"} · ${golfDateLabel(row.golf_date)} · ${row.counterparty_name || "—"}`;
     byId("reservationDetailContent").innerHTML = reservationDetailMarkup(row);
+    byId("editDetailReservation").dataset.editRound = row.id;
     if (!dialog.open) dialog.showModal();
     dialog.scrollTop = 0;
   }
 
   function closeReservationDetail() {
     byId("reservationDetailDialog").close();
+    state.detailId = null;
   }
 
-  function listBlocks(rows) {
-    const ordered = rows.slice().sort((a, b) =>
+  function orderedRows(rows) {
+    return rows.slice().sort((a, b) =>
       `${a.golf_date} ${a.golf_time} ${a.id}`.localeCompare(`${b.golf_date} ${b.golf_time} ${b.id}`)
     );
-    const blocks = new Map();
-    for (const row of ordered) {
-      const key = row.booking ? `booking:${row.booking.id}` : `round:${row.id}`;
-      if (!blocks.has(key)) blocks.set(key, { booking: row.booking || null, rows: [] });
-      blocks.get(key).rows.push(row);
-    }
-    return [...blocks.values()];
-  }
-
-  function renderBookingHeading(block) {
-    const booking = block.booking;
-    const content = `<button class="golf-group-detail-toggle" type="button" aria-haspopup="dialog" aria-controls="reservationDetailDialog">묶음예약 · ${escape(booking.label)} / Đặt chung</button>
-      <span class="golf-booking-heading-count">조회 ${block.rows.length} / 전체 ${booking.rounds.length}일정 · Đang xem ${block.rows.length} / tổng ${booking.rounds.length} lịch</span>
-      <span class="golf-booking-heading-dates">${escape(dateLabel(booking.range_from))} ~ ${escape(dateLabel(booking.range_to))}</span>`;
-    return `<tr class="golf-booking-heading" data-booking-id="${escape(booking.id)}" data-reservation-id="${escape(block.rows[0].id)}">
-      <td class="golf-booking-heading-screen" colspan="12">${content}</td>
-      <td class="golf-booking-heading-print" colspan="25">${content}</td>
-    </tr>`;
   }
 
   function renderTableRows(rows) {
-    return listBlocks(rows).map((block) => `${block.booking ? renderBookingHeading(block) : ""}${block.rows.map(renderRow).join("")}`).join("");
+    return orderedRows(rows).map(renderRow).join("");
   }
 
   function render() {
@@ -572,7 +557,7 @@
         if (!paymentsByReservation.has(payment.reservation_id)) paymentsByReservation.set(payment.reservation_id, []);
         paymentsByReservation.get(payment.reservation_id).push(payment);
       }
-      state.rows = reservations.map((row) => ({
+      const loadedRows = reservations.map((row) => ({
         ...row,
         payments: paymentsByReservation.get(row.id) || []
       })).sort((a, b) =>
@@ -580,22 +565,129 @@
           .localeCompare(`${b.golf_date} ${b.golf_time} ${b.id}`)
       );
       if (!global.GolfBookings?.loadAndAttach) throw new Error("묶음 예약 모듈을 불러오지 못했습니다. 페이지를 새로고침해 주세요. / Vui lòng tải lại trang.");
-      await global.GolfBookings.loadAndAttach(state.rows);
+      await global.GolfBookings.loadAndAttach(loadedRows);
+      state.rows = loadedRows;
       render();
       QRStaff.connectionBadge("online", "연결됨");
       if (!options.quiet) setBanner("골프 예약 목록을 불러왔습니다. / Đã tải danh sách đặt sân.", "ok");
+      return true;
     } catch (error) {
       console.error(error);
       QRStaff.connectionBadge("offline", "연결 오류");
       setBanner(QRStaff.messageOf(error, "골프 예약 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."), "error");
+      return false;
     }
   }
 
-  function confirmAndOpenEdit(button) {
-    const href = clean(button?.dataset.editHref);
-    if (!href) return;
-    if (!global.confirm("이 예약을 수정하시겠습니까?\nBạn có muốn chỉnh sửa đặt sân này không?")) return;
-    global.location.assign(href);
+  function inlineEditStatus(message, tone = "info") {
+    const status = byId("inlineEditStatus");
+    status.textContent = message;
+    status.dataset.tone = tone;
+  }
+
+  function openInlineEditor(recordId) {
+    if (state.editor || state.refreshingEdit || !UUID_PATTERN.test(String(recordId))) return;
+    const row = state.rows.find((item) => item.id === recordId);
+    if (!row) return;
+    if (!global.crypto?.randomUUID) {
+      QRStaff.toast("안전한 수정 창을 열지 못했습니다. HTTPS 주소에서 다시 시도해 주세요. / Vui lòng mở trang HTTPS để chỉnh sửa.", "error");
+      return;
+    }
+    const sheet = document.querySelector(".golf-sheet-wrap");
+    const editor = {
+      token: global.crypto.randomUUID(), recordId: row.id,
+      allowedIds: new Set((row.booking?.rounds || [row]).map((item) => item.id)),
+      returnDetailId: state.detailId || row.id, ready: false, savingResult: false,
+      scroll: { x: global.scrollX || 0, y: global.scrollY || 0, left: sheet.scrollLeft, top: sheet.scrollTop },
+      timer: null
+    };
+    state.editor = editor;
+    closeReservationDetail();
+    byId("inlineEditTitle").textContent = `예약 수정 / Chỉnh sửa · ${row.representative_name || "—"}`;
+    inlineEditStatus("수정 화면을 불러오는 중입니다. / Đang tải màn hình chỉnh sửa.");
+    const url = new URL("golf_reserv.html", global.location.href);
+    url.searchParams.set("edit", row.id);
+    url.searchParams.set("embedded", "1");
+    url.searchParams.set("editorToken", editor.token);
+    byId("inlineEditFrame").src = url.href;
+    byId("inlineEditDialog").showModal();
+    editor.timer = global.setTimeout(() => {
+      if (state.editor === editor && !editor.ready) inlineEditStatus("화면 로딩이 지연되고 있습니다. 로그인 화면 또는 네트워크 연결을 확인해 주세요. / Tải chậm. Vui lòng kiểm tra đăng nhập hoặc kết nối mạng.", "error");
+    }, 20000);
+  }
+
+  function removeInlineEditor() {
+    const editor = state.editor;
+    if (!editor) return null;
+    if (editor.timer != null) global.clearTimeout(editor.timer);
+    state.editor = null;
+    byId("inlineEditDialog").close();
+    byId("inlineEditFrame").src = "about:blank";
+    return editor;
+  }
+
+  function restoreListPosition(editor) {
+    const sheet = document.querySelector(".golf-sheet-wrap");
+    sheet.scrollLeft = editor.scroll.left;
+    sheet.scrollTop = editor.scroll.top;
+    global.scrollTo(editor.scroll.x, editor.scroll.y);
+  }
+
+  function closeInlineEditor() {
+    const editor = removeInlineEditor();
+    if (!editor) return;
+    const row = state.rows.find((item) => item.id === editor.returnDetailId);
+    if (row) openReservationDetail(row);
+    restoreListPosition(editor);
+  }
+
+  function requestInlineEditorClose() {
+    const editor = state.editor;
+    if (!editor || editor.savingResult) return;
+    // The embedded child keeps its reservation form hidden/locked until ready.
+    if (!editor.ready) { closeInlineEditor(); return; }
+    byId("inlineEditFrame").contentWindow.postMessage({ type: "golf-editor-request-close", token: editor.token }, global.location.origin);
+  }
+
+  async function onInlineEditorMessage(event) {
+    const editor = state.editor;
+    const message = event.data;
+    if (!editor || event.origin !== global.location.origin || event.source !== byId("inlineEditFrame").contentWindow
+      || !message || typeof message !== "object" || message.token !== editor.token
+      || !UUID_PATTERN.test(String(message.recordId)) || !editor.allowedIds.has(message.recordId)) return;
+    if (message.type === "golf-editor-ready") {
+      editor.ready = true;
+      if (editor.timer != null) global.clearTimeout(editor.timer);
+      inlineEditStatus("같은 페이지에서 수정한 후 저장해 주세요. / Chỉnh sửa rồi lưu ngay tại đây.");
+    } else if (message.type === "golf-editor-close") {
+      if (!editor.savingResult) closeInlineEditor();
+    } else if (message.type === "golf-editor-close-blocked") {
+      inlineEditStatus("저장 중이거나 저장하지 않은 변경사항이 있습니다. 수정 화면을 확인해 주세요. / Đang lưu hoặc có thay đổi chưa lưu. Vui lòng kiểm tra.");
+    } else if (message.type === "golf-editor-error") {
+      inlineEditStatus("수정 화면을 준비하지 못했습니다. 화면의 안내를 확인하거나 닫고 다시 시도해 주세요. / Không thể mở chỉnh sửa. Vui lòng kiểm tra hoặc đóng rồi thử lại.", "error");
+    } else if (message.type === "golf-editor-saved" && editor.ready && !editor.savingResult) {
+      editor.savingResult = true;
+      state.refreshingEdit = true;
+      removeInlineEditor();
+      closeReservationDetail();
+      setBanner("저장된 내용을 다시 불러오는 중입니다. / Đang tải lại dữ liệu đã lưu.");
+      try {
+        const loaded = await loadRows({ quiet: true });
+        if (loaded) {
+          const freshRow = state.rows.find((item) => item.id === editor.returnDetailId);
+          if (freshRow) openReservationDetail(freshRow);
+          setBanner("저장한 내용이 목록과 상세에 반영되었습니다. / Đã cập nhật danh sách và chi tiết.", "ok");
+        } else {
+          // Never present pre-save figures as the latest state after a failed refresh.
+          state.rows = [];
+          render();
+          setBanner("저장은 완료됐지만 최신 목록을 불러오지 못했습니다. 새로고침해 주세요. / Đã lưu nhưng chưa tải được danh sách mới. Vui lòng tải lại.", "error");
+        }
+      } finally {
+        state.refreshingEdit = false;
+        restoreListPosition(editor);
+      }
+    }
   }
 
   function bindEvents() {
@@ -604,25 +696,34 @@
     byId("exportListButton").addEventListener("click", exportList);
     const detailDialog = byId("reservationDetailDialog");
     byId("closeReservationDetail").addEventListener("click", closeReservationDetail);
+    byId("editDetailReservation").addEventListener("click", (event) => openInlineEditor(event.currentTarget.dataset.editRound));
+    byId("reservationDetailContent").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-edit-round]");
+      if (button) openInlineEditor(button.dataset.editRound);
+    });
     detailDialog.addEventListener("click", (event) => {
       if (event.target !== detailDialog) return;
       const bounds = detailDialog.getBoundingClientRect();
       if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeReservationDetail();
     });
-    const tableBody = byId("reservationTableBody");
-    tableBody.addEventListener("dblclick", (event) => {
-      const button = event.target.closest("button.golf-edit-link[data-edit-href]");
-      if (!button) return;
+    const editDialog = byId("inlineEditDialog");
+    byId("closeInlineEdit").addEventListener("click", requestInlineEditorClose);
+    editDialog.addEventListener("cancel", (event) => {
       event.preventDefault();
-      confirmAndOpenEdit(button);
+      requestInlineEditorClose();
     });
+    editDialog.addEventListener("click", (event) => {
+      if (event.target !== editDialog) return;
+      const bounds = editDialog.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) requestInlineEditorClose();
+    });
+    byId("inlineEditFrame").addEventListener("error", () => {
+      if (state.editor) inlineEditStatus("수정 화면을 불러오지 못했습니다. 연결 상태를 확인해 주세요. / Không tải được chỉnh sửa. Vui lòng kiểm tra kết nối.", "error");
+    });
+    global.addEventListener("message", onInlineEditorMessage);
+    const tableBody = byId("reservationTableBody");
     let suppressRowClickUntil = 0;
     tableBody.addEventListener("click", (event) => {
-      const button = event.target.closest("button.golf-edit-link[data-edit-href]");
-      if (button) {
-        if (event.detail === 0) confirmAndOpenEdit(button);
-        return;
-      }
       if (event.detail > 1 || Date.now() < suppressRowClickUntil) return;
       const row = event.target.closest("tr[data-reservation-id]");
       if (!row) return;

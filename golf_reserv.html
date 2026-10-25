@@ -8,6 +8,11 @@
   <style>
     .locked .golf-app{pointer-events:none;user-select:none;filter:blur(2px)}
     .golf-app{transition:filter .15s ease;font-size:16px;font-weight:750}
+    body.golf-embedded{background:var(--qr-bg,#faf7f0)}
+    .golf-embedded .golf-app{max-width:none;padding:12px}
+    .golf-embedded .qr-header,.golf-embedded .golf-list-card,.golf-embedded #resetButton,.golf-embedded #cancelEditButton,.golf-embedded #bookingModeField,.golf-embedded #createGroupPanel{display:none!important}
+    .golf-embedded:not(.golf-embedded-ready) .golf-form-card{visibility:hidden;pointer-events:none}
+    .golf-embedded .golf-form-card{box-shadow:none}
     .golf-app .qr-brand-subtitle{font-size:13px;font-weight:1000}
     .golf-app .qr-banner{font-size:14px;font-weight:950}
     .golf-app .qr-section-title{font-size:17px}
@@ -273,6 +278,6 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/golf-bookings.js?v=20261025-group-1"></script>
-  <script src="assets/golf-reserv.js?v=20261025-create-group-1"></script>
+  <script src="assets/golf-reserv.js?v=20261025-inline-edit-1"></script>
 </body>
 </html>
