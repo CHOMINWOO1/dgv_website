@@ -28,7 +28,7 @@ const [
 assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
-assert.match(page, /assets\/golf-reserv\.js\?v=20261025-create-group-1/);
+assert.match(page, /assets\/golf-reserv\.js\?v=20261025-inline-edit-1/);
 assert.match(page, /assets\/golf-bookings\.js\?v=20261025-group-1/);
 assert.ok(page.indexOf('assets/golf-bookings.js') < page.indexOf('assets/golf-reserv.js'), "group helper must load before the editor");
 assert.match(page, /href="golf_reserv_list\.html"[^>]*>한 줄 목록 \/ Bảng<\/a>/);

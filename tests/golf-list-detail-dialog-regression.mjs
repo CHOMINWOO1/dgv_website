@@ -36,6 +36,7 @@ const window = {
   QRStaff: { toast() {} }, DGV_XLSX: { downloadWorkbook: (value) => downloads.push(value) },
   confirm(message) { confirms.push(message); return confirmResult; }, location: { assign: (href) => navigations.push(href) },
   print() { printed.push(byId("reservationTableBody").innerHTML); },
+  addEventListener() {},
 };
 vm.runInNewContext(source.replace(/\n  init\(\);/, "\n  global.__test = { state, render, renderRow, workbookOptions, bindEvents, openReservationDetail, closeReservationDetail, reservationDetailMarkup };"),
   { window, document: { getElementById: byId, querySelector: (s) => s === ".golf-sheet-wrap" ? sheet : null }, console, Date: TestDate },
@@ -69,7 +70,8 @@ assert.match(page, /<h1 class="qr-brand-title">골프 예약 현황<\/h1>/);
 assert.match(page, /\.golf-screen-hidden\{display:table-cell!important\}/);
 assert.match(page, /\.golf-detail-dialog\{display:none!important\}/);
 assert.match(page, /<dialog[^>]+id="reservationDetailDialog"[^>]+aria-labelledby="reservationDetailTitle"/);
-assert.doesNotMatch(source, /addEventListener\("cancel"/, "Native Escape dismissal must not be cancelled");
+assert.doesNotMatch(source, /detailDialog\.addEventListener\("cancel"/, "Native detail Escape dismissal remains available");
+assert.match(source, /editDialog\.addEventListener\("cancel"/, "Editor Escape must consult the child dirty-state guard");
 assert.match(page, /id="closeReservationDetail"[^>]+autofocus/);
 assert.doesNotMatch(markup, /<img\b|<script\b/);
 
@@ -84,20 +86,16 @@ const target = (kind) => ({ closest(selector) {
 } });
 dispatch(tableBody, "click", { target: target("representative"), detail: 1 });
 dispatch(tableBody, "click", { target: target("representative"), detail: 2 });
-assert.equal(dialog.open, false); assert.equal(confirms.length, 0, "Representative clicks must not preempt native double-click");
+assert.equal(dialog.open, true); assert.equal(confirms.length, 0, "Representative clicks open details directly without confirmation or navigation");
 dispatch(tableBody, "dblclick", { target: target("representative"), detail: 2 });
-assert.equal(confirms.length, 1); assert.equal(navigations.length, 1, "One double-click asks and navigates exactly once");
-assert.match(confirms[0], /수정하시겠습니까\?[\s\S]*Bạn có muốn chỉnh sửa đặt sân này không\?/);
-assert.equal(navigations[0], representativeButton.dataset.editHref);
-confirmResult = false;
-dispatch(tableBody, "dblclick", { target: target("representative"), detail: 2 });
-assert.equal(navigations.length, 1, "Cancel must never navigate");
-confirmResult = true;
+assert.equal(confirms.length, 0); assert.equal(navigations.length, 0, "Double-click never navigates away");
 dispatch(tableBody, "click", { target: target("representative"), detail: 0 });
-assert.equal(navigations.length, 2, "Keyboard activation retains accessible edit confirmation");
+assert.equal(dialog.open, true); assert.equal(navigations.length, 0, "Keyboard activation opens accessible details");
+assert.equal(byId("editDetailReservation").dataset.editRound, fixture.id);
+api.closeReservationDetail();
 
 dispatch(tableBody, "click", { target: target("cell"), detail: 1 });
-assert.equal(dialog.open, true); assert.equal(dialog.showCount, 1);
+assert.equal(dialog.open, true); assert.equal(dialog.showCount, 2);
 const detail = byId("reservationDetailContent").innerHTML;
 const fields = new Map([...detail.matchAll(/<dt>([\s\S]*?)<\/dt><dd>([\s\S]*?)<\/dd>/g)].map((m) => [m[1], m[2]]));
 for (const [label, value] of [
