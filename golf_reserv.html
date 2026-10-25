@@ -31,6 +31,7 @@
     .golf-money-preview>div{padding:10px;border:1px solid var(--qr-line);border-radius:11px;background:#fffaf0}
     .golf-money-preview span{display:block;color:var(--qr-sub);font-size:11px;font-weight:950}
     .golf-money-preview strong{display:block;margin-top:4px;font-size:15px;font-weight:1000;overflow-wrap:anywhere}
+    .golf-cart-error{color:#a72820;font-weight:900}
     .golf-filter-tabs{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
     .golf-filter-tabs .qr-btn[aria-pressed="true"]{border-color:var(--qr-gold);background:#f3d995;color:#4c3511}
     .golf-filters{display:grid;grid-template-columns:minmax(180px,1fr) repeat(2,minmax(145px,.55fr)) auto;gap:8px;align-items:end;margin-bottom:12px}
@@ -132,7 +133,7 @@
               <fieldset class="qr-field golf-teeoff-field"><legend class="qr-label">골프 날짜·티오프<span class="golf-label-vi">Ngày chơi và giờ phát bóng</span></legend><div class="golf-teeoff-controls"><label class="golf-date-control"><span class="golf-visually-hidden">골프 날짜 / Ngày chơi</span><input class="qr-input" id="golfDate" type="date" required /></label><label class="golf-time-control"><span class="golf-time-heading">TIME</span><select class="qr-select" id="golfHour" required aria-label="TIME / Giờ"><option value="" selected>--</option><option value="00">00</option><option value="01">01</option><option value="02">02</option><option value="03">03</option><option value="04">04</option><option value="05">05</option><option value="06">06</option><option value="07">07</option><option value="08">08</option><option value="09">09</option><option value="10">10</option><option value="11">11</option><option value="12">12</option><option value="13">13</option><option value="14">14</option><option value="15">15</option><option value="16">16</option><option value="17">17</option><option value="18">18</option><option value="19">19</option><option value="20">20</option><option value="21">21</option><option value="22">22</option><option value="23">23</option></select></label><label class="golf-time-control"><span class="golf-time-heading">MIN</span><select class="qr-select" id="golfMinute" required aria-label="MIN / Phút"><option value="00" selected>00</option><option value="05">05</option><option value="10">10</option><option value="15">15</option><option value="20">20</option><option value="25">25</option><option value="30">30</option><option value="35">35</option><option value="40">40</option><option value="45">45</option><option value="50">50</option><option value="55">55</option></select></label></div></fieldset>
               <label class="qr-field"><span class="qr-label">골프장<span class="golf-label-vi">Sân golf</span></span><select class="qr-select" id="golfCourse" required><option value="">선택 / Chọn</option><option value="AT1200">AT1200</option><option value="SAM">SAM</option><option value="PALACE">PALACE</option></select></label>
               <label class="qr-field"><span class="qr-label">홀 수<span class="golf-label-vi">Số hố</span></span><select class="qr-select" id="holes" required><option value="9">9</option><option value="18" selected>18</option><option value="27">27</option><option value="26">26</option></select></label>
-              <label class="qr-field"><span class="qr-label">S-CART<span class="golf-label-vi">Ghi chú xe điện</span></span><input class="qr-input" id="smartCartNote" type="text" maxlength="300" /></label>
+              <label class="qr-field"><span class="qr-label">S-CART 금액 (예약 전체, VND)<span class="golf-label-vi">Tiền S-CART cho cả đặt sân (VND)</span></span><input class="qr-input" id="smartCartNote" type="text" inputmode="numeric" autocomplete="off" maxlength="300" placeholder="400,000 VND" aria-describedby="smartCartHint smartCartError" /><span class="qr-hint" id="smartCartHint">예약 전체 금액을 한 번만 입력합니다. 고객 합계와 원가에 동일하게 더해지며 수익은 늘지 않습니다. 고객이 골프장에 직접 결제하면 비워두거나 0을 입력해 주세요.<br />Nhập tổng tiền một lần cho cả đặt sân. Khoản này được cộng bằng nhau vào tiền khách và giá vốn, không làm tăng lợi nhuận. Nếu khách trả trực tiếp cho sân, để trống hoặc nhập 0.</span><span class="qr-hint golf-cart-error" id="smartCartError" role="status" hidden></span></label>
             </div>
           </div>
 
@@ -220,7 +221,7 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
-  <script src="assets/golf-reserv.js?v=20261024-partner-1"></script>
+  <script src="assets/golf-reserv.js?v=20261025-scart-accounting-1"></script>
 </body>
 </html>
 

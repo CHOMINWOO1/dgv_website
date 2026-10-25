@@ -8,6 +8,7 @@
   const sb = DGV.supabase;
   const TIME_ZONE = "Asia/Ho_Chi_Minh";
   const MAX_SAFE_MONEY = 9007199254740991;
+  const MAX_SMART_CART_AMOUNT = 1000000000;
   const GOLF_COURSES = new Set(["AT1200", "SAM", "PALACE"]);
   const STANDARD_HOLES = new Set([9, 18, 27, 26]);
   const PAYMENT_KINDS = new Set(["deposit", "receipt", "withdrawal"]);
@@ -80,6 +81,18 @@
     if (value == null || value === "") return "—";
     const number = Number(value);
     return Number.isFinite(number) ? `${Math.round(number).toLocaleString("ko-KR")} VND` : "—";
+  }
+
+  function smartCartAmount(value) {
+    const text = clean(value);
+    if (!text) return 0;
+    if (!/^(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\s*VND)?$/i.test(text)) return NaN;
+    const amount = Number(text.replace(/\s*VND$/i, "").replace(/,/g, ""));
+    return Number.isSafeInteger(amount) && amount >= 0 && amount <= MAX_SMART_CART_AMOUNT ? amount : NaN;
+  }
+
+  function smartCartErrorMessage() {
+    return "S-CART 금액은 0~1,000,000,000 VND의 정수로 입력해 주세요. 예: 400,000 VND / Vui lòng nhập số tiền S-CART nguyên từ 0 đến 1.000.000.000 VND. Ví dụ: 400,000 VND.";
   }
 
   function formatMoneyInput(input) {
@@ -350,8 +363,15 @@
     const pax = Number(byId("pax").value || 0);
     const guestUnit = moneyNumber(byId("guestUnitPrice").value);
     const courseUnit = moneyNumber(byId("courseUnitPrice").value);
-    const guestTotal = pax > 0 && Number.isFinite(guestUnit) ? pax * guestUnit : null;
-    const courseTotal = pax > 0 && Number.isFinite(courseUnit) ? pax * courseUnit : null;
+    const cartAmount = smartCartAmount(byId("smartCartNote").value);
+    const cartValid = Number.isFinite(cartAmount);
+    const cartError = cartValid ? "" : smartCartErrorMessage();
+    byId("smartCartNote").setCustomValidity(cartError);
+    byId("smartCartNote").setAttribute("aria-invalid", String(!cartValid));
+    byId("smartCartError").textContent = cartError;
+    byId("smartCartError").hidden = cartValid;
+    const guestTotal = cartValid && pax > 0 && Number.isFinite(guestUnit) ? pax * guestUnit + cartAmount : null;
+    const courseTotal = cartValid && pax > 0 && Number.isFinite(courseUnit) ? pax * courseUnit + cartAmount : null;
     const margin = guestTotal != null && courseTotal != null ? guestTotal - courseTotal : null;
     byId("guestTotalPreview").textContent = moneyLabel(guestTotal);
     byId("courseTotalPreview").textContent = moneyLabel(courseTotal);
@@ -446,6 +466,7 @@
     const customerType = clean(byId("customerType").value);
     const costSettlementType = clean(byId("costSettlementType").value);
     const costPartnerName = nullableText(byId("costPartnerName").value);
+    if (!Number.isFinite(smartCartAmount(byId("smartCartNote").value))) throw new Error(smartCartErrorMessage());
     const payments = validatePayments(allPaymentDrafts());
 
     if (!counterpartyName) throw new Error("거래처를 입력해 주세요. / Vui lòng nhập đối tác.");
@@ -940,6 +961,8 @@
       input.addEventListener("blur", () => formatMoneyInput(input));
     }
     byId("pax").addEventListener("input", updatePreview);
+    byId("smartCartNote").addEventListener("input", updatePreview);
+    byId("smartCartNote").addEventListener("blur", updatePreview);
     byId("costSettlementType").addEventListener("change", updatePreview);
     byId("playerNamesEn").addEventListener("input", () => {
       const count = namesCount(byId("playerNamesEn").value);

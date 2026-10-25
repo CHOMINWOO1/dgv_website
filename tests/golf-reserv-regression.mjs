@@ -28,7 +28,7 @@ const [
 assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
-assert.match(page, /assets\/golf-reserv\.js\?v=20261024-partner-1/);
+assert.match(page, /assets\/golf-reserv\.js\?v=20261025-scart-accounting-1/);
 assert.match(page, /href="golf_reserv_list\.html"[^>]*>한 줄 목록 \/ Bảng<\/a>/);
 assert.match(page, /href="golf_budget\.html"[^>]*>골프장 예산 \/ Ngân sách<\/a>/);
 assert.match(page, /티업 시작일 \/ Từ ngày chơi/);
@@ -165,8 +165,8 @@ assert.match(source, /Date\.UTC\(Number\(match\[1\]\), Number\(match\[2\]\) - 1,
 assert.match(page, /id="pax"[^>]+type="number"/);
 assert.match(source, /namesCount\(byId\("playerNamesEn"\)\.value\)/);
 assert.match(source, /byId\("pax"\)\.value = String\(count\)/);
-assert.match(source, /const guestTotal = pax > 0[\s\S]*?pax \* guestUnit/);
-assert.match(source, /const courseTotal = pax > 0[\s\S]*?pax \* courseUnit/);
+assert.match(source, /const guestTotal = cartValid && pax > 0[\s\S]*?pax \* guestUnit \+ cartAmount/);
+assert.match(source, /const courseTotal = cartValid && pax > 0[\s\S]*?pax \* courseUnit \+ cartAmount/);
 assert.match(source, /completed \? "완료 \/ Hoàn tất" : "진행중 \/ Đang xử lý"/);
 
 // Customer deposits and receipts remain editable. Legacy withdrawal rows stay in
