@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFile(path.join(projectRoot, file), "utf8");
@@ -14,7 +15,7 @@ const [page, source, editor, adminHome, managerHome] = await Promise.all([
 ]);
 
 assert.match(page, /<table class="golf-sheet">/);
-assert.match(page, /assets\/golf-reserv-list\.js\?v=20261024-partner-1/);
+assert.match(page, /assets\/golf-reserv-list\.js\?v=20261025-scart-1/);
 assert.match(page, /티업 시작일 \/ Từ ngày chơi/);
 assert.match(page, /티업 종료일 \/ Đến ngày chơi/);
 assert.match(page, /id="reservationTableBody"/);
@@ -140,5 +141,27 @@ assert.match(editor, /href="golf_reserv_list\.html"/);
 assert.match(adminHome, /href="golf_reserv_list\.html"/);
 assert.doesNotMatch(managerHome, /href="golf_reserv_list\.html"/);
 
-console.log("Golf reservation one-row list, filters, auth, read-only data access, and navigation verified.");
+// Exercise real render/export functions without starting login or DB access.
+const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+}[character]));
+const testWindow = { DGV: { supabase: {}, escapeHTML }, QRStaff: {} };
+const testDocument = { getElementById: (id) => ({ value: id === "statusFilter" ? "all" : "" }) };
+assert.match(source, /\n  init\(\);\s*}\)\(window\);/);
+vm.runInNewContext(source.replace(/\n  init\(\);/, "\n  global.__listTest = { renderRow, workbookOptions };"),
+  { window: testWindow, document: testDocument, console }, { filename: "golf-reserv-list.js" });
+const fixture = { id: "cart-test", status: "in_progress", golf_date: "2026-10-25", golf_time: "09:00:00",
+  golf_course: "SAM", holes: 18, pax: 2, player_names_en: "A,B", payments: [] };
+for (const value of ["400,000 VND", "1,200,000 VND", null, '<img src=x onerror="alert(1)">']) {
+  const row = { ...fixture, smart_cart_note: value };
+  const markup = testWindow.__listTest.renderRow(row);
+  const cells = [...markup.slice(0, markup.indexOf("</tr>")).matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)];
+  assert.equal(cells[9][1], escapeHTML(value ?? "—"), "S-CART must preserve commas and escape HTML");
+  assert.ok(cells[9][0].includes(`title="${escapeHTML(value ?? "—")}"`), "S-CART tooltip must retain original text");
+  assert.equal(cells[5][1], "A / B", "Player-name separators must remain unchanged");
+  assert.doesNotMatch(markup, /<img\b|<script\b/i);
+  const workbook = testWindow.__listTest.workbookOptions([row]);
+  assert.equal(workbook.sheets[0].rows[5][9].value, value ?? "", "Excel must retain the original S-CART text");
+}
 
+console.log("Golf reservation one-row list, S-CART rendering/export, filters, auth, read-only data access, and navigation verified.");
