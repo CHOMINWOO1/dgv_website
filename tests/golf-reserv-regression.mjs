@@ -28,7 +28,7 @@ const [
 assert.match(page, /<form id="reservationForm"/);
 assert.match(page, /id="reservationList"/);
 assert.match(page, /id="loginForm"/);
-assert.match(page, /assets\/golf-reserv\.js\?v=20261025-group-1/);
+assert.match(page, /assets\/golf-reserv\.js\?v=20261025-create-group-1/);
 assert.match(page, /assets\/golf-bookings\.js\?v=20261025-group-1/);
 assert.ok(page.indexOf('assets/golf-bookings.js') < page.indexOf('assets/golf-reserv.js'), "group helper must load before the editor");
 assert.match(page, /href="golf_reserv_list\.html"[^>]*>한 줄 목록 \/ Bảng<\/a>/);
@@ -193,7 +193,7 @@ assert.match(source, /byId\("paymentCompleted"\)\.checked/);
 assert.match(source, /5,000,000 VND 이상은 은행 거래가 필요합니다/);
 assert.match(source, /Giao dịch từ 5\.000\.000 VND phải chuyển khoản ngân hàng/);
 assert.match(source, /payment\.payment_method === "cash" && payment\.amount_vnd >= CASH_BANK_THRESHOLD/);
-assert.match(source, /const bookingGuestTotal = bookingDraftTotal\(booking, "guest_total_vnd", guestTotal\)/);
+assert.match(source, /const bookingGuestTotal = state\.createGroupMode \? createGroupTotal\("guestUnitPrice"\) : bookingDraftTotal\(booking, "guest_total_vnd", guestTotal\)/);
 assert.match(source, /bookingGuestTotal == null \? null : bookingGuestTotal - totals\.received/);
 assert.match(source, /row\.course_total_vnd != null[\s\S]*rowTotals\.received[\s\S]*Number\(row\.course_total_vnd\)/);
 assert.match(source, /원가를 입력한 후 완료 처리해 주세요/);
