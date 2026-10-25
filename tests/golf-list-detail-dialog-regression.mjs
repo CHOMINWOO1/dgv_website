@@ -70,7 +70,7 @@ assert.match(page, /<h1 class="qr-brand-title">골프 예약 현황<\/h1>/);
 assert.match(page, /\.golf-screen-hidden\{display:table-cell!important\}/);
 assert.match(page, /\.golf-detail-dialog\{display:none!important\}/);
 assert.match(page, /<dialog[^>]+id="reservationDetailDialog"[^>]+aria-labelledby="reservationDetailTitle"/);
-assert.doesNotMatch(source, /detailDialog\.addEventListener\("cancel"/, "Native detail Escape dismissal remains available");
+assert.match(source, /detailDialog\.addEventListener\("cancel", \(event\) => \{ if \(state\.deleting\) event\.preventDefault\(\); \}\)/, "Native detail Escape is guarded only while deletion is pending");
 assert.match(source, /editDialog\.addEventListener\("cancel"/, "Editor Escape must consult the child dirty-state guard");
 assert.match(page, /id="closeReservationDetail"[^>]+autofocus/);
 assert.doesNotMatch(markup, /<img\b|<script\b/);
@@ -134,5 +134,6 @@ assert.equal(exportRow[16].value, 100000); assert.equal(exportRow[18].value, 900
 assert.equal(workbook.sheets.length, 2); assert.equal(workbook.sheets[1].rows.length, 8);
 assert.equal(workbook.sheets[1].rows[5][6].value, 100000); assert.equal(workbook.sheets[1].rows[6][6].value, 300000); assert.equal(workbook.sheets[1].rows[7][6].value, 500000);
 assert.equal(JSON.stringify(fixture), original, "Rendering, detail, print and export remain read-only");
-assert.doesNotMatch(source, /\.insert\(|\.update\(|\.delete\(/);
+assert.doesNotMatch(source, /\.insert\(|\.update\(/);
+assert.match(source, /\.delete\(\)\.eq\("id", target\.id\)/);
 console.log("Compact 12-column screen/full 25-column reports, representative retained, native details popup, payment summaries, XSS, edit confirmation, keyboard/touch, and drag suppression verified (no database writes).");

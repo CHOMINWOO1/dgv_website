@@ -15,7 +15,7 @@ const [page, source, editor, adminHome, managerHome] = await Promise.all([
 ]);
 
 assert.match(page, /<table class="golf-sheet">/);
-assert.match(page, /assets\/golf-reserv-list\.js\?v=20261025-inline-edit-1/);
+assert.match(page, /assets\/golf-reserv-list\.js\?v=20261025-inline-create-1/);
 assert.match(page, /티업 시작일 \/ Từ ngày chơi/);
 assert.match(page, /티업 종료일 \/ Đến ngày chơi/);
 assert.match(page, /id="reservationTableBody"/);
@@ -104,9 +104,12 @@ assert.ok(source.includes('<button class="golf-edit-link" type="button" aria-has
 assert.doesNotMatch(source, /<a class="golf-edit-link"/);
 assert.match(source, /event\.target\.closest\("a, button, input, select, textarea"\)/);
 assert.doesNotMatch(source, /tableBody\.addEventListener\("dblclick"|global\.location\.assign/);
-assert.match(source, /function openInlineEditor\(recordId\)/);
+assert.match(source, /function openInlineEditor\(recordId, mode = "edit"\)/);
 assert.match(page, /id="editDetailReservation"[^>]*>수정 \/ Chỉnh sửa/);
 assert.match(page, /id="inlineEditDialog"/);
+assert.match(page, /id="addReservationButton"[^>]*>\+ 예약 추가 \/ Thêm đặt sân/);
+assert.match(source, /function openInlineCreate\(\)/);
+assert.match(source, /function deleteReservation\(recordId, wholeGroup = false\)/);
 assert.match(page, /\.golf-list-app\{[^}]*font-size:16px;font-weight:750\}/);
 assert.match(page, /\.golf-list-app \.qr-label\{font-size:13px;font-weight:1000\}/);
 assert.match(page, /\.golf-sheet\{[^}]*font-size:14px\}/);
@@ -133,7 +136,7 @@ assert.match(source, /현금 \/ Tiền mặt/);
 assert.match(source, /카드 \/ Thẻ/);
 assert.match(page, /golf-cell-payments/);
 assert.match(source, /\.in\("payment_kind", \["deposit", "receipt"\]\)/);
-assert.doesNotMatch(source, /\.insert\(|\.update\(|\.delete\(/, "one-line page must remain read-only");
+assert.doesNotMatch(source, /\.insert\(|\.update\(/, "Financial create/edit stays in the shared editor; host deletes only confirmed exact targets");
 assert.match(editor, /href="golf_reserv_list\.html"/);
 assert.match(adminHome, /href="golf_reserv_list\.html"/);
 assert.doesNotMatch(managerHome, /href="golf_reserv_list\.html"/);

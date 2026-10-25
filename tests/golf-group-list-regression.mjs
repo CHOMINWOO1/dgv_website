@@ -149,7 +149,8 @@ assert.equal(JSON.stringify(booking.payments), paymentSnapshot, "List/report ren
 assert.match(source, /"booking_group_id"/);
 assert.match(source, /await global\.GolfBookings\.loadAndAttach\(loadedRows\)/);
 assert.ok(page.indexOf('src="assets/golf-bookings.js') < page.indexOf('src="assets/golf-reserv-list.js'));
-assert.doesNotMatch(source, /\.insert\(|\.update\(|\.delete\(/, "List remains read-only");
+assert.doesNotMatch(source, /\.insert\(|\.update\(/, "List does not duplicate financial save logic");
+assert.match(source, /sb\.from\("golf_reservations"\)\.delete\(\)\.eq\("id", target\.id\)/, "Deletion is an explicit exact-row action");
 assert.doesNotMatch(source, /tableBody\.addEventListener\("dblclick"|global\.location\.assign/);
-assert.match(source, /function openInlineEditor\(recordId\)/);
+assert.match(source, /function openInlineEditor\(recordId, mode = "edit"\)/);
 console.log("Grouped booking list keeps each round, preserves edit and amounts, exposes shared detail, deduplicates parent payments and profit in summaries/print/XLSX, labels filtered subtotal vs whole booking, escapes HTML, and remains read-only.");

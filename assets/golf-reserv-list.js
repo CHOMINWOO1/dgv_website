@@ -17,7 +17,7 @@
     "final_received_amount_vnd", "final_received_date", "customer_type", "note",
     "status", "created_at", "updated_at", "booking_group_id"
   ].join(",");
-  const state = { identity: null, rows: [], detailId: null, editor: null, refreshingEdit: false };
+  const state = { identity: null, rows: [], detailId: null, editor: null, refreshingEdit: false, deleting: false, loadGeneration: 0 };
   const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const byId = (id) => document.getElementById(id);
   const escape = (value) => DGV.escapeHTML(value ?? "");
@@ -502,11 +502,18 @@
     byId("reservationDetailSubtitle").textContent = `${row.status === "completed" ? "완료 / Hoàn tất" : "진행중 / Đang xử lý"} · ${golfDateLabel(row.golf_date)} · ${row.counterparty_name || "—"}`;
     byId("reservationDetailContent").innerHTML = reservationDetailMarkup(row);
     byId("editDetailReservation").dataset.editRound = row.id;
+    byId("deleteDetailReservation").textContent = row.booking ? "이 일정 삭제 / Xóa lịch này" : "삭제 / Xóa";
+    byId("deleteDetailReservation").dataset.reservationId = row.id;
+    byId("deleteDetailGroup").hidden = !row.booking;
+    byId("deleteDetailGroup").dataset.reservationId = row.id;
+    byId("detailActionStatus").textContent = "";
+    syncActionLocks();
     if (!dialog.open) dialog.showModal();
     dialog.scrollTop = 0;
   }
 
   function closeReservationDetail() {
+    if (state.deleting) return;
     byId("reservationDetailDialog").close();
     state.detailId = null;
   }
@@ -532,6 +539,7 @@
   }
 
   async function loadRows(options = {}) {
+    const generation = ++state.loadGeneration;
     QRStaff.connectionBadge("connecting", "불러오는 중");
     try {
       const [reservations, payments] = await Promise.all([
@@ -552,6 +560,7 @@
           ] }
         )
       ]);
+      if (generation !== state.loadGeneration) return false;
       const paymentsByReservation = new Map();
       for (const payment of payments) {
         if (!paymentsByReservation.has(payment.reservation_id)) paymentsByReservation.set(payment.reservation_id, []);
@@ -566,12 +575,14 @@
       );
       if (!global.GolfBookings?.loadAndAttach) throw new Error("묶음 예약 모듈을 불러오지 못했습니다. 페이지를 새로고침해 주세요. / Vui lòng tải lại trang.");
       await global.GolfBookings.loadAndAttach(loadedRows);
+      if (generation !== state.loadGeneration) return false;
       state.rows = loadedRows;
       render();
       QRStaff.connectionBadge("online", "연결됨");
       if (!options.quiet) setBanner("골프 예약 목록을 불러왔습니다. / Đã tải danh sách đặt sân.", "ok");
       return true;
     } catch (error) {
+      if (generation !== state.loadGeneration) return false;
       console.error(error);
       QRStaff.connectionBadge("offline", "연결 오류");
       setBanner(QRStaff.messageOf(error, "골프 예약 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."), "error");
@@ -585,28 +596,40 @@
     status.dataset.tone = tone;
   }
 
-  function openInlineEditor(recordId) {
-    if (state.editor || state.refreshingEdit || !UUID_PATTERN.test(String(recordId))) return;
-    const row = state.rows.find((item) => item.id === recordId);
-    if (!row) return;
+  function syncActionLocks() {
+    const busy = Boolean(state.editor || state.refreshingEdit || state.deleting);
+    for (const id of ["addReservationButton", "editDetailReservation", "deleteDetailReservation", "deleteDetailGroup", "reloadButton", "printListButton", "exportListButton", "searchInput", "statusFilter", "filterFrom", "filterTo", "clearFiltersButton"]) byId(id).disabled = busy;
+    byId("closeReservationDetail").disabled = state.deleting;
+    for (const button of byId("reservationDetailContent").querySelectorAll?.("button[data-edit-round]") || []) button.disabled = busy;
+  }
+
+  function openInlineCreate() { openInlineEditor(null, "create"); }
+
+  function openInlineEditor(recordId, mode = "edit") {
+    if (state.editor || state.refreshingEdit || state.deleting || !["edit", "create"].includes(mode)) return;
+    if (mode === "edit" && !UUID_PATTERN.test(String(recordId))) return;
+    const row = mode === "edit" ? state.rows.find((item) => item.id === recordId) : null;
+    if (mode === "edit" && !row) return;
     if (!global.crypto?.randomUUID) {
       QRStaff.toast("안전한 수정 창을 열지 못했습니다. HTTPS 주소에서 다시 시도해 주세요. / Vui lòng mở trang HTTPS để chỉnh sửa.", "error");
       return;
     }
     const sheet = document.querySelector(".golf-sheet-wrap");
     const editor = {
-      token: global.crypto.randomUUID(), recordId: row.id,
-      allowedIds: new Set((row.booking?.rounds || [row]).map((item) => item.id)),
-      returnDetailId: state.detailId || row.id, ready: false, savingResult: false,
+      token: global.crypto.randomUUID(), recordId: row?.id || null, mode,
+      allowedIds: new Set((row?.booking?.rounds || (row ? [row] : [])).map((item) => item.id)),
+      returnDetailId: state.detailId || row?.id || null, ready: false, savingResult: false,
       scroll: { x: global.scrollX || 0, y: global.scrollY || 0, left: sheet.scrollLeft, top: sheet.scrollTop },
       timer: null
     };
     state.editor = editor;
     closeReservationDetail();
-    byId("inlineEditTitle").textContent = `예약 수정 / Chỉnh sửa · ${row.representative_name || "—"}`;
-    inlineEditStatus("수정 화면을 불러오는 중입니다. / Đang tải màn hình chỉnh sửa.");
+    syncActionLocks();
+    byId("inlineEditTitle").textContent = mode === "create" ? "새 예약 추가 / Thêm đặt sân mới" : `예약 수정 / Chỉnh sửa · ${row.representative_name || "—"}`;
+    inlineEditStatus("예약 입력 화면을 불러오는 중입니다. / Đang tải màn hình đặt sân.");
     const url = new URL("golf_reserv.html", global.location.href);
-    url.searchParams.set("edit", row.id);
+    if (mode === "create") url.searchParams.set("create", "1");
+    else url.searchParams.set("edit", row.id);
     url.searchParams.set("embedded", "1");
     url.searchParams.set("editorToken", editor.token);
     byId("inlineEditFrame").src = url.href;
@@ -623,6 +646,7 @@
     state.editor = null;
     byId("inlineEditDialog").close();
     byId("inlineEditFrame").src = "about:blank";
+    syncActionLocks();
     return editor;
   }
 
@@ -646,56 +670,139 @@
     if (!editor || editor.savingResult) return;
     // The embedded child keeps its reservation form hidden/locked until ready.
     if (!editor.ready) { closeInlineEditor(); return; }
-    byId("inlineEditFrame").contentWindow.postMessage({ type: "golf-editor-request-close", token: editor.token }, global.location.origin);
+    byId("inlineEditFrame").contentWindow.postMessage({ type: "golf-editor-request-close", token: editor.token, mode: editor.mode }, global.location.origin);
   }
 
   async function onInlineEditorMessage(event) {
     const editor = state.editor;
     const message = event.data;
     if (!editor || event.origin !== global.location.origin || event.source !== byId("inlineEditFrame").contentWindow
-      || !message || typeof message !== "object" || message.token !== editor.token
-      || !UUID_PATTERN.test(String(message.recordId)) || !editor.allowedIds.has(message.recordId)) return;
+      || !message || typeof message !== "object" || message.token !== editor.token) return;
+    if (editor.mode === "create") {
+      if (message.mode !== "create") return;
+      if (message.type === "golf-editor-saved" ? !UUID_PATTERN.test(String(message.recordId)) : message.recordId !== null) return;
+    } else if ((message.mode != null && message.mode !== "edit") || !UUID_PATTERN.test(String(message.recordId)) || !editor.allowedIds.has(message.recordId)) return;
     if (message.type === "golf-editor-ready") {
       editor.ready = true;
       if (editor.timer != null) global.clearTimeout(editor.timer);
-      inlineEditStatus("같은 페이지에서 수정한 후 저장해 주세요. / Chỉnh sửa rồi lưu ngay tại đây.");
+      inlineEditStatus(editor.mode === "create" ? "새 예약을 입력한 후 저장해 주세요. / Nhập đặt sân mới rồi lưu." : "같은 페이지에서 수정한 후 저장해 주세요. / Chỉnh sửa rồi lưu ngay tại đây.");
     } else if (message.type === "golf-editor-close") {
-      if (!editor.savingResult) closeInlineEditor();
+      if (!editor.savingResult) {
+        if (editor.mode === "create" && message.refreshRequired === true && editor.ready) await refreshAfterEditor(editor, null, true);
+        else closeInlineEditor();
+      }
     } else if (message.type === "golf-editor-close-blocked") {
       inlineEditStatus("저장 중이거나 저장하지 않은 변경사항이 있습니다. 수정 화면을 확인해 주세요. / Đang lưu hoặc có thay đổi chưa lưu. Vui lòng kiểm tra.");
     } else if (message.type === "golf-editor-error") {
       inlineEditStatus("수정 화면을 준비하지 못했습니다. 화면의 안내를 확인하거나 닫고 다시 시도해 주세요. / Không thể mở chỉnh sửa. Vui lòng kiểm tra hoặc đóng rồi thử lại.", "error");
     } else if (message.type === "golf-editor-saved" && editor.ready && !editor.savingResult) {
-      editor.savingResult = true;
-      state.refreshingEdit = true;
-      removeInlineEditor();
-      closeReservationDetail();
-      setBanner("저장된 내용을 다시 불러오는 중입니다. / Đang tải lại dữ liệu đã lưu.");
-      try {
-        const loaded = await loadRows({ quiet: true });
-        if (loaded) {
-          const freshRow = state.rows.find((item) => item.id === editor.returnDetailId);
-          if (freshRow) openReservationDetail(freshRow);
-          setBanner("저장한 내용이 목록과 상세에 반영되었습니다. / Đã cập nhật danh sách và chi tiết.", "ok");
-        } else {
-          // Never present pre-save figures as the latest state after a failed refresh.
-          state.rows = [];
-          render();
-          setBanner("저장은 완료됐지만 최신 목록을 불러오지 못했습니다. 새로고침해 주세요. / Đã lưu nhưng chưa tải được danh sách mới. Vui lòng tải lại.", "error");
-        }
-      } finally {
-        state.refreshingEdit = false;
-        restoreListPosition(editor);
-      }
+      await refreshAfterEditor(editor, message.recordId);
     }
   }
 
+  async function refreshAfterEditor(editor, savedId, uncertain = false) {
+    editor.savingResult = true;
+    state.refreshingEdit = true;
+    removeInlineEditor();
+    closeReservationDetail();
+    setBanner("저장된 내용을 다시 불러오는 중입니다. / Đang tải lại dữ liệu đã lưu.");
+    try {
+      const loaded = await loadRows({ quiet: true });
+      if (loaded) {
+        const detailId = editor.mode === "create" && savedId ? savedId : editor.returnDetailId;
+        const freshRow = state.rows.find((item) => item.id === detailId);
+        if (freshRow) openReservationDetail(freshRow);
+        if (uncertain) setBanner("저장 여부를 목록에서 확인해 주세요. 현재 검색·날짜 조건 밖의 예약도 있을 수 있습니다. 확인 전에는 같은 예약을 다시 추가하지 마세요. / Kiểm tra đã lưu hay chưa, kể cả ngoài bộ lọc, trước khi tạo lại.", "error");
+        else if (editor.mode === "create" && !freshRow) setBanner("저장 응답은 받았지만 최신 목록에서 새 예약을 확인하지 못했습니다. 새로고침 후 확인해 주세요. / Đã nhận phản hồi lưu nhưng chưa tìm thấy đặt sân mới. Vui lòng tải lại để kiểm tra.", "error");
+        else if (editor.mode === "create" && !filteredRows().some((item) => item.id === savedId)) setBanner("새 예약을 저장했습니다. 현재 검색·기간 조건 밖이므로 상세만 표시합니다. / Đã lưu đặt sân mới ngoài bộ lọc hiện tại; đang hiển thị chi tiết.", "ok");
+        else setBanner("저장한 내용이 목록과 상세에 반영되었습니다. / Đã cập nhật danh sách và chi tiết.", "ok");
+      } else {
+        state.rows = [];
+        render();
+        setBanner("저장 후 최신 목록을 확인하지 못했습니다. 다시 추가하지 말고 새로고침해 주세요. / Chưa xác nhận danh sách mới. Không tạo lại, hãy tải lại trang.", "error");
+      }
+    } finally {
+      state.refreshingEdit = false;
+      syncActionLocks();
+      restoreListPosition(editor);
+    }
+  }
+
+  function deletionWarning(row, wholeGroup) {
+    const identity = `${golfDateLabel(row.golf_date)} ${timeLabel(row.golf_time)} · ${row.golf_course} · ${row.representative_name || "—"}`;
+    const irreversible = "삭제한 기록은 복구할 수 없습니다. / Không thể khôi phục bản ghi đã xóa.";
+    const refund = "실제 고객 환불은 처리되지 않습니다. / Không thực hiện hoàn tiền thực tế cho khách.";
+    if (wholeGroup) {
+      const booking = row.booking;
+      const schedules = booking.rounds.map((round) => `${golfDateLabel(round.golf_date)} ${timeLabel(round.golf_time)} · ${round.golf_course} · ${round.representative_name || "—"}`).join("\n");
+      return `${booking.label} · 전체 ${booking.rounds.length}일정 / Toàn bộ ${booking.rounds.length} lịch\n${schedules}\n\n계약금 / Tiền cọc: ${moneyLabel(booking.deposit_vnd)}\n추가 입금 / Khoản thu thêm: ${moneyLabel(booking.receipt_vnd)}\n\n묶음 전체 일정과 공통 입금 기록을 모두 삭제합니다. 활성 골프장·거래처 차감은 복원됩니다.\nXóa tất cả lịch và sổ thu chung; hoàn lại các khoản khấu trừ sân và đối tác đang hiệu lực.\n${irreversible}\n${refund}\n\n정말 묶음 전체를 삭제하시겠습니까? / Bạn có chắc muốn xóa toàn bộ nhóm?`;
+    }
+    if (row.booking) return `${identity}\n\n이 일정만 삭제하며 다른 일정과 공통 입금 내역은 유지합니다. 이 일정의 골프장·거래처 차감은 복원됩니다.\nChỉ xóa lịch này, giữ các lịch khác và khoản thu chung. Hoàn lại khấu trừ sân hoặc đối tác của lịch này.\n${irreversible}\n${refund}\n\n이 일정만 삭제하시겠습니까? / Xóa riêng lịch này?`;
+    return `${identity}\n\n이 예약과 입금 내역을 삭제하며 골프장·거래처 차감은 복원됩니다.\nXóa đặt sân và các khoản thu; hoàn lại khấu trừ sân hoặc đối tác.\n${irreversible}\n${refund}\n\n이 예약을 삭제하시겠습니까? / Bạn có muốn xóa đặt sân này?`;
+  }
+
+  async function deleteReservation(recordId, wholeGroup = false) {
+    if (state.deleting || state.refreshingEdit || state.editor || !UUID_PATTERN.test(String(recordId))) return;
+    const row = state.rows.find((item) => item.id === recordId);
+    if (!row || (wholeGroup && !row.booking)) return;
+    if (!global.confirm(deletionWarning(row, wholeGroup))) return;
+    const target = { id: row.id, updatedAt: row.updated_at, groupId: row.booking?.id || null, version: row.booking?.version };
+    const sheet = document.querySelector(".golf-sheet-wrap");
+    const position = { scroll: { x: global.scrollX || 0, y: global.scrollY || 0, left: sheet.scrollLeft, top: sheet.scrollTop } };
+    state.deleting = true;
+    syncActionLocks();
+    byId("detailActionStatus").textContent = "삭제 결과를 확인하는 중입니다. / Đang xác nhận kết quả xóa.";
+    let confirmed = false, mutationError = null, loaded = false;
+    try {
+      let result;
+      if (wholeGroup) result = await sb.rpc("delete_golf_booking_group", { p_group_id: target.groupId, p_expected_version: target.version });
+      else if (target.groupId) result = await sb.rpc("delete_golf_booking_round", { p_reservation_id: target.id, p_expected_version: target.version });
+      else {
+        let query = sb.from("golf_reservations").delete().eq("id", target.id);
+        if (target.updatedAt) query = query.eq("updated_at", target.updatedAt);
+        result = await query.select("id").single();
+      }
+      if (result.error) throw result.error;
+      const returnedId = target.groupId ? result.data : result.data?.id;
+      if (returnedId !== (wholeGroup ? target.groupId : target.id)) throw new Error("삭제 응답을 확인하지 못했습니다. / Chưa xác nhận phản hồi xóa.");
+      confirmed = true;
+    } catch (error) {
+      mutationError = error;
+    }
+    try {
+      // A transport error can happen after commit. Read back before allowing a retry.
+      loaded = await loadRows({ quiet: true });
+      if (!loaded) { state.rows = []; render(); }
+    } finally {
+      state.deleting = false;
+      syncActionLocks();
+      closeReservationDetail();
+      restoreListPosition(position);
+    }
+    const remains = wholeGroup ? state.rows.some((item) => item.booking_group_id === target.groupId) : state.rows.some((item) => item.id === target.id);
+    let message, tone = "error";
+    if (!loaded) message = "삭제 결과와 최신 목록을 확인하지 못했습니다. 추가 삭제 전에 새로고침해 주세요. / Chưa xác nhận kết quả xóa. Hãy tải lại trước khi xóa tiếp.";
+    else if (!remains) {
+      message = confirmed ? "삭제가 완료되어 최신 목록에 반영되었습니다. / Đã xóa và cập nhật danh sách." : "응답 확인 중 오류가 있었지만 최신 목록에서 해당 예약이 없는 것을 확인했습니다. / Phản hồi gặp lỗi; danh sách mới xác nhận không còn đặt sân này.";
+      tone = confirmed ? "ok" : "info";
+    } else {
+      message = QRStaff.messageOf(mutationError, "예약이 변경되었거나 삭제되지 않았습니다. 최신 내용을 확인한 후 다시 시도해 주세요. / Đặt sân đã thay đổi hoặc chưa bị xóa. Kiểm tra dữ liệu mới rồi thử lại.");
+      const freshRow = state.rows.find((item) => item.id === target.id);
+      if (freshRow) { openReservationDetail(freshRow); byId("detailActionStatus").textContent = message; }
+    }
+    setBanner(message, tone);
+    QRStaff.toast(message, tone);
+  }
+
   function bindEvents() {
-    byId("reloadButton").addEventListener("click", () => loadRows());
+    byId("reloadButton").addEventListener("click", () => { if (!state.deleting && !state.editor && !state.refreshingEdit) loadRows(); });
+    byId("addReservationButton").addEventListener("click", openInlineCreate);
     byId("printListButton").addEventListener("click", printList);
     byId("exportListButton").addEventListener("click", exportList);
     const detailDialog = byId("reservationDetailDialog");
     byId("closeReservationDetail").addEventListener("click", closeReservationDetail);
+    byId("deleteDetailReservation").addEventListener("click", (event) => deleteReservation(event.currentTarget.dataset.reservationId));
+    byId("deleteDetailGroup").addEventListener("click", (event) => deleteReservation(event.currentTarget.dataset.reservationId, true));
     byId("editDetailReservation").addEventListener("click", (event) => openInlineEditor(event.currentTarget.dataset.editRound));
     byId("reservationDetailContent").addEventListener("click", (event) => {
       const button = event.target.closest("button[data-edit-round]");
@@ -706,6 +813,7 @@
       const bounds = detailDialog.getBoundingClientRect();
       if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) closeReservationDetail();
     });
+    detailDialog.addEventListener("cancel", (event) => { if (state.deleting) event.preventDefault(); });
     const editDialog = byId("inlineEditDialog");
     byId("closeInlineEdit").addEventListener("click", requestInlineEditorClose);
     editDialog.addEventListener("cancel", (event) => {
@@ -721,10 +829,13 @@
       if (state.editor) inlineEditStatus("수정 화면을 불러오지 못했습니다. 연결 상태를 확인해 주세요. / Không tải được chỉnh sửa. Vui lòng kiểm tra kết nối.", "error");
     });
     global.addEventListener("message", onInlineEditorMessage);
+    global.addEventListener("beforeunload", (event) => {
+      if (state.deleting) { event.preventDefault(); event.returnValue = ""; }
+    });
     const tableBody = byId("reservationTableBody");
     let suppressRowClickUntil = 0;
     tableBody.addEventListener("click", (event) => {
-      if (event.detail > 1 || Date.now() < suppressRowClickUntil) return;
+      if (state.deleting || state.editor || state.refreshingEdit || event.detail > 1 || Date.now() < suppressRowClickUntil) return;
       const row = event.target.closest("tr[data-reservation-id]");
       if (!row) return;
       openReservationDetail(state.rows.find((item) => String(item.id) === row.dataset.reservationId));

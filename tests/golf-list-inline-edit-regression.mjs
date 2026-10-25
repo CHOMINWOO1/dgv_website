@@ -159,7 +159,7 @@ readFailure = true; await api.onInlineEditorMessage(message("golf-editor-saved")
 assert.equal(api.state.rows.length, 0, "Failed refresh must not present old financial amounts as fresh");
 assert.equal(host.get("reservationDetailDialog").open, false);
 assert.equal(host.get("pageBanner").dataset.tone, "error");
-assert.doesNotMatch(listSource, /\.rpc\(|\.insert\(|\.update\(|\.delete\(/, "Host never writes any financial data");
+assert.doesNotMatch(listSource.replace(/\r/g, "").split("async function onInlineEditorMessage(event)")[1].split("\n  }\n")[0], /\.rpc\(|\.insert\(|\.update\(|\.delete\(/, "Editor messages never write financial data; explicit confirmed deletion is separately scoped");
 
 function childHarness({ search = `?edit=${ids.first}&embedded=1&editorToken=${ids.token}`, framed = true } = {}) {
   const domState = dom(childPage), sent = [], confirmations = [], calls = [], notices = [];
@@ -185,7 +185,7 @@ for (const options of [ { framed: false }, { search: `?edit=${ids.first}&embedde
   assert.equal(ordinary.api.embeddedEditor, null);
   assert.equal(ordinary.document.body.classList.contains("golf-embedded"), false, "Malformed embedded parameters never hide the normal page");
 }
-const child = childHarness(); child.api.configureEmbeddedEditor(); child.api.bindEvents();
+let child = childHarness(); child.api.configureEmbeddedEditor(); child.api.bindEvents();
 assert.equal(child.document.body.classList.contains("golf-embedded"), true);
 assert.equal(child.document.body.classList.contains("golf-embedded-ready"), false);
 assert.equal(child.get("reservationForm").getAttribute("aria-busy"), "true");
@@ -197,16 +197,23 @@ const standalone = { ...base, id: ids.first, golf_date: "2027-01-25", payments: 
 child.api.state.rows = [standalone]; child.api.fillForm(standalone, { scroll: false }); child.api.completeEmbeddedLoad();
 assert.equal(child.api.embeddedEditor.ready, true); assert.equal(child.document.body.classList.contains("golf-embedded-ready"), true);
 assert.equal(child.sent.at(-1).message.type, "golf-editor-ready"); assert.equal(child.sent.at(-1).targetOrigin, origin);
-const childMessage = (overrides = {}) => ({ origin, source: child.parent, data: { type: "golf-editor-request-close", token: ids.token }, ...overrides });
+const childMessage = (overrides = {}) => ({ origin, source: child.parent, data: { type: "golf-editor-request-close", mode: "edit", token: ids.token }, ...overrides });
 child.api.state.formDirty = true;
 const beforeInvalid = child.sent.length;
-for (const override of [ { origin: "https://evil.test" }, { source: {} }, { data: { type: "golf-editor-request-close", token: "wrong" } }, { data: { type: "request-close", token: ids.token } }, { data: null } ]) child.api.handleEditorMessage(childMessage(override));
+for (const override of [ { origin: "https://evil.test" }, { source: {} }, { data: { type: "golf-editor-request-close", mode: "edit", token: "wrong" } }, { data: { type: "request-close", mode: "edit", token: ids.token } }, { data: { type: "golf-editor-request-close", mode: "create", token: ids.token } }, { data: null } ]) child.api.handleEditorMessage(childMessage(override));
 assert.equal(child.sent.length, beforeInvalid); assert.equal(child.confirmations.length, 0);
 child.api.handleEditorMessage(childMessage());
 assert.equal(child.sent.at(-1).message.type, "golf-editor-close-blocked"); assert.equal(child.api.state.formDirty, true);
 assert.equal(child.confirmations.length, 1, "Standalone embedded dirty edits also require confirmation");
 child.confirm(true); child.api.handleEditorMessage(childMessage());
 assert.equal(child.sent.at(-1).message.type, "golf-editor-close"); assert.equal(child.api.state.formDirty, false);
+const beforeLegacyClose = child.sent.length;
+child.api.handleEditorMessage(childMessage({ data: { type: "golf-editor-request-close", token: ids.token } }));
+assert.equal(child.sent.length, beforeLegacyClose + 1);
+assert.equal(child.sent.at(-1).message.type, "golf-editor-close", "Already-open legacy edit host may omit mode; create mode never may");
+await child.api.save({ preventDefault() {} }); assert.equal(child.calls.length, 0, "Confirmed closed session cannot submit later");
+child = childHarness(); child.api.configureEmbeddedEditor(); child.api.bindEvents();
+child.api.state.rows = [standalone]; child.api.fillForm(standalone, { scroll: false }); child.api.completeEmbeddedLoad();
 child.api.state.saving = true; const confirmCount = child.confirmations.length;
 child.api.handleEditorMessage(childMessage());
 assert.equal(child.sent.at(-1).message.type, "golf-editor-close-blocked"); assert.equal(child.confirmations.length, confirmCount);

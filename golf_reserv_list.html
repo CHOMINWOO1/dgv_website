@@ -45,6 +45,10 @@
     .golf-detail-dialog-head p{margin:5px 0 0;color:#6a4935;font-size:13px;font-weight:800}
     .golf-detail-dialog-close{flex:none;min-width:44px;min-height:44px;cursor:pointer}
     .golf-detail-dialog-actions{display:flex;align-items:center;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+    .golf-detail-action-status{margin:0;padding:0 18px;color:#a72820;font-size:13px;font-weight:850;white-space:pre-wrap}
+    .golf-detail-action-status:empty{display:none}
+    .golf-delete-button{color:#a72820;border-color:#dfb3aa;background:#fff4f0}
+    .golf-delete-button:hover{background:#ffe5df}
     .golf-inline-edit-dialog{width:min(1240px,calc(100vw - 24px));height:calc(100vh - 24px);height:calc(100dvh - 24px);max-width:none;max-height:none;padding:0;border:1px solid var(--qr-line);border-radius:16px;background:var(--qr-bg,#fffaf0);color:var(--qr-text,#36261d);box-shadow:0 20px 70px #0005;overflow:hidden;box-sizing:border-box}
     .golf-inline-edit-dialog[open]{display:flex;flex-direction:column}
     .golf-inline-edit-dialog::backdrop{background:rgba(34,25,19,.65)}
@@ -120,7 +124,7 @@
       .golf-booking-report .golf-detail-values dt,.golf-booking-report .golf-detail-values dd,.golf-booking-report p,.golf-booking-report .golf-payment-detail-item{font-size:9px}
     }
     @media(max-width:900px){.golf-expanded-grid{grid-template-columns:1fr}.golf-list-tools{grid-template-columns:1fr 1fr}.golf-list-field:first-child{grid-column:1/-1}.golf-list-apply{grid-column:1/-1}.golf-list-apply .qr-btn{width:100%}.golf-sheet-wrap{max-height:none}}
-    @media(max-width:520px){.golf-booking-schedule{align-items:stretch;flex-direction:column}.golf-list-tools{grid-template-columns:1fr}.golf-list-field:first-child{grid-column:auto}.golf-list-apply{grid-column:auto}.qr-header-actions{width:100%}.qr-header-actions .qr-btn{flex:1}.golf-list-section-head{align-items:stretch;flex-direction:column}.golf-list-title-actions{width:100%;justify-content:flex-start}.golf-list-title-actions .qr-btn{flex:1 1 140px}}
+    @media(max-width:520px){.golf-detail-dialog .golf-detail-dialog-head{flex-wrap:wrap}.golf-detail-dialog-actions{width:100%;justify-content:flex-start}.golf-detail-dialog-actions #closeReservationDetail{margin-left:auto}.golf-booking-schedule{align-items:stretch;flex-direction:column}.golf-list-tools{grid-template-columns:1fr}.golf-list-field:first-child{grid-column:auto}.golf-list-apply{grid-column:auto}.qr-header-actions{width:100%}.qr-header-actions .qr-btn{flex:1}.golf-list-section-head{align-items:stretch;flex-direction:column}.golf-list-title-actions{width:100%;justify-content:flex-start}.golf-list-title-actions .qr-btn{flex:1 1 140px}}
   </style>
 </head>
 <body class="locked">
@@ -156,6 +160,7 @@
           <div class="golf-list-count" id="listCount" aria-live="polite">0건</div>
         </div>
         <div class="golf-list-title-actions" aria-label="목록 출력 및 엑셀">
+          <button class="qr-btn qr-btn-small qr-btn-primary" id="addReservationButton" type="button">+ 예약 추가 / Thêm đặt sân</button>
           <button class="qr-btn qr-btn-small" id="printListButton" type="button">출력 / In</button>
           <button class="qr-btn qr-btn-small qr-btn-primary" id="exportListButton" type="button">엑셀 생성 / Tạo Excel</button>
         </div>
@@ -216,8 +221,9 @@
   <dialog class="golf-detail-dialog" id="reservationDetailDialog" aria-labelledby="reservationDetailTitle" aria-describedby="reservationDetailSubtitle">
     <header class="golf-detail-dialog-head">
       <div><h2 id="reservationDetailTitle">예약 상세 / Chi tiết đặt sân</h2><p id="reservationDetailSubtitle"></p></div>
-      <div class="golf-detail-dialog-actions"><button class="qr-btn qr-btn-primary" id="editDetailReservation" type="button">수정 / Chỉnh sửa</button><button class="qr-btn golf-detail-dialog-close" id="closeReservationDetail" type="button" aria-label="상세 닫기 / Đóng chi tiết" autofocus>✕</button></div>
+      <div class="golf-detail-dialog-actions"><button class="qr-btn qr-btn-primary" id="editDetailReservation" type="button">수정 / Chỉnh sửa</button><button class="qr-btn golf-delete-button" id="deleteDetailReservation" type="button">삭제 / Xóa</button><button class="qr-btn golf-delete-button" id="deleteDetailGroup" type="button" hidden>묶음 전체 삭제 / Xóa toàn bộ nhóm</button><button class="qr-btn golf-detail-dialog-close" id="closeReservationDetail" type="button" aria-label="상세 닫기 / Đóng chi tiết" autofocus>✕</button></div>
     </header>
+    <p class="golf-detail-action-status" id="detailActionStatus" role="status" aria-live="polite"></p>
     <div class="golf-detail-content" id="reservationDetailContent"></div>
   </dialog>
 
@@ -244,6 +250,6 @@
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
   <script src="assets/golf-bookings.js?v=20261025-groups-1"></script>
-  <script src="assets/golf-reserv-list.js?v=20261025-inline-edit-1"></script>
+  <script src="assets/golf-reserv-list.js?v=20261025-inline-create-1"></script>
 </body>
 </html>
