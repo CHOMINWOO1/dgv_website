@@ -15,7 +15,7 @@
     "cost_settlement_type", "cost_partner_name",
     "deposit_amount_vnd", "deposit_received_date",
     "final_received_amount_vnd", "final_received_date", "customer_type", "note",
-    "status", "created_at", "updated_at"
+    "status", "created_at", "updated_at", "booking_group_id"
   ].join(",");
   const state = { identity: null, rows: [] };
   const byId = (id) => document.getElementById(id);
@@ -85,7 +85,58 @@
   }
 
   function paymentRowsFor(row) {
+    if (row?.booking) return [];
     return Array.isArray(row?.payments) ? row.payments : [];
+  }
+
+  function bookingLabel(booking) {
+    return `묶음예약 · ${booking.label} · ${booking.rounds.length}일정 / Đặt chung · ${booking.rounds.length} lịch`;
+  }
+
+  function distinctBookings(rows) {
+    const bookings = new Map();
+    for (const row of rows) if (row.booking) bookings.set(row.booking.id, row.booking);
+    return [...bookings.values()];
+  }
+
+  function completeTotal(rows, field) {
+    return rows.some((row) => row[field] == null) ? null : rows.reduce((sum, row) => sum + Number(row[field]), 0);
+  }
+
+  function bookingReportMarkup(booking, rows, includePayments = true) {
+    const selected = rows.filter((row) => row.booking?.id === booking.id);
+    const field = (label, amount) => `<div><dt>${escape(label)}</dt><dd>${escape(moneyLabel(amount))}</dd></div>`;
+    return `<section class="golf-booking-report"><h3>${escape(bookingLabel(booking))}</h3>
+      <p>${escape(dateLabel(booking.range_from))} ~ ${escape(dateLabel(booking.range_to))} · 조회 일정 ${selected.length}/${booking.rounds.length} / Lịch đang lọc
+      <br />입금·미수금·수익은 묶음 전체 기준이며 일정별로 배분하지 않습니다. / Khoản thu, công nợ và lợi nhuận tính cho toàn bộ đặt chung, không phân bổ từng lịch.</p>
+      <dl class="golf-detail-values">${[
+        field("조회 일정 판매 소계 / Tiền khách của lịch đang lọc", completeTotal(selected, "guest_total_vnd")),
+        field("조회 일정 원가 소계 / Giá vốn của lịch đang lọc", completeTotal(selected, "course_total_vnd")),
+        field("묶음 전체 판매 합계 / Tổng tiền khách đặt chung", booking.guest_total_vnd),
+        field("묶음 전체 원가 합계 / Tổng giá vốn đặt chung", booking.cost_total_vnd),
+        field("계약금 합계 / Tổng tiền cọc", booking.deposit_vnd),
+        field("추가 입금 합계 / Tổng khoản thu thêm", booking.receipt_vnd),
+        field("고객 총입금 / Tổng tiền khách đã trả", booking.received_vnd),
+        field("묶음 미수금·초과입금 / Công nợ · Thu dư đặt chung", booking.balance_vnd),
+        field("묶음 실제 수익 / Lợi nhuận đặt chung", booking.completed_at ? booking.profit_vnd : null)
+      ].join("")}</dl>
+      ${includePayments ? `<div class="golf-payment-detail-groups">${paymentDetailMarkup({ payments: booking.payments })}</div>` : ""}
+    </section>`;
+  }
+
+  function bookingDetailMarkup(row) {
+    const booking = row.booking;
+    if (!booking) return "";
+    const schedules = booking.rounds.map((round, index) => `<article class="golf-booking-schedule${round.id === row.id ? " is-selected" : ""}">
+      <div><strong>${index + 1}. ${escape(golfDateLabel(round.golf_date))} ${escape(timeLabel(round.golf_time))} · ${escape(round.golf_course)}</strong>
+      <span>${escape(round.holes)}H · ${escape(round.pax)}명 / khách · ${escape(round.representative_name || "—")}</span>
+      <span>판매 / Tiền khách: ${escape(moneyLabel(round.guest_total_vnd))} · 원가 / Giá vốn: ${escape(moneyLabel(round.course_total_vnd))}</span></div>
+      <a class="qr-btn qr-btn-small" href="golf_reserv.html?edit=${escape(encodeURIComponent(round.id))}">일정 수정 / Sửa lịch</a>
+    </article>`).join("");
+    return `<div class="golf-booking-detail">${bookingReportMarkup(booking, booking.rounds)}
+      <h3 class="golf-roster-title">묶음 전체 일정 / Tất cả lịch trong đặt chung</h3><div class="golf-booking-schedules">${schedules}</div>
+      <a class="qr-btn qr-btn-primary" href="golf_reserv.html?edit=${escape(encodeURIComponent(row.id))}">묶음 입금·완료 처리 / Thu tiền · Hoàn tất đặt chung</a>
+      <h3 class="golf-roster-title golf-selected-round-title">선택한 일정 상세 / Chi tiết lịch đã chọn</h3></div>`;
   }
 
   function paymentsOfKinds(row, kinds) {
@@ -140,6 +191,7 @@
   }
 
   function actualProfit(row) {
+    if (row.booking) return null;
     if (row.status !== "completed" || row.course_total_vnd == null) return null;
     const received = paymentTotal(row, ["deposit", "receipt"]);
     if (received == null) return Number(row.final_received_amount_vnd || 0) - Number(row.course_total_vnd);
@@ -159,7 +211,7 @@
       return [
         row.counterparty_name, row.representative_name, row.player_names_en,
         row.golf_course, row.smart_cart_note, row.cost_settlement_type,
-        row.cost_partner_name, costSettlementTypeLabel(row), row.note
+        row.cost_partner_name, costSettlementTypeLabel(row), row.note, row.booking?.label
       ].some((value) => String(value || "").toLocaleLowerCase().includes(query));
     });
   }
@@ -187,6 +239,7 @@
     }
     byId("golfPrintCriteria").textContent = filterDescription();
     byId("golfPrintGeneratedAt").textContent = `출력 일시 / Thời gian in: ${new Date().toLocaleString("ko-KR", { timeZone: "Asia/Ho_Chi_Minh" })}`;
+    byId("golfBookingPrintSummary").innerHTML = distinctBookings(rows).map((booking) => bookingReportMarkup(booking, rows)).join("");
     global.print();
   }
 
@@ -215,14 +268,14 @@
       return [
         textCell(row.status === "completed" ? "완료 / Hoàn tất" : "진행중 / Đang xử lý"),
         textCell(row.golf_date), textCell(timeLabel(row.golf_time)), textCell(row.counterparty_name),
-        textCell(row.representative_name), textCell(row.player_names_en, "wrapped"), integerCell(row.pax),
+        textCell(row.booking ? `${row.representative_name}\n${bookingLabel(row.booking)}` : row.representative_name, "wrapped"), textCell(row.player_names_en, "wrapped"), integerCell(row.pax),
         textCell(row.golf_course), integerCell(row.holes), textCell(row.smart_cart_note, "wrapped"),
         integerCell(row.guest_unit_price_vnd), integerCell(row.guest_total_vnd),
         integerCell(row.course_unit_price_vnd), integerCell(row.course_total_vnd),
         textCell(costSettlementTypeLabel(row)), textCell(costSettlementPartnerLabel(row)),
-        integerCell(depositTotal), textCell(depositTotal == null ? "" : paymentDetailText(row, "deposit"), "wrapped"),
-        integerCell(receivedTotal), textCell(receivedTotal == null ? "" : paymentDetailText(row, ["deposit", "receipt"]), "wrapped"),
-        integerCell(actualProfit(row)),
+        row.booking ? textCell("묶음 정산 / Thu chung") : integerCell(depositTotal), textCell(depositTotal == null ? "" : paymentDetailText(row, "deposit"), "wrapped"),
+        row.booking ? textCell("묶음 정산 / Thu chung") : integerCell(receivedTotal), textCell(receivedTotal == null ? "" : paymentDetailText(row, ["deposit", "receipt"]), "wrapped"),
+        row.booking ? textCell("묶음 정산 / Thu chung") : integerCell(actualProfit(row)),
         textCell(row.customer_type === "company" ? "회사 / Công ty" : "개인 / Cá nhân"),
         textCell(dateTimeLabel(row.created_at)), textCell(row.note, "wrapped"), textCell(dateTimeLabel(row.updated_at))
       ];
@@ -239,6 +292,35 @@
       textCell(row.status === "completed" ? "완료 / Hoàn tất" : "진행중 / Đang xử lý"),
       textCell(payment.legacy_import ? "기존 / Dữ liệu cũ" : "")
     ]));
+    const bookings = distinctBookings(rows);
+    for (const booking of bookings) {
+      for (const payment of booking.payments) transactionRows.push([
+        textCell(`묶음 / Nhóm: ${booking.id}`),
+        textCell(`${booking.range_from} ~ ${booking.range_to}`),
+        textCell(booking.rounds[0]?.counterparty_name), textCell(booking.label),
+        textCell(paymentKindLabel(payment.payment_kind)), textCell(payment.payment_date), integerCell(payment.amount_vnd),
+        textCell(paymentMethodLabel(payment.payment_method)),
+        textCell(booking.completed_at ? "완료 / Hoàn tất" : "진행중 / Đang xử lý"), textCell("")
+      ]);
+    }
+    const bookingHeaders = [
+      "묶음 ID / ID đặt chung", "묶음 이름 / Tên đặt chung", "전체 일정 시작 / Từ ngày", "전체 일정 종료 / Đến ngày",
+      "조회 일정 수 / Số lịch đang lọc", "전체 일정 수 / Tổng số lịch",
+      "조회 일정 판매 소계 / Tiền khách lịch đang lọc", "조회 일정 원가 소계 / Giá vốn lịch đang lọc",
+      "묶음 전체 판매 / Tổng tiền khách đặt chung", "묶음 전체 원가 / Tổng giá vốn đặt chung",
+      "계약금 / Tiền cọc", "추가 입금 / Khoản thu thêm", "총입금 / Tổng đã thu",
+      "미수금·초과입금 / Công nợ · Thu dư", "묶음 실제 수익 / Lợi nhuận đặt chung", "상태 / Trạng thái"
+    ];
+    const bookingRows = bookings.map((booking) => {
+      const selected = rows.filter((row) => row.booking?.id === booking.id);
+      return [textCell(booking.id), textCell(booking.label), textCell(booking.range_from), textCell(booking.range_to),
+        integerCell(selected.length), integerCell(booking.rounds.length),
+        integerCell(completeTotal(selected, "guest_total_vnd")), integerCell(completeTotal(selected, "course_total_vnd")),
+        integerCell(booking.guest_total_vnd), integerCell(booking.cost_total_vnd),
+        integerCell(booking.deposit_vnd), integerCell(booking.receipt_vnd), integerCell(booking.received_vnd),
+        integerCell(booking.balance_vnd), integerCell(booking.completed_at ? booking.profit_vnd : null),
+        textCell(booking.completed_at ? "완료 / Hoàn tất" : "진행중 / Đang xử lý")];
+    });
     const from = byId("filterFrom").value || "ALL";
     const to = byId("filterTo").value || "ALL";
     const generatedAt = new Date().toLocaleString("ko-KR", { timeZone: "Asia/Ho_Chi_Minh" });
@@ -272,7 +354,18 @@
         merges: ["A1:J1"],
         freezeRows: 5,
         autoFilterRange: `A5:J${Math.max(5, 5 + transactionRows.length)}`
-      }]
+      }, ...(bookings.length ? [{
+        name: "묶음 정산",
+        rows: [
+          [textCell("묶음 예약 정산 / Quyết toán đặt chung", "title"), ...Array(15).fill("")],
+          [textCell("조회 기준 / Điều kiện lọc"), textCell(filterDescription()), ...Array(14).fill("")],
+          [textCell("입금·미수금·수익은 묶음 전체 기준입니다. / Khoản thu, công nợ và lợi nhuận tính cho toàn bộ đặt chung."), ...Array(15).fill("")],
+          [],
+          bookingHeaders.map((label) => textCell(label, "header")), ...bookingRows
+        ],
+        columnWidths: [38,26,18,18,16,16,24,24,24,24,22,22,22,24,24,20],
+        merges: ["A1:P1", "A3:P3"], freezeRows: 5, autoFilterRange: `A5:P${5 + bookingRows.length}`
+      }] : [])]
     };
   }
 
@@ -302,12 +395,16 @@
   function renderSummary(rows) {
     const progress = rows.filter((row) => row.status === "in_progress").length;
     const completed = rows.filter((row) => row.status === "completed").length;
-    const deposits = rows.reduce((total, row) => total + Number(paymentTotal(row, "deposit") || 0), 0);
-    const profit = rows.reduce((total, row) => total + Number(actualProfit(row) || 0), 0);
+    const bookings = distinctBookings(rows);
+    const deposits = rows.reduce((total, row) => total + Number(paymentTotal(row, "deposit") || 0), 0)
+      + bookings.reduce((total, booking) => total + Number(booking.deposit_vnd || 0), 0);
+    const profit = rows.reduce((total, row) => total + Number(actualProfit(row) || 0), 0)
+      + bookings.reduce((total, booking) => total + Number(booking.completed_at ? booking.profit_vnd || 0 : 0), 0);
     byId("summaryProgress").textContent = progress.toLocaleString("ko-KR");
     byId("summaryCompleted").textContent = completed.toLocaleString("ko-KR");
     byId("summaryDeposit").textContent = moneyLabel(deposits);
     byId("summaryProfit").textContent = moneyLabel(profit);
+    byId("summaryScopeNote").hidden = !bookings.length;
   }
 
   function renderRow(row) {
@@ -321,8 +418,8 @@
     const editHref = `golf_reserv.html?edit=${encodeURIComponent(String(row.id || ""))}`;
     const depositTotal = paymentTotal(row, "deposit");
     const receivedTotal = paymentTotal(row, ["deposit", "receipt"]);
-    return `<tr data-status="${escape(row.status)}" data-reservation-id="${escape(row.id)}">
-      <td><button class="golf-detail-toggle" type="button" aria-haspopup="dialog" aria-controls="reservationDetailDialog" aria-label="${escape(`${representative} 예약 상세 보기 / Xem chi tiết đặt sân`)}" title="상세 보기 / Xem chi tiết">ⓘ</button><span class="golf-status-chip${completed ? " is-completed" : ""}">${escape(statusLabel)}</span></td>
+    return `<tr data-status="${escape(row.status)}" data-reservation-id="${escape(row.id)}" class="${row.booking ? "golf-group-member-row" : "golf-standalone-row"}">
+      <td><button class="golf-detail-toggle" type="button" aria-haspopup="dialog" aria-controls="reservationDetailDialog" aria-label="${escape(`${representative} 예약 상세 보기 / Xem chi tiết đặt sân`)}" title="상세 보기 / Xem chi tiết">ⓘ</button><span class="golf-status-chip${completed ? " is-completed" : ""}">${escape(statusLabel)}</span>${row.booking ? "" : '<span class="golf-standalone-label">개별 예약 / Đặt riêng</span>'}</td>
       <td>${escape(golfDateLabel(row.golf_date))}</td>
       <td>${escape(timeLabel(row.golf_time))}</td>
       <td class="golf-cell-text" title="${escape(row.counterparty_name || "—")}">${escape(row.counterparty_name || "—")}</td>
@@ -338,11 +435,11 @@
       <td class="golf-cell-money golf-screen-hidden">${escape(moneyLabel(row.course_total_vnd))}</td>
       <td class="golf-cell-text golf-screen-hidden" title="${escape(costSettlementTypeLabel(row))}">${escape(costSettlementTypeLabel(row))}</td>
       <td class="golf-cell-text golf-screen-hidden" title="${escape(costSettlementPartnerLabel(row))}">${escape(costSettlementPartnerLabel(row))}</td>
-      <td class="golf-cell-money golf-screen-hidden">${escape(moneyLabel(depositTotal))}</td>
+      <td class="golf-cell-money golf-screen-hidden">${escape(row.booking ? "묶음 정산 / Thu chung" : moneyLabel(depositTotal))}</td>
       <td class="golf-cell-text golf-cell-payments golf-screen-hidden" title="${escape(paymentDetailText(row, "deposit"))}"><span class="golf-payment-screen-summary">${escape(paymentMethodSummary(row, "deposit"))}</span><span class="golf-payment-print-detail">${escape(paymentDetailText(row, "deposit"))}</span></td>
-      <td class="golf-cell-money golf-screen-hidden">${escape(moneyLabel(receivedTotal))}</td>
+      <td class="golf-cell-money golf-screen-hidden">${escape(row.booking ? "묶음 정산 / Thu chung" : moneyLabel(receivedTotal))}</td>
       <td class="golf-cell-text golf-cell-payments golf-screen-hidden" title="${escape(paymentDetailText(row, ["deposit", "receipt"]))}"><span class="golf-payment-screen-summary">${escape(paymentMethodSummary(row, ["deposit", "receipt"]))}</span><span class="golf-payment-print-detail">${escape(paymentDetailText(row, ["deposit", "receipt"]))}</span></td>
-      <td class="golf-cell-money golf-screen-hidden">${escape(moneyLabel(actualProfit(row)))}</td>
+      <td class="golf-cell-money golf-screen-hidden">${escape(row.booking ? "묶음 정산 / Thu chung" : moneyLabel(actualProfit(row)))}</td>
       <td class="golf-screen-hidden">${escape(customerType)}</td>
       <td class="golf-screen-hidden">${escape(dateTimeLabel(row.created_at))}</td>
       <td class="golf-cell-text golf-cell-note golf-screen-hidden" title="${escape(note)}">${escape(note)}</td>
@@ -376,28 +473,31 @@
       field("S-CART", clean(row.smart_cart_note) || "—"),
       field("1인 원가 / Giá vốn mỗi khách", moneyLabel(row.course_unit_price_vnd)),
       field("골프장·거래처 원가 합계 / Tổng giá vốn", moneyLabel(row.course_total_vnd)),
-      field("계약금 합계 / Tổng tiền cọc", moneyLabel(deposit)),
+      ...(!row.booking ? [field("계약금 합계 / Tổng tiền cọc", moneyLabel(deposit)),
       field("추가 입금 합계 / Tổng khoản thu thêm", moneyLabel(receipt)),
       field("고객 총입금 / Tổng tiền khách đã trả", moneyLabel(received)),
       field("미수금·초과입금 / Còn phải thu · Thu dư", moneyLabel(receivable)),
-      field("실제 수익 / Lợi nhuận", moneyLabel(actualProfit(row)))
+      field("실제 수익 / Lợi nhuận", moneyLabel(actualProfit(row)))] : [])
     ].join("")}</dl>`;
     const other = `<dl class="golf-detail-values">${[
       field("원가 정산 방식 / Phương thức quyết toán", costSettlementTypeLabel(row)),
       field("정산 거래처 / Đối tác quyết toán", costSettlementPartnerLabel(row)),
       field("구분 / Loại khách", row.customer_type === "company" ? "회사 / Công ty" : "개인 / Cá nhân"),
-      field("예약금 최초 입금일 / Ngày nhận cọc đầu tiên", dateLabel(row.deposit_received_date)),
-      field("완료 기준일 / Ngày hoàn tất", dateLabel(row.final_received_date)),
+      ...(!row.booking ? [field("예약금 최초 입금일 / Ngày nhận cọc đầu tiên", dateLabel(row.deposit_received_date)),
+      field("완료 기준일 / Ngày hoàn tất", dateLabel(row.final_received_date))] : [
+        field("묶음 완료 기준일 / Ngày hoàn tất đặt chung", dateLabel(row.booking.completion_date))
+      ]),
       field("등록 일시 / Thời gian tạo", dateTimeLabel(row.created_at)),
       field("최종 수정 / Cập nhật", dateTimeLabel(row.updated_at)),
       field("비고 / Ghi chú", clean(row.note) || "—", true)
     ].join("")}</dl>`;
-    return `<div class="golf-expanded-grid">${section("예약 정보 / Thông tin đặt sân", reservation)}${section("금액 요약 / Tổng hợp số tiền", financial)}${section("입금 건별 내역 / Chi tiết từng khoản thu", `<div class="golf-payment-detail-groups">${paymentDetailMarkup(row)}</div>`)}${section("정산 및 기타 정보 / Quyết toán và thông tin khác", other)}</div>`;
+    return `${bookingDetailMarkup(row)}<div class="golf-expanded-grid">${section("예약 정보 / Thông tin đặt sân", reservation)}${section(row.booking ? "선택 일정 금액 / Số tiền lịch đã chọn" : "금액 요약 / Tổng hợp số tiền", financial)}${row.booking ? "" : section("입금 건별 내역 / Chi tiết từng khoản thu", `<div class="golf-payment-detail-groups">${paymentDetailMarkup(row)}</div>`)}${section("정산 및 기타 정보 / Quyết toán và thông tin khác", other)}</div>`;
   }
 
   function openReservationDetail(row) {
     if (!row) return;
     const dialog = byId("reservationDetailDialog");
+    byId("reservationDetailTitle").textContent = row.booking ? bookingLabel(row.booking) : "예약 상세 / Chi tiết đặt sân";
     byId("reservationDetailSubtitle").textContent = `${row.status === "completed" ? "완료 / Hoàn tất" : "진행중 / Đang xử lý"} · ${golfDateLabel(row.golf_date)} · ${row.counterparty_name || "—"}`;
     byId("reservationDetailContent").innerHTML = reservationDetailMarkup(row);
     if (!dialog.open) dialog.showModal();
@@ -408,13 +508,42 @@
     byId("reservationDetailDialog").close();
   }
 
+  function listBlocks(rows) {
+    const ordered = rows.slice().sort((a, b) =>
+      `${a.golf_date} ${a.golf_time} ${a.id}`.localeCompare(`${b.golf_date} ${b.golf_time} ${b.id}`)
+    );
+    const blocks = new Map();
+    for (const row of ordered) {
+      const key = row.booking ? `booking:${row.booking.id}` : `round:${row.id}`;
+      if (!blocks.has(key)) blocks.set(key, { booking: row.booking || null, rows: [] });
+      blocks.get(key).rows.push(row);
+    }
+    return [...blocks.values()];
+  }
+
+  function renderBookingHeading(block) {
+    const booking = block.booking;
+    const content = `<button class="golf-group-detail-toggle" type="button" aria-haspopup="dialog" aria-controls="reservationDetailDialog">묶음예약 · ${escape(booking.label)} / Đặt chung</button>
+      <span class="golf-booking-heading-count">조회 ${block.rows.length} / 전체 ${booking.rounds.length}일정 · Đang xem ${block.rows.length} / tổng ${booking.rounds.length} lịch</span>
+      <span class="golf-booking-heading-dates">${escape(dateLabel(booking.range_from))} ~ ${escape(dateLabel(booking.range_to))}</span>`;
+    return `<tr class="golf-booking-heading" data-booking-id="${escape(booking.id)}" data-reservation-id="${escape(block.rows[0].id)}">
+      <td class="golf-booking-heading-screen" colspan="12">${content}</td>
+      <td class="golf-booking-heading-print" colspan="25">${content}</td>
+    </tr>`;
+  }
+
+  function renderTableRows(rows) {
+    return listBlocks(rows).map((block) => `${block.booking ? renderBookingHeading(block) : ""}${block.rows.map(renderRow).join("")}`).join("");
+  }
+
   function render() {
     const rows = filteredRows();
     renderSummary(rows);
     byId("listCount").textContent = `${rows.length.toLocaleString("ko-KR")}건 / mục`;
     byId("reservationTableBody").innerHTML = rows.length
-      ? rows.map(renderRow).join("")
+      ? renderTableRows(rows)
       : '<tr><td class="golf-cell-empty" colspan="25">조건에 맞는 골프 예약이 없습니다. / Không có đặt sân phù hợp.</td></tr>';
+    byId("golfBookingPrintSummary").innerHTML = distinctBookings(rows).map((booking) => bookingReportMarkup(booking, rows)).join("");
   }
 
   async function loadRows(options = {}) {
@@ -450,6 +579,8 @@
         `${a.golf_date} ${a.golf_time} ${a.id}`
           .localeCompare(`${b.golf_date} ${b.golf_time} ${b.id}`)
       );
+      if (!global.GolfBookings?.loadAndAttach) throw new Error("묶음 예약 모듈을 불러오지 못했습니다. 페이지를 새로고침해 주세요. / Vui lòng tải lại trang.");
+      await global.GolfBookings.loadAndAttach(state.rows);
       render();
       QRStaff.connectionBadge("online", "연결됨");
       if (!options.quiet) setBanner("골프 예약 목록을 불러왔습니다. / Đã tải danh sách đặt sân.", "ok");
