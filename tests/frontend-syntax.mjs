@@ -39,6 +39,7 @@ const externalScripts = [
   "assets/golf-reserv.js",
   "assets/golf-reserv-list.js",
   "assets/golf-budget.js",
+  "assets/golf-budget-detail.js",
   "assets/vendor/qrcode.min.js",
 ];
 

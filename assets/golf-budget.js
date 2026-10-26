@@ -438,7 +438,6 @@
     byId("chargeTableBody").innerHTML = charges.length
       ? charges.map((charge) => {
         const reservation = reservationForCharge(charge);
-        const href = `golf_reserv.html?edit=${encodeURIComponent(charge.reservation_id)}`;
         const balanceAfter = balanceAfterCharge.get(charge.reservation_id);
         const statusLabel = chargeStatusLabel(charge);
         return `<tr>
@@ -449,7 +448,7 @@
           <td>${escape(reservation.counterparty_name || "—")}</td>
           <td>${escape(reservation.representative_name || "—")}</td>
           <td class="budget-money"><strong>−${escape(moneyLabel(charge.amount_vnd))}</strong></td>
-          <td><a class="budget-edit-link" href="${escape(href)}">예약 보기 / Xem</a></td>
+          <td><button class="budget-edit-link" type="button" data-reservation-detail="${escape(charge.reservation_id)}" aria-haspopup="dialog" aria-controls="budgetReservationDialog">예약 보기 / Xem</button></td>
           <td class="budget-money${Number(balanceAfter) < 0 ? " is-negative" : ""}"><strong>${escape(moneyLabel(balanceAfter))}</strong></td>
           <td>${escape(dateTimeLabel(charge.reversed_at))}</td>
         </tr>`;
@@ -513,7 +512,7 @@
         <td>${escape(row.counterparty_name || "—")}</td>
         <td>${escape(row.representative_name || "—")}</td>
         <td class="budget-money"><strong>${escape(moneyLabel(row.course_total_vnd))}</strong></td>
-        <td><a class="budget-edit-link" href="golf_reserv.html?edit=${escape(encodeURIComponent(row.id))}">예약 보기 / Xem</a></td>
+        <td><button class="budget-edit-link" type="button" data-reservation-detail="${escape(row.id)}" aria-haspopup="dialog" aria-controls="budgetReservationDialog">예약 보기 / Xem</button></td>
       </tr>`).join("")
       : '<tr><td class="budget-empty" colspan="8">차감 예정 내역이 없습니다.<br />Không có khoản chờ khấu trừ.</td></tr>';
   }
@@ -872,6 +871,13 @@
   }
 
   function bindEvents() {
+    const reservationDetail = global.GolfBudgetDetail.create({ canView: () => Boolean(state.identity) });
+    for (const id of ["chargeTableBody", "pendingTableBody"]) {
+      byId(id).addEventListener("click", (event) => {
+        const button = event.target.closest("[data-reservation-detail]");
+        if (button) reservationDetail.open(button.dataset.reservationDetail, button);
+      });
+    }
     byId("reservationViewFilters").addEventListener("click", (event) => {
       const button = event.target.closest("[data-reservation-view]");
       if (button) setReservationView(button.dataset.reservationView);
