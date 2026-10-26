@@ -470,9 +470,9 @@
       return (!state.pendingFrom && !state.pendingTo)
         || dateInRange(String(row.golf_date || ""), state.pendingFrom, state.pendingTo);
     }).slice().sort((left, right) =>
-      String(right.golf_date || "").localeCompare(String(left.golf_date || ""))
-      || String(right.golf_time || "").localeCompare(String(left.golf_time || ""))
-      || String(right.id || "").localeCompare(String(left.id || "")));
+      String(left.golf_date || "").localeCompare(String(right.golf_date || ""))
+      || String(left.golf_time || "").localeCompare(String(right.golf_time || ""))
+      || String(left.id || "").localeCompare(String(right.id || "")));
   }
 
   function pendingTotalOf(rows) {

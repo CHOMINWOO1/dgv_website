@@ -25,7 +25,11 @@ for (const id of ["addReservationButton", "searchInput", "statusFilter", "filter
   assert.ok(page.includes(`id="${id}"`), `Keep list control ${id}`);
   assert.ok(!hiddenSummary.includes(`id="${id}"`), `${id} must not move into the hidden summary`);
 }
-assert.match(page, /assets\/golf-reserv-list\.js\?v=20261025-inline-create-1/);
+assert.match(page, /assets\/golf-reserv-list\.js\?v=20261026-progress-first-1/);
+const statusOptions = page.match(/<select[^>]*id="statusFilter"[^>]*>([\s\S]*?)<\/select>/)[1];
+assert.deepEqual(Array.from(statusOptions.matchAll(/<option value="([^"]+)"/g), (match) => match[1]), ["in_progress", "completed", "all"]);
+assert.match(statusOptions, /<option value="in_progress" selected>/);
+assert.match(source, /clearFiltersButton"\)\.addEventListener[\s\S]*?statusFilter"\)\.value = "in_progress"/);
 assert.match(page, /티업 시작일 \/ Từ ngày chơi/);
 assert.match(page, /티업 종료일 \/ Đến ngày chơi/);
 assert.match(page, /id="reservationTableBody"/);
@@ -158,10 +162,26 @@ const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (character) => (
 const testWindow = { DGV: { supabase: {}, escapeHTML }, QRStaff: {} };
 const testDocument = { getElementById: (id) => ({ value: id === "statusFilter" ? "all" : "" }) };
 assert.match(source, /\n  init\(\);\s*}\)\(window\);/);
-vm.runInNewContext(source.replace(/\n  init\(\);/, "\n  global.__listTest = { renderRow, workbookOptions };"),
+vm.runInNewContext(source.replace(/\n  init\(\);/, "\n  global.__listTest = { renderRow, workbookOptions, orderedRows, renderTableRows };"),
   { window: testWindow, document: testDocument, console }, { filename: "golf-reserv-list.js" });
 const fixture = { id: "cart-test", status: "in_progress", golf_date: "2026-10-25", golf_time: "09:00:00",
   golf_course: "SAM", holes: 18, pax: 2, player_names_en: "A,B", payments: [] };
+// The list uses nearest-to-farthest dates and earliest tee time, matching the budget's pending list.
+const scheduleFixtures = [
+  { ...fixture, id: "future-late", golf_date: "2027-01-23", golf_time: "09:00:00" },
+  { ...fixture, id: "current-late", golf_date: "2026-10-26", golf_time: "11:00:00" },
+  { ...fixture, id: "future-near", golf_date: "2026-11-01", golf_time: "09:00:00" },
+  { ...fixture, id: "current-early", golf_date: "2026-10-26", golf_time: "07:00:00" }
+];
+const orderedSchedules = testWindow.__listTest.orderedRows(scheduleFixtures);
+const expectedOrder = ["current-early", "current-late", "future-near", "future-late"];
+assert.deepEqual(Array.from(orderedSchedules, (row) => row.id), expectedOrder);
+assert.equal(scheduleFixtures[0].id, "future-late", "Sorting must not mutate original records");
+const scheduleMarkup = testWindow.__listTest.renderTableRows(scheduleFixtures);
+assert.deepEqual(Array.from(scheduleMarkup.matchAll(/data-reservation-id="([^"]+)"/g), (match) => match[1]), expectedOrder);
+const scheduleWorkbook = testWindow.__listTest.workbookOptions(orderedSchedules);
+assert.deepEqual(Array.from(scheduleWorkbook.sheets[0].rows.slice(5, 9), (row) => row[1].value),
+  ["2026-10-26", "2026-10-26", "2026-11-01", "2027-01-23"]);
 for (const value of ["400,000 VND", "1,200,000 VND", null, '<img src=x onerror="alert(1)">']) {
   const row = { ...fixture, smart_cart_note: value };
   const markup = testWindow.__listTest.renderRow(row);
