@@ -842,7 +842,7 @@
     });
     byId("clearFiltersButton").addEventListener("click", () => {
       byId("searchInput").value = "";
-      byId("statusFilter").value = "all";
+      byId("statusFilter").value = "in_progress";
       byId("filterFrom").value = "";
       byId("filterTo").value = "";
       render();

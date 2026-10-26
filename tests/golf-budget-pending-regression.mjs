@@ -38,7 +38,7 @@ const viewButtons = ["all", "completed", "pending"].map((view) => {
 });
 byId("reservationViewFilters").querySelectorAll = () => viewButtons;
 const body = { classList: classList() };
-const toasts = [], exported = [], printModes = [], printedSections = [], queries = [];
+const toasts = [], exported = [], printModes = [], printedSections = [], printedPendingOrders = [], queries = [];
 const globalEvents = new Map(), fixtureTables = new Map();
 const supabase = {
   from(table) {
@@ -61,6 +61,7 @@ const window = {
   print: () => {
     printModes.push({ payments: body.classList.contains("print-budget-payments"), charges: body.classList.contains("print-budget-charges") });
     printedSections.push({ completed: !byId("chargeListSection").hidden, pending: !byId("pendingListSection").hidden });
+    printedPendingOrders.push([...byId("pendingTableBody").innerHTML.matchAll(/data-reservation-detail="([^"]+)"/g)].map((match) => match[1]));
   },
   addEventListener(type, fn) { const list = globalEvents.get(type) || []; list.push(fn); globalEvents.set(type, list); },
 };
@@ -92,7 +93,7 @@ state.charges = [
 ];
 const base = { status: "in_progress", cost_settlement_type: "golf_course", golf_course: "SAM", pax: 2 };
 state.pendingReservations = [
-  { ...base, id: "future", golf_date: "2026-11-02", golf_time: "10:05:00", course_total_vnd: 400, representative_name: '<img src=x onerror="alert(1)">', counterparty_name: "=1+1" },
+  { ...base, id: "future", golf_date: "2027-01-23", golf_time: "10:05:00", course_total_vnd: 400, representative_name: '<img src=x onerror="alert(1)">', counterparty_name: "=1+1" },
   { ...base, id: "october", golf_date: "2026-10-20", golf_time: "08:00:00", course_total_vnd: 200, representative_name: "October guest" },
   { ...base, id: "missing", golf_date: "2026-10-20", golf_time: "09:00:00", course_total_vnd: null, representative_name: "Missing cost guest" },
   { ...base, id: "other", golf_course: "AT1200", golf_date: "2026-10-10", golf_time: "07:00:00", course_total_vnd: 300 },
@@ -101,8 +102,9 @@ state.pendingReservations = [
 ];
 api.bindEvents(); api.render();
 assert.equal(byId("chargeListSection").hidden, false); assert.equal(byId("pendingListSection").hidden, false);
-assert.deepEqual(plain(api.filteredPendingReservations().map((r) => r.id)), ["future", "missing", "october", "other"]);
-assert.match(byId("pendingTableBody").innerHTML, /2026\. 11\. 02/);
+assert.deepEqual(plain(api.filteredPendingReservations().map((r) => r.id)), ["other", "october", "missing", "future"], "Pending dates must run nearest-to-farthest, with the earlier tee time first on the same day");
+assert.deepEqual([...byId("pendingTableBody").innerHTML.matchAll(/data-reservation-detail="([^"]+)"/g)].map((match) => match[1]), ["other", "october", "missing", "future"]);
+assert.match(byId("pendingTableBody").innerHTML, /2027\. 01\. 23/);
 assert.match(byId("pendingTableBody").innerHTML, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
 assert.doesNotMatch(byId("pendingTableBody").innerHTML, /<img|edit=partner|edit=completed/);
 assert.equal(byId("pendingTableTotal").textContent, "900 VND");
@@ -112,7 +114,7 @@ assert.equal(byId("summaryBalance").textContent, "2,800 VND");
 
 byId("pendingRangeFrom").value = "2026-10-01"; byId("pendingRangeTo").value = "2026-10-31";
 click("pendingRangeApplyButton"); courseClick("pending", "SAM");
-assert.deepEqual(plain(api.filteredPendingReservations().map((r) => r.id)), ["missing", "october"]);
+assert.deepEqual(plain(api.filteredPendingReservations().map((r) => r.id)), ["october", "missing"], "Date/course filters preserve ascending tee times");
 assert.equal(byId("pendingTableTotal").textContent, "200 VND");
 assert.equal(byId("summaryBalance").textContent, "2,800 VND");
 assert.equal(state.chargeFrom, ""); assert.equal(state.paymentFrom, "");
@@ -135,8 +137,9 @@ const pendingData = pendingRows.filter((r) => String(r[7] || "").includes("?edit
 assert.equal(completeData.length, 2); assert.equal(pendingData.length, 2);
 assert.equal(completeData[0][6], -100); assert.equal(completeData[1][6], -300);
 assert.equal(completeData[1][8], 900, "Historical balance uses all events, not filtered subset");
-assert.equal(pendingData[0][6], "", "Unknown cost must stay blank, not zero");
-assert.equal(pendingData[1][6], 200);
+assert.deepEqual(plain(pendingData.map((row) => [row[2], row[3]])), [["2026-10-20", "08:00"], ["2026-10-20", "09:00"]], "Excel order must match the nearest-date-first screen list");
+assert.equal(pendingData[0][6], 200);
+assert.equal(pendingData[1][6], "", "Unknown cost must stay blank, not zero");
 assert.ok(completeRows.flat().some((v) => typeof v === "string" && v.includes("2026. 10. 01")));
 assert.ok(pendingRows.flat().some((v) => typeof v === "string" && v.includes("2026. 10. 31")));
 assert.equal(completeRows.at(-1)[6], 300); assert.equal(pendingRows.at(-1)[6], 200);
@@ -147,6 +150,7 @@ body.classList.add("print-budget-payments"); click("printChargeButton");
 assert.deepEqual(printModes.at(-1), { payments: false, charges: true });
 assert.match(byId("printChargeCriteria").textContent, /2026\. 10\. 01/);
 assert.match(byId("printPendingCriteria").textContent, /SAM/);
+assert.deepEqual(printedPendingOrders.at(-1), ["october", "missing"], "Print uses the same ascending pending rows as the screen and Excel");
 afterPrint(); assert.equal(body.classList.contains("print-budget-charges"), false);
 body.classList.add("print-budget-charges"); click("printDepositButton");
 assert.deepEqual(printModes.at(-1), { payments: true, charges: false });
@@ -230,4 +234,4 @@ assert.equal(printModes.length, printsBeforeEmpty, "Do not open an empty print d
 assert.equal(byId("exportChargeButton").disabled, false);
 assert.equal(body.classList.contains("print-budget-charges"), false);
 assert.equal(api.courseBalance("SAM"), 900, "Filtering never affects current balance");
-console.log("Golf budget pending lists, filters, balances, print isolation, XLSX values and read-only query verified.");
+console.log("Golf budget pending nearest-date/early-tee order, filters, unchanged completed order/balances, print/XLSX order and read-only query verified.");
