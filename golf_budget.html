@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>HANA 골프장 예산 관리</title>
   <link rel="stylesheet" href="assets/qr-staff.css" />
+  <link rel="stylesheet" href="assets/golf-budget-detail.css?v=20261026-readonly-1" />
   <style>
     .locked .budget-app{pointer-events:none;user-select:none;filter:blur(2px)}
     .budget-app{transition:filter .15s ease;font-size:16px;font-weight:750}
@@ -54,7 +55,8 @@
     .budget-empty{padding:28px!important;text-align:center!important;color:var(--qr-sub)}
     .budget-rule{margin-top:9px;color:#9b4a2a;font-size:12px;font-weight:1000}
     .budget-explainer{margin:0;color:var(--qr-sub);font-size:13px;font-weight:900;line-height:1.6}
-    .budget-edit-link{color:#6f452e;font-weight:1000;text-underline-offset:3px}
+    .budget-edit-link{appearance:none;padding:4px 0;border:0;background:transparent;color:#6f452e;font:inherit;font-weight:1000;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+    .budget-edit-link:focus-visible{outline:2px solid #795039;outline-offset:3px}
     .budget-print-head{display:none}
     .budget-app #chargeListSection[hidden],.budget-app #pendingListSection[hidden]{display:none!important}
     @media(max-width:900px){
@@ -284,6 +286,14 @@
     </section>
   </main>
 
+  <dialog class="golf-detail-dialog" id="budgetReservationDialog" aria-labelledby="budgetReservationTitle" aria-describedby="budgetReservationSubtitle">
+    <header class="golf-detail-dialog-head">
+      <div><h2 id="budgetReservationTitle">예약 상세 / Chi tiết đặt sân</h2><p id="budgetReservationSubtitle">조회 전용 / Chỉ xem</p></div>
+      <button class="qr-btn golf-detail-dialog-close" id="closeBudgetReservation" type="button" aria-label="상세 닫기 / Đóng chi tiết" autofocus>✕</button>
+    </header>
+    <div class="golf-detail-content" id="budgetReservationContent" aria-live="polite" aria-busy="false"></div>
+  </dialog>
+
   <div class="qr-modal-back" id="loginModal" hidden>
     <form class="qr-modal" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="loginTitle" aria-describedby="loginDescription">
       <h2 id="loginTitle">매니저 / 관리자 로그인</h2>
@@ -300,6 +310,8 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
-  <script src="assets/golf-budget.js?v=20261024-pending-report-2"></script>
+  <script src="assets/golf-bookings.js?v=20261025-group-1"></script>
+  <script src="assets/golf-budget-detail.js?v=20261026-readonly-1"></script>
+  <script src="assets/golf-budget.js?v=20261026-readonly-1"></script>
 </body>
 </html>

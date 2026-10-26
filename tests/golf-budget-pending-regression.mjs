@@ -56,6 +56,7 @@ const window = {
     async collectSupabasePages(factory, options) { const q = factory(); assert.ok(options.pageSize > 0); return fixtureTables.get(q.table) || []; },
   },
   QRStaff: { toast: (...args) => toasts.push(args), connectionBadge() {}, messageOf: (error) => error.message },
+  GolfBudgetDetail: { create: () => ({ open() {} }) },
   DGV_XLSX: { downloadWorkbook: (options) => exported.push(options) }, requestAnimationFrame: (fn) => fn(),
   print: () => {
     printModes.push({ payments: body.classList.contains("print-budget-payments"), charges: body.classList.contains("print-budget-charges") });
