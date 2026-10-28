@@ -1,6 +1,6 @@
 # HANA administrator payroll
 
-The first release adds a private payroll workspace reached from `home_admin.html`.
+The payroll workspace is reached from `home_admin.html`.
 The manager home does not contain the payroll entry. The page uses the existing
 administrator password and Supabase Auth session. No new password is stored by
 the payroll feature. A hidden navigation link is not its security boundary:
@@ -9,22 +9,32 @@ role in the database. Staff, manager and anonymous sessions cannot read payroll.
 
 ## Deployment
 
-Apply `supabase/migrations/20261028055329_hana_payroll_admin.sql` to a local or
-staging database with the existing `auth.uid()` and `public.has_app_role(text[])`
-helpers. Run `supabase/tests/payroll.sql` as one transaction using a database
-owner connection. It is a rollback-only test and requires no real employee or
-auth-user fixtures. The repository's `tests/payroll-db.mjs` also runs this contract
-in an isolated PostgreSQL-compatible PGlite instance with stubbed Auth helpers.
+Apply these migrations in order to a local or staging database with the existing
+`auth.uid()` and `public.has_app_role(text[])` helpers, Supabase Vault and Storage:
+
+1. `supabase/migrations/20261028055329_hana_payroll_admin.sql`
+2. `supabase/migrations/20261028062408_hana_payroll_complete.sql`
+3. `supabase/migrations/20261028064044_hana_payroll_backup_restore.sql`
+4. `supabase/migrations/20261028070047_hana_payroll_consistent_reads.sql`
+
+Run `supabase/tests/payroll.sql`, `payroll-complete.sql`, `payroll-backup.sql` and `payroll-consistency.sql`
+as whole files using a database owner connection. They roll back all fixtures.
+The restore test requires initially empty payroll tables; do not clear existing
+data merely to run it. `tests/payroll-db.mjs` also runs the contracts in an
+isolated PGlite database with stubbed Auth, Storage and Vault interfaces.
+This isolated test does not establish real Vault encryption or file uploads;
+those must be checked on Supabase before production promotion.
 
 Before production promotion, run the same migration and rollback test against
 staging Supabase, inspect security advisors, and verify signed-in administrator,
 manager, staff and signed-out browser sessions. Production migration application
 and website publication are separate actions from preparing this change.
 
-This migration only adds `payroll_*` objects. It does not update restaurant
-orders, expenses, reservations, role helpers, Auth accounts or storage buckets.
-There is deliberately no automatic expense posting or balance movement.
-An approved payroll calculation does not mean that money was paid.
+The migrations only change payroll objects and add the private
+`payroll-evidence` Storage bucket. Existing restaurant orders, expenses,
+reservations, role helpers and Auth accounts are preserved. There is no payment
+fund-source selection, bank integration or automatic expense posting. An
+approved payroll calculation does not mean that money was paid.
 
 ## Import and deduplication
 
@@ -103,9 +113,12 @@ allowances minus deductions and must be nonnegative.
 
 Finalized `payroll_runs` preserve their snapshot and amounts permanently.
 Later imports, employee edits and term changes do not recalculate them.
-This first release does not amend or delete finalized payroll; a correction
-workflow should add a separately audited adjustment before supporting changes
-to an already approved period.
+Corrections use append-only `payroll_run_adjustments`: `payroll_adjust_run`
+requires the run ID, signed amount, reason and retry UUID. The original run is
+never updated. A correction cannot reduce the adjusted total below the amount
+actually paid. `payroll_run_balances` is a security-invoker view returning
+`run_id`, `employee_id`, `month`, `original_total`, `adjustment_total`, `total`,
+`paid` and `balance` under the caller's administrator RLS permissions.
 
 `payroll_pay(p_run_id, p_amount, p_paid_on, p_method, p_reference, p_note,
 p_request_id)` returns the payment UUID. The method is `cash` or `bank` and the
@@ -117,9 +130,11 @@ also applies this check to direct table inserts. Payments are append-only.
 
 Record only money actually paid. Split cash/bank payments can be entered as
 separate rows. The reference and note fields can record a receipt or bank
-transaction identifier; receipt uploads and electronic signatures are outside
-this first release. No sensitive bank-account or national-identity fields are
-collected here.
+transaction identifier. `payroll_reverse_payment(payment_id, reason, request_id)`
+adds one immutable reversal per payment instead of deleting it. The corrected
+payable balance excludes reversed payments. Adjustment, reversal and payment
+operations all lock the same run before checking balances, and identical retry
+UUIDs return the original record rather than creating duplicates.
 
 `payroll_audit` records actor, time and before/after values for saved payroll
 changes. Clients cannot directly manufacture audit rows or source revisions.
@@ -154,3 +169,109 @@ and overpayment rejection through both RPC and direct table access.
 PGlite verifies SQL execution and role policies in isolation. Actual Supabase
 Auth, API grants, concurrent network requests and production infrastructure
 still require staging/browser verification before release.
+
+## Staff details, rules and review history
+
+Employee details now include `phone`, `employment_type` (`full_time` or
+`part_time`), `hire_date`, `termination_date`, `employment_status` (`active`,
+`leave`, `terminated`) and preferred `payment_method` (`cash`, `bank`, `mixed`).
+The legacy `active` flag stays synchronized with employment status.
+
+`payroll_rule_versions` is append-only and has a generated version, unique
+effective date, enable flag, explicit overtime multipliers, night premiums and
+hours, monthly proration/basis, optional contractual monthly hours, weekly rest
+days, overtime warning limits, next-month payment day and change reason.
+Overtime starts disabled. No fixed 26-day/208-hour divisor is assumed. New rules
+affect later calculations; finalized snapshots retain their original version.
+
+`payroll_days` retains separately approved `overtime_intervals` and
+`night_intervals` (arrays of `{start,end}` Vietnamese wall times), approval flags
+and an approval reason. The database rejects malformed, overlapping or excessively
+long intervals. The calculation layer also verifies the approved intervals are
+inside actual working time and handles day boundaries and breaks.
+
+`payroll_review(employee_id, month, snapshot, reason, expected_revision)` saves
+an immutable review for one employee/month/source version, independently of
+finalization. An identical snapshot/reason retry reuses its saved review. A changed
+snapshot or reason creates another immutable review at the same source version.
+Reviewing an unresolved month is allowed; finalizing it is not.
+
+The fourth migration, `20261028070047_hana_payroll_consistent_reads.sql`, extends
+the read revision to finalized salaries, payments, adjustments, reversals and
+evidence metadata. A report brackets its reads with this revision and retries if
+it changed. All source and money writes take the revision lock before row/run
+locks, including direct REST writes and retry RPC paths. Reviews intentionally
+do not increment it so saving a review and finalizing its calculation can use
+the same captured revision. Failed writes and identical retries do not increment
+it. `payroll-consistency.sql` covers these behaviors; real multi-session lock
+contention is outside the isolated PGlite test runtime.
+
+## Encrypted bank and identity fields
+
+`payroll_set_sensitive(employee_id, data, reason)` accepts only `bank_name`,
+`bank_account`, `account_holder`, `national_id` and `tax_id`, each a string of up
+to 300 characters. Each save creates a new authenticated-encrypted Vault secret.
+Private version rows preserve references and metadata; audit logs never contain
+those plaintext field values. Do not put private account numbers in a reason or
+other ordinary note. `payroll_get_sensitive(employee_id)` returns the latest
+version only after an administrator check.
+
+Public RPC wrappers use SECURITY INVOKER. The two private Vault helpers use
+SECURITY DEFINER solely to access the non-exposed Vault objects, set an empty
+search path, and repeat the `auth.uid()` plus admin-role checks. Browser roles
+have no grants to Vault or the private version table. Shared technical accounts
+remain the existing site's audit identity limitation.
+
+## Private evidence and signatures
+
+Upload evidence to `payroll-evidence` at
+`<payment UUID>/<new file UUID>.<pdf|png|jpg|jpeg|webp>`, with upsert disabled.
+Only administrators can upload or read. Maximum size is 5 MiB and MIME types are
+PDF, PNG, JPEG and WebP. No public URL, manager policy, overwrite policy or delete
+policy is provided.
+
+After upload, insert `payroll_attachments` metadata with the payment ID, path,
+original filename, MIME type, byte size and evidence type (`receipt`,
+`bank_transfer`, `signature`, `tax_invoice`). The insert verifies actual Storage
+metadata, so a nonexistent object or mismatched size/type cannot be presented
+as a receipt. Signature evidence must be a PNG with `signed_name` and
+`acknowledged_at`. A stored signature documents receipt acknowledgement; it does
+not replace every document an accountant may require. Tax-invoice files are
+attachments, not an electronic invoice issuing or tax-filing service.
+
+## Encrypted backup and safe restoration
+
+`payroll_backup()` returns one consistent database snapshot:
+
+```text
+{format:"DGV_PAYROLL_BACKUP", version:2, exported_at, revision,
+ tables:{payroll_employees:[...], ...13 payroll tables...},
+ sensitive:[{id,version,employee_id,reason,created_by,created_at,data}]}
+```
+
+The snapshot includes all sensitive historical versions decrypted for the
+administrator. It is limited to 10 MiB. The client must immediately encrypt the
+whole envelope with a user password before writing a file; never save plaintext
+or put it in localStorage. Optional receipt bytes belong alongside `database`
+inside the encrypted client envelope, not inside the database RPC payload.
+
+`payroll_restore(payload)` accepts only this versioned format and a fixed payroll
+table allowlist. It refuses any nonempty payroll database and never truncates,
+overwrites or touches unrelated business tables. It acquires exclusive payroll
+table locks with NOWAIT, restores original IDs/actors/timestamps/audit records,
+validates balances and approval invariants, re-encrypts each sensitive version
+into a new Vault secret, and records a restore receipt. Trigger suspension is
+transactional and lock-protected; errors restore the original trigger state and
+roll back every row. A busy database should be retried after other work finishes.
+
+The result contains `restored`, `replayed`, `receipt_id`, `counts` and
+`missing_evidence`. Receipt metadata is restored even when binary files have not
+yet been uploaded. After database restoration, upload saved evidence bytes to
+their original paths. Retrying the exact same payload uses the private restore
+fingerprint to report missing files without reinserting or overwriting rows.
+If evidence was not backed up or an upload fails, show an incomplete-file status
+until the missing files are supplied; do not report complete recovery.
+
+Additional tests verify disabled/enabled trigger state after failed/successful
+restore, immutable history, regenerated secret references, restored sequence
+continuity, missing-file reporting and identical restore retry behavior.
