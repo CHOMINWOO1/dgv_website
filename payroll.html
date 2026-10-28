@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HANA · 직원·급여관리</title>
+  <link rel="stylesheet" href="assets/qr-staff.css" />
+  <link rel="stylesheet" href="assets/payroll.css" />
+</head>
+<body>
+  <div id="pageError" role="alert" hidden></div>
+  <main id="payrollApp" hidden>
+    <header class="page-head"><div><a class="back" href="home_admin.html">← 관리자 홈 / Trang quản trị</a><p class="eyebrow">HANA · ADMIN ONLY</p><h1>직원·급여관리</h1><p>Quản lý nhân sự &amp; tiền lương</p></div><button id="logout" class="quiet">로그아웃 / Đăng xuất</button></header>
+    <fieldset id="workspace">
+      <section class="panel toolbar" aria-label="조회 조건 / Bộ lọc">
+        <label>조회 월 / Tháng<input id="month" type="month" required /></label>
+        <label>직원 / Nhân viên<select id="employeeFilter"><option value="">전체 직원 / Tất cả</option></select></label>
+        <button id="refresh" class="quiet">새로고침 / Tải lại</button>
+        <button id="export" class="quiet">급여대장 Excel / Tải Excel</button>
+      </section>
+      <section class="panel import-panel" aria-labelledby="importTitle">
+        <div><h2 id="importTitle">출퇴근 엑셀 / Nhập chấm công</h2><p class="muted">N308 .xlsx · 최대 5 MB / Tối đa 5 MB · 베트남 현지시각 / Giờ Việt Nam</p></div>
+        <div class="import-controls"><label class="sr-only" for="importFile">N308 엑셀 파일 / Tệp Excel</label><input id="importFile" type="file" accept=".xlsx" /><button id="previewImport">내용 확인 / Xem trước</button></div>
+        <div id="importPreview" hidden></div>
+      </section>
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+      <section id="metrics" class="metrics" aria-label="월별 요약 / Tổng hợp tháng"></section>
+      <section class="panel" aria-labelledby="ledgerTitle">
+        <div class="section-head"><div><h2 id="ledgerTitle">월별 급여대장 / Bảng lương tháng</h2><p class="muted">금액은 VND · 계산 급여와 실제 지급액을 구분합니다. / Đơn vị VND · Phân biệt lương và thực trả.</p></div><button id="addEmployee" class="quiet">+ 직원 등록 / Thêm nhân viên</button></div>
+        <div class="table-scroll"><table><thead><tr><th>직원 / Nhân viên</th><th>근무 / Giờ làm</th><th>계산·확정 급여 / Lương</th><th>지급 / Đã trả</th><th>미지급 / Còn lại</th><th>상태 / Trạng thái</th><th>상세 / Chi tiết</th></tr></thead><tbody id="ledgerBody"></tbody></table></div>
+        <p class="muted">월급은 등록된 기본급을 사용합니다. 지각·부족시간의 자동 공제는 없으며, 법정 수당·공제는 검토한 금액을 별도 입력합니다.<br />Lương tháng theo mức đã đăng ký; không tự động trừ lương do đi muộn. Phụ cấp và khấu trừ cần được kiểm tra.</p>
+      </section>
+      <section id="employeeDetail" class="panel" hidden>
+        <div class="section-head"><div><p class="eyebrow">EMPLOYEE DETAIL</p><h2 id="detailTitle"></h2></div><button id="editEmployee" class="quiet">직원 정보 / Thông tin</button></div>
+        <div id="detailSummary"></div>
+        <div class="detail-grid">
+          <section><h3>근무 달력 / Lịch làm việc</h3><p class="muted">날짜를 눌러 휴무·근무일 또는 출퇴근을 보정하세요. / Chọn ngày để sửa lịch hoặc chấm công.</p><div id="calendar" class="calendar"></div></section>
+          <section><h3>급여·근무조건 / Điều kiện lương</h3><div id="termsList"></div><button id="addTerms" class="quiet">조건 추가 / Thêm điều kiện</button><h3>급여 검토 / Duyệt lương</h3><div id="reviewArea"></div></section>
+        </div>
+        <details open><summary>일별 출퇴근 / Chấm công hằng ngày</summary><div class="table-scroll"><table><thead><tr><th>날짜 / Ngày</th><th>출근 / Vào</th><th>퇴근 / Ra</th><th>근무 / Làm</th><th>지각 / Muộn</th><th>조퇴 / Về sớm</th><th>추가 / Thêm</th><th>확인 / Kiểm tra</th></tr></thead><tbody id="dailyBody"></tbody></table></div></details>
+        <section><h3>급여 지급내역 / Thanh toán lương</h3><p class="muted">실제 지급한 금액만 기록하세요. / Chỉ ghi nhận số tiền đã thực trả.</p><div id="paymentArea"></div></section>
+      </section>
+      <details class="panel"><summary>가져오기 이력 / Lịch sử nhập</summary><div id="importHistory"></div></details>
+    </fieldset>
+  </main>
+
+  <div class="qr-modal-back" id="loginModal" hidden>
+    <form class="qr-modal" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+      <h2 id="loginTitle">관리자 로그인 / Đăng nhập quản trị</h2>
+      <p>기존 관리자 비밀번호를 입력해 주세요. / Nhập mật khẩu quản trị hiện tại.</p>
+      <label class="qr-label" for="loginPassword">관리자 비밀번호 / Mật khẩu quản trị</label>
+      <input class="qr-input" id="loginPassword" type="password" autocomplete="current-password" required />
+      <div class="qr-button-row"><button class="qr-btn qr-btn-primary" id="loginConfirm" type="submit">입장 / Đăng nhập</button></div>
+    </form>
+  </div>
+
+  <dialog id="employeeDialog"><form id="employeeForm"><h2>직원 정보 / Nhân viên</h2><label>지문인식기 ID / User ID<input name="device_user_id" required maxlength="80" /></label><label>이름 / Họ tên<input name="name" required maxlength="120" /></label><label class="check"><input name="active" type="checkbox" checked /> 재직 / Đang làm việc</label><p class="muted">급여조건은 직원 등록 후 별도로 추가합니다. / Thêm điều kiện lương sau khi đăng ký.</p><div class="actions"><button type="button" data-close>취소 / Hủy</button><button type="submit">저장 / Lưu</button></div></form></dialog>
+  <dialog id="termsDialog"><form id="termsForm"><h2>급여·근무조건 / Điều kiện lương</h2><p class="muted">기존 조건을 보존하고 새 적용일부터 사용합니다. / Giữ điều kiện cũ và áp dụng từ ngày mới.</p><div class="form-grid"><label>적용 시작일 / Hiệu lực từ<input name="effective_from" type="date" required /></label><label>급여 방식 / Hình thức<select name="pay_type"><option value="monthly">월급 / Tháng</option><option value="hourly">시급 / Giờ</option><option value="daily">일급 / Ngày</option></select></label><label>기본급·단가 VND / Mức lương<input name="rate" type="number" min="0" max="1000000000" step="1" value="7000000" required /></label><label>출근 / Giờ vào<input name="shift_start" type="time" value="10:00" required /></label><label>퇴근 / Giờ ra<input name="shift_end" type="time" value="20:00" required /></label><label>휴게 시작 / Nghỉ từ<input name="break_start" type="time" value="13:00" required /></label><label>휴게 종료 / Nghỉ đến<input name="break_end" type="time" value="15:00" required /></label></div><p class="muted">휴게가 없으면 시작·종료를 같게 입력하세요. / Không nghỉ: nhập cùng giờ bắt đầu và kết thúc.</p><div class="actions"><button type="button" data-close>취소 / Hủy</button><button type="submit">조건 저장 / Lưu</button></div></form></dialog>
+  <dialog id="dayDialog"><form id="dayForm"><h2>근무일 확인 / Kiểm tra ngày làm</h2><label>날짜 / Ngày<input name="work_date" type="date" required readonly /></label><label>근무 구분 / Loại ngày<select name="day_type"><option value="work">근무일 / Ngày làm</option><option value="rest">휴무 / Ngày nghỉ</option><option value="paid_leave">유급휴가 / Nghỉ có lương</option><option value="unpaid_leave">무급휴가 / Nghỉ không lương</option><option value="holiday">공휴일 / Ngày lễ</option></select></label><div class="form-grid"><label>보정 출근 / Vào đã xác nhận<input name="check_in" type="datetime-local" /></label><label>보정 퇴근 / Ra đã xác nhận<input name="check_out" type="datetime-local" /></label></div><p class="muted">두 시각을 비워두면 원본 기록으로 계산합니다. 야간근무는 다음 날 퇴근일을 지정할 수 있습니다.<br />Để trống cả hai để dùng bản gốc. Ca đêm có thể kết thúc ngày hôm sau.</p><label>변경·확인 사유 / Lý do<textarea name="reason" required maxlength="500"></textarea></label><div id="dayRaw" class="muted"></div><div class="actions"><button type="button" data-close>취소 / Hủy</button><button type="submit">저장 / Lưu</button></div></form></dialog>
+  <dialog id="confirmDialog"><form id="confirmForm"><h2>급여 확정 / Chốt lương</h2><p id="confirmText"></p><p class="muted">확정 후 금액과 계산 내역을 보존합니다. 실제 지급은 별도로 기록합니다.<br />Lưu cố định số tiền và cách tính. Ghi thanh toán riêng.</p><label class="check"><input type="checkbox" required /> 근무기록·수당·공제를 검토했습니다. / Đã kiểm tra chấm công, phụ cấp và khấu trừ.</label><div class="actions"><button type="button" data-close>취소 / Hủy</button><button type="submit">확정 / Chốt</button></div></form></dialog>
+  <dialog id="paymentDialog"><form id="paymentForm"><h2>실제 지급 기록 / Ghi nhận thanh toán</h2><label>지급일 / Ngày trả<input name="paid_on" type="date" required /></label><label>지급액 VND / Số tiền<input name="amount" type="number" min="1" step="1" required /></label><label>지급방법 / Phương thức<select name="method"><option value="cash">현금 / Tiền mặt</option><option value="bank">계좌이체 / Chuyển khoản</option></select></label><label>거래번호·수령 확인 / Mã giao dịch, xác nhận<input name="reference" maxlength="200" /></label><label>비고 / Ghi chú<textarea name="note" maxlength="500"></textarea></label><div class="actions"><button type="button" data-close>취소 / Hủy</button><button type="submit">지급 기록 / Lưu thanh toán</button></div></form></dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script><script src="assets/dgv-data.js"></script><script src="assets/supabase-client.js"></script><script src="assets/qr-staff.js"></script>
+  <script src="assets/dgv-xlsx.js"></script><script src="assets/payroll-core.js"></script><script src="assets/payroll.js"></script>
+</body>
+</html>

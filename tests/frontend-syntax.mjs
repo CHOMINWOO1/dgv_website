@@ -5,6 +5,7 @@ import vm from "node:vm";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const files = [
+  "payroll.html",
   "home.html",
   "home_manager.html",
   "home_admin.html",
@@ -29,6 +30,9 @@ const files = [
 ];
 
 const externalScripts = [
+  "assets/payroll.js",
+  "assets/payroll-core.js",
+  "assets/payroll-import-worker.js",
   "assets/qr-menu.js",
   "assets/qr-staff.js",
   "assets/order-inbox.js",

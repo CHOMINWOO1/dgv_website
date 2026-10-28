@@ -110,7 +110,7 @@ for (const destination of requiredAdminDestinations) {
 }
 assert.deepEqual(
   hrefs(sectionHtml(adminHome, "salesTitle", "reservationTitle")),
-  ["admin.html", "reserv_check.html", "expense.html"],
+  ["admin.html", "reserv_check.html", "expense.html", "payroll.html"],
   "sales section must keep the requested manager, staff reservation, and expense order",
 );
 assert.deepEqual(
@@ -151,4 +151,7 @@ for (const html of [staffHome, managerHome, adminHome]) {
 }
 
 console.log("Staff, manager, and administrator home navigation/auth contracts verified.");
+assert.ok(adminDestinations.includes("payroll.html"));
+assert.doesNotMatch(managerHome, /href="payroll\.html"/);
+assert.doesNotMatch(staffHome, /href="payroll\.html"/);
 
