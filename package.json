@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:payroll": "node tests/payroll-core.mjs",
+    "test:payroll:db": "node tests/payroll-db.mjs",
+    "test:payroll:browser": "node tests/payroll-browser.mjs",
     "supabase": "supabase",
     "db:lint": "supabase db lint",
     "test:security": "node tests/security-regression.mjs",
@@ -42,6 +45,8 @@
     "qrcodejs": "1.0.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "playwright": "1.62.1",
     "supabase": "2.112.0"
   }
 }
