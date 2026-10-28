@@ -20,6 +20,8 @@
     monthly: "월중 급여조건 변경 확인 필요 / Kiểm tra thay đổi lương trong tháng",
     overlap: "수정 근무시간이 다른 날짜와 겹칩니다 / Ca đã sửa chồng lấn ngày khác",
     paidLeave: "유급휴일 급여 별도 검토 필요 / Cần duyệt tiền lương ngày nghỉ có lương",
+    employment: "재직기간 밖의 근무기록 확인 필요 / Chấm công ngoài thời gian làm việc",
+    employmentProration: "입·퇴사월 급여 일할 검토 필요 / Kiểm tra lương tháng vào hoặc nghỉ việc",
   };
 
   function parseTimestamp(value, options) {
@@ -173,6 +175,9 @@
     if (!Number.isFinite(dayMs(today))) throw new Error("today must be YYYY-MM-DD");
     return employees.map((employee) => {
       const id = employee.id;
+      const hireDate = Number.isFinite(dayMs(employee.hire_date)) ? employee.hire_date : null;
+      const terminationDate = Number.isFinite(dayMs(employee.termination_date)) ? employee.termination_date : null;
+      const employedOn = (date) => (!hireDate || date >= hireDate) && (!terminationDate || date <= terminationDate);
       const employeeTerms = terms.filter((t) => t.employee_id === id).slice().sort((a, b) => String(a.effective_from).localeCompare(String(b.effective_from)));
       const employeeDays = days.filter((d) => d.employee_id === id);
       const dayMap = new Map(employeeDays.map((d) => [d.work_date, d]));
@@ -233,9 +238,11 @@
         if (!manual && punches.length > 2) issues.push(message.many);
         if (!manual && punches.length >= 2 && b - a < 5 * MINUTE) issues.push(message.short);
         if (!manual && punches.length >= 2 && b - a > 16 * 60 * MINUTE) issues.push(message.long);
-        if (!manual && punches.length && dayType !== "work") issues.push(message.rest);
-        if (!manual && !punches.length && dayType === "work" && day && date < today) issues.push(message.missing);
+        const approvedRestWork = day && day.overtime_approved === true && String(day.approval_reason || "").trim();
+        if (!manual && punches.length && dayType !== "work" && !approvedRestWork) issues.push(message.rest);
+        if (!manual && !punches.length && dayType === "work" && day && date < today && employedOn(date)) issues.push(message.missing);
         const hasWork = manual || punches.length > 0;
+        if (hasWork && !employedOn(date)) issues.push(message.employment);
         if (hasWork && !validTerm(term)) issues.push(message.terms);
         if (!hasWork && ["paid_leave", "holiday"].includes(dayType)) {
           if (!validTerm(term)) issues.push(message.terms);
@@ -258,14 +265,18 @@
           checkOut: Number.isFinite(b) && (manual || punches.length > 1) ? timestampText(b) : null,
           minutes, lateMinutes, earlyMinutes, extraMinutes,
           status: issues.length ? "review" : manual ? "confirmed" : dayType === "work" ? "ok" : dayType,
-          issues, rawCount: punches.length, dayType, payType: term && term.pay_type, rate: term ? Number(term.rate) : null });
+          issues, issueCodes: issues.map((issue) => Object.keys(message).find((key) => message[key] === issue) || "unknown"),
+          rawCount: punches.length, dayType, payType: term && term.pay_type, rate: term ? Number(term.rate) : null });
       }
       const relevantTerms = employeeTerms.filter((t) => t.effective_from < end && (t.effective_from >= start || t === activeTerm(employeeTerms, start)));
       const payTypes = [...new Set(relevantTerms.map((t) => t.pay_type))];
-      const startTerm = activeTerm(employeeTerms, start);
+      const employmentStart = hireDate && hireDate > start ? hireDate : start;
+      const startTerm = activeTerm(employeeTerms, employmentStart);
       const hasMonthly = payTypes.includes("monthly");
       let baseAmount = Math.round(hourlyAmount + dailyAmount);
-      if (!relevantTerms.length || relevantTerms.some((t) => !validTerm(t))) {
+      const outsideEmployment = (hireDate && hireDate >= end) || (terminationDate && terminationDate < start);
+      if (outsideEmployment && !daily.some((d) => d.checkIn)) baseAmount = 0;
+      else if (!relevantTerms.length || relevantTerms.some((t) => !validTerm(t))) {
         summaryIssues.push(message.terms);
         baseAmount = null;
       } else if (hasMonthly) {
@@ -277,7 +288,10 @@
         } else if (startTerm.pay_type !== "monthly" || relevantTerms.some((t) => t.pay_type !== "monthly" || Number(t.rate) !== Number(startTerm.rate))) {
           summaryIssues.push(message.monthly);
           baseAmount = null;
-        } else baseAmount = Number(startTerm.rate);
+        } else {
+          baseAmount = Number(startTerm.rate);
+          if ((hireDate && hireDate > start && hireDate < end) || (terminationDate && terminationDate >= start && terminationDate < dateText(endMs - DAY))) summaryIssues.push(message.employmentProration);
+        }
       }
       if (!hasMonthly && daily.some((d) => d.status === "review")) baseAmount = null;
       if (daily.some((d) => d.issues.includes(message.terms)) || invalidRecord) baseAmount = null;
@@ -286,10 +300,10 @@
       const earlyMinutes = sum("earlyMinutes");
       const extraMinutes = sum("extraMinutes");
       const compensationIssues = [
-        ...summaryIssues.filter((issue) => issue === message.monthly),
+        ...summaryIssues.filter((issue) => issue === message.monthly || issue === message.employmentProration),
         ...daily.flatMap((d) => d.issues.filter((issue) => issue === message.paidLeave).map((issue) => d.date + ": " + issue)),
       ];
-      const attendanceUnresolved = summaryIssues.filter((issue) => issue !== message.monthly).length + daily.filter((d) => d.issues.some((issue) => issue !== message.paidLeave)).length;
+      const attendanceUnresolved = summaryIssues.filter((issue) => issue !== message.monthly && issue !== message.employmentProration).length + daily.filter((d) => d.issues.some((issue) => issue !== message.paidLeave)).length;
       const compensationUnresolved = compensationIssues.length;
       return { employee_id: id, name: employee.name, device_user_id: employee.device_user_id,
         active: employee.active !== false,
@@ -297,6 +311,7 @@
         lateMinutes, earlyMinutes, extraMinutes, balanceMinutes: extraMinutes - lateMinutes - earlyMinutes,
         baseAmount, unresolved: attendanceUnresolved + compensationUnresolved,
         attendanceUnresolved, compensationUnresolved, compensationIssues,
+        summaryIssueCodes: summaryIssues.map((issue) => Object.keys(message).find((key) => message[key] === issue) || "unknown"),
         issues: [...summaryIssues, ...daily.flatMap((d) => d.issues.map((issue) => d.date + ": " + issue))],
         daily, payTypes, termsSummary: relevantTerms.map((t) => t.effective_from + " · " + t.pay_type + " · " + Number(t.rate).toLocaleString("en-US") + " VND").join(" / ") };
     });

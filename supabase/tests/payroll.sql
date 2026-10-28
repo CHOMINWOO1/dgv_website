@@ -116,6 +116,7 @@ begin
   v_run_id:=public.payroll_finalize(employee,'2090-01-01',1000,100,50,saved_snapshot,rev);
   perform pg_temp.payroll_assert((select total=1050 and snapshot=saved_snapshot from public.payroll_runs where id=v_run_id),
     'approved salary is persisted with immutable calculation snapshot');
+  select version into rev from public.payroll_revision where id=1;
   rejected:=false;
   begin perform public.payroll_finalize(employee,'2090-01-01',1000,100,50,saved_snapshot,rev);
   exception when unique_violation then rejected:=true; end;

@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+await import("../assets/payroll-archive.js");
+const archive=globalThis.DGV_PAYROLL_ARCHIVE,password="Synthetic-password-2026";
+const payload={database:{format:"DGV_PAYROLL_BACKUP",version:2,tables:{payroll_employees:[{name:"합성 직원 Nguyễn"}]}},evidence:[{path:"test/evidence",mime:"application/pdf",dataBase64:archive.base64(new Uint8Array([0,255,128,13,10]))}]};
+const sealed=await archive.encrypt(payload,password),second=await archive.encrypt(payload,password);
+assert.notEqual(sealed.ciphertext,second.ciphertext,"random salt and IV prevent repeated ciphertext");
+assert.equal(JSON.stringify(sealed).includes("Nguyễn"),false);
+assert.deepEqual(await archive.decrypt(sealed,password),payload);
+assert.deepEqual(archive.unbase64(payload.evidence[0].dataBase64),new Uint8Array([0,255,128,13,10]));
+await assert.rejects(archive.decrypt(sealed,"Incorrect-password-2026"));
+const bytes=archive.unbase64(sealed.ciphertext);bytes[15]^=1;
+await assert.rejects(archive.decrypt({...sealed,ciphertext:archive.base64(bytes)},password));
+await assert.rejects(archive.decrypt({...sealed,iterations:1},password));
+await assert.rejects(archive.decrypt({...sealed,version:3},password));
+await assert.rejects(archive.encrypt(payload,"short"));
+assert.throws(()=>archive.unbase64("<>invalid"));
+console.log("PASS payroll encrypted backup: round trip, binary evidence, unique ciphertext, wrong password, tamper, KDF/version validation");
