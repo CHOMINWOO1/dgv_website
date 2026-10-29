@@ -94,6 +94,10 @@
     return errors;
   }
   function serialize(intervals) { return intervals.map(([a, b]) => ({ start: textStamp(a), end: textStamp(b) })); }
+  function workedIntervals(daily) {
+    const values = Array.isArray(daily.workIntervals) ? daily.workIntervals : [{ start: daily.checkIn, end: daily.checkOut }];
+    return values.map((item) => [stamp(item.start), stamp(item.end)]).filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a);
+  }
   function approvedIntervals(value, allowed, label) {
     if (!Array.isArray(value) || value.length > 16) return { intervals: [], errors: [label + ": 승인 구간 형식 확인 / Kiểm tra khoảng thời gian"] };
     const intervals = value.map((item) => [stamp(item && item.start), stamp(item && item.end)]).sort((a, b) => a[0] - b[0]);
@@ -221,7 +225,7 @@
       const futureIssue = "미래 출퇴근 시각 확인 필요 / Kiểm tra thời gian chấm công trong tương lai";
       if (futurePunch) issue(daily.date + ": " + futureIssue);
       if (daily.checkIn && daily.checkOut) {
-        const actual = [[stamp(daily.checkIn), stamp(daily.checkOut)]];
+        const actual = workedIntervals(daily);
         if (actual.every(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a)) {
           for (const part of calendarPieces(actual)) if (!withinEmployment(employee, part.date)) issue(daily.date + ": 재직기간 밖의 근무 시각 확인 / Kiểm tra giờ làm ngoài thời gian hợp đồng");
           if (daily.checkOut.slice(0, 7) !== month && stamp(daily.checkOut) > dateMs(daily.checkOut.slice(0, 10))) warning("월말 야간근무는 근무 시작일의 급여월에 한 번만 포함됩니다 / Ca qua tháng chỉ được tính một lần theo tháng bắt đầu");
@@ -329,7 +333,7 @@
       const enhancedDaily = base.daily.map((daily) => {
         const date = daily.date, day = dayMap.get(date) || {}, term = latest(employeeTerms, date), schedule = scheduleBounds(term, date);
         const dayType = day.day_type || daily.dayType || "work";
-        const actual = Number.isFinite(stamp(daily.checkIn)) && Number.isFinite(stamp(daily.checkOut)) && stamp(daily.checkOut) > stamp(daily.checkIn) && schedule ? subtract([[stamp(daily.checkIn), stamp(daily.checkOut)]], schedule.breaks) : [];
+        const actual = schedule ? subtract(workedIntervals(daily), schedule.breaks) : [];
         const special = ["rest", "holiday", "paid_leave"].includes(dayType);
         const contextFor = (calendarDate) => ({ date: calendarDate, dayType: dayMap.get(calendarDate)?.day_type || dayType,
           term: latest(employeeTerms, calendarDate), rule: normalizeRule(latest(rules, calendarDate)) });

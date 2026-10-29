@@ -82,7 +82,7 @@ contain `import_id`, `inserted_count`, `duplicate_count`, and `employee_count`
 - `payroll_terms`: effective-dated monthly, hourly or daily rates plus shift and
   break times. These rows are append-only; a new effective date changes future
   calculations while retaining prior terms. The default schedule is
-  10:00–20:00 with a 13:00–15:00 break. Imported staff have no implicit salary.
+  10:00–20:00 with a 12:00–14:00 break. Imported staff have no implicit salary.
 - `payroll_attendance_raw`: immutable original punches and import provenance.
 - `payroll_days`: explicit work, rest, paid leave, unpaid leave or holiday dates.
   An administrator can also save a reviewed in/out pair without changing raw
@@ -418,3 +418,105 @@ until the missing files are supplied; do not report complete recovery.
 Additional tests verify disabled/enabled trigger state after failed/successful
 restore, immutable history, regenerated secret references, restored sequence
 continuity, missing-file reporting and identical restore retry behavior.
+
+## Online tablet attendance
+
+Migration `20261029035509_hana_payroll_kiosk_attendance.sql` adds an online-only
+tablet capability without modifying existing staff, POS punches or finalized
+payroll values. Apply it after the seven earlier payroll migrations. Face
+templates and images are not sent to the database. The recorded verification
+label is `trusted_kiosk_verification`: it means the enrolled device asserted a
+successful local comparison. This is not server-verified biometric identity or
+a guarantee against a modified browser, stolen device token or presentation
+attack. Register a supervised tablet and revoke its capability when it is lost.
+
+Administrators authenticate through the existing password login in an isolated,
+nonpersistent Supabase client. Device setup must not retain an administrator
+session. Generate a 256-bit random token with Web Crypto, encode it as 64
+lowercase hexadecimal characters, and store it only in encrypted tablet-local
+storage. The server stores its SHA-256 hash, never the raw token. Never put the
+token in a URL, analytics, audit details, screenshots or exported payroll files.
+
+Administrator RPCs:
+
+| RPC | Arguments | Result |
+| --- | --- | --- |
+| `payroll_kiosk_register` | `p_device_id` stable UUID, `p_name`, `p_token` | `{device_id,name,status}`; an exact retry is safe |
+| `payroll_kiosk_devices` | none | Array of device ID/name/status, creation/revocation times and active enrollment count |
+| `payroll_kiosk_revoke` | `p_device_id`, `p_reason` | Device UUID; capability is immediately unusable |
+| `payroll_kiosk_enroll` | `p_device_id`, `p_employee_id`, `p_consent_version` | Enrollment UUID; server records administrator and consent time |
+| `payroll_kiosk_unenroll` | `p_device_id`, `p_employee_id`, `p_reason` | Employee UUID; active grant is withdrawn |
+
+Employee enrollment requires a deliberate administrator confirmation of the
+selected employee and consent. Re-enrollment after withdrawal gets a new grant
+UUID. Store that UUID with the local template and compare it to the current
+roster so a withdrawn template is not reused. Device and grant revocations
+preserve their private administrator audit history. Raw tokens and hashes do
+not appear in those audit details. Existing managers cannot manage devices.
+
+Runtime RPCs accept the publishable/anonymous client plus a valid device token;
+they do not require or return an administrator session:
+
+| RPC | Arguments | Result |
+| --- | --- | --- |
+| `payroll_kiosk_roster` | `p_token` | `{device_id,name,employees:[{id,device_user_id,name,enrollment_id,last_punch}]}` |
+| `payroll_kiosk_punch` | `p_token`, `p_employee_id`, `p_kind` (`in`/`out`), `p_request_id` UUID | `{event_id,employee_id,punch_type,occurred_at,server_received_at,replayed,verification}` |
+| `payroll_kiosk_receipt` | `p_token`, `p_request_id` | The stored event with `replayed:true`, or null if absent/owned by another device |
+
+`last_punch` is null or `{punch_type,occurred_at}`. The roster exposes only
+currently enrolled, active employees within their hire/termination dates.
+It contains no contact details, identity numbers, wages or bank information.
+Anonymous callers receive no direct table privileges. Kiosk implementation
+objects live in the dedicated, non-exposed `payroll_kiosk` schema. The migration
+does not grant anonymous access to the existing `private` or Vault schemas.
+A private, NOLOGIN
+`payroll_kiosk_writer` role owns only the three capability RPC implementations;
+its grants are limited to minimum employee columns, private registration reads,
+raw event insertion and trigger-controlled audit/revision writes. API roles
+cannot assume this role. Other payroll administrator gates remain in place.
+
+The server sets `occurred_at` using `clock_timestamp()` in
+`Asia/Ho_Chi_Minh` wall time; no punch RPC accepts a client timestamp. UTC receipt
+time remains in `server_received_at`. Only an explicit online user action may
+send a new punch. A face test must only compare locally and must not call punch.
+Do not queue new offline attendance for later submission. If a response is
+uncertain, persist the request UUID and resolve it through the receipt RPC.
+A null receipt means no event was found; require a fresh face check before any
+new action. Never submit a delayed request as if it happened at the earlier time.
+
+An identical request UUID returns the original event and time without another
+raw row or revision increment. Reusing it for a different employee, direction
+or device fails. A first `out`, consecutive same-direction events and a direction
+switch within 30 seconds fail. Device revocation is checked before retries.
+All devices share the payroll revision lock so concurrent punches, revocation,
+employee status changes and salary finalization cannot interleave unchecked.
+Missing terms, off-schedule work, rest/leave-day work and a long open shift do
+not discard genuine punch evidence; the payroll calculation flags cases for
+administrator review. Employment-inactive, pre-hire and post-termination
+employees and withdrawn enrollments cannot create new events.
+
+New raw columns are `source` (`excel` or `kiosk`), nullable `punch_type`,
+`kiosk_device_id` and globally unique `kiosk_request_id`. Existing records gain
+only the `excel` provenance default; original timestamps and values stay intact.
+Only kiosk rows may have a null `import_id`; they do not create fake workbook
+import rows. Typed attendance uses explicit in/out pairs, supports several
+separate work periods and assigns an overnight pair to the in date. Mixed POS
+and typed evidence that cannot be safely deduplicated requires review.
+Raw audit `created_by` attributes the device to its registering administrator;
+the `source` and device UUID identify that this is a kiosk assertion, not a
+fresh administrator verification of the employee's face.
+
+Encrypted payroll archives preserve typed raw attendance. Device credentials,
+enrollment grants and their private setup audit are intentionally excluded;
+after restoration, register the tablet and enroll employees again. Old version-2
+archives missing the new raw fields restore as Excel records. Explicit invalid
+or null provenance is rejected rather than silently changed.
+
+Run `tests/payroll-db.mjs` for isolated regression, including
+`supabase/tests/payroll-kiosk.sql` and `payroll-kiosk-backup.sql`. Those two files
+are for the isolated database only. For a live nonempty database, use only
+`supabase/tests/payroll-kiosk-live.sql`: it runs random-ID fixture writes inside
+a rollback, never disables triggers or changes existing rows, and asserts all
+payroll/private row counts and the source revision return to their original
+values. The local harness also verifies that applying this migration preserves
+preexisting terms, POS timestamps and finalized salary snapshots.

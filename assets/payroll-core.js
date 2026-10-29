@@ -22,6 +22,8 @@
     paidLeave: "유급휴일 급여 별도 검토 필요 / Cần duyệt tiền lương ngày nghỉ có lương",
     employment: "재직기간 밖의 근무기록 확인 필요 / Chấm công ngoài thời gian làm việc",
     employmentProration: "입·퇴사월 급여 일할 검토 필요 / Kiểm tra lương tháng vào hoặc nghỉ việc",
+    sequence: "출퇴근 순서·중복 기록 확인 필요 / Kiểm tra thứ tự hoặc chấm công lặp",
+    mixed: "웹·엑셀 출퇴근 기록이 겹칩니다. 원본을 확인하세요 / Chấm công web và Excel chồng lấn; kiểm tra bản gốc",
   };
 
   function parseTimestamp(value, options) {
@@ -198,46 +200,104 @@
         }
       }
       let invalidRecord = false;
+      const normalized = [];
       for (const record of records.filter((r) => r.employee_id === id)) {
         const ms = timestampMs(record.occurred_at);
-        if (!Number.isFinite(ms)) { invalidRecord = true; continue; }
-        const key = JSON.stringify([ms, record.device_id]);
+        const type = record.punch_type == null ? null : record.punch_type;
+        if (!Number.isFinite(ms) || (type !== null && type !== "in" && type !== "out")) { invalidRecord = true; continue; }
+        // Replayed typed events at the identical instant cannot add another
+        // worked interval. Keep the legacy import key unchanged.
+        const key = JSON.stringify(type ? [ms, type] : [ms, null, record.device_id]);
         if (seen.has(key)) continue;
         seen.add(key);
         let date = dateText(ms);
-        const corrected = corrections.find((d) => !overlappingCorrections.has(d) && ms >= timestampMs(d.check_in) && ms <= timestampMs(d.check_out));
-        if (corrected) date = corrected.work_date;
-        else {
-          const previous = dateText(dayMs(date) - DAY);
-          const priorTerm = activeTerm(employeeTerms, previous);
+        if (type) {
+          // A re-entry after midnight can still be part of the explicitly
+          // scheduled overnight shift, just as with legacy device punches.
+          const previous = dateText(dayMs(date) - DAY), priorTerm = activeTerm(employeeTerms, previous);
           if (validTerm(priorTerm) && clockMinutes(priorTerm.shift_end) < clockMinutes(priorTerm.shift_start) && ms <= shiftBounds(priorTerm, previous).end) date = previous;
         }
+        normalized.push({ ms, type, date, issues: [] });
+      }
+      normalized.sort((a, b) => a.ms - b.ms || String(a.type).localeCompare(String(b.type)));
+      const typed = normalized.filter((record) => record.type), typedTimes = new Set(typed.map((record) => record.ms));
+      const pairs = [];
+      let pending = null;
+      for (const record of typed) {
+        if (record.type === "in") {
+          if (pending) pending.issues.push(message.sequence, message.single);
+          pending = record;
+        } else if (pending) {
+          // A declared out belongs to its in even after midnight. Legacy
+          // punches still require an explicitly overnight schedule below.
+          record.date = pending.date;
+          pairs.push({ first: pending, last: record });
+          pending = null;
+        } else {
+          record.issues.push(message.single);
+        }
+      }
+      if (pending) pending.issues.push(message.single);
+      const groupFor = (date) => {
+        if (!grouped.has(date)) grouped.set(date, { punches: [], intervals: [], typedIssues: [], typedCount: 0, legacyCount: 0 });
+        return grouped.get(date);
+      };
+      for (const record of normalized) {
+        const { ms, type } = record;
+        // Exact cross-source copies are one event for calculation. Never use
+        // a time tolerance to guess that two distinct records are duplicates.
+        if (!type && typedTimes.has(ms)) continue;
+        let date = record.date;
+        const corrected = corrections.find((d) => !overlappingCorrections.has(d) && ms >= timestampMs(d.check_in) && ms <= timestampMs(d.check_out));
+        if (corrected) date = corrected.work_date;
+        else if (!type) {
+          const enclosing = pairs.find((pair) => ms >= pair.first.ms && ms <= pair.last.ms);
+          const previous = dateText(dayMs(date) - DAY);
+          const priorTerm = activeTerm(employeeTerms, previous);
+          if (enclosing) date = enclosing.first.date;
+          else if (validTerm(priorTerm) && clockMinutes(priorTerm.shift_end) < clockMinutes(priorTerm.shift_start) && ms <= shiftBounds(priorTerm, previous).end) date = previous;
+        }
+        record.date = date;
         if (date < start || date >= end) continue;
-        if (!grouped.has(date)) grouped.set(date, []);
-        grouped.get(date).push(ms);
+        const group = groupFor(date);
+        group.punches.push(record);
+        group[type ? "typedCount" : "legacyCount"] += 1;
+        group.typedIssues.push(...record.issues);
+      }
+      for (const pair of pairs) {
+        if (pair.first.date < start || pair.first.date >= end) continue;
+        const group = groupFor(pair.first.date);
+        if (pair.first.date !== pair.last.date) group.typedIssues.push(message.sequence);
+        else group.intervals.push([pair.first.ms, pair.last.ms]);
       }
       if (invalidRecord) summaryIssues.push("저장된 출퇴근 시각 확인 필요 / Kiểm tra thời gian đã lưu");
-      for (const day of employeeDays) if (day.work_date >= start && day.work_date < end && Number.isFinite(dayMs(day.work_date)) && !grouped.has(day.work_date)) grouped.set(day.work_date, []);
+      for (const day of employeeDays) if (day.work_date >= start && day.work_date < end && Number.isFinite(dayMs(day.work_date))) groupFor(day.work_date);
       const daily = [];
       let hourlyAmount = 0;
       let dailyAmount = 0;
-      for (const [date, punches] of [...grouped].sort(([a], [b]) => a.localeCompare(b))) {
-        punches.sort((a, b) => a - b);
+      for (const [date, group] of [...grouped].sort(([a], [b]) => a.localeCompare(b))) {
+        const punches = group.punches.sort((a, b) => a.ms - b.ms);
         const day = dayMap.get(date);
         const term = activeTerm(employeeTerms, date);
         const dayType = day ? day.day_type : "work";
         const issues = [];
         const hasOverride = Boolean(day && (day.check_in || day.check_out));
         const manual = Boolean(hasOverride && corrections.includes(day));
-        let a = manual ? timestampMs(day.check_in) : punches[0];
-        let b = manual ? timestampMs(day.check_out) : punches[punches.length - 1];
+        const typedDay = group.typedCount > 0;
+        let a = manual ? timestampMs(day.check_in) : typedDay ? punches.find((record) => record.type === "in")?.ms : punches[0]?.ms;
+        let b = manual ? timestampMs(day.check_out) : typedDay ? punches.filter((record) => record.type === "out").at(-1)?.ms : punches[punches.length - 1]?.ms;
+        const intervals = manual ? [[a, b]] : typedDay ? group.intervals : punches.length === 2 ? [[a, b]] : [];
         if (hasOverride && !manual) issues.push(message.correction);
         if (overlappingCorrections.has(day)) issues.push(message.overlap);
         if (manual && day.check_in.slice(0, 10) !== date) issues.push(message.correction);
-        if (!manual && punches.length === 1) issues.push(message.single);
-        if (!manual && punches.length > 2) issues.push(message.many);
-        if (!manual && punches.length >= 2 && b - a < 5 * MINUTE) issues.push(message.short);
-        if (!manual && punches.length >= 2 && b - a > 16 * 60 * MINUTE) issues.push(message.long);
+        if (!manual && typedDay) {
+          issues.push(...new Set(group.typedIssues));
+          if (group.legacyCount) issues.push(message.mixed);
+        }
+        if (!manual && !typedDay && punches.length === 1) issues.push(message.single);
+        if (!manual && !typedDay && punches.length > 2) issues.push(message.many);
+        if (!manual && intervals.some(([from, to]) => to - from < 5 * MINUTE)) issues.push(message.short);
+        if (!manual && (b - a > 16 * 60 * MINUTE || intervals.some(([from, to]) => to - from > 16 * 60 * MINUTE))) issues.push(message.long);
         const approvedRestWork = day && day.overtime_approved === true && String(day.approval_reason || "").trim();
         const monthlyNet = term && term.pay_type === "monthly" && term.monthly_settlement === "monthly_net";
         // Monthly net settlement counts real work on every day. It does not use
@@ -258,16 +318,17 @@
         let extraMinutes = 0;
         if (!issues.length && hasWork && validTerm(term)) {
           const shift = shiftBounds(term, date);
-          actualSeconds = Math.max(0, (b - a - overlap(a, b, shift.breakStart, shift.breakEnd)) / 1000);
+          actualSeconds = intervals.reduce((total, [from, to]) => total + Math.max(0, (to - from - overlap(from, to, shift.breakStart, shift.breakEnd)) / 1000), 0);
           minutes = monthlyNet ? Math.floor(actualSeconds / 60) : Math.round(actualSeconds / 60);
           lateMinutes = Math.round(Math.max(0, Math.min(a, shift.end) - shift.start) / MINUTE);
           earlyMinutes = Math.round(Math.max(0, shift.end - Math.max(b, shift.start)) / MINUTE);
-          extraMinutes = Math.round((Math.max(0, Math.min(b, shift.start) - a) + Math.max(0, b - Math.max(a, shift.end))) / MINUTE);
+          extraMinutes = Math.round(intervals.reduce((total, [from, to]) => total + Math.max(0, Math.min(to, shift.start) - from) + Math.max(0, to - Math.max(from, shift.end)), 0) / MINUTE);
           if (term.pay_type === "hourly") hourlyAmount += minutes * Number(term.rate) / 60;
           if (term.pay_type === "daily" && minutes > 0) dailyAmount += Number(term.rate);
         }
         daily.push({ date, checkIn: Number.isFinite(a) ? timestampText(a) : null,
-          checkOut: Number.isFinite(b) && (manual || punches.length > 1) ? timestampText(b) : null,
+          checkOut: Number.isFinite(b) && (manual || typedDay || punches.length > 1) ? timestampText(b) : null,
+          workIntervals: intervals.filter(([from, to]) => Number.isFinite(from) && Number.isFinite(to) && to > from).map(([from, to]) => ({ start: timestampText(from), end: timestampText(to) })),
           minutes, actualSeconds, lateMinutes, earlyMinutes, extraMinutes,
           status: issues.length ? "review" : manual ? "confirmed" : dayType === "work" ? "ok" : dayType,
           issues, issueCodes: issues.map((issue) => Object.keys(message).find((key) => message[key] === issue) || "unknown"),

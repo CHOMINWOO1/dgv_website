@@ -10,13 +10,55 @@
   const state = {busy:false, loaded:false, employees:[], terms:[], records:[], days:[], runs:[], payments:[], imports:[], summaries:[], selected:"", preview:null, revision:null, paymentRequest:null, confirmation:null};
   const typeLabels = {work:"근무 / Làm",rest:"휴무 / Nghỉ",paid_leave:"유급휴가 / Nghỉ có lương",unpaid_leave:"무급휴가 / Nghỉ không lương",holiday:"공휴일 / Lễ"};
   const payLabels = {monthly:"월급 / Tháng",hourly:"시급 / Giờ",daily:"일급 / Ngày"};
-  let employeeDialogGeneration=0;
+  let employeeDialogGeneration=0,loadGeneration=0,polling=false,reviewDirty=false,refreshFailed=false;
+  const refreshStatus=document.createElement("div");
+  refreshStatus.id="payrollRefreshStatus";refreshStatus.className="notice";refreshStatus.hidden=true;
+  refreshStatus.setAttribute("role","status");refreshStatus.setAttribute("aria-live","polite");$("notice").after(refreshStatus);
   const selected = () => state.summaries.find((row) => row.employee_id === state.selected);
   const runFor = (id) => state.runs.find((run) => run.employee_id === id);
   const paidFor = (run) => run ? state.payments.filter((payment) => payment.run_id === run.id && !(state.reversals||[]).some((item)=>item.payment_id===payment.id)).reduce((sum,payment) => sum + Number(payment.amount),0) : 0;
   const totalFor = (run) => run ? Number(run.total)+(state.adjustments||[]).filter((item)=>item.run_id===run.id).reduce((sum,item)=>sum+Number(item.amount),0) : 0;
   const filtered = () => state.summaries.filter((row) => $("employeeFilter").value ? row.employee_id === $("employeeFilter").value : row.active !== false || row.daily.some((day)=>day.checkIn) || runFor(row.employee_id));
   function notice(message, error = false) { $("notice").textContent = message; $("notice").className = `notice${error ? " error" : ""}`; $("notice").hidden = !message; }
+  function refreshNotice(message) {refreshStatus.textContent=message;refreshStatus.hidden=!message;refreshFailed=false;}
+  function clearAuthenticatedState() {
+    employeeDialogGeneration++;loadGeneration++;reviewDirty=false;state.loaded=false;
+    $("payrollApp").hidden=true;state.records=[];state.payments=[];state.preview=null;refreshNotice("");
+    window.DGV_PAYROLL_ADVANCED?.invalidate();$("employeeForm").reset();$("sensitiveForm")?.reset();
+    document.querySelectorAll("dialog[open]").forEach((dialog)=>dialog.close());
+  }
+  function hasActiveWork() {
+    return reviewDirty||Boolean(document.querySelector("dialog[open]"))||Boolean(state.preview)||Boolean($("importFile").files.length)
+      ||Boolean($("taxPreview")&&!$("taxPreview").hidden)||$("rangeExport")?.disabled===false
+      ||Boolean(document.activeElement?.matches("input,textarea,select"));
+  }
+  async function checkForUpdates() {
+    if(document.hidden||$("payrollApp").hidden||!state.loaded||state.busy||polling)return;
+    polling=true;const generation=loadGeneration;
+    try {
+      await DGV.requireAuth({roles:["admin"]});
+      if(generation!==loadGeneration||!state.loaded||$("payrollApp").hidden)return;
+      const current=await revision();
+      if(generation!==loadGeneration||!state.loaded||$("payrollApp").hidden||document.hidden||state.busy)return;
+      if(current===state.revision){if(refreshFailed)refreshNotice("");return;}
+      if(hasActiveWork()){
+        refreshNotice("새 출퇴근·급여 기록이 있습니다. 입력·미리보기는 유지했습니다. 작업을 마친 뒤 새로고침하세요. / Có dữ liệu mới. Đã giữ nội dung đang nhập hoặc xem; tải lại sau khi hoàn tất.");
+        return;
+      }
+      await task(async()=>{
+        // Authentication can yield while a dialog opens; check again before
+        // replacing any editable fields or a report's reviewed snapshot.
+        if(hasActiveWork())return;
+        await load();
+        if(state.loaded)refreshNotice("새 출퇴근·급여 기록을 반영했습니다. / Đã cập nhật chấm công và lương mới.");
+      });
+    } catch(error) {
+      if(generation!==loadGeneration||$("payrollApp").hidden)return;
+      if(error.message==="AUTH_REQUIRED"){clearAuthenticatedState();location.reload();return;}
+      refreshNotice("자동 갱신을 확인하지 못했습니다. 연결 후 다시 확인합니다. / Chưa kiểm tra được cập nhật; sẽ thử lại khi có kết nối.");
+      refreshFailed=true;
+    } finally {polling=false;}
+  }
   function messageOf(error) {
     const message = error?.message || String(error);
     if (/relation.*does not exist|schema cache|PGRST20[25]/i.test(message)) return "급여 DB 설정이 필요합니다. 관리자에게 문의해 주세요. / Cần thiết lập dữ liệu lương.";
@@ -29,7 +71,7 @@
     document.querySelectorAll("dialog button[type=submit]").forEach((button) => button.disabled = true);
     try { await DGV.requireAuth({roles:["admin"]}); await action(); }
     catch (error) {
-      if (error.message === "AUTH_REQUIRED") { $("payrollApp").hidden = true; location.reload(); return; }
+      if (error.message === "AUTH_REQUIRED") { clearAuthenticatedState(); location.reload(); return; }
       notice(messageOf(error), true);
       const dialog = document.querySelector("dialog[open]");
       if (dialog) { let alert = dialog.querySelector(".dialog-error"); if (!alert) { alert = document.createElement("p"); alert.className = "dialog-error notice error"; alert.setAttribute("role","alert"); dialog.querySelector("form").prepend(alert); } alert.textContent = messageOf(error); }
@@ -49,6 +91,7 @@
     return {start,end:next.toISOString().slice(0,10),before:before.toISOString().slice(0,10),after:after.toISOString().slice(0,10)};
   }
   async function load() {
+    const generation=++loadGeneration;
     state.loaded = false; $("export").disabled = true; $("employeeDetail").hidden = true;
     window.DGV_PAYROLL_ADVANCED?.invalidate();
     $("ledgerBody").innerHTML = '<tr><td colspan="7" class="empty">불러오는 중 / Đang tải…</td></tr>'; $("metrics").innerHTML = "";
@@ -64,7 +107,9 @@
       ]);
       const payments = runs.length ? await rows("payroll_payments", (q) => q.in("run_id",runs.map((run) => run.id))) : [];
       const extra = window.DGV_PAYROLL_ADVANCED ? await DGV_PAYROLL_ADVANCED.load({month,dates,employees,runs,payments}) : {};
-      if (before !== await revision()) continue;
+      const after=await revision();
+      if(generation!==loadGeneration||$("payrollApp").hidden)return;
+      if (before !== after) continue;
       const effectiveDays=window.DGV_PAYROLL_RULES?.buildEffectiveDays({month,employees,terms,days})||days;
       Object.assign(state,{employees,terms,records,days,effectiveDays,runs,payments,imports,...extra,revision:before,loaded:true});
       let summaries = core.summarizeMonth({month,employees,terms,records,days:effectiveDays,today:today()});
@@ -77,7 +122,7 @@
       $("employeeFilter").innerHTML = '<option value="">전체 직원 / Tất cả</option>' + employees.map((employee) => `<option value="${esc(employee.id)}">${esc(employee.name)} · #${esc(employee.device_user_id)}</option>`).join("");
       if (employees.some((employee) => employee.id === filter)) $("employeeFilter").value = filter;
       if (!employees.some((employee) => employee.id === state.selected)) state.selected = "";
-      $("export").disabled = !state.summaries.length; render(); return;
+      reviewDirty=false;refreshNotice("");$("export").disabled = !state.summaries.length; render(); return;
     }
     throw new Error("다른 작업으로 자료가 변경되고 있습니다. 잠시 후 새로고침해 주세요. / Dữ liệu đang thay đổi, vui lòng tải lại.");
   }
@@ -101,6 +146,7 @@
     window.DGV_PAYROLL_ADVANCED?.render();
   }
   function renderDetail() {
+    reviewDirty=false;
     const row = selected(); $("employeeDetail").hidden = !row; if (!row) return;
     const run = runFor(row.employee_id), shown = run?.snapshot?.daily ? run.snapshot : row;
     $("detailTitle").textContent = `${row.name} · ID ${row.device_user_id}`;
@@ -245,7 +291,7 @@
       const run=runFor(state.selected),form=$("paymentForm");form.reset();field(form,"paid_on").value=today();field(form,"paid_on").max=today();field(form,"amount").max=String(totalFor(run)-paidFor(run));field(form,"method").value=state.employees.find(e=>e.id===state.selected)?.payment_method==="bank"?"bank":"cash";state.paymentRequest=crypto.randomUUID();openDialog("paymentDialog");
     }
   });
-  $("reviewArea").addEventListener("input",()=>{try{const values=draft();$("draftTotal").textContent=money(values.total)+" VND";window.DGV_PAYROLL_ADVANCED?.renderMonthlyDraft(values);}catch{$("draftTotal").textContent="입력 확인 / Kiểm tra";}});
+  $("reviewArea").addEventListener("input",()=>{reviewDirty=true;try{const values=draft();$("draftTotal").textContent=money(values.total)+" VND";window.DGV_PAYROLL_ADVANCED?.renderMonthlyDraft(values);}catch{$("draftTotal").textContent="입력 확인 / Kiểm tra";}});
   $("employeeForm").addEventListener("submit",(event)=>{event.preventDefault();task(async()=>{
     const form=event.currentTarget||$("employeeForm"); // event.currentTarget can be cleared after await in task.
     const values={name:field(form,"name").value.trim(),device_user_id:field(form,"device_user_id").value.trim(),active:field(form,"active").checked,...window.DGV_PAYROLL_ADVANCED?.employeeValues(form)};
@@ -285,7 +331,10 @@
     await result(db.rpc("payroll_pay",{p_run_id:runFor(state.selected).id,p_amount:values.amount,p_paid_on:values.paid_on,p_method:values.method,p_reference:values.reference.trim(),p_note:values.note.trim(),p_request_id:state.paymentRequest}));
     $("paymentDialog").close();await load();notice("실제 지급내역을 기록했습니다. / Đã ghi thanh toán thực tế.");
   });});
-  db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_OUT"||(session&&DGV.roleOf(session.user)!=="admin")){employeeDialogGeneration++;state.loaded=false;$("payrollApp").hidden=true;state.records=[];state.payments=[];window.DGV_PAYROLL_ADVANCED?.invalidate();$("employeeForm").reset();$("sensitiveForm")?.reset();document.querySelectorAll("dialog[open]").forEach((dialog)=>dialog.close());}});
+  db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_OUT"||(session&&DGV.roleOf(session.user)!=="admin"))clearAuthenticatedState();});
+  setInterval(checkForUpdates,30000);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)void checkForUpdates();});
+  window.addEventListener("focus",()=>void checkForUpdates());
   window.DGV_PAYROLL_APP={state,db,$,esc,money,hours,today,rows,result,task,load,render,renderDetail,selected,runFor,paidFor,totalFor,openDialog,field,bounds,notice,draft};
   (async()=>{try{await QRStaff.requireLogin({roles:["admin"],preferredRole:"admin"});await DGV.requireAuth({roles:["admin"]});$("payrollApp").hidden=false;await task(load);}catch(error){$("pageError").textContent=messageOf(error);$("pageError").hidden=false;}})();
 })();
