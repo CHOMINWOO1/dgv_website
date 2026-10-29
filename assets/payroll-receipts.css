@@ -1,7 +1,8 @@
 /* Load after payroll.css. Receipt thumbnails only; stored images and the signing canvas stay unchanged. */
-#rangeReceipts .receipt-table{table-layout:fixed;min-width:800px}
+#rangeReceipts .receipt-table{table-layout:fixed;min-width:1060px}
 #rangeReceipts .receipt-table th,#rangeReceipts .receipt-table td{padding:7px 8px;line-height:1.35}
-#rangeReceipts .receipt-table td:nth-child(6){min-width:132px}
+#rangeReceipts .receipt-table .receipt-signature-cell{min-width:132px}
+#rangeReceipts .receipt-personal{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 #rangeReceipts tr[data-payment-id] td:last-child{min-width:0}
 #rangeReceipts .receipt-signature{margin:0 0 6px;padding:0}
 #rangeReceipts .receipt-signature:last-child{margin-bottom:0}

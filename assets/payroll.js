@@ -292,7 +292,12 @@
   $("export").addEventListener("click",()=>task(exportLedger));
   $("addEmployee").addEventListener("click",()=>task(()=>employeeDialog(false)));
   $("editEmployee").addEventListener("click",()=>task(()=>employeeDialog(true)));
-  $("addTerms").addEventListener("click",()=>{const form=$("termsForm");form.reset();field(form,"effective_from").value=`${$("month").value}-01`;window.DGV_PAYROLL_ADVANCED?.termsEdit(form);openDialog("termsDialog");});
+  $("addTerms").addEventListener("click",()=>{
+    const employee=state.employees.find(item=>item.id===state.selected);if(!state.loaded||!employee)return;
+    const form=$("termsForm");form.reset();form.dataset.employeeId=employee.id;
+    $("termsEmployeeContext").textContent=`${employee.name} · ID ${employee.device_user_id}`;
+    field(form,"effective_from").value=`${$("month").value}-01`;window.DGV_PAYROLL_ADVANCED?.termsEdit(form);openDialog("termsDialog");
+  });
   $("logout").addEventListener("click",()=>DGV.signOut());
   document.addEventListener("click",(event)=>{
     const button=event.target.closest("button");if(!button||state.busy)return;
@@ -313,17 +318,26 @@
     if(!values.name)throw new Error("이름을 입력해 주세요. / Nhập tên.");
     const nationalId=field(form,"national_id").value.trim();
     if(!nationalId||nationalId.length>300||/[\u0000-\u001f\u007f]/.test(nationalId))throw new Error("신분증 번호를 입력해 주세요. / Nhập số định danh.");
-    await result(db.rpc("payroll_save_employee",{p_employee_id:form.dataset.employeeId,p_employee:values,p_national_id:nationalId,p_expected_revision:Number(form.dataset.revision),p_create:form.dataset.create==="true"}));
-    $("employeeDialog").close();await load();notice("직원 정보와 신분증 번호를 저장했습니다. / Đã lưu nhân viên và số định danh.");
+    const employeeId=form.dataset.employeeId;
+    await result(db.rpc("payroll_save_employee",{p_employee_id:employeeId,p_employee:values,p_national_id:nationalId,p_expected_revision:Number(form.dataset.revision),p_create:form.dataset.create==="true"}));
+    state.selected=employeeId;$("employeeDialog").close();await load();
+    if(state.loaded){$("employeeFilter").value=employeeId;render();}
+    notice(`${values.name} · 직원 정보와 신분증 번호를 저장했습니다. 급여는 이 직원의 급여 설정에서 저장하세요. / Đã lưu thông tin nhân viên; thiết lập lương riêng cho nhân viên này.`);
   });});
   $("employeeDialog").addEventListener("close",()=>{employeeDialogGeneration++;const form=$("employeeForm");form.reset();delete form.dataset.employeeId;delete form.dataset.create;delete form.dataset.revision;});
   $("termsForm").addEventListener("submit",(event)=>{event.preventDefault();task(async()=>{
-    const form=$("termsForm"),values=Object.fromEntries(new FormData(form));values.employee_id=state.selected;values.rate=Number(values.rate);
+    const form=$("termsForm"),employee=state.employees.find(item=>item.id===form.dataset.employeeId);
+    if(!state.loaded||!employee||employee.id!==state.selected)throw new Error("직원을 다시 선택한 뒤 급여 설정을 열어 주세요. / Chọn lại nhân viên rồi mở thiết lập lương.");
+    const values=Object.fromEntries(new FormData(form));values.employee_id=employee.id;values.rate=Number(values.rate);
     if("overtime_hourly_rate" in values)values.overtime_hourly_rate=values.overtime_hourly_rate===""?null:Number(values.overtime_hourly_rate);
     window.DGV_PAYROLL_ADVANCED?.termsValues(values,form);
     if(!Number.isSafeInteger(values.rate)||values.rate<0)throw new Error("급여 단가를 확인해 주세요. / Kiểm tra mức lương.");
-    await result(db.from("payroll_terms").insert(values));$("termsDialog").close();await load();notice("적용일과 함께 급여조건을 저장했습니다. / Đã lưu điều kiện và ngày hiệu lực.");
+    const saved=await db.from("payroll_terms").insert(values);
+    if(saved.error?.code==="23505")throw new Error(`${employee.name} · ${values.effective_from}에 이미 급여조건이 있습니다. 변경할 적용 시작일을 선택해 주세요. / Đã có điều kiện lương vào ngày này; chọn ngày hiệu lực mới.`);
+    if(saved.error)throw saved.error;
+    $("termsDialog").close();await load();notice(`${employee.name} · ${payLabels[values.pay_type]} ${money(values.rate)} VND · ${values.effective_from}부터 저장 완료 / Đã lưu, áp dụng từ ngày này.`);
   });});
+  $("termsDialog").addEventListener("close",()=>{delete $("termsForm").dataset.employeeId;$("termsEmployeeContext").textContent="";});
   $("dayForm").addEventListener("submit",(event)=>{event.preventDefault();task(async()=>{
     const values=Object.fromEntries(new FormData($("dayForm")));values.employee_id=state.selected;values.reason=values.reason.trim();
     if(!values.reason)throw new Error("변경 사유를 입력해 주세요. / Nhập lý do.");
