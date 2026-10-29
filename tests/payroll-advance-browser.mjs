@@ -131,7 +131,7 @@ try{
   const rawText=await page.locator("#rawAttendanceRows").innerText();for(const time of ["11:32","11:34","12:13"])assert.ok(rawText.includes(time));assert.match(rawText,/출근|Vào/);assert.match(rawText,/퇴근|Ra/);
   assert.match(await page.locator("#ledgerBody").innerText(),/원본\s*3\s*건/);
   const unresolved=await page.evaluate(id=>DGV_PAYROLL_APP.state.summaries.find(row=>row.employee_id===id),rawEmployee);
-  assert.equal(unresolved.minutes,0);assert.ok(unresolved.unresolved>0);assert.equal(unresolved.baseAmount,null);await moneySummary(0,null);
+  assert.equal(unresolved.minutes,2,"the completed two-minute pair is recognized even with a later open arrival and missing wage terms");assert.ok(unresolved.unresolved>0);assert.equal(unresolved.baseAmount,null);await moneySummary(0,null);
   if(process.env.PAYROLL_SCREENSHOTS){await page.setViewportSize({width:1100,height:850});await page.evaluate(()=>{const label=document.createElement("p");label.className="notice";label.textContent="예시 · 미계산 출퇴근도 원본 확인 / DEMO · Synthetic attendance";document.getElementById("rawAttendancePanel").prepend(label);});await page.locator("#rawAttendancePanel").screenshot({path:path.join(process.env.PAYROLL_SCREENSHOTS,"payroll-raw-attendance.png")});}
   assert.deepEqual(errors,[]);
   console.log("Payroll advances passed: money-only pre-finalization monthly and ad hoc part-time payments, exact replay, signature linkage, paid-date cross-month receipts, credited balances/cancellations, overpayment without cross-month carry and visible unpayable raw attendance.");

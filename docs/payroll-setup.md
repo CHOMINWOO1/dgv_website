@@ -106,6 +106,56 @@ This only resolves compensation review; missing pay terms or unresolved punch
 records still block finalization. The system does not decide statutory overtime,
 tax withholding, leave entitlement or legal wage deductions automatically.
 
+### Automatic attendance recognition and separate wage approval
+
+Valid completed in/out pairs contribute attendance immediately after import or
+online kiosk recording. There is no separate daily confirmation click or DB
+approval flag required to count an ordinary completed pair. A short positive
+pair is still real recorded time: retain its seconds rather than discarding it
+because it lasted less than five minutes. Whole-minute displays use completed
+time only; they must not run a speculative timer from an unmatched open check-in.
+
+Several valid pairs on one day are summed. A later unmatched check-in does not
+erase the work from earlier completed pairs. Show the open check-in separately
+as in progress, or a missing/ambiguous record as an exception. The unfinished or
+ambiguous part contributes no invented time and may still prevent final wage
+approval. Raw untyped POS records whose pairing is ambiguous are not converted
+into guessed work periods. Explicit administrator corrections remain available
+with a reason and do not edit the raw source.
+
+A completed interval up to 24 hours can be recognized automatically, with the
+applicable break windows deducted across every calendar date it crosses. An
+overnight break is deducted once, not once per displayed day. A pair spanning
+more than 24 hours remains ambiguous and contributes no automatic work time;
+other valid completed pairs on the same day still count. The server retains
+such long raw events as evidence instead of deleting them or guessing where a
+missing earlier check-out should have occurred.
+
+Daily attendance status is separate from monetary review:
+`recognized`, `in_progress`, `missing`, `ambiguous`, or `no_record`. Informational
+`warnings`/`warningCodes` explain unusual but accepted work, while actual
+`issues`/`issueCodes` identify unresolved data or compensation. A past scheduled
+workday with no source records is zero recorded work and `no_record`; it is not
+an invented full workday or a requirement to acknowledge every empty date.
+Future scheduled days do not add actual time. The monthly completion guard can
+remain pending while the month or today's work is unfinished without hiding
+the completed work already recorded.
+
+Attendance can be displayed before a wage rate is known. Use the employee's
+valid effective shift/break settings when available. Otherwise use the shop's
+explicit attendance default, 10:00–20:00 with a 12:00–14:00 break, and expose
+`attendanceDefaultUsed` with an explanatory warning. This fallback estimates
+attendance under the displayed break rule; it does not create a wage agreement
+or salary. Missing or invalid pay terms still leave calculated pay unavailable
+and prevent monthly wage finalization until terms are supplied.
+
+Automatic recognition updates live calculations only. It does not auto-finalize
+a salary, rewrite a finalized snapshot, authorize a payment, change an advance
+or remaining-money balance, or modify any saved receipt signature. Existing
+administrator-only finalization, source-revision checks and immutable monetary
+records remain unchanged. No database migration is required for this display
+and calculation separation.
+
 ## Finalization and payment contracts
 
 `payroll_finalize(p_employee_id, p_month, p_base_amount, p_allowances,

@@ -11,6 +11,7 @@
     "test:payroll:identity:browser": "node tests/payroll-identity-browser.mjs",
     "test:payroll:signatures": "node tests/payroll-signatures-browser.mjs",
     "test:payroll:advance": "node tests/payroll-advance-browser.mjs",
+    "test:payroll:auto-attendance": "node tests/payroll-auto-attendance-browser.mjs",
     "test:payroll:receipts": "node tests/payroll-receipts.mjs",
     "test:payroll:signatures:live": "node tests/payroll-signatures-live.mjs",
     "test:payroll:typed": "node tests/payroll-typed-attendance.mjs",
