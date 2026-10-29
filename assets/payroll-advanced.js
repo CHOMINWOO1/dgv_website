@@ -65,15 +65,15 @@
   dialog("archiveDialog",`<form id="archiveForm"><h2 id="archiveTitle"></h2><label id="archiveFileLabel" hidden>암호화 백업 / Bản sao lưu mã hóa<input name="archive_file" type="file" accept=".payroll" /></label><label>백업 비밀번호 (12자 이상) / Mật khẩu (ít nhất 12 ký tự)<input name="password" type="password" required minlength="12" autocomplete="new-password" /></label><label class="check"><input name="confirmed" type="checkbox" required /> 백업 파일과 비밀번호를 안전하게 보관하며 복구 범위를 확인했습니다. / Đã kiểm tra phạm vi và bảo quản mật khẩu.</label><p id="archiveInfo" class="muted"></p>${actions}</form>`);
 
   async function loadExtra({month,dates,runs,payments}) {
-    const [rules,reviews,historyRuns,adjustments,reversals,attachments]=await Promise.all([
+    const [rules,reviews,historyRuns,adjustments,reversals,attachments,serviceDetails]=await Promise.all([
       rows("payroll_rule_versions",q=>q.lt("effective_from",dates.after)),
       rows("payroll_reviews",q=>q.eq("month",dates.start)),
       rows("payroll_runs",q=>q.lte("month",dates.start)),
-      rows("payroll_run_adjustments"),rows("payroll_payment_reversals"),rows("payroll_attachments")
+      rows("payroll_run_adjustments"),rows("payroll_payment_reversals"),rows("payroll_attachments"),rows("payroll_service_payment_details")
     ]);
     const historyPaymentGroups=await Promise.all([rows("payroll_payments",q=>q.lte("payroll_month",dates.start)),historyRuns.length?rows("payroll_payments",q=>q.in("run_id",historyRuns.map(r=>r.id))):[]]);
     const historyPayments=Array.from(new Map(historyPaymentGroups.flat().map(p=>[p.id,p])).values());
-    return {rules,reviews,historyRuns,historyPayments,adjustments,reversals,attachments};
+    return {rules,reviews,historyRuns,historyPayments,adjustments,reversals,attachments,serviceDetails};
   }
   function employeeEdit(employee,form) {
     for(const name of employeeFields)field(form,name).value=employee?.[name]||({employment_type:"full_time",employment_status:employee?.active===false?"terminated":"active",payment_method:"cash"}[name]||"");
@@ -121,7 +121,7 @@
     $("previewTax").disabled=false;$("rangeSearch").disabled=false;
     $("rulesPanel").querySelector(".muted").innerHTML="월 합산 방식은 기본 월급과 주 1회 휴무를 반영한 월 기준시간으로 시급을 자동 계산합니다. 아래 설정은 일별 승인수당 방식에 사용합니다.<br />Bù trừ tháng tự tính đơn giá từ lương cơ bản và giờ chuẩn với một ngày nghỉ mỗi tuần. Thiết lập dưới đây dành cho phụ cấp từng ngày.";
     const old=$("rangeEmployee").value;
-    $("rangeEmployee").innerHTML='<option value="">전체 / Tất cả</option>'+state.employees.map(e=>`<option value="${esc(e.id)}">${esc(e.name)} · ${esc(e.device_user_id)}</option>`).join("");
+    $("rangeEmployee").innerHTML='<option value="">전체 / Tất cả</option>'+state.employees.filter(e=>e.payee_type!=='service').map(e=>`<option value="${esc(e.id)}">${esc(e.name)} · ${esc(e.device_user_id)}</option>`).join("");
     if(state.employees.some(e=>e.id===old))$("rangeEmployee").value=old;
     if(!$("rangeFrom").value){$("rangeFrom").value=$("month").value+"-01";$("rangeTo").value=plusDay(app.bounds($("month").value).end,-1);}
     const rule=(state.rules||[]).slice().sort((a,b)=>b.effective_from.localeCompare(a.effective_from))[0];
@@ -135,7 +135,8 @@
       const next=app.bounds(run.month.slice(0,7)).end.slice(0,7),due=run.snapshot?.settlementMode==="monthly_net"?(run.snapshot.monthlyExpectedPayDate||next+"-05"):`${next}-${String(payRule.pay_day||5).padStart(2,"0")}`;
       return {run,due,balance:Number(run.total)+adjusted-paid};
     }).filter(item=>item.balance>0&&item.due<today());
-    const missing=state.payments.filter(p=>!reversed.has(p.id)&&!(state.attachments||[]).some(a=>a.payment_id===p.id));
+    const servicePayeeIds=new Set(state.employees.filter(e=>e.payee_type==='service').map(e=>e.id));
+    const missing=state.payments.filter(p=>!servicePayeeIds.has(p.employee_id)&&!reversed.has(p.id)&&!(state.attachments||[]).some(a=>a.payment_id===p.id));
     $("payrollAlerts").innerHTML=(overdue.length?`<div class="notice error">지급기한 경과 / Quá hạn: ${overdue.length}건 · ${money(overdue.reduce((n,r)=>n+r.balance,0))} VND</div>`:"")+(missing.length?`<div class="notice warning">지급 증빙 미등록 / Thiếu chứng từ: ${missing.length}건. 지급·서명·출력 메뉴에서 직원을 선택하고 증빙을 첨부해 주세요. / Chọn nhân viên và thêm chứng từ tại mục Thanh toán · Ký · In.</div>`:"");
     const month=$("month").value,previous=new Date(month+"-01T00:00:00Z");previous.setUTCMonth(previous.getUTCMonth()-1);const previousMonth=isoDate(previous).slice(0,7);
     const totals=(period)=>{
@@ -264,7 +265,8 @@
       cursor=app.bounds(cursor).end.slice(0,7);
     }
     const matchingRuns=new Set(runs.filter(r=>!employeeId||r.employee_id===employeeId).map(r=>r.id));
-    const selectedPayments=payments.filter(p=>p.employee_id?(!employeeId||p.employee_id===employeeId):matchingRuns.has(p.run_id));
+    const employeeIds=new Set(employees.filter(e=>e.payee_type!=='service').map(e=>e.id));
+    const selectedPayments=payments.filter(p=>p.employee_id?(employeeIds.has(p.employee_id)&&(!employeeId||p.employee_id===employeeId)):matchingRuns.has(p.run_id));
     rangeData={revision:rangeRevision,month:fromDate.slice(0,7),fromDate,toDate,employeeId:employeeId||undefined,employees,terms,records,days,runs,payments:selectedPayments,summaries,adjustments,reversals,attachments};
     const reversed=new Set(reversals.map(r=>r.payment_id)),daily=summaries.flatMap(r=>r.daily.map(d=>({...d,name:r.name})));
     $("rangeResult").innerHTML=`<p class="range-summary">${fromDate} ~ ${toDate} · 근무 / Làm <strong>${hours(summaries.reduce((n,r)=>n+r.minutes,0))}</strong> · 실제 지급 / Thực trả <strong>${money(selectedPayments.filter(p=>!reversed.has(p.id)).reduce((n,p)=>n+Number(p.amount),0))} VND</strong></p><div class="table-scroll"><table><thead><tr><th>직원 / Nhân viên</th><th>근무일 / Ngày</th><th>출근 / Vào</th><th>퇴근 / Ra</th><th>근무 / Giờ</th><th>확인 / Kiểm tra</th></tr></thead><tbody>${daily.map(d=>`<tr><td>${esc(d.name)}</td><td>${esc(d.date)}</td><td>${esc(d.checkIn?.slice(11,16)||"—")}</td><td>${esc(d.checkOut?.slice(5,16)||"—")}</td><td>${hours(d.minutes)}</td><td>${esc(d.issues.join(" · "))}</td></tr>`).join("")||'<tr><td colspan="6">기록 없음 / Không có dữ liệu</td></tr>'}</tbody></table></div>`;
@@ -396,9 +398,12 @@
     field(form,"evidence_type").value=kind||(payment.method==="bank"?"bank_transfer":"receipt");
     field(form,"signed_name").value=employee.name;
     const signature=kind==="signature";
-    $("evidenceTitle").textContent=signature?"급여 수령 서명 / Ký nhận lương":"지급 증빙 / Chứng từ thanh toán";
+    const service=employee.payee_type==='service',job=(state.serviceDetails||[]).find(d=>d.payment_id===paymentId)||fallback?.serviceDetails;
+    $("evidenceTitle").textContent=signature?(service?'외주 작업비 수령 서명 / Ký nhận tiền dịch vụ':'급여 수령 서명 / Ký nhận lương'):'지급 증빙 / Chứng từ thanh toán';
+    $("signatureCanvas").setAttribute('aria-label',service?'외주 작업비 수령 서명 / Ký nhận dịch vụ':'급여 수령 서명 / Chữ ký nhận lương');
+    field(form,'acknowledged').parentElement.lastChild.textContent=service?' 작업비 수령을 확인합니다. / Xác nhận đã nhận tiền dịch vụ.':' 급여 수령을 확인합니다. / Xác nhận đã nhận lương.';
     $("evidencePaymentSummary").dataset.paymentId=paymentId;
-    $("evidencePaymentSummary").innerHTML=`<strong>${esc(employee.name)}</strong><p>${esc(payment.paid_on)} · ${payment.method==="cash"?"현금 / Tiền mặt":"이체 / Chuyển khoản"}<br /><strong>${money(payment.amount)} VND</strong><br />급여월 / Tháng lương ${esc((payment.payroll_month||run.month).slice(0,7))}</p>`;
+    $("evidencePaymentSummary").innerHTML=`<strong>${esc(employee.name)}</strong><p>${esc(payment.paid_on)} · ${payment.method==="cash"?"현금 / Tiền mặt":"이체 / Chuyển khoản"}<br /><strong>${money(payment.amount)} VND</strong><br />${service?`작업 / Công việc ${esc(job?.description||'')} · ${esc(job?.work_from||'')} ~ ${esc(job?.work_to||'')}`:`급여월 / Tháng lương ${esc((payment.payroll_month||run.month).slice(0,7))}`}</p>`;
     $("signatureArea").hidden=!signature;$("evidenceFileLabel").hidden=signature;
     clearSignature();openDialog("evidenceDialog");
   }
@@ -523,5 +528,5 @@
   $("amendForm").addEventListener("submit",event=>{event.preventDefault();task(async()=>{const form=$("amendForm"),reason=field(form,"reason").value.trim();if(form.dataset.action==="reverse")await result(db.rpc("payroll_reverse_payment",{p_payment_id:form.dataset.target,p_reason:reason,p_request_id:actionRequest}));else await result(db.rpc("payroll_adjust_run",{p_run_id:form.dataset.target,p_amount:amount(field(form,"amount").value),p_reason:reason,p_request_id:actionRequest}));$("amendDialog").close();await load();notice("정정 이력을 저장했습니다. / Đã lưu lịch sử điều chỉnh.");});});
   $("evidenceForm").addEventListener("submit",event=>{event.preventDefault();task(async()=>{const controls=Array.from($("evidenceForm").querySelectorAll("input,select,button"));controls.forEach(control=>control.disabled=true);try{await submitEvidence();}finally{controls.forEach(control=>control.disabled=false);}});});
   $("archiveForm").addEventListener("submit",event=>{event.preventDefault();task(archiveSubmit);});
-  window.DGV_PAYROLL_ADVANCED={load:loadExtra,render,renderDetail,employeeEdit,employeeValues,termsEdit,termsValues,dayEdit,dayValues,recordReview,reviewSnapshot,renderMonthlyDraft,exportWorkbook,invalidate,openEvidence};
+  window.DGV_PAYROLL_ADVANCED={load:loadExtra,render,renderDetail,employeeEdit,employeeValues,termsEdit,termsValues,dayEdit,dayValues,recordReview,reviewSnapshot,renderMonthlyDraft,exportWorkbook,invalidate,openEvidence,signatureImage};
 })();

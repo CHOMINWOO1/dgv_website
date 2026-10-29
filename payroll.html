@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>HANA · 직원·급여관리</title>
   <link rel="stylesheet" href="assets/qr-staff.css" />
-  <link rel="stylesheet" href="assets/payroll.css?v=20261029-9" />
-  <link rel="stylesheet" href="assets/payroll-workspace.css?v=20261029-9" />
-  <link rel="stylesheet" href="assets/payroll-receipts.css?v=20261029-9" />
+  <link rel="stylesheet" href="assets/payroll.css?v=20261029-10" />
+  <link rel="stylesheet" href="assets/payroll-workspace.css?v=20261029-10" />
+  <link rel="stylesheet" href="assets/payroll-receipts.css?v=20261029-10" />
 </head>
 <body>
   <div id="pageError" role="alert" hidden></div>
@@ -22,6 +22,7 @@
             <button id="tab-employees" role="tab" data-payroll-tab="employees" aria-controls="view-employees" aria-selected="false"><span class="nav-icon">人</span><span><strong>직원관리</strong><small>Nhân viên · 등록·월급 설정</small></span></button>
             <button id="tab-attendance" role="tab" data-payroll-tab="attendance" aria-controls="view-attendance" aria-selected="false"><span class="nav-icon">▦</span><span><strong>출퇴근 기록</strong><small>Chấm công · 전체 직원 달력</small></span></button>
             <button id="tab-payments" role="tab" data-payroll-tab="payments" aria-controls="view-payments" aria-selected="false"><span class="nav-icon">✓</span><span><strong>지급·서명·출력</strong><small>Thanh toán · 지급·기간 조회</small></span></button>
+            <button id="tab-services" role="tab" data-payroll-tab="services" aria-controls="view-services" aria-selected="false"><span class="nav-icon">⚒</span><span><strong>외주·수리비</strong><small>Dịch vụ · 작업비 지급·서명</small></span></button>
           </nav>
           <p class="sidebar-note">직원 등록은 직원관리에서,<br />지급과 서명은 지급 메뉴에서.</p>
         </aside>
@@ -45,7 +46,7 @@
           </section>
           <section id="view-employees" role="tabpanel" aria-labelledby="tab-employees" hidden>
             <section class="panel"><div class="section-head"><div><h2>직원 목록 / Danh sách nhân viên <span id="staffCount" class="count-pill"></span></h2><p class="muted">직원 정보, 월급, 입사일과 근무조건을 여기서 관리합니다. / Quản lý thông tin và điều kiện lương tại đây.</p></div><button id="addEmployee">+ 직원 등록 / Thêm nhân viên</button></div>
-              <div class="staff-filters"><label>직원 찾기 / Tìm nhân viên<input id="staffSearch" type="search" placeholder="이름 또는 직원 ID / Tên hoặc mã" /></label><label>고용상태 / Trạng thái<select id="staffStatus"><option value="">전체 직원 / Tất cả</option><option value="active">재직 / Đang làm</option><option value="leave">휴직 / Tạm nghỉ</option><option value="terminated">퇴사 / Đã nghỉ</option></select></label></div>
+              <div class="staff-filters"><label>직원 찾기 / Tìm nhân viên<input id="staffSearch" type="search" placeholder="이름 또는 직원 ID / Tên hoặc mã" /></label><label>고용상태 / Trạng thái<select id="staffStatus"><option value="">전체 직원 / Tất cả</option><option value="active">재직 / Đang làm</option><option value="leave">휴직 / Tạm nghỉ</option><option value="terminated">퇴사 / Đã nghỉ</option><option value="archived">삭제된 직원 / Đã xóa</option></select></label></div>
               <div id="staffList" class="staff-list"></div>
             </section>
             <div data-detail-mount="employees"></div>
@@ -63,6 +64,7 @@
             <section class="panel payment-start"><div><h2>직원에게 지급하고 서명 받기 / Trả lương &amp; ký nhận</h2><p class="muted">월급날 전 선지급이나 단기 알바 지급도 기록할 수 있습니다. / Có thể tạm ứng và trả linh hoạt.</p></div><div class="payment-start-controls"><label>지급할 직원 / Nhân viên<select id="paymentEmployee"><option value="">직원 선택 / Chọn nhân viên</option></select></label><button id="startPayment" disabled>지급하고 서명 받기 / Trả &amp; ký</button></div></section>
             <div data-detail-mount="payments"></div><div id="paymentReportsMount"></div>
           </section>
+          <section id="view-services" role="tabpanel" aria-labelledby="tab-services" hidden><div id="servicesMount"></div><div data-detail-mount="services" hidden></div></section>
           <section id="employeeDetail" class="panel selected-employee" hidden>
             <div class="section-head"><div><p class="eyebrow">선택 직원 / NHÂN VIÊN</p><h2 id="detailTitle"></h2></div><button id="editEmployee" class="quiet" data-detail-views="employees">직원 정보 수정 / Sửa thông tin</button></div>
             <div id="employeeActionBar"></div>
@@ -94,7 +96,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
   <script src="assets/supabase-config.js"></script><script src="assets/dgv-data.js"></script><script src="assets/supabase-client.js"></script><script src="assets/qr-staff.js"></script>
-  <script src="assets/dgv-xlsx.js"></script><script src="assets/payroll-core.js?v=20261029-9"></script><script src="assets/payroll-rules.js?v=20261029-9"></script><script src="assets/payroll-tax.js?v=20261029-9"></script><script src="assets/payroll-archive.js?v=20261029-3"></script><script src="assets/payroll.js?v=20261029-9"></script><script src="assets/payroll-receipts.js?v=20261029-9"></script><script src="assets/payroll-advanced.js?v=20261029-9"></script>
-  <script src="assets/payroll-workspace.js?v=20261029-9"></script>
+  <script src="assets/dgv-xlsx.js"></script><script src="assets/payroll-core.js?v=20261029-10"></script><script src="assets/payroll-rules.js?v=20261029-10"></script><script src="assets/payroll-tax.js?v=20261029-10"></script><script src="assets/payroll-archive.js?v=20261029-3"></script><script src="assets/payroll.js?v=20261029-10"></script><script src="assets/payroll-receipts.js?v=20261029-10"></script><script src="assets/payroll-advanced.js?v=20261029-10"></script>
+  <script src="assets/payroll-workspace.js?v=20261029-10"></script>
+  <script src="assets/payroll-services.js?v=20261029-10"></script>
 </body>
 </html>

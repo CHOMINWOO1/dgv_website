@@ -57,8 +57,8 @@ try{
   await page.locator('[data-payroll-tab="employees"]').press("ArrowLeft");
   assert.equal(await page.locator('[data-payroll-tab="ledger"]').getAttribute("aria-selected"),"true");
   await page.locator('[data-payroll-tab="ledger"]').press("End");
-  assert.equal(await page.locator('[data-payroll-tab="payments"]').getAttribute("aria-selected"),"true");
-  await page.locator('[data-payroll-tab="payments"]').press("Home");
+  assert.equal(await page.locator('[data-payroll-tab="services"]').getAttribute("aria-selected"),"true");
+  await page.locator('[data-payroll-tab="services"]').press("Home");
   assert.equal(await page.locator('[data-payroll-tab="ledger"]').getAttribute("aria-selected"),"true");
   await openPayrollView(page,"employees");
   await page.locator("#month").fill("2026-10");await page.locator("#month").dispatchEvent("change");await idle();
@@ -108,9 +108,10 @@ try{
   await openPayrollView(page,"ledger");await page.locator("#employeeFilter").selectOption(b);
   await page.locator("#allowances").fill("1234");await page.locator("#adjustmentNote").fill("DEMO unsaved review stays intact");
   const counts=await page.evaluate(()=>({calls:__payrollTest.calls.length,rpcs:__payrollTest.rpcs.length,revision:DGV_PAYROLL_APP.state.revision}));
-  for(const view of ["employees","attendance","payments","ledger"]){
+  for(const view of ["employees","attendance","payments","services","ledger"]){
     await openPayrollView(page,view);
     assert.equal(await page.locator("#workspaceAlerts").isVisible(),view==="ledger"||view==="payments","payment evidence reminders appear only in payroll and payment workspaces");
+    assert.equal(await page.locator("#sharedToolbar").isVisible(),view!=="services","external service payments have their own date filters instead of the salary month selector");
   }
   assert.equal(await page.locator("#allowances").inputValue(),"1234");assert.equal(await page.locator("#adjustmentNote").inputValue(),"DEMO unsaved review stays intact");
   assert.equal(await page.locator("#month").inputValue(),"2026-10");assert.equal(await page.locator("#employeeFilter").inputValue(),b);
@@ -145,7 +146,7 @@ try{
   assert.equal(await page.locator("#startPayment").isDisabled(),true);
 
   await page.setViewportSize({width:390,height:844});
-  for(const view of ["ledger","attendance","payments","employees"]){await openPayrollView(page,view);await fit();}
+  for(const view of ["ledger","attendance","payments","services","employees"]){await openPayrollView(page,view);await fit();}
   await capture("payroll-employees-mobile.png");
   await page.locator("#staffSearch").fill("NEW-05");await action(newId,"info").click();await page.locator("#employeeDialog").waitFor({state:"visible"});await fit();await page.locator("#employeeForm [data-close]").click();
   await page.waitForFunction(()=>document.querySelector('#employeeForm [name="national_id"]').value==="");
@@ -158,5 +159,5 @@ try{
   assert.equal(await page.locator('[data-payroll-tab="payments"]').getAttribute("aria-selected"),"true");
   await page.evaluate(()=>DGV.supabase.auth.signOut());assert.equal(await page.locator("#payrollApp").isVisible(),false);
   assert.equal(await field("employeeForm","national_id").inputValue(),"");assert.deepEqual(errors,[]);
-  console.log("Payroll navigation passed: independent searchable employee management, status/no-history staff, atomic employee edit, effective-date salary history, preserved finalized amounts, four real tabs/drafts, all-staff split-shift calendar, quick advance/signature flow, mobile layout, private identity cleanup and legacy links.");
+  console.log("Payroll navigation passed: independent searchable employee management, status/no-history staff, atomic employee edit, effective-date salary history, preserved finalized amounts, five real tabs/drafts, separate service filters, all-staff split-shift calendar, quick advance/signature flow, mobile layout, private identity cleanup and legacy links.");
 }finally{await context.close();await browser.close();await new Promise(resolve=>server.close(resolve));}

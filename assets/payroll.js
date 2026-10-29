@@ -29,11 +29,11 @@
   function clearAuthenticatedState() {
     employeeDialogGeneration++;loadGeneration++;reviewDirty=false;state.loaded=false;
     $("payrollApp").hidden=true;state.records=[];state.payments=[];state.preview=null;refreshNotice("");
-    window.DGV_PAYROLL_WORKSPACE?.invalidate();window.DGV_PAYROLL_ADVANCED?.invalidate();$("employeeForm").reset();$("sensitiveForm")?.reset();
+    window.DGV_PAYROLL_WORKSPACE?.invalidate();window.DGV_PAYROLL_ADVANCED?.invalidate();window.DGV_PAYROLL_SERVICES?.invalidate();$("employeeForm").reset();$("sensitiveForm")?.reset();
     document.querySelectorAll("dialog[open]").forEach((dialog)=>dialog.close());
   }
   function hasActiveWork() {
-    return reviewDirty||Boolean(document.querySelector("dialog[open]"))||Boolean(state.preview)||Boolean($("importFile").files.length)
+    return reviewDirty||Boolean(window.DGV_PAYROLL_SERVICES?.hasActiveWork())||Boolean(document.querySelector("dialog[open]"))||Boolean(state.preview)||Boolean($("importFile").files.length)
       ||Boolean($("taxPreview")&&!$("taxPreview").hidden)||$("rangeExport")?.disabled===false
       ||Boolean(document.activeElement?.matches("input,textarea,select"));
   }
@@ -66,6 +66,12 @@
   }
   function messageOf(error) {
     const message = error?.message || String(error);
+    if(/PAYROLL_SERVICE_PROVIDER_REQUIRED/.test(message))return '외주 작업자를 다시 선택해 주세요. / Chọn lại bên nhận dịch vụ.';
+    if(/PAYROLL_SERVICE_DETAILS_INVALID|PAYROLL_SERVICE_DETAILS_CONFLICT/.test(message))return '외주 작업기간·내용을 확인해 주세요. 이미 저장된 건이면 새로 조회하세요. / Kiểm tra công việc, thời gian; tra cứu lại khoản đã lưu.';
+    if(/PAYROLL_SERVICE_NOT_EMPLOYEE/.test(message))return '외주 작업자는 직원 근무·급여 계산에 등록할 수 없습니다. 외주·수리비 메뉴를 이용해 주세요. / Dùng mục dịch vụ cho bên nhận ngoài.';
+    if(/PAYROLL_ARCHIVE_REASON_REQUIRED/.test(message))return '삭제·복원 사유는 1~500자 한 줄로 입력해 주세요. / Nhập lý do từ 1 đến 500 ký tự, một dòng.';
+    if(/PAYROLL_(?:EMPLOYEE_)?ARCHIVE_STATE_CONFLICT/.test(message))return '직원 상태가 변경되었습니다. 새로고침 후 다시 확인해 주세요. / Trạng thái đã đổi; tải lại.';
+    if(/PAYROLL_(?:EMPLOYEE_)?ARCHIVE_RPC_REQUIRED|PAYROLL_ARCHIVED_EMPLOYEE_INACTIVE|PAYROLL_EMPLOYEE_ARCHIVED/.test(message))return '삭제된 직원은 먼저 복원해 주세요. / Khôi phục nhân viên trước.';
     if (/relation.*does not exist|schema cache|PGRST20[25]/i.test(message)) return "급여 DB 설정이 필요합니다. 관리자에게 문의해 주세요. / Cần thiết lập dữ liệu lương.";
     if (/stale|revision/i.test(message)) return "근무자료가 변경되었습니다. 새로고침 후 다시 검토해 주세요. / Dữ liệu đã đổi, vui lòng tải lại.";
     return message;
@@ -99,7 +105,7 @@
     const generation=++loadGeneration;
     state.loaded = false; $("export").disabled = true; $("employeeDetail").hidden = true;
     window.DGV_PAYROLL_WORKSPACE?.invalidate();
-    window.DGV_PAYROLL_ADVANCED?.invalidate();
+    window.DGV_PAYROLL_ADVANCED?.invalidate();window.DGV_PAYROLL_SERVICES?.invalidate();
     $("ledgerBody").innerHTML = '<tr><td colspan="7" class="empty">불러오는 중 / Đang tải…</td></tr>'; $("metrics").innerHTML = "";
     const month = $("month").value, dates = bounds(month);
     for (let attempt=0; attempt<3; attempt++) {
@@ -126,9 +132,9 @@
         return row;
       });
       const filter = $("employeeFilter").value;
-      $("employeeFilter").innerHTML = '<option value="">전체 직원 / Tất cả</option>' + employees.map((employee) => `<option value="${esc(employee.id)}">${esc(employee.name)} · #${esc(employee.device_user_id)}</option>`).join("");
+      $("employeeFilter").innerHTML = '<option value="">전체 직원 / Tất cả</option>' + employees.filter(employee=>employee.payee_type!=='service').map((employee) => `<option value="${esc(employee.id)}">${esc(employee.name)} · #${esc(employee.device_user_id)}</option>`).join("");
       if (employees.some((employee) => employee.id === filter)) $("employeeFilter").value = filter;
-      if (!employees.some((employee) => employee.id === state.selected)) state.selected = "";
+      if (!employees.some((employee) => employee.id === state.selected&&employee.payee_type!=='service')) state.selected = "";
       reviewDirty=false;refreshNotice("");$("export").disabled = !state.summaries.length; render(); return;
     }
     throw new Error("다른 작업으로 자료가 변경되고 있습니다. 잠시 후 새로고침해 주세요. / Dữ liệu đang thay đổi, vui lòng tải lại.");
@@ -156,7 +162,7 @@
     $("importHistory").innerHTML = state.imports.length ? state.imports.map((entry) => `<p class="term-row"><strong>${esc(entry.filename)}</strong> · 신규 / Mới ${entry.inserted_count} · 중복 / Trùng ${entry.duplicate_count}<br /><span class="muted">${esc(new Date(entry.created_at).toLocaleString("ko-KR",{timeZone:"Asia/Ho_Chi_Minh"}))} (VN)</span></p>`).join("") : '<p class="muted">가져오기 이력이 없습니다. / Chưa nhập dữ liệu.</p>';
     renderDetail();
     window.DGV_PAYROLL_ADVANCED?.render();
-    window.DGV_PAYROLL_WORKSPACE?.render();
+    window.DGV_PAYROLL_WORKSPACE?.render();window.DGV_PAYROLL_SERVICES?.render();
   }
   function renderDetail() {
     reviewDirty=false;
@@ -194,6 +200,8 @@
   async function employeeDialog(edit) {
     const generation=++employeeDialogGeneration;
     const form = $("employeeForm"), employee = edit ? state.employees.find((item)=>item.id===state.selected) : null;
+    if(edit&&employee?.archived_at)throw new Error('삭제된 직원은 먼저 복원해 주세요. / Khôi phục nhân viên trước.');
+    if(edit&&employee?.payee_type==='service')throw new Error('외주 작업자 정보는 외주·수리비 메뉴에서 변경하세요. / Sửa bên nhận dịch vụ trong mục dịch vụ.');
     if(edit&&!employee)throw new Error("직원을 선택해 주세요. / Chọn nhân viên.");
     form.reset(); form.dataset.employeeId = employee?.id || crypto.randomUUID();form.dataset.create=String(!employee);form.dataset.revision=String(state.revision);field(form,"device_user_id").value=employee?.device_user_id||""; field(form,"device_user_id").readOnly=!!employee;
     field(form,"name").value=employee?.name||""; field(form,"active").checked=employee?.active??true; window.DGV_PAYROLL_ADVANCED?.employeeEdit(employee,form);
@@ -293,7 +301,7 @@
   $("addEmployee").addEventListener("click",()=>task(()=>employeeDialog(false)));
   $("editEmployee").addEventListener("click",()=>task(()=>employeeDialog(true)));
   $("addTerms").addEventListener("click",()=>{
-    const employee=state.employees.find(item=>item.id===state.selected);if(!state.loaded||!employee)return;
+    const employee=state.employees.find(item=>item.id===state.selected);if(!state.loaded||!employee||employee.archived_at||employee.payee_type==='service')return;
     const form=$("termsForm");form.reset();form.dataset.employeeId=employee.id;
     $("termsEmployeeContext").textContent=`${employee.name} · ID ${employee.device_user_id}`;
     field(form,"effective_from").value=`${$("month").value}-01`;window.DGV_PAYROLL_ADVANCED?.termsEdit(form);openDialog("termsDialog");
