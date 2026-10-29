@@ -45,6 +45,11 @@ try{
   await submit("employeeForm");
   const savedEmployee=await page.evaluate(id=>__payrollTest.db.payroll_employees.find(e=>e.id===id),employee);
   assert.equal(savedEmployee.employment_type,"part_time");assert.equal(savedEmployee.phone,"090-TEST-0001");assert.equal(savedEmployee.payment_method,"mixed");
+  // The dedicated part-time suite verifies no-break actual-hour wages. Keep
+  // this fixture full-time for its scheduled-break/overtime approval checks.
+  await page.locator("#editEmployee").click();await page.locator("#employeeDialog").waitFor({state:"visible"});
+  await field("employeeForm","employment_type").selectOption("full_time");await submit("employeeForm");
+  assert.equal(await page.evaluate(id=>__payrollTest.db.payroll_employees.find(e=>e.id===id).employment_type,employee),"full_time");
 
   await page.locator("#sensitiveInfo").click();await page.locator("#sensitiveDialog").waitFor({state:"visible"});
   await field("sensitiveForm","bank_account").fill("SYNTHETIC-PRIVATE-ACCOUNT");

@@ -272,6 +272,28 @@
       yearToDateOvertimeMinutes: null, annualCoverageComplete: false, sources: [] };
   }
 
+  function hourlyActualSummary(base, employeeTerms, employee, dates) {
+    const paidDays = base.daily.filter(day => day.actualSeconds > 0 && day.payType === "hourly" && Number(day.rate) > 0);
+    const hourlyRates = [...new Set((paidDays.length ? paidDays.map(day => Number(day.rate))
+      : effectiveMonthTerms(employee, employeeTerms, dates).map(term => Number(term.rate))).filter(rate => Number.isFinite(rate) && rate > 0))];
+    const wageBreakdown = paidDays.map(day => ({ code: "hourly_actual", label: "실제 근무 시급 / Lương theo giờ thực làm", category: "base",
+      date: day.date, dayType: day.dayType, minutes: day.minutes, rate: day.rate, multiplier: 1,
+      rawAmount: day.minutes * day.rate / 60, amount: Math.round(day.minutes * day.rate / 60) }));
+    if (base.baseAmount !== null) {
+      const rounding = base.baseAmount - wageBreakdown.reduce((sum, line) => sum + line.amount, 0);
+      if (rounding) wageBreakdown.push({ code: "base_rounding", label: "월 합계 VND 반올림 조정 / Điều chỉnh làm tròn tổng tháng VND", category: "base",
+        date: dates.at(-1), dayType: "work", minutes: 0, rate: 0, multiplier: 1, rawAmount: rounding, amount: rounding });
+    }
+    return { ...base, settlementMode: "hourly_actual", originalBaseAmount: base.baseAmount, hourlyActualMinutes: base.minutes,
+      hourlyAmount: base.baseAmount, hourlyRate: hourlyRates.length === 1 ? hourlyRates[0] : null, hourlyRates, wageBreakdown,
+      statutoryAmount: 0, monthlyExtraAmount: 0, monthlyExtraMinutes: 0, monthlyExtraHourlyRate: null,
+      monthlyPlannedMinutes: null, monthlyActualMinutes: null, monthlyBalanceMinutes: null, scheduleDefaultUsed: false,
+      plannedMinutes: 0, fullMonthPlannedMinutes: 0, paidScheduledMinutes: 0, paidLeaveDays: 0, unpaidLeaveDays: 0, holidayDays: 0, restDays: 0,
+      regularOvertimeMinutes: 0, restWorkMinutes: 0, holidayWorkMinutes: 0, nightMinutes: 0, nightOvertimeMinutes: 0,
+      ruleVersionIds: [], ruleUnresolved: 0, ruleIssues: [], yearToDateOvertimeMinutes: 0, annualCoverageComplete: false, sources: [], calculationVersion: 4,
+      daily: base.daily.map(day => ({ ...day, overtimeCandidates: [], nightCandidates: [], approvedOvertimeMinutes: 0, approvedNightMinutes: 0, statutoryAmount: 0 })) };
+  }
+
   function extendSummaries({ month, employees = [], terms = [], records = [], days = [], rules = [], baseSummaries, yearToDateRuns, today }) {
     const dates = monthDates(month), first = dates[0], last = dates.at(-1);
     days = buildEffectiveDays({ month, employees, terms, days });
@@ -279,7 +301,13 @@
     const bases = baseSummaries || calculated;
     return bases.map((base) => {
       const employee = employees.find((item) => item.id === base.employee_id) || {};
-      const employeeTerms = terms.filter((item) => item.employee_id === base.employee_id);
+      const employeeTerms = terms.filter((item) => item.employee_id === base.employee_id)
+        .map(term => employee.employment_type === "part_time" ? { ...term, break_start: "00:00", break_end: "00:00" } : term);
+      const effectiveTerms = effectiveMonthTerms(employee, employeeTerms, dates);
+      if (employee.employment_type === "part_time" && effectiveTerms.length && effectiveTerms.every(term => term.pay_type === "hourly")) {
+        const freshBase = calculated.find(row => row.employee_id === base.employee_id) || base;
+        return hourlyActualSummary(freshBase, employeeTerms, employee, dates);
+      }
       if (effectiveMonthTerms(employee, employeeTerms, dates).some(isMonthlyNet)) {
         const freshBase = calculated.find((row) => row.employee_id === base.employee_id) || base;
         return monthlyNetSummary({ month, dates, employee, employeeTerms, days, base: freshBase, today });

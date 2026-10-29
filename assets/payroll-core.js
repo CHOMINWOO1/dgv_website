@@ -146,7 +146,8 @@
   }
   function validTerm(term) {
     return Boolean(validSchedule(term) && ["monthly", "hourly", "daily"].includes(term.pay_type) &&
-      term.rate !== null && term.rate !== "" && term.rate !== undefined && Number.isFinite(Number(term.rate)) && Number(term.rate) >= 0);
+      term.rate !== null && term.rate !== "" && term.rate !== undefined && Number.isFinite(Number(term.rate)) && Number(term.rate) >= 0 &&
+      (term.pay_type !== "hourly" || Number(term.rate) > 0));
   }
 
   function activeTerm(terms, date) {
@@ -184,6 +185,7 @@
     if (!Number.isFinite(dayMs(today))) throw new Error("today must be YYYY-MM-DD");
     return employees.map((employee) => {
       const id = employee.id;
+      const partTime = employee.employment_type === "part_time";
       const hireDate = Number.isFinite(dayMs(employee.hire_date)) ? employee.hire_date : null;
       const terminationDate = Number.isFinite(dayMs(employee.termination_date)) ? employee.termination_date : null;
       const employedOn = (date) => (!hireDate || date >= hireDate) && (!terminationDate || date <= terminationDate);
@@ -338,13 +340,13 @@
         let attendanceDefaultUsed = false;
         if (intervals.length) {
           const attendanceTerm = validSchedule(term) ? term : DEFAULT_ATTENDANCE;
-          attendanceDefaultUsed = !validSchedule(term);
+          attendanceDefaultUsed = !partTime && !validSchedule(term);
           const shift = shiftBounds(attendanceTerm, date);
           actualSeconds = intervals.reduce((total, [from, to]) => {
             const breaks = [];
             // Include the previous work date for a scheduled overnight break.
             // Merge overlaps so effective-term boundaries never deduct twice.
-            for (let cursor = dayMs(dateText(from)) - DAY; cursor <= dayMs(dateText(to)); cursor += DAY) {
+            for (let cursor = dayMs(dateText(from)) - DAY; !partTime && cursor <= dayMs(dateText(to)); cursor += DAY) {
               const breakDate = dateText(cursor), effective = activeTerm(employeeTerms, breakDate);
               const configured = validSchedule(effective) ? effective : DEFAULT_ATTENDANCE;
               const bounds = shiftBounds(configured, breakDate);
@@ -364,6 +366,9 @@
           lateMinutes = Math.round(Math.max(0, Math.min(completedStart, shift.end) - shift.start) / MINUTE);
           earlyMinutes = Math.round(Math.max(0, shift.end - Math.max(completedEnd, shift.start)) / MINUTE);
           extraMinutes = Math.round(intervals.reduce((total, [from, to]) => total + Math.max(0, Math.min(to, shift.start) - from) + Math.max(0, to - Math.max(from, shift.end)), 0) / MINUTE);
+          // Part-time hourly work has no daily attendance quota or fixed-shift
+          // comparison. Pay uses the completed intervals, with no lunch deduction.
+          if (partTime && (!term || term.pay_type === "hourly")) lateMinutes = earlyMinutes = extraMinutes = 0;
           if (validTerm(term) && term.pay_type === "hourly") hourlyAmount += minutes * Number(term.rate) / 60;
           if (validTerm(term) && term.pay_type === "daily" && actualSeconds > 0) dailyAmount += Number(term.rate);
         }
@@ -424,6 +429,7 @@
       const attendanceUnresolved = summaryIssues.filter((issue) => issue !== message.monthly && issue !== message.employmentProration).length + daily.filter((d) => d.issues.some((issue) => issue !== message.paidLeave)).length;
       const compensationUnresolved = compensationIssues.length;
       return { employee_id: id, name: employee.name, device_user_id: employee.device_user_id,
+        employmentType: employee.employment_type || "full_time", breakPolicy: partTime ? "none" : "scheduled",
         active: employee.active !== false,
         minutes: sum("minutes"), actualSeconds: sum("actualSeconds"), workedDays: daily.filter((d) => d.actualSeconds > 0).length,
         lateMinutes, earlyMinutes, extraMinutes, balanceMinutes: extraMinutes - lateMinutes - earlyMinutes,
