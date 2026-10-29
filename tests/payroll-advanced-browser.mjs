@@ -126,7 +126,10 @@ try{
   // Another admin's correction must be fetched by range search even without page refresh.
   await page.evaluate(id=>{__payrollTest.db.payroll_payment_reversals.push({id:"remote-reversal",payment_id:"prior-2026-10-01",reason:"Remote correction"});__payrollTest.db.payroll_employees.find(e=>e.id===id).name="Remote refreshed A";__payrollTest.db.payroll_revision[0].version++;},employee);
   await page.locator("#rangeSearch").click();await idle();
-  assert.match(await page.locator("#rangeResult .range-summary").innerText(),/20[.,]000/);assert.doesNotMatch(await page.locator("#rangeResult .range-summary").innerText(),/40[.,]000/);assert.match(await page.locator("#rangeResult").innerText(),/Remote refreshed A/);assert.match(await page.locator("#rangeReceipts").innerText(),/Đã hủy/);
+  assert.match(await page.locator("#rangeResult .range-summary").innerText(),/20[.,]000/);assert.doesNotMatch(await page.locator("#rangeResult .range-summary").innerText(),/40[.,]000/);assert.match(await page.locator("#rangeResult").innerText(),/Remote refreshed A/);assert.doesNotMatch(await page.locator("#rangeReceipts").innerText(),/Đã hủy/);
+  assert.deepEqual(await page.locator("#rangeReceipts [data-payment-id]").evaluateAll(rows=>rows.map(row=>row.dataset.paymentId)),["prior-2026-09-30"],"receipt output excludes a cancelled payment while the original history stays intact");
+  assert.equal(await page.locator('[data-receipt-field="national-id"]').innerText(),"SYNTHETIC-PRIVATE-ID");assert.equal(await page.locator('[data-receipt-field="phone"]').innerText(),"090-TEST-0001");
+  assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_payments.some(p=>p.id==="prior-2026-10-01")&&__payrollTest.db.payroll_payment_reversals.some(r=>r.payment_id==="prior-2026-10-01")),true,"receipt filtering never deletes cancelled history");
   assert.match((await download("#rangeExport")).text,/Remote correction/,"range export uses freshly fetched reversals");
   const rangeReads=await page.evaluate(()=>__payrollTest.calls.filter(c=>c.table==="payroll_payments"&&c.operation==="select").length);
   await page.evaluate(()=>{__payrollTest.bumpRevisionReadFor="payroll_payments";});await page.locator("#rangeSearch").click();await idle();

@@ -324,7 +324,24 @@
     const generation=receiptGeneration,scope=receiptScope(),images=Object.create(null);
     const model=DGV_PAYROLL_RECEIPTS.buildModel(input),paymentIds=new Set(model.rows.map(row=>row.paymentId));
     const files=input.attachments.filter(file=>file.evidence_type==="signature"&&paymentIds.has(file.payment_id));
+    const current=()=>state.loaded&&generation===receiptGeneration&&scope===receiptScope();
     $("rangeReceipts").textContent="지급내역·서명을 불러오는 중 / Đang tải thanh toán và chữ ký…";
+    const before=Number((await result(db.from("payroll_revision").select("version").eq("id",1).single())).version);
+    if(!current())return;
+    if(before!==input.revision){clearReceiptPreview();throw new Error("자료가 변경되었습니다. 다시 조회해 주세요. / Dữ liệu đã đổi; tra cứu lại.");}
+    // Only administrators can retrieve identities, and only employees with an
+    // active payment in this report need to be requested. Keep them in memory.
+    const employeeIds=[...new Set(model.rows.map(row=>row.employeeId))],identities=[];
+    let nextEmployee=0;
+    await Promise.all(Array.from({length:Math.min(3,employeeIds.length)},async()=>{
+      while(current()&&nextEmployee<employeeIds.length){
+        const employeeId=employeeIds[nextEmployee++];
+        const data=await result(db.rpc("payroll_get_sensitive",{p_employee_id:employeeId}));
+        if(!current())return;
+        identities.push({employee_id:employeeId,national_id:data?.national_id||""});
+      }
+    }));
+    if(!current())return;
     // Bound memory and network concurrency on older tablets. Images remain in
     // memory only, and authenticated Storage downloads never expose public URLs.
     let next=0,totalBytes=0;
@@ -333,11 +350,14 @@
         const file=files[next++];totalBytes+=Number(file.byte_size)||0;
         if(totalBytes>40*1024*1024)continue;
         try{images[file.id]=await signatureImage(file);}catch{ /* Missing images block printing below. */ }
-        if(generation!==receiptGeneration)return;
+        if(!current())return;
       }
     }));
-    if(!state.loaded||generation!==receiptGeneration||scope!==receiptScope())return;
-    const finalModel=DGV_PAYROLL_RECEIPTS.buildModel({...input,signatureImages:images});
+    if(!current())return;
+    const after=Number((await result(db.from("payroll_revision").select("version").eq("id",1).single())).version);
+    if(!current())return;
+    if(before!==after){clearReceiptPreview();throw new Error("자료가 변경되었습니다. 다시 조회해 주세요. / Dữ liệu đã đổi; tra cứu lại.");}
+    const finalModel=DGV_PAYROLL_RECEIPTS.buildModel({...input,identities,signatureImages:images});
     receiptPreview={model:finalModel,scope,revision:input.revision,generation};
     $("rangeReceipts").innerHTML=DGV_PAYROLL_RECEIPTS.buildTableHtml(finalModel);
     for(const row of finalModel.rows.filter(row=>row.status==="paid"&&row.signatureStatus==="unsigned")){
