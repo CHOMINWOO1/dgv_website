@@ -49,7 +49,8 @@
       rows("payroll_runs",q=>q.lte("month",dates.start)),
       rows("payroll_run_adjustments"),rows("payroll_payment_reversals"),rows("payroll_attachments")
     ]);
-    const historyPayments=historyRuns.length?await rows("payroll_payments",q=>q.in("run_id",historyRuns.map(r=>r.id))):[];
+    const historyPaymentGroups=await Promise.all([rows("payroll_payments",q=>q.lte("payroll_month",dates.start)),historyRuns.length?rows("payroll_payments",q=>q.in("run_id",historyRuns.map(r=>r.id))):[]]);
+    const historyPayments=Array.from(new Map(historyPaymentGroups.flat().map(p=>[p.id,p])).values());
     return {rules,reviews,historyRuns,historyPayments,adjustments,reversals,attachments};
   }
   function employeeEdit(employee,form) {
@@ -107,7 +108,7 @@
     const reversed=new Set((state.reversals||[]).map(r=>r.payment_id));
     const overdue=(state.historyRuns||[]).map(run=>{
       const adjusted=(state.adjustments||[]).filter(a=>a.run_id===run.id).reduce((n,a)=>n+Number(a.amount),0);
-      const paid=(state.historyPayments||[]).filter(p=>p.run_id===run.id&&!reversed.has(p.id)).reduce((n,p)=>n+Number(p.amount),0);
+      const paid=(state.historyPayments||[]).filter(p=>(p.run_id===run.id||p.employee_id===run.employee_id&&p.payroll_month===run.month)&&!reversed.has(p.id)).reduce((n,p)=>n+Number(p.amount),0);
       const payRule=(state.rules||[]).filter(r=>r.effective_from<=run.month).sort((a,b)=>b.effective_from.localeCompare(a.effective_from))[0]||rule||initialRules;
       const next=app.bounds(run.month.slice(0,7)).end.slice(0,7),due=run.snapshot?.settlementMode==="monthly_net"?(run.snapshot.monthlyExpectedPayDate||next+"-05"):`${next}-${String(payRule.pay_day||5).padStart(2,"0")}`;
       return {run,due,balance:Number(run.total)+adjusted-paid};
@@ -159,9 +160,27 @@
       if(changes.length)$("reviewArea").insertAdjacentHTML("beforeend",changes.map(a=>`<p class="muted">정정 / Điều chỉnh ${money(a.amount)} VND · ${esc(a.reason)}</p>`).join(""));
       const normalized=days=>(days||[]).map(d=>[d.date,d.checkIn,d.checkOut,d.minutes]);
       if(JSON.stringify(normalized(run.snapshot?.daily))!==JSON.stringify(normalized(row.daily)))$("reviewArea").insertAdjacentHTML("beforeend",'<p class="notice warning">확정 이후 근무자료가 변경되었습니다. 확정 금액은 유지되며 필요한 차액은 정정으로 기록하세요. / Chấm công đã đổi; ghi điều chỉnh nếu cần.</p>');
-      const payments=state.payments.filter(p=>p.run_id===run.id),reversals=state.reversals||[];
-      $("paymentArea").innerHTML=`<p>급여 / Lương <strong>${money(app.totalFor(run))}</strong> · 지급 / Đã trả <strong>${money(app.paidFor(run))}</strong> · 잔액 / Còn lại <strong>${money(app.totalFor(run)-app.paidFor(run))} VND</strong></p><button id="addPayment" class="quiet" ${app.paidFor(run)>=app.totalFor(run)?"disabled":""}>+ 지급 기록 / Thêm thanh toán</button><div class="payment-cards">${payments.map(p=>{const reversal=reversals.find(r=>r.payment_id===p.id),files=(state.attachments||[]).filter(a=>a.payment_id===p.id),signed=files.some(f=>f.evidence_type==="signature");return `<article class="payment-card ${reversal?"reversed":""}"><strong>${esc(p.paid_on)} · ${p.method==="cash"?"현금 / Tiền mặt":"이체 / Chuyển khoản"} · ${money(p.amount)} VND</strong><p class="muted">${esc(p.reference||"")} ${esc(p.note||"")}</p>${reversal?`<p class="badge warn">취소 / Đã hủy · ${esc(reversal.reason)}</p>`:`<p class="badge ${signed?"":"warn"}" data-signature-status="${esc(p.id)}">${signed?"서명 저장됨 / Đã lưu chữ ký":"서명 대기 / Chờ ký"}</p><div class="actions"><button data-signature="${esc(p.id)}">${signed?"서명 추가 / Thêm chữ ký":"서명 받기 / Nhận chữ ký"}</button><button class="quiet" data-evidence="${esc(p.id)}">증빙 첨부 / Chứng từ</button><button class="quiet" data-reverse="${esc(p.id)}">지급 취소 / Hủy ghi nhận</button></div>`}${files.length?files.map(f=>`<p class="muted">${esc(legalNames[f.evidence_type]||f.evidence_type)} · ${esc(f.filename)} ${esc(f.signed_name||"")} <button class="quiet" data-file="${esc(f.id)}">보기 / Xem</button></p>`).join(""):'<p class="muted">증빙 미등록 / Chưa có chứng từ</p>'}</article>`;}).join("")||'<p class="muted">지급내역 없음 / Chưa thanh toán</p>'}</div>`;
+
+
     }
+    renderPaymentDetail(row,run);
+    renderRawAttendance(row);
+  }
+  function estimatedPay(row){return row.baseAmount==null?null:Number(row.baseAmount)+Number(row.statutoryAmount||0)+Number(row.monthlyExtraAmount||0);}
+  function paymentBalanceHtml(total,paid,confirmed){
+    const remaining=total==null?null:total-paid;
+    return `<div class="payment-totals"><div><small>${confirmed?"확정 급여 / Lương đã chốt":"예상 급여 / Lương dự kiến"}</small><strong data-testid="payment-expected">${total==null?"미산정 / Chưa tính":money(total)+" VND"}</strong></div><div><small>실제 지급 / Đã trả</small><strong data-testid="payment-paid">${money(paid)} VND</strong></div><div><small>${remaining<0?"초과 지급 / Trả dư":confirmed?"남은 금액 / Còn lại":"예상 남은 금액 / Còn lại dự kiến"}</small><strong data-testid="payment-remaining">${remaining==null?"급여 확정 후 계산 / Tính sau khi chốt":money(Math.abs(remaining))+" VND"}</strong></div></div>`;
+  }
+  function renderPaymentDetail(row,run){
+    const payments=app.paymentsFor(row.employee_id).slice().sort((a,b)=>b.paid_on.localeCompare(a.paid_on)||String(b.created_at||"").localeCompare(String(a.created_at||""))),reversals=state.reversals||[];
+    const paid=app.paidForEmployee(row.employee_id),total=run?app.totalFor(run):estimatedPay(row);
+    $("paymentArea").innerHTML=`<div id="paymentTotals">${paymentBalanceHtml(total,paid,!!run)}</div>${run?"":'<p class="muted">월급날 전 선지급·단기 알바 수시 지급을 기록할 수 있습니다. 같은 급여월의 이미 지급한 금액은 최종 정산에서 차감됩니다. 예상 잔액은 근무·급여 검토 후 달라질 수 있습니다.<br />Có thể tạm ứng hoặc trả linh hoạt trước khi chốt. Khoản đã trả cùng kỳ được trừ khi quyết toán; số dư dự kiến có thể thay đổi.</p>'}<button id="addPayment" ${run&&paid>=total?"disabled":""}>${run?"+ 지급하고 서명 받기 / Trả và ký nhận":"+ 조기·수시 지급 후 서명 / Tạm ứng, trả và ký"}</button><div class="payment-cards">${payments.map(p=>{const reversal=reversals.find(r=>r.payment_id===p.id),files=(state.attachments||[]).filter(a=>a.payment_id===p.id),signed=files.some(f=>f.evidence_type==="signature");return `<article class="payment-card ${reversal?"reversed":""}" data-payment-card="${esc(p.id)}"><strong>지급일 / Ngày trả ${esc(p.paid_on)} · ${p.method==="cash"?"현금 / Tiền mặt":"이체 / Chuyển khoản"} · ${money(p.amount)} VND</strong>${p.created_at?`<p class="muted">입력 시각 / Ghi nhận ${esc(new Date(p.created_at).toLocaleString("ko-KR",{timeZone:"Asia/Ho_Chi_Minh",hour12:false}))} (VN)</p>`:""}<p class="muted">${!p.run_id?"조기·수시 지급 / Tạm ứng, trả linh hoạt · ":""}${esc(p.reference||"")} ${esc(p.note||"")}</p>${reversal?`<p class="badge warn">취소 / Đã hủy · ${esc(reversal.reason)}</p>`:`<p class="badge ${signed?"":"warn"}" data-signature-status="${esc(p.id)}">${signed?"서명 저장됨 / Đã lưu chữ ký":"서명 대기 / Chờ ký"}</p><div class="actions"><button data-signature="${esc(p.id)}">${signed?"서명 추가 / Thêm chữ ký":"서명 받기 / Nhận chữ ký"}</button><button class="quiet" data-evidence="${esc(p.id)}">증빙 첨부 / Chứng từ</button><button class="quiet" data-reverse="${esc(p.id)}">지급 취소 / Hủy ghi nhận</button></div>`}${files.map(f=>`<p class="muted">${esc(legalNames[f.evidence_type]||f.evidence_type)} · ${esc(f.signed_name||f.filename)} <button class="quiet" data-file="${esc(f.id)}">보기 / Xem</button></p>`).join("")}</article>`;}).join("")||'<p class="muted">지급내역 없음 / Chưa thanh toán</p>'}</div>`;
+  }
+  function renderRawAttendance(row){
+    if(!$("rawAttendancePanel"))$("dailyBody").closest(".table-scroll").insertAdjacentHTML("afterend",'<section id="rawAttendancePanel"><h3>수신된 출퇴근 원본 / Lần chấm công đã nhận</h3><p id="rawAttendanceSummary" class="muted"></p><div class="table-scroll raw-attendance-scroll"><table><thead><tr><th>기록 시각 (VN) / Thời gian</th><th>출퇴근 / Vào · Ra</th><th>입력 / Nguồn</th></tr></thead><tbody id="rawAttendanceRows"></tbody></table></div></section>');
+    const records=state.records.filter(record=>record.employee_id===row.employee_id&&record.occurred_at.startsWith($("month").value)).slice().sort((a,b)=>b.occurred_at.localeCompare(a.occurred_at));
+    $("rawAttendanceSummary").textContent=`원본 ${records.length}건 / ${records.length} lần chấm công · 저장된 원본과 급여에 합산된 시간은 다를 수 있습니다. 퇴근 누락·5분 미만 근무·급여조건 미등록은 위 근무내역에서 확인하세요. / Giờ tính lương có thể khác bản gốc; kiểm tra thiếu giờ ra, ca dưới 5 phút hoặc thiếu điều kiện lương.`;
+    $("rawAttendanceRows").innerHTML=records.map(record=>`<tr><td>${esc(record.occurred_at.replace("T"," ").slice(0,19))}</td><td>${record.punch_type==="in"?"출근 / Vào":record.punch_type==="out"?"퇴근 / Ra":"출퇴근 기록 / Chấm công"}</td><td>${record.source==="kiosk"?"얼굴 출퇴근 / Chấm công khuôn mặt":"엑셀 / Excel"}</td></tr>`).join("")||'<tr><td colspan="3">수신된 원본 없음 / Chưa có bản gốc</td></tr>';
   }
   async function recordReview(values,snapshot) {
     return result(db.rpc("payroll_review",{p_employee_id:values.row.employee_id,p_month:(values.month||$("month").value)+"-01",p_snapshot:snapshot,p_reason:values.note||values.reviewedReason||"근무기록 및 급여 검토 / Đã kiểm tra chấm công và lương",p_expected_revision:values.revision??state.revision}));
@@ -195,7 +214,7 @@
       cursor=app.bounds(cursor).end.slice(0,7);
     }
     const matchingRuns=new Set(runs.filter(r=>!employeeId||r.employee_id===employeeId).map(r=>r.id));
-    const selectedPayments=payments.filter(p=>matchingRuns.has(p.run_id));
+    const selectedPayments=payments.filter(p=>p.employee_id?(!employeeId||p.employee_id===employeeId):matchingRuns.has(p.run_id));
     rangeData={revision:rangeRevision,month:fromDate.slice(0,7),fromDate,toDate,employeeId:employeeId||undefined,employees,terms,records,days,runs,payments:selectedPayments,summaries,adjustments,reversals,attachments};
     const reversed=new Set(reversals.map(r=>r.payment_id)),daily=summaries.flatMap(r=>r.daily.map(d=>({...d,name:r.name})));
     $("rangeResult").innerHTML=`<p class="range-summary">${fromDate} ~ ${toDate} · 근무 / Làm <strong>${hours(summaries.reduce((n,r)=>n+r.minutes,0))}</strong> · 실제 지급 / Thực trả <strong>${money(selectedPayments.filter(p=>!reversed.has(p.id)).reduce((n,p)=>n+Number(p.amount),0))} VND</strong></p><div class="table-scroll"><table><thead><tr><th>직원 / Nhân viên</th><th>근무일 / Ngày</th><th>출근 / Vào</th><th>퇴근 / Ra</th><th>근무 / Giờ</th><th>확인 / Kiểm tra</th></tr></thead><tbody>${daily.map(d=>`<tr><td>${esc(d.name)}</td><td>${esc(d.date)}</td><td>${esc(d.checkIn?.slice(11,16)||"—")}</td><td>${esc(d.checkOut?.slice(5,16)||"—")}</td><td>${hours(d.minutes)}</td><td>${esc(d.issues.join(" · "))}</td></tr>`).join("")||'<tr><td colspan="6">기록 없음 / Không có dữ liệu</td></tr>'}</tbody></table></div>`;
@@ -204,6 +223,7 @@
     if(summaries.some(r=>r.rangeRoundingMinutes))$("rangeResult").insertAdjacentHTML("beforeend",'<p class="muted">월 합산 직원은 조회기간 내 실제 초를 직원·월별로 합친 후 분으로 환산합니다. 일별 표시분 합계와 차이가 날 수 있습니다. / Cộng giây thực tế theo nhân viên và tháng rồi lấy phút; tổng có thể khác phút từng ngày.</p>');
   }
   function renderMonthlyDraft(values) {
+    if($("paymentTotals"))$("paymentTotals").innerHTML=paymentBalanceHtml(values.total,app.paidForEmployee(values.row.employee_id),false);
     if(values.row.settlementMode!=="monthly_net")return;
     const rate=document.querySelector('[data-testid="month-hourly-rate"]'),extra=document.querySelector('[data-testid="month-extra-amount"]');
     if(rate)rate.textContent=hourlyMoney(values.monthlyExtraHourlyRate)+" VND";
@@ -297,9 +317,9 @@
   function openEvidence(paymentId,kind,fallback) {
     requireLoaded();
     const payment=state.payments.find(p=>p.id===paymentId)||rangeData?.payments.find(p=>p.id===paymentId)||fallback?.payment;
-    const run=[...state.runs,...(rangeData?.runs||[])].find(r=>r.id===payment?.run_id)||fallback?.run;
-    const employee=state.employees.find(e=>e.id===run?.employee_id)||fallback?.employee;
-    if(!payment||!run||!employee)throw new Error("지급내역을 다시 조회해 주세요. / Tra cứu lại thanh toán.");
+    const run=[...state.runs,...(rangeData?.runs||[])].find(r=>r.id===payment?.run_id||(payment?.employee_id===r.employee_id&&payment?.payroll_month===r.month))||fallback?.run;
+    const employee=state.employees.find(e=>e.id===(payment?.employee_id||run?.employee_id))||fallback?.employee;
+    if(!payment||!employee||!(payment.payroll_month||run?.month))throw new Error("지급내역을 다시 조회해 주세요. / Tra cứu lại thanh toán.");
     if((state.reversals||[]).some(r=>r.payment_id===paymentId)||(rangeData?.reversals||[]).some(r=>r.payment_id===paymentId))throw new Error("취소된 지급에는 서명할 수 없습니다. / Không ký thanh toán đã hủy.");
     evidencePayment=paymentId;evidenceDraft=null;
     const form=$("evidenceForm");form.reset();
@@ -308,7 +328,7 @@
     const signature=kind==="signature";
     $("evidenceTitle").textContent=signature?"급여 수령 서명 / Ký nhận lương":"지급 증빙 / Chứng từ thanh toán";
     $("evidencePaymentSummary").dataset.paymentId=paymentId;
-    $("evidencePaymentSummary").innerHTML=`<strong>${esc(employee.name)}</strong><p>${esc(payment.paid_on)} · ${payment.method==="cash"?"현금 / Tiền mặt":"이체 / Chuyển khoản"}<br /><strong>${money(payment.amount)} VND</strong><br />급여월 / Tháng lương ${esc(run.month.slice(0,7))}</p>`;
+    $("evidencePaymentSummary").innerHTML=`<strong>${esc(employee.name)}</strong><p>${esc(payment.paid_on)} · ${payment.method==="cash"?"현금 / Tiền mặt":"이체 / Chuyển khoản"}<br /><strong>${money(payment.amount)} VND</strong><br />급여월 / Tháng lương ${esc((payment.payroll_month||run.month).slice(0,7))}</p>`;
     $("signatureArea").hidden=!signature;$("evidenceFileLabel").hidden=signature;
     clearSignature();openDialog("evidenceDialog");
   }
@@ -365,7 +385,7 @@
   dialog("auditDialog",'<h2>변경 이력 / Lịch sử thay đổi</h2><div id="auditRows"></div><button type="button" data-close>닫기 / Đóng</button>');
   async function showAudit(){
     const entries=await rows("payroll_audit"),employee=state.selected;
-    const employeeRuns=(state.historyRuns||[]).filter(d=>d.employee_id===employee).map(d=>d.id),employeePayments=(state.historyPayments||[]).filter(d=>employeeRuns.includes(d.run_id)).map(d=>d.id);
+    const employeeRuns=(state.historyRuns||[]).filter(d=>d.employee_id===employee).map(d=>d.id),employeePayments=(state.historyPayments||[]).filter(d=>d.employee_id===employee||employeeRuns.includes(d.run_id)).map(d=>d.id);
     const related=new Set([employee,...state.days.filter(d=>d.employee_id===employee).map(d=>d.id),...state.terms.filter(d=>d.employee_id===employee).map(d=>d.id),...employeeRuns,...employeePayments,...(state.adjustments||[]).filter(d=>employeeRuns.includes(d.run_id)).map(d=>d.id),...(state.reversals||[]).filter(d=>employeePayments.includes(d.payment_id)).map(d=>d.id),...(state.attachments||[]).filter(d=>employeePayments.includes(d.payment_id)).map(d=>d.id)]);
     const all=entries.filter(e=>related.has(String(e.record_id))||e.before_data?.employee_id===employee||e.after_data?.employee_id===employee||e.new_data?.employee_id===employee||e.old_data?.employee_id===employee).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
     $("auditRows").innerHTML=all.map(e=>`<article class="payment-card"><strong>${esc(e.table_name)} · ${esc(e.action||e.operation||"")}</strong><p>${esc(e.created_at)} · ${esc(e.created_by||e.actor_id||"")}</p><p>${esc(e.reason||e.after_data?.reason||e.new_data?.reason||"")}</p><details><summary>변경 전·후 / Trước &amp; sau</summary><pre>${esc(JSON.stringify({before:e.before_data||e.old_data,after:e.after_data||e.new_data},null,2))}</pre></details></article>`).join("")||'<p>이력 없음 / Chưa có lịch sử</p>';openDialog("auditDialog");

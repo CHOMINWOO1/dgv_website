@@ -80,4 +80,34 @@ assert.match(receipts.buildTableHtml(receipts.buildModel({...input,employeeId:"u
 const hostile=structuredClone(input);hostile.runs[0].snapshot.name='<img src=x onerror="evil()">';hostile.attachments[0].signed_name='</figcaption><script>evil()</script>';hostile.reversals[0].reason='</td><script>evil()</script>';
 const escaped=receipts.buildPrintHtml(hostile);assert.doesNotMatch(escaped,/<script|<img src=x/);assert.match(escaped,/&lt;img src=x onerror=&quot;evil\(\)&quot;&gt;/);assert.match(escaped,/&lt;script&gt;evil\(\)&lt;\/script&gt;/);
 const forged=structuredClone(model);forged.rows[0].signatures[0].imageDataUrl='data:image/svg+xml,<svg onload="evil()"/>';assert.doesNotMatch(receipts.buildTableHtml(forged),/src="data:image\/svg/,'even directly supplied models cannot inject an unvalidated image URL');
-console.log("Payroll receipts passed: paid-date/year boundaries, split payouts, historical names, current cancellations once, exact PNG/payment binding, signature completeness, private-field exclusion, safe A4 table/print escaping.");
+// Runless advances and ad-hoc part-time payouts retain their own payment IDs,
+// payroll month and signatures before and after the monthly salary is finalized.
+const advancePayment={id:"advance-a",run_id:null,employee_id:"a",payroll_month:"2025-12-01",paid_on:"2026-01-01",amount:123,method:"cash"};
+const advanceInput={fromDate:"2026-01-01",toDate:"2026-01-31",employees:input.employees,runs:[],
+  payments:[advancePayment,{...advancePayment,id:"advance-b",employee_id:"b",payroll_month:"2026-01-01",paid_on:"2026-01-31",amount:200,method:"bank"},{...advancePayment,id:"advance-cancel",payroll_month:"2026-01-01",amount:300},structuredClone(advancePayment),{...advancePayment,id:"advance-outside",paid_on:"2026-02-01",amount:400}],
+  reversals:[{id:"advance-reversal",payment_id:"advance-cancel",reason:"Cancelled advance",created_at:"2026-02-01T01:00:00Z"}],
+  attachments:[key("advance-signature","advance-a")],signatureImages:{"advance-signature":{paymentId:"advance-a",storagePath:"advance-a/advance-signature.png",dataUrl:imageA}}};
+const beforeFinal=receipts.buildModel(advanceInput),advanceRow=beforeFinal.rows.find(row=>row.paymentId==="advance-a");
+assert.equal(beforeFinal.rows.length,3);assert.equal(beforeFinal.totals.activeTotal,323);assert.equal(beforeFinal.totals.cancelledTotal,300);
+assert.equal(advanceRow.employeeId,"a");assert.equal(advanceRow.month,"2025-12");assert.equal(advanceRow.name,"Current A");assert.equal(advanceRow.runId,null);assert.equal(advanceRow.matchedRunId,null);
+assert.equal(advanceRow.isAdvance,true);assert.equal(advanceRow.payrollStatus,"unfinalized");assert.equal(advanceRow.signatureStatus,"signed");assert.equal(advanceRow.signatures[0].imageDataUrl,imageA);
+assert.equal(receipts.buildModel({...advanceInput,employeeId:"b"}).totals.activeTotal,200);
+assert.equal(receipts.buildModel({...advanceInput,fromDate:"2026-01-31",toDate:"2026-01-31"}).rows[0].paymentId,"advance-b");
+const beforePrint=receipts.buildPrintHtml(beforeFinal);assert.match(beforePrint,/급여 미확정/);assert.match(beforePrint,/선지급·수시지급/);assert.match(beforePrint,/data-payment-id="advance-a"/);
+assert.doesNotMatch(JSON.stringify(beforeFinal)+beforePrint,/NATIONAL-MUST|BANK-MUST|SNAPSHOT-PRIVATE/);
+const finalAdvance=receipts.buildModel({...advanceInput,runs:[input.runs[0]]}).rows.find(row=>row.paymentId==="advance-a");
+assert.equal(finalAdvance.payrollStatus,"finalized");assert.equal(finalAdvance.name,"Historical A");assert.equal(finalAdvance.deviceUserId,"0001");assert.equal(finalAdvance.isAdvance,true);
+assert.equal(finalAdvance.runId,null,"finalization never pretends to rewrite the original payment link");assert.equal(finalAdvance.matchedRunId,"previous");
+assert.equal(finalAdvance.signatures[0].imageDataUrl,imageA,"finalizing cannot replace the signature association");
+const mixed=receipts.buildModel({...advanceInput,runs:[input.runs[0]],payments:[...advanceInput.payments,input.payments[2]]});
+assert.equal(mixed.totals.activeTotal,473,"legacy run-only payment and advances are counted exactly once");
+assert.equal(mixed.rows.find(row=>row.paymentId==="p2").isAdvance,false);
+const wrongEmployee={...input.payments[1],employee_id:"b",payroll_month:"2025-12-01"};
+assert.throws(()=>receipts.buildModel({...input,payments:[wrongEmployee]}),/직원·급여월/);
+assert.throws(()=>receipts.buildModel({...input,payments:[{...wrongEmployee,employee_id:"a",payroll_month:"2026-01-01"}]}),/직원·급여월/);
+assert.throws(()=>receipts.buildModel({...advanceInput,payments:[{...advancePayment,payroll_month:"2025-12-02"}]}),/급여월/);
+assert.throws(()=>receipts.buildModel({...advanceInput,payments:[{...advancePayment,employee_id:null}]}),/직원·급여월/);
+assert.throws(()=>receipts.buildModel({...advanceInput,runs:[input.runs[0],{...input.runs[0],id:"duplicate-period"}]}),/중복/);
+const hostileAdvance={...advanceInput,employees:input.employees.map(employee=>({...employee,name:'<script>advanceAttack()</script>'}))};
+assert.doesNotMatch(receipts.buildPrintHtml(hostileAdvance),/<script>/);assert.match(receipts.buildPrintHtml(hostileAdvance),/&lt;script&gt;advanceAttack/);
+console.log("Payroll receipts passed: legacy and runless payments, finalization continuity, paid-date/year boundaries, split payouts, historical names, cancellations once, exact PNG/payment binding, private-field exclusion, safe A4 table/print escaping.");

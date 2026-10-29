@@ -187,6 +187,63 @@ const identityXml=new TextDecoder().decode(context.DGV_XLSX.buildWorkbookBytes(t
 assert.doesNotMatch(identityXml,/<f(?:\s|>)/);assert.match(identityXml,/HYPERLINK/);assert.doesNotMatch(identityXml,/BANK-MUST-NOT-EXPORT/);
 const identityPrint=tax.buildPayrollPrintHtml({...hostileIdentity,kind:"tax"});assert.doesNotMatch(identityPrint,/<img|<script/);assert.match(identityPrint,/&lt;img src=x onerror=&quot;evil\(\)&quot;&gt;/);assert.doesNotMatch(identityPrint,/BANK-MUST-NOT-EXPORT/);
 
+// Payments recorded before finalization are monetary records only. Their
+// employee/payroll_month scope survives finalization and cross-year paid dates.
+const advances={month:"2026-10",today:"2026-11-10",employees:[data.employees[0],{...data.employees[1],active:false}],terms:[],records:[],days:[],runs:[],previousRuns:[],adjustments:[],
+  summaries:[{employee_id:"a",month:"2026-10",name:"Draft A",baseAmount:1000,minutes:123,workedDays:1,unresolved:2,daily:[],wageBreakdown:[{code:"draft",amount:1000}]}],
+  payments:[
+    {id:"advance1",employee_id:"a",payroll_month:"2026-10-01",run_id:null,paid_on:"2026-10-01",method:"cash",amount:100},
+    {id:"advance2",employee_id:"a",payroll_month:"2026-10-01",run_id:null,paid_on:"2026-11-01",method:"bank",amount:200},
+    {id:"cancelled-advance",employee_id:"a",payroll_month:"2026-10-01",run_id:null,paid_on:"2026-10-05",method:"cash",amount:900},
+    {id:"parttime-advance",employee_id:"b",payroll_month:"2026-10-01",run_id:null,paid_on:"2026-10-15",method:"bank",amount:300},
+    {id:"previous-period",employee_id:"a",payroll_month:"2026-09-01",run_id:null,paid_on:"2026-10-01",method:"cash",amount:400},
+    {id:"next-period",employee_id:"a",payroll_month:"2026-11-01",run_id:null,paid_on:"2026-10-15",method:"cash",amount:500},
+    {id:"earlier-paid",employee_id:"a",payroll_month:"2026-10-01",run_id:null,paid_on:"2026-09-30",method:"cash",amount:50},
+    {id:"previous-year",employee_id:"a",payroll_month:"2025-12-01",run_id:null,paid_on:"2026-01-01",method:"cash",amount:700}
+  ],reversals:[{id:"cancel-advance",payment_id:"cancelled-advance",created_at:"2026-12-01T01:00:00Z",reason:"Cancel only this payment"}],
+  attachments:[{...data.attachments[0],id:"advance-signature",payment_id:"advance1",storage_path:"advance1/signature.png"}],identities:data.identities};
+advances.previousPayments=[structuredClone(advances.payments[0])];
+const advanceUnchanged=JSON.stringify(advances),advanceModel=tax.summarizePayroll(advances),advanceA=advanceModel.rows.find(row=>row.employee_id==="a");
+assert.equal(advanceModel.rows.length,2,"inactive employee with a payment remains reportable");
+assert.equal(advanceA.paid,350,"same id from overlapping sources is counted once, cancellations excluded");
+assert.equal(advanceA.approved,null);assert.equal(advanceA.outstanding,null);assert.equal(advanceA.snapshot.minutes,123,"payments never invent or alter work hours");
+assert.equal(advanceA.payrollStatus,"unfinalized");assert.match(advanceA.status,/선지급.*미확정/);
+assert.equal(advanceModel.totals.approved,0);assert.equal(advanceModel.totals.paid,650);assert.equal(advanceModel.totals.unfinalizedPaid,650);assert.equal(advanceModel.totals.outstanding,0);
+assert.equal(advanceModel.comparison.find(row=>row.employee_id==="a").previousPaid,400);
+assert.ok(advanceModel.warnings.some(row=>row.code==="UNFINALIZED_PAYMENT"&&row.employee_id==="a"));
+const advanceLedger=body(tax.buildPayrollWorkbook({...advances,kind:"ledger"}).sheets[0]);
+assert.equal(advanceLedger[0][7],null);assert.equal(advanceLedger[0][9],null);assert.equal(advanceLedger[0][11],null);
+const advanceOutstanding=body(tax.buildPayrollWorkbook({...advances,kind:"outstanding"}).sheets[0]);
+assert.equal(advanceOutstanding.length,2);assert.equal(advanceOutstanding[0][3],null);assert.equal(advanceOutstanding[0][5],null,"unknown balance is blank, never a negative draft salary");
+const advanceCash=body(tax.buildPayrollWorkbook({...advances,kind:"cash"}).sheets[0]);
+assert.deepEqual(Array.from(advanceCash,row=>row[0]),["advance1","cancelled-advance","earlier-paid"]);
+assert.equal(advanceCash.find(row=>row[0]==="cancelled-advance")[8],0);
+assert.match(advanceCash[0][14],/미확정/);assert.match(advanceCash[0][15],/선지급/);
+const exactPaidDay=body(tax.buildPayrollWorkbook({...advances,kind:"cash",fromDate:"2026-10-01",toDate:"2026-10-01"}).sheets[0]);
+assert.deepEqual(Array.from(exactPaidDay,row=>row[0]),["previous-period","advance1"]);
+const previousYearPaid=body(tax.buildPayrollWorkbook({...advances,kind:"cash",fromDate:"2026-01-01",toDate:"2026-01-01"}).sheets[0]);
+assert.equal(previousYearPaid.length,1);assert.equal(previousYearPaid[0][0],"previous-year");assert.equal(previousYearPaid[0][3],"2025-12");
+const scopedParttime=body(tax.buildPayrollWorkbook({...advances,kind:"parttime",employeeId:"b",fromDate:"2026-10-01",toDate:"2026-10-31"}).sheets[0]);
+assert.equal(scopedParttime.length,1);assert.equal(scopedParttime[0][0],"parttime-advance");
+const advanceTax=tax.buildPayrollWorkbook({...advances,kind:"tax"});
+assert.match(body(lookup(advanceTax,"Khoản lương"))[0][10],/초안.*미확정/);
+assert.equal(body(lookup(advanceTax,"Chứng từ"))[0][1],"advance1","signatures remain bound to the exact advance");
+assert.ok(body(lookup(advanceTax,"Hồ sơ lương")).some(row=>/미확정 급여의 순지급액/.test(row[0])&&row[1]===650));
+assert.match(tax.buildPayrollPrintHtml({...advances,kind:"tax"}),/급여 미확정/);
+assert.equal(JSON.stringify(advances),advanceUnchanged);
+const afterFinal={...advances,runs:[{id:"advance-final",employee_id:"a",month:"2026-10-01",base_amount:1000,total:1000,snapshot:{name:"Final historical A",minutes:777,daily:[]}}]};
+const finalAdvance=tax.summarizePayroll(afterFinal).rows.find(row=>row.employee_id==="a");
+assert.equal(finalAdvance.name,"Final historical A");assert.equal(finalAdvance.approved,1000);assert.equal(finalAdvance.paid,350);assert.equal(finalAdvance.outstanding,650);assert.equal(finalAdvance.snapshot.minutes,777);
+const fullyPaid={...afterFinal,payments:[...afterFinal.payments,{id:"final-balance",run_id:"advance-final",employee_id:"a",payroll_month:"2026-10-01",paid_on:"2026-11-05",method:"bank",amount:650}]};
+assert.equal(tax.summarizePayroll(fullyPaid).rows.find(row=>row.employee_id==="a").outstanding,0,"linked final payment and runless advances are each counted once");
+const overpaid=tax.summarizePayroll({...afterFinal,runs:[{...afterFinal.runs[0],total:0,base_amount:0}]}).rows.find(row=>row.employee_id==="a");
+assert.equal(overpaid.outstanding,-350);assert.match(overpaid.status,/초과 지급/);
+assert.equal(tax.summarizePayroll({...afterFinal,month:"2026-11"}).rows.find(row=>row.employee_id==="a").paid,500,"overpayment does not move itself into the next payroll month");
+assert.throws(()=>tax.summarizePayroll({...afterFinal,payments:[{...fullyPaid.payments.at(-1),employee_id:"b"}]}),/직원·급여월/);
+assert.throws(()=>tax.summarizePayroll({...afterFinal,payments:[{...fullyPaid.payments.at(-1),payroll_month:"2026-09-01"}]}),/직원·급여월/);
+assert.throws(()=>tax.summarizePayroll({...advances,payments:[{...advances.payments[0],payroll_month:"2026-10-02"}]}),/급여월/);
+assert.throws(()=>tax.summarizePayroll({...advances,payments:[{...advances.payments[0],employee_id:null}]}),/직원·급여월/);
+
 assert.throws(()=>tax.buildPayrollWorkbook({...data,month:"2026-13"}));
 assert.throws(()=>tax.buildPayrollWorkbook({...data,kind:"unknown"}));
 assert.throws(()=>tax.buildPayrollWorkbook({...data,fromDate:"2026-02-30",toDate:"2026-03-01"}));
