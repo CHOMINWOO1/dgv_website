@@ -16,9 +16,12 @@
   refreshStatus.setAttribute("role","status");refreshStatus.setAttribute("aria-live","polite");$("notice").after(refreshStatus);
   const selected = () => state.summaries.find((row) => row.employee_id === state.selected);
   const runFor = (id) => state.runs.find((run) => run.employee_id === id);
-  const paidFor = (run) => run ? state.payments.filter((payment) => payment.run_id === run.id && !(state.reversals||[]).some((item)=>item.payment_id===payment.id)).reduce((sum,payment) => sum + Number(payment.amount),0) : 0;
+  const paymentMatches=(payment,employeeId,month=$("month").value)=>{const run=state.runs.find(r=>r.id===payment.run_id);return (payment.employee_id||run?.employee_id)===employeeId&&String(payment.payroll_month||run?.month||"").slice(0,7)===month.slice(0,7);};
+  const paymentsFor=(employeeId,month=$("month").value)=>state.payments.filter(payment=>paymentMatches(payment,employeeId,month));
+  const paidForEmployee=(employeeId,month=$("month").value)=>paymentsFor(employeeId,month).filter(payment=>!(state.reversals||[]).some(item=>item.payment_id===payment.id)).reduce((sum,payment)=>sum+Number(payment.amount),0);
+  const paidFor = (run) => run ? paidForEmployee(run.employee_id,run.month) : 0;
   const totalFor = (run) => run ? Number(run.total)+(state.adjustments||[]).filter((item)=>item.run_id===run.id).reduce((sum,item)=>sum+Number(item.amount),0) : 0;
-  const filtered = () => state.summaries.filter((row) => $("employeeFilter").value ? row.employee_id === $("employeeFilter").value : row.active !== false || row.daily.some((day)=>day.checkIn) || runFor(row.employee_id));
+  const filtered = () => state.summaries.filter((row) => $("employeeFilter").value ? row.employee_id === $("employeeFilter").value : row.active !== false || row.daily.some((day)=>day.checkIn) || runFor(row.employee_id) || paymentsFor(row.employee_id).length);
   function notice(message, error = false) { $("notice").textContent = message; $("notice").className = `notice${error ? " error" : ""}`; $("notice").hidden = !message; }
   function refreshNotice(message) {refreshStatus.textContent=message;refreshStatus.hidden=!message;refreshFailed=false;}
   function clearAuthenticatedState() {
@@ -105,7 +108,8 @@
         rows("payroll_runs", (q) => q.eq("month", dates.start)),
         result(db.from("payroll_imports").select("*").order("created_at",{ascending:false}).limit(20))
       ]);
-      const payments = runs.length ? await rows("payroll_payments", (q) => q.in("run_id",runs.map((run) => run.id))) : [];
+      const paymentGroups=await Promise.all([rows("payroll_payments",q=>q.eq("payroll_month",dates.start)),runs.length?rows("payroll_payments",q=>q.in("run_id",runs.map(run=>run.id))):[]]);
+      const payments=Array.from(new Map(paymentGroups.flat().map(payment=>[payment.id,payment])).values());
       const extra = window.DGV_PAYROLL_ADVANCED ? await DGV_PAYROLL_ADVANCED.load({month,dates,employees,runs,payments}) : {};
       const after=await revision();
       if(generation!==loadGeneration||$("payrollApp").hidden)return;
@@ -130,15 +134,17 @@
     if (!state.loaded) return;
     const visible = filtered();
     const confirmed = visible.reduce((sum,row) => sum + totalFor(runFor(row.employee_id)),0);
-    const paid = visible.reduce((sum,row) => sum + paidFor(runFor(row.employee_id)),0);
+    const paid = visible.reduce((sum,row) => sum + paidForEmployee(row.employee_id),0);
+    const outstanding=visible.reduce((sum,row)=>{const run=runFor(row.employee_id);return sum+(run?Math.max(0,totalFor(run)-paidFor(run)):0);},0);
     const reviews = visible.filter((row) => !runFor(row.employee_id) && (row.unresolved || row.baseAmount == null)).length;
-    $("metrics").innerHTML = [["확정 급여 / Lương đã chốt",money(confirmed),"VND"],["실제 지급 / Đã thanh toán",money(paid),"VND"],["미지급 / Còn phải trả",money(confirmed-paid),"VND"],["확인 필요 / Cần kiểm tra",reviews,`${visible.length} 직원 / nhân viên`]].map(([label,value,unit],index) => `<div class="metric ${index===1?"highlight":""}"><small>${label}</small><strong>${value}</strong><small>${unit}</small></div>`).join("");
+    $("metrics").innerHTML = [["확정 급여 / Lương đã chốt",money(confirmed),"VND"],["실제 지급 (선지급 포함) / Đã trả",money(paid),"VND"],["확정분 미지급 / Còn phải trả đã chốt",money(outstanding),"VND"],["확인 필요 / Cần kiểm tra",reviews,`${visible.length} 직원 / nhân viên`]].map(([label,value,unit],index) => `<div class="metric ${index===1?"highlight":""}"><small>${label}</small><strong>${value}</strong><small>${unit}</small></div>`).join("");
     $("ledgerBody").innerHTML = visible.length ? visible.map((row) => {
-      const run = runFor(row.employee_id), paid = paidFor(run), review = row.unresolved || row.baseAmount == null;
+      const run = runFor(row.employee_id), paid = paidForEmployee(row.employee_id), review = row.unresolved || row.baseAmount == null;
+      const received=state.records.filter(record=>record.employee_id===row.employee_id&&record.occurred_at.startsWith($("month").value)).length;
       const reviewed=(state.reviews||[]).some((item)=>item.employee_id===row.employee_id&&Number(item.source_revision)===state.revision);
       const shown=run?.snapshot||row;
-      const timeCell=shown.settlementMode==="monthly_net"?`<strong>${hours(shown.monthlyActualMinutes)}</strong><span class="muted">월 기준 / Chuẩn ${hours(shown.monthlyPlannedMinutes)}<br />${Number(shown.monthlyBalanceMinutes)<0?"−":"+"}${hours(shown.monthlyBalanceMinutes)} · 추가 / Thêm ${money(shown.monthlyExtraAmount)} VND</span>`:`${hours(shown.minutes)}<span class="muted">${shown.workedDays}일 / ngày</span>`;
-      const status = run ? (paid >= totalFor(run) ? "지급 완료 / Đã trả" : paid ? "일부 지급 / Trả một phần" : "급여 확정 / Đã chốt") : review ? "확인 필요 / Cần kiểm tra" : reviewed?"검토 완료 / Đã duyệt":"계산 완료 / Đã tính";
+      const timeCell=(shown.settlementMode==="monthly_net"?`<strong>${hours(shown.monthlyActualMinutes)}</strong><span class="muted">월 기준 / Chuẩn ${hours(shown.monthlyPlannedMinutes)}<br />${Number(shown.monthlyBalanceMinutes)<0?"−":"+"}${hours(shown.monthlyBalanceMinutes)} · 추가 / Thêm ${money(shown.monthlyExtraAmount)} VND</span>`:`${hours(shown.minutes)}<span class="muted">${shown.workedDays}일 / ngày</span>`)+(received?`<span class="badge ${row.attendanceUnresolved?"warn":"neutral"}">출퇴근 원본 ${received}건 / ${received} lần chấm công</span>`:"");
+      const status = run ? (paid>totalFor(run)?"초과 지급 / Trả dư":paid === totalFor(run) ? "지급 완료 / Đã trả" : paid ? "일부 지급 / Trả một phần" : "급여 확정 / Đã chốt") : paid?"선지급 · 미확정 / Tạm ứng, chưa chốt":review ? "확인 필요 / Cần kiểm tra" : reviewed?"검토 완료 / Đã duyệt":"계산 완료 / Đã tính";
       return `<tr><td><strong>${esc(row.name)}</strong><span class="muted">ID ${esc(row.device_user_id)}</span></td><td>${timeCell}</td><td>${money(run?totalFor(run):row.baseAmount==null?null:row.baseAmount+(row.statutoryAmount||0)+(row.monthlyExtraAmount||0))}<span class="muted">${run?"확정 / Đã chốt":"계산 급여 / Lương dự kiến"}</span></td><td>${money(paid)}</td><td>${run?money(totalFor(run)-paid):"—"}</td><td><span class="badge ${!run&&review?"warn":!run?"neutral":""}">${status}</span></td><td><button class="quiet" data-employee="${esc(row.employee_id)}">보기 / Xem</button></td></tr>`;
     }).join("") : '<tr><td colspan="7" class="empty">엑셀을 가져오거나 직원을 등록해 주세요.<br />Nhập tệp Excel hoặc thêm nhân viên để bắt đầu.</td></tr>';
     $("importHistory").innerHTML = state.imports.length ? state.imports.map((entry) => `<p class="term-row"><strong>${esc(entry.filename)}</strong> · 신규 / Mới ${entry.inserted_count} · 중복 / Trùng ${entry.duplicate_count}<br /><span class="muted">${esc(new Date(entry.created_at).toLocaleString("ko-KR",{timeZone:"Asia/Ho_Chi_Minh"}))} (VN)</span></p>`).join("") : '<p class="muted">가져오기 이력이 없습니다. / Chưa nhập dữ liệu.</p>';
@@ -288,7 +294,7 @@
     if(button.id==="cancelImport"){state.preview=null;$("importPreview").hidden=true;}
     if(button.id==="finalize")task(()=>{const values=draft();state.confirmation={...values,revision:state.revision,month:$("month").value};$("confirmForm").reset();$("confirmText").textContent=`${values.row.name} · ${$("month").value} · ${money(values.total)} VND`;openDialog("confirmDialog");});
     if(button.id==="addPayment"){
-      const run=runFor(state.selected),form=$("paymentForm");form.reset();field(form,"paid_on").value=today();field(form,"paid_on").max=today();field(form,"amount").max=String(totalFor(run)-paidFor(run));field(form,"method").value=state.employees.find(e=>e.id===state.selected)?.payment_method==="bank"?"bank":"cash";state.paymentRequest=crypto.randomUUID();openDialog("paymentDialog");
+      const run=runFor(state.selected),form=$("paymentForm"),employee=state.employees.find(e=>e.id===state.selected);form.reset();form.dataset.employeeId=employee.id;form.dataset.month=$("month").value;form.dataset.runId=run?.id||"";field(form,"paid_on").value=today();field(form,"paid_on").max=today();field(form,"amount").max=String(run?Math.max(0,totalFor(run)-paidFor(run)):999999999999);field(form,"method").value=employee.payment_method==="bank"?"bank":"cash";$("paymentContext").textContent=employee.name+" · "+$("month").value+" · "+(run?"확정 급여 지급 / Trả lương đã chốt":"조기·수시 지급 · 월말 정산에 반영 / Tạm ứng, trả linh hoạt; trừ khi chốt tháng");state.paymentRequest=crypto.randomUUID();openDialog("paymentDialog");
     }
   });
   $("reviewArea").addEventListener("input",()=>{reviewDirty=true;try{const values=draft();$("draftTotal").textContent=money(values.total)+" VND";window.DGV_PAYROLL_ADVANCED?.renderMonthlyDraft(values);}catch{$("draftTotal").textContent="입력 확인 / Kiểm tra";}});
@@ -328,12 +334,13 @@
   $("paymentForm").addEventListener("submit",(event)=>{event.preventDefault();task(async()=>{
     const values=Object.fromEntries(new FormData($("paymentForm")));values.amount=Number(values.amount);
     if(!Number.isSafeInteger(values.amount)||values.amount<=0)throw new Error("지급액을 확인해 주세요. / Kiểm tra số tiền.");
-    const run=runFor(state.selected),employee=state.employees.find(e=>e.id===run.employee_id);
-    const paymentId=await result(db.rpc("payroll_pay",{p_run_id:run.id,p_amount:values.amount,p_paid_on:values.paid_on,p_method:values.method,p_reference:values.reference.trim(),p_note:values.note.trim(),p_request_id:state.paymentRequest}));
+    const form=$("paymentForm"),employee=state.employees.find(e=>e.id===form.dataset.employeeId),run=state.runs.find(r=>r.id===form.dataset.runId),payrollMonth=form.dataset.month+"-01";
+    const args={p_amount:values.amount,p_paid_on:values.paid_on,p_method:values.method,p_reference:values.reference.trim(),p_note:values.note.trim(),p_request_id:state.paymentRequest};
+    const paymentId=await result(run?db.rpc("payroll_pay",{...args,p_run_id:run.id}):db.rpc("payroll_pay_advance",{...args,p_employee_id:employee.id,p_payroll_month:payrollMonth}));
     $("paymentDialog").close();
     // The payment is committed once. A signature retry must never pay again,
     // including when the subsequent ledger refresh fails.
-    window.DGV_PAYROLL_ADVANCED?.openEvidence(paymentId,"signature",{payment:{id:paymentId,run_id:run.id,...values},run,employee});
+    window.DGV_PAYROLL_ADVANCED?.openEvidence(paymentId,"signature",{payment:{id:paymentId,run_id:run?.id||null,employee_id:employee.id,payroll_month:payrollMonth,...values},run,employee});
     try{await load();}catch(error){if(error.message==="AUTH_REQUIRED")throw error;throw new Error("지급은 이미 저장되었습니다. 조회 갱신에 실패했지만 아래에서 서명을 저장할 수 있습니다. / Đã lưu thanh toán; tải lại thất bại nhưng vẫn có thể ký nhận.");}
     notice("지급을 기록했습니다. 직원의 수령 서명을 받아 주세요. / Đã ghi thanh toán. Vui lòng lấy chữ ký nhận lương.");
   });});
@@ -341,7 +348,7 @@
   setInterval(checkForUpdates,30000);
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)void checkForUpdates();});
   window.addEventListener("focus",()=>void checkForUpdates());
-  window.DGV_PAYROLL_APP={state,db,$,esc,money,hours,today,rows,result,task,load,render,renderDetail,selected,runFor,paidFor,totalFor,openDialog,field,bounds,notice,draft};
+  window.DGV_PAYROLL_APP={state,db,$,esc,money,hours,today,rows,result,task,load,render,renderDetail,selected,runFor,paidFor,totalFor,openDialog,field,bounds,notice,draft,paymentMatches,paymentsFor,paidForEmployee};
   const startPayroll=async()=>{try{await QRStaff.requireLogin({roles:["admin"],preferredRole:"admin"});await DGV.requireAuth({roles:["admin"]});$("payrollApp").hidden=false;await task(load);}catch(error){$("pageError").textContent=messageOf(error);$("pageError").hidden=false;}};
   // Register advanced UI/report modules before even a cached session can load
   // the ledger; otherwise fast responses can skip their data and rendering.

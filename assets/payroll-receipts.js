@@ -73,9 +73,15 @@
     const warnings=[],rows=[];
     for(const payment of payments){
       const paidOn=date(payment.paid_on);if(paidOn<fromDate||paidOn>toDate)continue;
-      const run=runs.get(payment.run_id);if(!run||!run.employee_id)throw new Error("지급 건의 급여 확정정보가 없습니다. 새로고침하세요. / Thiếu kỳ lương của khoản trả. Tải lại dữ liệu.");
-      if(employeeId&&run.employee_id!==employeeId)continue;
-      const employee=employees.get(run.employee_id),snapshot=run.snapshot||{},paid=amount(payment.amount);
+      const linked=payment.run_id?runs.get(payment.run_id):null;
+      if(payment.run_id&&(!linked||!linked.employee_id))throw new Error("지급 건의 급여 확정정보가 없습니다. 새로고침하세요. / Thiếu kỳ lương của khoản trả. Tải lại dữ liệu.");
+      if(payment.payroll_month&&!/^\d{4}-(0[1-9]|1[0-2])(?:-01)?$/.test(text(payment.payroll_month)))throw new Error("지급 급여월을 확인하세요. / Kiểm tra kỳ lương.");
+      const paymentEmployeeId=payment.employee_id||linked?.employee_id,payrollMonth=month(payment.payroll_month||linked?.month);
+      if(!paymentEmployeeId||linked&&(linked.employee_id!==paymentEmployeeId||month(linked.month)!==payrollMonth))throw new Error("지급 직원·급여월 정보가 일치하지 않습니다. / Nhân viên hoặc kỳ lương không khớp.");
+      if(employeeId&&paymentEmployeeId!==employeeId)continue;
+      const matchingRuns=[...runs.values()].filter(item=>item.employee_id===paymentEmployeeId&&month(item.month)===payrollMonth);
+      if(matchingRuns.length>1)throw new Error("직원·급여월의 확정정보가 중복되었습니다. / Trùng kỳ lương đã chốt.");
+      const run=linked||matchingRuns[0],employee=employees.get(paymentEmployeeId),snapshot=run?.snapshot||{},paid=amount(payment.amount);
       if(paid===0)throw new Error("지급액은 0보다 커야 합니다. / Khoản trả phải lớn hơn 0.");
       const cancelled=reversals.filter(item=>item.payment_id===payment.id),issues=[];
       if(!employee&&!snapshot.name&&!snapshot.employee?.name)issues.push("직원 이름 확인 필요 / Cần kiểm tra tên nhân viên");
@@ -96,8 +102,8 @@
         return {attachmentId:file.id,signedName,acknowledgedAt:acknowledgedDisplay?file.acknowledged_at:null,acknowledgedDisplay,imageStatus,imageDataUrl};
       });
       const signatureStatus=!signatures.length?"unsigned":signatures.every(signature=>signature.imageStatus==="loaded")?"signed":"unavailable";
-      const row={paymentId:payment.id,runId:run.id,employeeId:run.employee_id,deviceUserId:text(snapshot.device_user_id||snapshot.employee?.device_user_id||employee?.device_user_id),
-        name:text(snapshot.name||snapshot.employee?.name||employee?.name||"이름 확인 필요 / Cần kiểm tra tên"),month:month(run.month),paidOn,amount:paid,netAmount:cancelled.length?0:paid,
+      const row={paymentId:payment.id,runId:payment.run_id||null,matchedRunId:run?.id||null,employeeId:paymentEmployeeId,deviceUserId:text(snapshot.device_user_id||snapshot.employee?.device_user_id||employee?.device_user_id),
+        name:text(snapshot.name||snapshot.employee?.name||employee?.name||"이름 확인 필요 / Cần kiểm tra tên"),month:payrollMonth,paidOn,amount:paid,netAmount:cancelled.length?0:paid,isAdvance:!payment.run_id,payrollStatus:run?"finalized":"unfinalized",
         method:text(payment.method),status:cancelled.length?"cancelled":"paid",reversalReason:cancelled.map(item=>text(item.reason)).filter(Boolean).join(" · "),signatures,signatureStatus,issues:[...new Set(issues)]};
       rows.push(row);row.issues.forEach(message=>warnings.push({paymentId:row.paymentId,message}));
     }
@@ -112,7 +118,7 @@
   function checkedModel(value){if(value?.format!==FORMAT||value.version!==1||!Array.isArray(value.rows)||!value.totals)throw new Error("지급 보고서를 다시 조회하세요. / Tải lại báo cáo thanh toán.");date(value.fromDate);date(value.toDate);return value;}
   function buildTableHtml(model){
     checkedModel(model);const totals=model.totals;
-    const status=row=>row.status==="cancelled"?"취소 / Đã hủy":"지급 / Đã trả";
+    const status=row=>(row.status==="cancelled"?"취소 / Đã hủy":"지급 / Đã trả")+(row.isAdvance?"<small>선지급·수시지급 / Tạm trả</small>":"")+(row.payrollStatus==="unfinalized"?"<small>급여 미확정 / Lương chưa chốt</small>":row.isAdvance?"<small>급여 확정 / Lương đã chốt</small>":"");
     function signatureHtml(row){
       if(!array(row.signatures).length)return '<span class="receipt-unsigned">서명 미등록 / Chưa ký</span>';
       return row.signatures.map(signature=>{

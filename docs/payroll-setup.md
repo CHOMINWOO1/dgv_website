@@ -20,6 +20,7 @@ Apply these migrations in order to a local or staging database with the existing
 6. `supabase/migrations/20261029023034_hana_payroll_derived_monthly_rate.sql`
 7. `supabase/migrations/20261029025813_hana_payroll_employee_identity.sql`
 8. `supabase/migrations/20261029035509_hana_payroll_kiosk_attendance.sql`
+9. `supabase/migrations/20261029051511_hana_payroll_advances.sql`
 
 Run `supabase/tests/payroll.sql`, `payroll-complete.sql`, `payroll-backup.sql`,
 `payroll-consistency.sql` and `payroll-monthly-net.sql`
@@ -129,17 +130,91 @@ actually paid. `payroll_run_balances` is a security-invoker view returning
 p_request_id)` returns the payment UUID. The method is `cash` or `bank` and the
 request ID is a fresh client UUID retained during retries. An identical retry
 returns the original payment. Reusing the UUID with different values fails.
-Each payment locks its run before checking the remaining balance, so two
-concurrent payments cannot both spend the same remaining amount. The database
-also applies this check to direct table inserts. Payments are append-only.
+Each payment locks the global payroll revision and then its run before checking
+the remaining balance, so two concurrent payments cannot both spend the same
+remaining amount. The database also applies this check to direct table inserts.
+Payments are append-only, including their employee and salary-month binding.
 
 Record only money actually paid. Split cash/bank payments can be entered as
 separate rows. The reference and note fields can record a receipt or bank
 transaction identifier. `payroll_reverse_payment(payment_id, reason, request_id)`
 adds one immutable reversal per payment instead of deleting it. The corrected
 payable balance excludes reversed payments. Adjustment, reversal and payment
-operations all lock the same run before checking balances, and identical retry
-UUIDs return the original record rather than creating duplicates.
+operations acquire the same global revision lock and then the run, when one
+exists. Identical retry UUIDs return the original record rather than creating
+duplicates. A payment recorded before approval can be reversed before or after
+that approval without deleting its original payment or receipt signatures.
+
+### Advances and ad-hoc part-time payments
+
+Actual payment can be recorded before monthly payroll is finalized. This tracks
+money paid and money remaining; it does not assign paid/unpaid work hours or mark
+attendance as settled. Scheduled employees may receive an early or partial
+payment before the usual next-month fifth, and short-term staff may be paid
+as needed without inventing a finalized salary run.
+
+`payroll_pay_advance(p_employee_id, p_payroll_month, p_amount, p_paid_on,
+p_method, p_reference, p_note, p_request_id)` returns a payment UUID. The salary
+month is its first date (`YYYY-MM-01`), and the amount is finite positive whole
+VND within the existing payment amount limit. `paid_on` is the actual payment
+date entered by the administrator. `created_at` is the server's record-entry
+timestamp; label it as recorded time, not the actual time money changed hands.
+There is no estimated-salary cap before approval because an estimate is not a
+final wage. Every payment still requires the administrator role.
+
+All payments remain in `payroll_payments`, with immutable `employee_id` and
+`payroll_month` columns. An advance has `run_id:null` and keeps it null forever,
+even after the salary month is finalized. Existing approved-run payments receive
+the two binding fields from their original run during migration. A composite
+foreign key prevents a run-linked payment from claiming another employee or
+month. Original payment IDs, dates, amounts, audit events and signature files
+are unchanged; no second payment ledger is introduced.
+
+The retry UUID is global across normal and advance payments. Repeating identical
+advance arguments returns the original ID, including after later finalization.
+Conflicting arguments reject with `PAYROLL_PAYMENT_REQUEST_CONFLICT`. Once the
+month has been finalized, new advance requests and direct runless inserts fail
+with `PAYROLL_MONTH_ALREADY_FINALIZED`; use the existing `payroll_pay` RPC for
+the remaining approved amount. Both paths share the source-revision lock, so
+approval and an advance cannot race past one another's monthly state checks.
+
+Final balances sum every unreversed payment for the same employee and salary
+month exactly once, regardless of `run_id`. For example, a 7,000,000 VND approved
+salary with a 2,000,000 VND advance leaves 5,000,000 VND to pay. If advances were
+7,500,000 VND, the truthful 7,000,000 VND salary can still be finalized and the
+balance is -500,000 VND. Show this as 500,000 VND overpaid, separately from amounts
+still payable. Do not inflate the salary, silently zero the balance or move the
+excess into another month. Further regular payments fail while the balance is
+zero or negative. Existing protection against reducing an adjusted salary below
+the amount already paid remains in force.
+
+Before approval, any displayed remaining amount based on calculated salary is
+an estimate. After approval, use the approved total plus adjustments minus all
+unreversed employee/month payments. Group and export by `payroll_month` for wage
+settlement and filter by `paid_on` for actual cash-flow dates. A January advance
+paid in January and its February fifth settlement both belong to January wages,
+but appear on their respective actual payment dates. Never infer salary month
+from `paid_on`. A missing `run_id` must not hide an advance from employee history,
+receipt signatures, tax/payment exports, period reports or cancellation actions.
+
+The existing private receipt pipeline uses `payment_id`, so unsigned status,
+phone-captured signatures, encrypted evidence backup and cancellation history
+work for advances as well as approved-run payments. Finalization does not move
+or copy a signature to a new payment. Legacy version-2 backups without the two
+binding fields derive only missing keys from the restored run; explicit invalid
+bindings are rejected. New backups preserve both unfinalized advances and
+advances attached by employee/month to a later, possibly overpaid approval.
+
+The migration obtains the affected payroll table/view locks with NOWAIT before
+changing schema or backfilling derived keys. If the ledger is busy, retry later;
+failure leaves original data and trigger state intact. The backfill suspends
+payment USER triggers only inside the locked migration transaction, without
+creating fake new payment/audit events or altering money values.
+
+`payroll-advances.sql` and `payroll-advances-backup.sql` are isolated tests only.
+For a nonempty live database, `payroll-advances-live.sql` uses random-ID fixtures
+inside rollback, never suspends triggers or edits existing records, and verifies
+that every payroll/private table count and the revision remain unchanged.
 
 `payroll_audit` records actor, time and before/after values for saved payroll
 changes. Clients cannot directly manufacture audit rows or source revisions.

@@ -46,7 +46,10 @@ export function installMock(initialRole) {
           source.filter(row=>this.filters.every(filter=>filter(row))).forEach(row=>Object.assign(row,this.value));
           state.db.payroll_revision[0].version++;
         }
-        const data=source.filter(row=>this.filters.every(filter=>filter(row))).slice(this.offset,this.end+1);
+        // Existing fixtures predate the migration's employee/month backfill.
+        // Resolve those legacy run-bound rows as PostgreSQL now stores them.
+        const readable=this.table==="payroll_payments"?source.map(row=>{const run=state.db.payroll_runs.find(run=>run.id===row.run_id);return {...row,employee_id:row.employee_id??run?.employee_id,payroll_month:row.payroll_month??run?.month};}):source;
+        const data=readable.filter(row=>this.filters.every(filter=>filter(row))).slice(this.offset,this.end+1);
         resolve({data:this.singleRow?(data[0]||null):structuredClone(data),error:null});
       } catch(error) { reject(error); }
     }
@@ -128,9 +131,24 @@ export function installMock(initialRole) {
         const existing=state.db.payroll_payments.find(row=>row.request_id===args.p_request_id);
         if(existing)return {data:existing.id,error:null};
         if(state.failPaymentOnce){state.failPaymentOnce=false;return {data:null,error:{message:"Synthetic payment failure"}};}
-        const payment={id:crypto.randomUUID(),run_id:args.p_run_id,amount:args.p_amount,paid_on:args.p_paid_on,method:args.p_method,reference:args.p_reference,note:args.p_note,request_id:args.p_request_id};
+        const run=state.db.payroll_runs.find(row=>row.id===args.p_run_id);
+        if(!run)return {data:null,error:{message:"PAYROLL_RUN_NOT_FOUND"}};
+        const paid=state.db.payroll_payments.filter(row=>(row.run_id===run.id||row.employee_id===run.employee_id&&row.payroll_month===run.month)&&!state.db.payroll_payment_reversals.some(reversal=>reversal.payment_id===row.id)).reduce((sum,row)=>sum+Number(row.amount),0);
+        const total=run.total+state.db.payroll_run_adjustments.filter(row=>row.run_id===run.id).reduce((sum,row)=>sum+Number(row.amount),0);
+        if(paid+args.p_amount>total)return {data:null,error:{message:"PAYROLL_OVERPAYMENT"}};
+        const payment={id:crypto.randomUUID(),run_id:args.p_run_id,employee_id:run.employee_id,payroll_month:run.month,amount:args.p_amount,paid_on:args.p_paid_on,method:args.p_method,reference:args.p_reference,note:args.p_note,request_id:args.p_request_id,created_at:new Date().toISOString()};
         state.db.payroll_payments.push(payment);state.db.payroll_revision[0].version++;
         if(state.losePaymentResponseOnce){state.losePaymentResponseOnce=false;return {data:null,error:{message:"Synthetic lost payment response"}};}
+        return {data:payment.id,error:null};
+      }
+      if(name==="payroll_pay_advance") {
+        const existing=state.db.payroll_payments.find(row=>row.request_id===args.p_request_id);
+        if(existing)return {data:existing.id,error:null};
+        if(state.db.payroll_runs.some(row=>row.employee_id===args.p_employee_id&&row.month===args.p_payroll_month))return {data:null,error:{message:"PAYROLL_MONTH_ALREADY_FINALIZED"}};
+        if(state.failAdvanceOnce){state.failAdvanceOnce=false;return {data:null,error:{message:"Synthetic advance failure"}};}
+        const payment={id:crypto.randomUUID(),run_id:null,employee_id:args.p_employee_id,payroll_month:args.p_payroll_month,amount:args.p_amount,paid_on:args.p_paid_on,method:args.p_method,reference:args.p_reference,note:args.p_note,request_id:args.p_request_id,created_at:new Date().toISOString()};
+        state.db.payroll_payments.push(payment);state.db.payroll_revision[0].version++;
+        if(state.loseAdvanceResponseOnce){state.loseAdvanceResponseOnce=false;return {data:null,error:{message:"Synthetic lost advance response"}};}
         return {data:payment.id,error:null};
       }
       if(name==="payroll_review") {
