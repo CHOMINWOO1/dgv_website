@@ -1,0 +1,108 @@
+{
+  "format": "DGV_ATTENDANCE_FACE_VENDOR",
+  "version": 1,
+  "model": "dlib-resnet128-faceapi-1.7.15-tiny68-v1",
+  "packages": [
+    {
+      "name": "@vladmandic/face-api",
+      "version": "1.7.15",
+      "tarball": "https://registry.npmjs.org/@vladmandic/face-api/-/face-api-1.7.15.tgz",
+      "integrity": "sha512-WDMmK3CfNLo8jylWqMoQgf4nIst3M0fzx1dnac96wv/dvMTN4DxC/Pq1DGtduDk1lktCamQ3MIDXFnvrdHTXDw==",
+      "gitHead": null,
+      "licenseSourceCommit": "189226d63aabb48cb40776fd1c453ebc0fa722f1"
+    },
+    {
+      "name": "@tensorflow/tfjs-backend-wasm",
+      "version": "4.22.0",
+      "tarball": "https://registry.npmjs.org/@tensorflow/tfjs-backend-wasm/-/tfjs-backend-wasm-4.22.0.tgz",
+      "integrity": "sha512-/IYhReRIp4jg/wYW0OwbbJZG8ON87mbz0PgkiP3CdcACRSvUN0h8rvC0O3YcDtkTQtFWF/tcXq/KlVDyV49wmA==",
+      "gitHead": "5f8c90682cb59baff9b948028371dbbc85119243"
+    }
+  ],
+  "files": [
+    {
+      "path": "face-api-1.7.15.js",
+      "bytes": 1333943,
+      "sha256": "0160f7af3a8c78cece45c7ecc765383bad74becfd438bb787cdd627b2d6f2cf6",
+      "source": "https://registry.npmjs.org/@vladmandic/face-api/-/face-api-1.7.15.tgz#package/dist/face-api.js"
+    },
+    {
+      "path": "face-api.LICENSE.txt",
+      "bytes": 1067,
+      "sha256": "9a3442b79acaf4fbc7c2e07b7e2d8f84af9bb3871bf08a69d80304ab00640e9a",
+      "source": "https://registry.npmjs.org/@vladmandic/face-api/-/face-api-1.7.15.tgz#package/LICENSE"
+    },
+    {
+      "path": "models/tiny_face_detector_model-weights_manifest.json",
+      "bytes": 3219,
+      "sha256": "5d1af4849ac48d5b985f4a9b16010c512353ddd6fcc63d50fd0bc9e9e64296e5",
+      "source": "https://registry.npmjs.org/@vladmandic/face-api/-/face-api-1.7.15.tgz#package/model/tiny_face_detector_model-weights_manifest.json"
+    },
+    {
+      "path": "models/tiny_face_detector_model.bin",
+      "bytes": 193321,
+      "sha256": "b7503ce7df31039b1c43316a9b865cab6a70dd748cc602d3fa28b551503c3871",
+      "source": "https://registry.npmjs.org/@vladmandic/face-api/-/face-api-1.7.15.tgz#package/model/tiny_face_detector_model.bin"
+    },
+    {
+      "path": "models/face_landmark_68_tiny_model-weights_manifest.json",
+      "bytes": 4806,
+      "sha256": "9a1a5dd19fd814fd5095c3cb58f8e0d3193b8c5b9a6715b30a69d559aea31ad4",
+      "source": "https://registry.npmjs.org/@vladmandic/face-api/-/face-api-1.7.15.tgz#package/model/face_landmark_68_tiny_model-weights_manifest.json"
+    },
+    {
+      "path": "models/face_landmark_68_tiny_model.bin",
+      "bytes": 77224,
+      "sha256": "b98e9f2f7da76f8a6dda9741a36ed485b224b889d552de2b2c1bb16217f67bfc",
+      "source": "https://registry.npmjs.org/@vladmandic/face-api/-/face-api-1.7.15.tgz#package/model/face_landmark_68_tiny_model.bin"
+    },
+    {
+      "path": "models/face_recognition_model-weights_manifest.json",
+      "bytes": 19615,
+      "sha256": "cbaffa501b0b9275a12b63357a6843e7e30c054e1c9151e1a5f879b26e32986b",
+      "source": "https://registry.npmjs.org/@vladmandic/face-api/-/face-api-1.7.15.tgz#package/model/face_recognition_model-weights_manifest.json"
+    },
+    {
+      "path": "models/face_recognition_model.bin",
+      "bytes": 6444032,
+      "sha256": "b413e420d6840b2775fba32008db6f3cddb07d485967fb42cfcf379c16a8c589",
+      "source": "https://registry.npmjs.org/@vladmandic/face-api/-/face-api-1.7.15.tgz#package/model/face_recognition_model.bin"
+    },
+    {
+      "path": "wasm/tfjs-backend-wasm.wasm",
+      "bytes": 311123,
+      "sha256": "70a5d516060464e5269f01c74bac1772d6b8ab6cb612acf16b5cdaf61f78d892",
+      "source": "https://registry.npmjs.org/@tensorflow/tfjs-backend-wasm/-/tfjs-backend-wasm-4.22.0.tgz#package/dist/tfjs-backend-wasm.wasm"
+    },
+    {
+      "path": "wasm/tfjs-backend-wasm-simd.wasm",
+      "bytes": 424594,
+      "sha256": "77ebb28a6d34f371dbbf2086b7f2de8994acd8ea5a3cf1fa24d2c26c840cac7b",
+      "source": "https://registry.npmjs.org/@tensorflow/tfjs-backend-wasm/-/tfjs-backend-wasm-4.22.0.tgz#package/dist/tfjs-backend-wasm-simd.wasm"
+    },
+    {
+      "path": "wasm/tfjs-backend-wasm-threaded-simd.wasm",
+      "bytes": 435643,
+      "sha256": "c052228d4bef185c27bbe59a9e029570c78bbb9f08b3cb46b597851650373de2",
+      "source": "https://registry.npmjs.org/@tensorflow/tfjs-backend-wasm/-/tfjs-backend-wasm-4.22.0.tgz#package/dist/tfjs-backend-wasm-threaded-simd.wasm"
+    },
+    {
+      "path": "tensorflow.LICENSE.txt",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "source": "https://raw.githubusercontent.com/tensorflow/tfjs/tfjs-v4.22.0/LICENSE"
+    },
+    {
+      "path": "original-face-api.LICENSE.txt",
+      "bytes": 1072,
+      "sha256": "d5480b4d4e46880107a56db666697ec3e90def81a8fc829e530b1c291e3172a5",
+      "source": "https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/LICENSE"
+    },
+    {
+      "path": "dlib-models.LICENSE.txt",
+      "bytes": 634,
+      "sha256": "431c69cd10674d88be5f09f156e32aabaf638abe87278deb864961337f24c402",
+      "source": "https://raw.githubusercontent.com/davisking/dlib-models/master/README.md"
+    }
+  ]
+}

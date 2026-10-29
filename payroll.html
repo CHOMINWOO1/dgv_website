@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>HANA · 직원·급여관리</title>
   <link rel="stylesheet" href="assets/qr-staff.css" />
-  <link rel="stylesheet" href="assets/payroll.css?v=20261029-2" />
+  <link rel="stylesheet" href="assets/payroll.css?v=20261029-3" />
 </head>
 <body>
   <div id="pageError" role="alert" hidden></div>
@@ -16,6 +16,7 @@
         <label>조회 월 / Tháng<input id="month" type="month" required /></label>
         <label>직원 / Nhân viên<select id="employeeFilter"><option value="">전체 직원 / Tất cả</option></select></label>
         <button id="refresh" class="quiet">새로고침 / Tải lại</button>
+        <a href="attendance.html" target="_blank" rel="noopener">태블릿 출퇴근 / Chấm công ↗</a>
         <button id="export" class="quiet">급여대장 Excel / Tải Excel</button>
       </section>
       <section class="panel import-panel" aria-labelledby="importTitle">
@@ -62,6 +63,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
   <script src="assets/supabase-config.js"></script><script src="assets/dgv-data.js"></script><script src="assets/supabase-client.js"></script><script src="assets/qr-staff.js"></script>
-  <script src="assets/dgv-xlsx.js"></script><script src="assets/payroll-core.js?v=20261029-2"></script><script src="assets/payroll-rules.js?v=20261029-2"></script><script src="assets/payroll-tax.js?v=20261029-2"></script><script src="assets/payroll-archive.js?v=20261029-2"></script><script src="assets/payroll.js?v=20261029-2"></script><script src="assets/payroll-advanced.js?v=20261029-2"></script>
+  <script src="assets/dgv-xlsx.js"></script><script src="assets/payroll-core.js?v=20261029-3"></script><script src="assets/payroll-rules.js?v=20261029-3"></script><script src="assets/payroll-tax.js?v=20261029-3"></script><script src="assets/payroll-archive.js?v=20261029-3"></script><script src="assets/payroll.js?v=20261029-3"></script><script src="assets/payroll-advanced.js?v=20261029-3"></script>
 </body>
 </html>

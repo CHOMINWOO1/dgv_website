@@ -1,0 +1,5 @@
+Davis King / dlib face recognition model
+Source: https://raw.githubusercontent.com/davisking/dlib-models/master/README.md
+Source SHA-256: 9c6d18a2a83ceebc136997941ec913ccc0548889e24440381bd06d7453b05e3c
+
+This repository contains trained models created by me (Davis King).  They are provided as part of the dlib example programs, which are intended to be educational documents that explain how to use various parts of the dlib library.  As far as I am concerned, anyone can do whatever they want with these model files as I've released them into the public domain.  Details describing how each model was created are summarized below. 
