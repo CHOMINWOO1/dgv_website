@@ -16,8 +16,11 @@ Apply these migrations in order to a local or staging database with the existing
 2. `supabase/migrations/20261028062408_hana_payroll_complete.sql`
 3. `supabase/migrations/20261028064044_hana_payroll_backup_restore.sql`
 4. `supabase/migrations/20261028070047_hana_payroll_consistent_reads.sql`
+5. `supabase/migrations/20261029021538_hana_payroll_monthly_net.sql`
+6. `supabase/migrations/20261029023034_hana_payroll_derived_monthly_rate.sql`
 
-Run `supabase/tests/payroll.sql`, `payroll-complete.sql`, `payroll-backup.sql` and `payroll-consistency.sql`
+Run `supabase/tests/payroll.sql`, `payroll-complete.sql`, `payroll-backup.sql`,
+`payroll-consistency.sql` and `payroll-monthly-net.sql`
 as whole files using a database owner connection. They roll back all fixtures.
 The restore test requires initially empty payroll tables; do not clear existing
 data merely to run it. `tests/payroll-db.mjs` also runs the contracts in an
@@ -205,6 +208,98 @@ do not increment it so saving a review and finalizing its calculation can use
 the same captured revision. Failed writes and identical retries do not increment
 it. `payroll-consistency.sql` covers these behaviors; real multi-session lock
 contention is outside the isolated PGlite test runtime.
+
+## Monthly net settlement term versions
+
+`20261029021538_hana_payroll_monthly_net.sql` adds three versioned term fields.
+`20261029023034_hana_payroll_derived_monthly_rate.sql` removes the separate-rate
+requirement so the current calculation derives it automatically:
+
+- `monthly_settlement`: `monthly_net` for new term versions, or `statutory` for
+  the previous calculation behavior. Existing stored terms become `statutory`.
+- `monthly_extra_hourly_rate`: an optional legacy field retained for old data and
+  archives. New conditions omit it or send `null`; current calculations ignore
+  it. Existing values retain their whole-VND 0–1,000,000,000 validity check.
+- `weekly_rest_day`: one weekday, 0 (Sunday) through 6 (Saturday), default 0.
+  Calendar exceptions remain explicit day records; creating a schedule preserves
+  dates that an administrator already set.
+
+New term versions default to a 12:00–14:00 break. Existing terms retain their
+recorded break times. For a full employment month, monthly net settlement retains
+the full agreed base when monthly net time is zero or negative. The hourly rate
+is the agreed monthly salary divided by that month's planned working hours;
+extra pay is positive net minutes multiplied by that rate divided by 60. Keep the
+derived rate precise during calculation and round the resulting VND amount once.
+A positive planned-time denominator is required for extra pay; unresolved time
+or employment conditions must be reviewed before finalization. No separate extra
+rate input is required. The database preserves the term settings; confirmed salary
+snapshots retain their original amounts and are never recalculated by migration.
+Changes require a new effective-date term; existing terms remain immutable.
+
+The backup format remains version 2. An old archive lacking these three term
+fields restores them as `statutory`, `null`, and `0`, respectively, while keeping
+its recorded break times. Explicit fields in newer archives are preserved and
+validated. An explicitly null/invalid required field is rejected rather than
+treated as a legacy default. The restore fingerprint still uses the original
+payload, preserving exact retry behavior. `payroll-monthly-net.sql` covers new
+defaults, omitted/null legacy rates, invalid historical rate values, weekly rest
+bounds, immutable records, manager denial,
+both archive generations, failed-restore rollback and guard restoration.
+
+`supabase/tests/payroll-monthly-live.sql` is a separate rollback-only smoke test
+that can run with existing payroll data. It checks aggregate counts under the
+payroll revision lock, creates only a uniquely named temporary employee and term
+versions, tests admin/manager access and new constraints, rolls that fixture back,
+then verifies every original table count and the revision are unchanged. It never
+exports/restores a backup, clears a table or updates an existing employee. Run the
+whole file as a database owner; a busy payroll operation causes a bounded timeout.
+The sixth migration only drops the required-rate constraint and updates column
+comments. It does not rewrite terms, attendance, audit entries or saved salary
+snapshots. A legacy archive without the optional rate also remains restorable.
+
+### First employment month and the following month's pay date
+
+When a `monthly_net` employee joins during the selected month and has a stable
+monthly salary, the first month's base is calculated automatically:
+
+```text
+first-month base = round(full monthly salary × active planned minutes / full calendar-month planned minutes)
+derived hourly rate = full monthly salary × 60 / full calendar-month planned minutes
+extra pay = round(full monthly salary × positive monthly net minutes / full calendar-month planned minutes)
+```
+
+Active planned minutes cover the employment period, inclusive of the hire date.
+Full calendar-month planned minutes cover the whole selected month with its
+weekly rest day and saved day overrides. For dates before employment begins,
+the calculation uses the term effective on the hire date to build a virtual
+schedule; it does not create attendance or database day records. Both totals
+exclude rest days and scheduled breaks. Lateness or a shortage of actual hours
+does not reduce the prorated base further. Net extra minutes compare actual work
+against the active planned minutes, so pre-employment days are not treated as
+missing attendance or overtime debt.
+
+For example, a 7,000,000 VND monthly salary with 27 planned eight-hour days and
+15 active planned days produces a first-month base of 3,888,889 VND. The derived
+hourly rate still uses 7,000,000 VND divided by 216 hours. It does not divide the
+already rounded prorated base by 120 active hours. This avoids introducing an
+intermediate-rounding error into extra pay. A salary change during the month or
+a termination during that month still requires an explicit reviewed calculation.
+
+New snapshots preserve `monthlyProration` with `applied`, `reason: "hire_date"`,
+`hireDate`, `fullSalary`, `fullPlannedMinutes`, `activePlannedMinutes`, `ratio`,
+`unroundedBase` and `baseAmount`. `monthlyPlannedMinutes` remains the active
+employment-period total. `monthlyExtraBasisAmount` and `monthlyExtraBasisMinutes`
+preserve the full-salary/full-month basis for automatic first-month extra pay.
+A separately reviewed manual base uses the reviewed base and active planned
+minutes instead. Existing finalized snapshots are never rewritten.
+
+`monthlyExpectedPayDate` is the fifth day of the following month, including
+December-to-January rollover. Monthly-net due alerts use that frozen snapshot
+date, with next-month 05 as the fallback for older snapshots; statutory-rule
+`pay_day` settings do not change it. A payment is overdue after that date, rather
+than on the fifth itself. `payroll_payments.paid_on` remains the actual date of
+payment, and recording a scheduled due date does not create a payment. These
+fields are stored in the existing snapshot JSON; no schema migration is needed.
 
 ## Encrypted bank and identity fields
 

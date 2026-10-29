@@ -12,7 +12,7 @@ begin
   perform set_config('request.jwt.claims',jsonb_build_object('sub','00000000-0000-4000-8000-000000000004','role','authenticated','app_metadata',jsonb_build_object('role','admin'))::text,true);
   execute 'set local role authenticated';
   insert into public.payroll_employees(device_user_id,name) values('CONSISTENT-'||suffix,'Read consistency test') returning id into employee;
-  insert into public.payroll_terms(employee_id,effective_from,pay_type,rate) values(employee,'2097-01-01','monthly',1000);
+  insert into public.payroll_terms(employee_id,effective_from,pay_type,rate,monthly_settlement) values(employee,'2097-01-01','monthly',1000,'statutory');
   select version into rev from public.payroll_revision where id=1;
   review_id:=public.payroll_review(employee,'2097-01-01','{"unresolved":0,"baseAmount":1000}','Initial review',rev);
   perform pg_temp.payroll_consistency_assert((select version=rev from public.payroll_revision where id=1),'review does not invalidate its own finalization revision');

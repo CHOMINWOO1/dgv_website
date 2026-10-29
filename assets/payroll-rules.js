@@ -113,12 +113,171 @@
     });
   }
 
+  const isMonthlyNet = (term) => Boolean(term && term.pay_type === "monthly" && term.monthly_settlement === "monthly_net");
+  function effectiveMonthTerms(employee, employeeTerms, dates) {
+    const relevant = [...new Set(dates.filter((date) => withinEmployment(employee, date)).map((date) => latest(employeeTerms, date)).filter(Boolean))];
+    return relevant.length ? relevant : [latest(employeeTerms, dates[0])].filter(Boolean);
+  }
+  // Virtual schedules are calculation inputs only. The caller must not insert
+  // these generated rows into payroll_days; explicit saved overrides always win.
+  function buildEffectiveDays({ month, employees = [], terms = [], days = [] }) {
+    const dates = monthDates(month), result = days.filter((day) => day._scheduleDefault !== true).map((day) => ({ ...day }));
+    const known = new Set(result.map((day) => JSON.stringify([day.employee_id, day.work_date])));
+    for (const employee of employees) {
+      const employeeTerms = terms.filter((term) => term.employee_id === employee.id);
+      for (const date of dates) {
+        if (!withinEmployment(employee, date)) continue;
+        const term = latest(employeeTerms, date), key = JSON.stringify([employee.id, date]);
+        if (!isMonthlyNet(term) || known.has(key)) continue;
+        const restDay = term.weekly_rest_day == null ? 0 : Number(term.weekly_rest_day);
+        const rest = Number.isInteger(restDay) && restDay >= 0 && restDay <= 6 && new Date(dateMs(date)).getUTCDay() === restDay;
+        result.push({ employee_id: employee.id, work_date: date, day_type: rest ? "rest" : "work", check_in: null, check_out: null,
+          reason: "직원 주간 휴무일에서 계산 / Tính từ ngày nghỉ hằng tuần của nhân viên", _scheduleDefault: true });
+        known.add(key);
+      }
+    }
+    return result;
+  }
+
+  function calculateMonthlyExtra({ baseAmount, plannedMinutes, extraMinutes, salaryBasisAmount, salaryBasisMinutes }) {
+    if (!hasNumber(baseAmount) || !Number.isSafeInteger(Number(baseAmount)) || Number(baseAmount) < 0 ||
+      !Number.isSafeInteger(plannedMinutes) || plannedMinutes <= 0 || !Number.isSafeInteger(extraMinutes) || extraMinutes < 0) return { hourlyRate: null, amount: null };
+    const explicitBasis = salaryBasisAmount !== undefined || salaryBasisMinutes !== undefined;
+    const basisAmount = explicitBasis ? salaryBasisAmount : baseAmount, basisMinutes = explicitBasis ? salaryBasisMinutes : plannedMinutes;
+    if (!hasNumber(basisAmount) || !Number.isSafeInteger(Number(basisAmount)) || Number(basisAmount) < 0 || !Number.isSafeInteger(basisMinutes) || basisMinutes <= 0) return { hourlyRate: null, amount: null };
+    return { hourlyRate: Number(basisAmount) * 60 / basisMinutes, amount: Math.round(Number(basisAmount) * extraMinutes / basisMinutes) };
+  }
+
+  function monthlyNetSummary({ month, dates, employee, employeeTerms, days, base, today }) {
+    const first = dates[0], last = dates.at(-1), dayMap = new Map(days.filter((day) => day.employee_id === employee.id).map((day) => [day.work_date, day]));
+    const employedDates = dates.filter((date) => withinEmployment(employee, date));
+    const relevantTerms = effectiveMonthTerms(employee, employeeTerms, dates);
+    const ruleIssues = [], warnings = [], resolvedHireIssues = new Set();
+    let compensationIssues = [...(base.compensationIssues || [])];
+    const issue = (text) => { if (!ruleIssues.includes(text)) ruleIssues.push(text); };
+    const warning = (text) => { if (!warnings.includes(text)) warnings.push(text); };
+    const asOf = today || textDate(Date.now() + 7 * 60 * MIN);
+    const scheduleDefaultUsed = employedDates.some((date) => dayMap.get(date)?._scheduleDefault === true);
+    let monthlyPlannedMinutes = 0, paidLeaveDays = 0, unpaidLeaveDays = 0, holidayDays = 0, restDays = 0, paidScheduledMinutes = 0;
+    for (const date of employedDates) {
+      const day = dayMap.get(date), term = latest(employeeTerms, date), schedule = scheduleBounds(term, date);
+      if (!isMonthlyNet(term)) { issue("월중 급여 정산방식이 다릅니다. 월 전체 조건을 확인하세요 / Hình thức quyết toán thay đổi trong tháng; kiểm tra điều kiện cả tháng"); continue; }
+      const restDay = term.weekly_rest_day == null ? 0 : Number(term.weekly_rest_day);
+      if (!Number.isInteger(restDay) || restDay < 0 || restDay > 6) issue("주간 휴무 요일을 확인하세요 / Kiểm tra ngày nghỉ hằng tuần");
+      if (!day || !["work", "rest", "paid_leave", "unpaid_leave", "holiday"].includes(day.day_type) || !schedule || duration(schedule.normal) <= 0) {
+        issue(date + ": 월 기준시간에 필요한 근무조건·근무표 확인 / Kiểm tra điều kiện và lịch để tính giờ chuẩn tháng"); continue;
+      }
+      if (day.day_type === "rest") restDays += 1;
+      if (day.day_type === "paid_leave") paidLeaveDays += 1;
+      if (day.day_type === "unpaid_leave") unpaidLeaveDays += 1;
+      if (day.day_type === "holiday") holidayDays += 1;
+      if (day.day_type !== "rest") {
+        const minutes = Math.round(duration(schedule.normal)); monthlyPlannedMinutes += minutes;
+        if (day.day_type !== "unpaid_leave") paidScheduledMinutes += minutes;
+      }
+    }
+    const activeTerms = relevantTerms.filter(isMonthlyNet);
+    let baseAmount = base.baseAmount, monthlyProration = null;
+    const hireInMonth = Number.isFinite(dateMs(employee.hire_date)) && employee.hire_date > first && employee.hire_date <= last;
+    const terminationReview = Number.isFinite(dateMs(employee.termination_date)) && employee.termination_date >= first && employee.termination_date < last;
+    const salaries = [...new Set(activeTerms.map((term) => Number(term.rate)))];
+    const stableSalary = activeTerms.length > 0 && relevantTerms.every(isMonthlyNet) && salaries.length === 1 && Number.isSafeInteger(salaries[0]) && salaries[0] >= 0;
+    if (hireInMonth && !terminationReview && stableSalary) {
+      const hireTerm = latest(employeeTerms, employee.hire_date);
+      let fullPlannedMinutes = 0, completeBasis = true;
+      for (const date of dates) {
+        // Before employment began, use the contract effective on the hiring date
+        // as a hypothetical full-month schedule, never as invented attendance.
+        const term = date < employee.hire_date ? hireTerm : latest(employeeTerms, date);
+        const schedule = scheduleBounds(term, date), savedDay = dayMap.get(date);
+        const restDay = term?.weekly_rest_day == null ? 0 : Number(term.weekly_rest_day);
+        const dayType = savedDay?.day_type || (new Date(dateMs(date)).getUTCDay() === restDay ? "rest" : "work");
+        if (!term || !schedule || duration(schedule.normal) <= 0 || !Number.isInteger(restDay) || restDay < 0 || restDay > 6 || !["work", "rest", "paid_leave", "unpaid_leave", "holiday"].includes(dayType)) { completeBasis = false; continue; }
+        if (dayType !== "rest") fullPlannedMinutes += Math.round(duration(schedule.normal));
+      }
+      if (!completeBasis || fullPlannedMinutes <= 0) issue("입사월 일할계산의 전체 달력월 기준시간을 확인하세요 / Kiểm tra giờ chuẩn cả tháng để tính lương tháng vào làm");
+      else {
+        const fullSalary = salaries[0], ratio = monthlyPlannedMinutes / fullPlannedMinutes, unroundedBase = fullSalary * monthlyPlannedMinutes / fullPlannedMinutes;
+        baseAmount = Math.round(unroundedBase);
+        monthlyProration = { applied: true, reason: "hire_date", hireDate: employee.hire_date, fullSalary, fullPlannedMinutes,
+          activePlannedMinutes: monthlyPlannedMinutes, ratio, unroundedBase, baseAmount };
+        if ((base.employmentProrationReasons || []).length === 1 && base.employmentProrationReasons[0] === "hire") {
+          for (const [index, code] of (base.summaryIssueCodes || []).entries()) if (code === "employmentProration") resolvedHireIssues.add(base.issues[index]);
+          compensationIssues = compensationIssues.filter((text) => !resolvedHireIssues.has(text));
+        }
+      }
+    }
+    if (employedDates.length && monthlyPlannedMinutes <= 0) issue("월 기준시간이 0입니다. 급여와 추가급여를 확정하기 전에 근무표를 확인하세요 / Giờ chuẩn tháng bằng 0; kiểm tra lịch trước khi chốt lương");
+    if (relevantTerms.some((term) => !isMonthlyNet(term))) issue("월중 급여 정산방식이 다릅니다. 월 전체 조건을 확인하세요 / Hình thức quyết toán thay đổi trong tháng; kiểm tra điều kiện cả tháng");
+    const scheduleKeys = new Set(activeTerms.map((term) => JSON.stringify([term.shift_start, term.shift_end, term.break_start, term.break_end, term.weekly_rest_day ?? 0])));
+    if (scheduleKeys.size > 1) warning("월중 근무시간·휴무 요일 변경을 적용일별로 반영했습니다. 월 기준시간과 날짜별 근무표를 확인하세요 / Đã áp dụng thay đổi giờ và ngày nghỉ theo ngày hiệu lực; kiểm tra lịch và giờ chuẩn tháng");
+    if (paidLeaveDays || unpaidLeaveDays || holidayDays) warning("휴가·공휴일의 예정시간은 월 기준시간에 포함합니다. 실제 출퇴근 없는 시간은 실근무에 더하지 않으며 부족시간으로 월급을 공제하지 않습니다 / Giờ lịch ngày nghỉ được tính vào chuẩn; không tạo giờ làm thực tế và không trừ lương tháng khi thiếu giờ");
+    const pendingDates = [], reviewedDaily = base.daily.map((daily) => {
+      const day = dayMap.get(daily.date), term = latest(employeeTerms, daily.date), schedule = scheduleBounds(term, daily.date);
+      const hasCompletedWork = Boolean(daily.checkIn && daily.checkOut && !daily.issues.length);
+      const pending = withinEmployment(employee, daily.date) && day?.day_type === "work" && (daily.date > asOf || (daily.date === asOf && !hasCompletedWork));
+      if (pending) pendingDates.push(daily.date);
+      const futurePunch = [daily.checkIn, daily.checkOut].some((value) => value && value.slice(0, 10) > asOf);
+      const futureIssue = "미래 출퇴근 시각 확인 필요 / Kiểm tra thời gian chấm công trong tương lai";
+      if (futurePunch) issue(daily.date + ": " + futureIssue);
+      if (daily.checkIn && daily.checkOut) {
+        const actual = [[stamp(daily.checkIn), stamp(daily.checkOut)]];
+        if (actual.every(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a)) {
+          for (const part of calendarPieces(actual)) if (!withinEmployment(employee, part.date)) issue(daily.date + ": 재직기간 밖의 근무 시각 확인 / Kiểm tra giờ làm ngoài thời gian hợp đồng");
+          if (daily.checkOut.slice(0, 7) !== month && stamp(daily.checkOut) > dateMs(daily.checkOut.slice(0, 10))) warning("월말 야간근무는 근무 시작일의 급여월에 한 번만 포함됩니다 / Ca qua tháng chỉ được tính một lần theo tháng bắt đầu");
+        }
+      }
+      return { ...daily, ...(futurePunch ? { minutes: 0, actualSeconds: 0, status: "review", issues: [...daily.issues, futureIssue], issueCodes: [...daily.issueCodes, "future"] } : {}),
+        settlementMode: "monthly_net", scheduledMinutes: day?.day_type === "rest" || !schedule ? 0 : Math.round(duration(schedule.normal)),
+        scheduleDefaultUsed: day?._scheduleDefault === true, monthlyPending: pending,
+        overtimeCandidates: [], nightCandidates: [], approvedOvertimeMinutes: 0, approvedNightMinutes: 0, statutoryAmount: 0 };
+    });
+    if (pendingDates.length) issue("월 집계 중: 아직 끝나지 않은 예정 근무일 " + pendingDates.length + "일. 월 전체 기록을 확인한 후 확정하세요 / Đang tổng hợp: còn " + pendingDates.length + " ngày làm theo lịch; chốt sau khi đủ dữ liệu tháng");
+    const monthlyActualSeconds = reviewedDaily.reduce((sum, day) => sum + Number(day.actualSeconds || 0), 0);
+    const monthlyActualMinutes = Math.floor(monthlyActualSeconds / 60);
+    const monthlyRoundingMinutes = monthlyActualMinutes - reviewedDaily.reduce((sum, day) => sum + Number(day.minutes || 0), 0);
+    const monthlyBalanceMinutes = monthlyActualMinutes - monthlyPlannedMinutes;
+    const monthlyExtraMinutes = Math.max(0, monthlyBalanceMinutes);
+    const wageBreakdown = [];
+    // Legacy stored extra-price values intentionally do not participate. Derive
+    // from the actual fixed/reviewed base and this month's real planned minutes.
+    const monthlyExtraBasisAmount = monthlyProration?.fullSalary ?? baseAmount, monthlyExtraBasisMinutes = monthlyProration?.fullPlannedMinutes ?? monthlyPlannedMinutes;
+    const extra = calculateMonthlyExtra({ baseAmount, plannedMinutes: monthlyPlannedMinutes, extraMinutes: monthlyExtraMinutes,
+      ...(monthlyProration ? { salaryBasisAmount: monthlyExtraBasisAmount, salaryBasisMinutes: monthlyExtraBasisMinutes } : {}) });
+    const monthlyExtraHourlyRate = extra.hourlyRate, monthlyExtraAmount = employedDates.length ? extra.amount : 0;
+    if (Number.isFinite(baseAmount)) wageBreakdown.push({ code: "monthly_base", label: "약정 월급 (시간 부족 공제 없음) / Lương tháng (không trừ giờ thiếu)",
+      category: "base", date: first, dayType: "work", minutes: monthlyPlannedMinutes, rate: 0, multiplier: 1, rawAmount: baseAmount, amount: baseAmount });
+    if (Number.isFinite(monthlyExtraAmount)) wageBreakdown.push({ code: "monthly_net_extra", label: "월 순초과시간 추가급여 / Tiền giờ vượt ròng trong tháng",
+      category: "monthly_extra", date: last, dayType: "work", minutes: monthlyExtraMinutes, rate: monthlyExtraHourlyRate || 0, multiplier: 1,
+      rawAmount: monthlyExtraBasisMinutes > 0 && Number.isFinite(monthlyExtraBasisAmount) ? round(monthlyExtraBasisAmount * monthlyExtraMinutes / monthlyExtraBasisMinutes) : 0, amount: monthlyExtraAmount });
+    const attendanceUnresolved = Number(base.attendanceUnresolved || 0) + ruleIssues.length, compensationUnresolved = compensationIssues.length;
+    return { ...base, baseAmount, originalBaseAmount: base.baseAmount, settlementMode: "monthly_net", statutoryAmount: 0, wageBreakdown,
+      monthlyPlannedMinutes, monthlyActualMinutes, monthlyBalanceMinutes, monthlyExtraMinutes, monthlyExtraAmount, monthlyExtraHourlyRate,
+      monthlyProration, monthlyExpectedPayDate: textDate(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 5)),
+      monthlyExtraBasisAmount, monthlyExtraBasisMinutes, monthlyExtraRateSource: monthlyProration ? "full_month_salary_divided_by_full_calendar_hours" : "base_salary_divided_by_planned_hours",
+      minutes: monthlyActualMinutes, actualSeconds: monthlyActualSeconds, workedDays: reviewedDaily.filter((day) => day.actualSeconds > 0).length,
+      monthlyActualSeconds, monthlyRoundingMinutes,
+      monthlyCreditedMinutes: 0, monthlyPendingDays: pendingDates.length, monthlyReadyToFinalize: attendanceUnresolved + compensationUnresolved === 0,
+      scheduleDefaultUsed, plannedMinutes: monthlyPlannedMinutes, fullMonthPlannedMinutes: monthlyProration?.fullPlannedMinutes ?? monthlyPlannedMinutes, paidScheduledMinutes,
+      paidLeaveDays, unpaidLeaveDays, holidayDays, restDays, daily: reviewedDaily, ruleVersionIds: [], warnings,
+      regularOvertimeMinutes: 0, restWorkMinutes: 0, holidayWorkMinutes: 0, nightMinutes: 0, nightOvertimeMinutes: 0,
+      ruleUnresolved: ruleIssues.length, ruleIssues, attendanceUnresolved, compensationUnresolved, compensationIssues,
+      unresolved: attendanceUnresolved + compensationUnresolved, issues: [...base.issues.filter((text) => !resolvedHireIssues.has(text)), ...ruleIssues], calculationVersion: 3,
+      yearToDateOvertimeMinutes: null, annualCoverageComplete: false, sources: [] };
+  }
+
   function extendSummaries({ month, employees = [], terms = [], records = [], days = [], rules = [], baseSummaries, yearToDateRuns, today }) {
     const dates = monthDates(month), first = dates[0], last = dates.at(-1);
-    const bases = baseSummaries || core.summarizeMonth({ month, employees, terms, records, days, today });
+    days = buildEffectiveDays({ month, employees, terms, days });
+    const calculated = core.summarizeMonth({ month, employees, terms, records, days, today });
+    const bases = baseSummaries || calculated;
     return bases.map((base) => {
       const employee = employees.find((item) => item.id === base.employee_id) || {};
       const employeeTerms = terms.filter((item) => item.employee_id === base.employee_id);
+      if (effectiveMonthTerms(employee, employeeTerms, dates).some(isMonthlyNet)) {
+        const freshBase = calculated.find((row) => row.employee_id === base.employee_id) || base;
+        return monthlyNetSummary({ month, dates, employee, employeeTerms, days, base: freshBase, today });
+      }
       const dayMap = new Map(days.filter((day) => day.employee_id === base.employee_id).map((day) => [day.work_date, day]));
       const wageBreakdown = [], warnings = [], ruleIssues = [], ruleIds = new Set();
       const issue = (date, text) => { const value = (date ? date + ": " : "") + text; if (!ruleIssues.includes(value)) ruleIssues.push(value); };
@@ -337,7 +496,8 @@
       const attendanceUnresolved = Number(base.attendanceUnresolved || 0) + ruleIssues.length;
       const compensationUnresolved = compensationIssues.length;
       const remainingBaseIssues = (base.issues || []).filter((issueText) => !(base.compensationIssues || []).includes(issueText));
-      return { ...base, originalBaseAmount, baseAmount, statutoryAmount, wageBreakdown,
+      return { ...base, originalBaseAmount, baseAmount, statutoryAmount, wageBreakdown, settlementMode: "statutory",
+        monthlyPlannedMinutes: null, monthlyActualMinutes: null, monthlyBalanceMinutes: null, monthlyExtraMinutes: 0, monthlyExtraAmount: 0, monthlyExtraHourlyRate: null, scheduleDefaultUsed: false,
         daily: enhancedDaily, plannedMinutes: round(plannedMinutes), fullMonthPlannedMinutes: round(fullMonthPlannedMinutes), paidScheduledMinutes: round(paidScheduledMinutes),
         paidLeaveDays, unpaidLeaveDays, holidayDays, restDays, regularOvertimeMinutes: round(regularOvertimeMinutes), restWorkMinutes: round(restWorkMinutes), holidayWorkMinutes: round(holidayWorkMinutes),
         nightMinutes: round(nightMinutes), nightOvertimeMinutes: round(nightOvertimeMinutes), ruleVersionIds: [...ruleIds], warnings,
@@ -346,5 +506,5 @@
         yearToDateOvertimeMinutes: round(priorOt + totalOt), annualCoverageComplete: annualComplete, sources: SOURCES };
     });
   }
-  root.DGV_PAYROLL_RULES = Object.freeze({ DEFAULTS, SOURCES, validateRule, createMonthSchedule, extendSummaries });
+  root.DGV_PAYROLL_RULES = Object.freeze({ DEFAULTS, SOURCES, validateRule, createMonthSchedule, buildEffectiveDays, calculateMonthlyExtra, extendSummaries });
 })(typeof globalThis !== "undefined" ? globalThis : window);
