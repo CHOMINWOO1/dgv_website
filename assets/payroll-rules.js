@@ -127,7 +127,7 @@
   function buildEffectiveDays({ month, employees = [], terms = [], days = [] }) {
     const dates = monthDates(month), result = days.filter((day) => day._scheduleDefault !== true).map((day) => ({ ...day }));
     const known = new Set(result.map((day) => JSON.stringify([day.employee_id, day.work_date])));
-    for (const employee of employees) {
+    for (const employee of employees.filter(employee=>employee.payee_type!=="service")) {
       const employeeTerms = terms.filter((term) => term.employee_id === employee.id);
       for (const date of dates) {
         if (!withinEmployment(employee, date)) continue;
@@ -298,7 +298,8 @@
     const dates = monthDates(month), first = dates[0], last = dates.at(-1);
     days = buildEffectiveDays({ month, employees, terms, days });
     const calculated = core.summarizeMonth({ month, employees, terms, records, days, today });
-    const bases = baseSummaries || calculated;
+    const serviceIds=new Set(employees.filter(employee=>employee.payee_type==="service").map(employee=>employee.id));
+    const bases = (baseSummaries || calculated).filter(base=>!serviceIds.has(base.employee_id));
     return bases.map((base) => {
       const employee = employees.find((item) => item.id === base.employee_id) || {};
       const employeeTerms = terms.filter((item) => item.employee_id === base.employee_id)

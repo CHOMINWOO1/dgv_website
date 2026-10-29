@@ -1,14 +1,14 @@
 /* Load after payroll.css. Receipt thumbnails only; stored images and the signing canvas stay unchanged. */
-#rangeReceipts .receipt-table{table-layout:fixed;min-width:1060px}
-#rangeReceipts .receipt-table th,#rangeReceipts .receipt-table td{padding:7px 8px;line-height:1.35}
-#rangeReceipts .receipt-table .receipt-signature-cell{min-width:132px}
-#rangeReceipts .receipt-personal{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-#rangeReceipts tr[data-payment-id] td:last-child{min-width:0}
-#rangeReceipts .receipt-signature{margin:0 0 6px;padding:0}
-#rangeReceipts .receipt-signature:last-child{margin-bottom:0}
-#rangeReceipts .receipt-signature img{width:120px;height:48px;max-width:120px;max-height:48px;object-fit:contain;object-position:left center}
-#rangeReceipts .receipt-signature figcaption{margin-top:2px;font-size:10px;line-height:1.25}
-#rangeReceipts .receipt-signature time{white-space:nowrap}
-#rangeReceipts .receipt-table small{margin-top:3px;line-height:1.25}
-#rangeReceipts .receipt-table td p{margin:3px 0 0}
-#rangeReceipts .receipt-table button{margin-top:4px}
+:is(#rangeReceipts,#serviceReceipts) .receipt-table{table-layout:fixed;min-width:1060px}
+:is(#rangeReceipts,#serviceReceipts) .receipt-table th,:is(#rangeReceipts,#serviceReceipts) .receipt-table td{padding:7px 8px;line-height:1.35}
+:is(#rangeReceipts,#serviceReceipts) .receipt-table .receipt-signature-cell{min-width:132px}
+:is(#rangeReceipts,#serviceReceipts) .receipt-personal{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+:is(#rangeReceipts,#serviceReceipts) tr[data-payment-id] td:last-child{min-width:0}
+:is(#rangeReceipts,#serviceReceipts) .receipt-signature{margin:0 0 6px;padding:0}
+:is(#rangeReceipts,#serviceReceipts) .receipt-signature:last-child{margin-bottom:0}
+:is(#rangeReceipts,#serviceReceipts) .receipt-signature img{width:120px;height:48px;max-width:120px;max-height:48px;object-fit:contain;object-position:left center}
+:is(#rangeReceipts,#serviceReceipts) .receipt-signature figcaption{margin-top:2px;font-size:10px;line-height:1.25}
+:is(#rangeReceipts,#serviceReceipts) .receipt-signature time{white-space:nowrap}
+:is(#rangeReceipts,#serviceReceipts) .receipt-table small{margin-top:3px;line-height:1.25}
+:is(#rangeReceipts,#serviceReceipts) .receipt-table td p{margin:3px 0 0}
+:is(#rangeReceipts,#serviceReceipts) .receipt-table button{margin-top:4px}

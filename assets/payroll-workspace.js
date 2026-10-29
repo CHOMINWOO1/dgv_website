@@ -5,13 +5,39 @@
     ledger:{title:"급여대장",eyebrow:"PAYROLL",description:"월별 급여와 실제 지급액을 한눈에 확인하세요. / Xem lương tháng và số tiền đã trả."},
     employees:{title:"직원관리",eyebrow:"EMPLOYEES",description:"직원 등록부터 월급·근무조건 변경까지 한 곳에서 관리하세요. / Quản lý nhân viên và điều kiện lương."},
     attendance:{title:"출퇴근 기록",eyebrow:"ATTENDANCE",description:"모든 직원의 근무일과 시간을 확인하세요. 출퇴근은 자동으로 합산됩니다. / Chấm công được cộng tự động."},
-    payments:{title:"지급·서명·출력",eyebrow:"PAYMENTS",description:"지급한 금액을 기록하고 서명을 받으세요. 기간별 내역도 함께 출력할 수 있습니다. / Ghi thanh toán, ký nhận và in theo kỳ."}
+    payments:{title:"지급·서명·출력",eyebrow:"PAYMENTS",description:"지급한 금액을 기록하고 서명을 받으세요. 기간별 내역도 함께 출력할 수 있습니다. / Ghi thanh toán, ký nhận và in theo kỳ."},
+    services:{title:"외주·수리비",eyebrow:"SERVICE PAYMENTS",description:"전기·배관 등 외주 작업의 실제 지급액과 수령 서명을 기록합니다. / Ghi chi phí sửa chữa, dịch vụ và chữ ký nhận tiền."}
   };
   const aliases={ledgerTitle:"ledger",employeeDetail:"ledger",importTitle:"attendance",rangePanel:"payments",taxCenter:"payments",comparisonPanel:"ledger",rulesPanel:"employees",archivePanel:"employees"};
   let currentView="ledger",teamDate="",teamMonth="",teamDays=new Map();
   $("comparisonMount").append($("comparisonPanel"));
   $("settingsMount").append($("rulesPanel"),$("archivePanel"));
   $("paymentReportsMount").append($("rangePanel"),$("taxCenter"));
+  const deleteDialog=document.createElement("dialog");deleteDialog.id="deleteEmployeeDialog";
+  deleteDialog.innerHTML=`<form id="deleteEmployeeForm"><h2 id="deleteEmployeeTitle"></h2><p id="deleteEmployeeContext" class="notice"></p><p id="deleteEmployeeHelp"></p><label>사유 / Lý do<input name="reason" required maxlength="500" /></label><label class="check"><input name="confirmed" type="checkbox" required /> 대상 직원을 확인했습니다. / Đã kiểm tra đúng nhân viên.</label><div class="actions"><button type="button" data-close>돌아가기 / Quay lại</button><button type="submit" id="deleteEmployeeSubmit"></button></div></form>`;
+  document.body.append(deleteDialog);
+  let archiveGeneration=0;
+  const isArchived=id=>Boolean(state.employees.find(employee=>employee.id===id)?.archived_at);
+  function employeeArchiveDialog(archived){
+    archiveGeneration++;
+    const employee=state.employees.find(item=>item.id===state.selected);if(!state.loaded||!employee)return;
+    const form=$("deleteEmployeeForm");form.reset();form.dataset.employeeId=employee.id;form.dataset.revision=String(state.revision);form.dataset.archived=String(archived);
+    $("deleteEmployeeTitle").textContent=archived?"직원 삭제 / Xóa khỏi danh sách":"직원 복원 / Khôi phục nhân viên";
+    $("deleteEmployeeContext").textContent=`${employee.name} · ID ${employee.device_user_id}`;
+    $("deleteEmployeeHelp").textContent=archived?"기본 직원 목록에서 제외하고 얼굴 출퇴근을 중지합니다. 근무·급여·지급·서명 이력은 보존되며, 삭제된 직원 목록에서 복원할 수 있습니다. / Ẩn khỏi danh sách chính và ngừng chấm công. Giữ lịch sử công, lương, thanh toán và chữ ký; có thể khôi phục.":"직원 목록과 삭제 전 활성 상태를 복원합니다. 기존 근무·지급·서명 이력은 유지됩니다. / Khôi phục danh sách và trạng thái hoạt động trước khi xóa, giữ nguyên lịch sử.";
+    $("deleteEmployeeSubmit").textContent=archived?"목록에서 삭제 / Xóa khỏi danh sách":"직원 복원 / Khôi phục";
+    $("deleteEmployeeSubmit").classList.toggle("danger",archived);app.openDialog("deleteEmployeeDialog");
+  }
+  $("deleteEmployeeForm").addEventListener("submit",event=>{event.preventDefault();app.task(async()=>{
+    const generation=archiveGeneration,form=$("deleteEmployeeForm"),employeeId=form.dataset.employeeId,archived=form.dataset.archived==="true",reason=app.field(form,"reason").value.trim();
+    if(!state.loaded||employeeId!==state.selected||!state.employees.some(employee=>employee.id===employeeId))throw new Error("직원을 다시 선택해 주세요. / Chọn lại nhân viên.");
+    if(!reason||!app.field(form,"confirmed").checked)throw new Error("대상 직원과 사유를 확인해 주세요. / Kiểm tra nhân viên và lý do.");
+    await app.result(app.db.rpc("payroll_set_employee_archived",{p_employee_id:employeeId,p_archived:archived,p_reason:reason,p_expected_revision:Number(form.dataset.revision)}));
+    if(!state.loaded||generation!==archiveGeneration||!deleteDialog.open||employeeId!==form.dataset.employeeId)return;
+    deleteDialog.close();state.selected="";$("employeeFilter").value="";$("staffStatus").value="";
+    await app.load();app.notice(archived?"직원을 목록에서 삭제했습니다. 기존 기록은 보존했으며 ‘삭제된 직원’에서 복원할 수 있습니다. / Đã ẩn nhân viên, giữ lịch sử; có thể khôi phục từ danh sách đã xóa.":"직원을 복원했습니다. / Đã khôi phục nhân viên.");
+  });});
+  deleteDialog.addEventListener("close",()=>{archiveGeneration++;const form=$("deleteEmployeeForm");form.reset();delete form.dataset.employeeId;delete form.dataset.revision;delete form.dataset.archived;$("deleteEmployeeContext").textContent="";});
 
   function syncDetail(){
     const mount=document.querySelector(`[data-detail-mount="${currentView}"]`);
@@ -29,7 +55,8 @@
     $("workspaceTitle").textContent=views[name].title;
     $("workspaceEyebrow").textContent=views[name].eyebrow;
     $("workspaceDescription").textContent=views[name].description;
-    $("employeeFilterLabel").hidden=name==="employees"||name==="attendance";
+    $("employeeFilterLabel").hidden=name==="employees"||name==="attendance"||name==="services";
+    $("sharedToolbar").hidden=name==="services";
     document.querySelectorAll("[data-views]").forEach(node=>{node.hidden=!node.dataset.views.split(" ").includes(name);});
     syncDetail();
     if(historyMode)history[historyMode==="push"?"pushState":"replaceState"](null,"","#"+name);
@@ -42,17 +69,18 @@
     if(hash==="rulesPanel"||hash==="archivePanel")$("advancedSettings").open=true;
   }
   function selectEmployee(id){
-    if(!state.loaded||state.busy||!state.employees.some(employee=>employee.id===id))return false;
+    if(!state.loaded||state.busy||!state.employees.some(employee=>employee.id===id&&employee.payee_type!=="service"))return false;
     const changed=state.selected!==id||$("employeeDetail").hidden;
     state.selected=id;if(changed){$("employeeFilter").value=id;app.render();}
-    $("paymentEmployee").value=id;$("startPayment").disabled=false;
+    $("paymentEmployee").value=id;$("startPayment").disabled=isArchived(id);
     return true;
   }
   function renderStaff(){
     if(!state.loaded){$("staffList").replaceChildren();$("staffCount").textContent="";return;}
     const query=$("staffSearch").value.trim().toLocaleLowerCase(),status=$("staffStatus").value;
-    const employees=state.employees.filter(employee=>(!query||(employee.name+" "+employee.device_user_id).toLocaleLowerCase().includes(query))&&(!status||(employee.employment_status||(employee.active===false?"terminated":"active"))===status));
-    $("staffCount").textContent=employees.length+"명 / "+state.employees.length;
+    const staff=state.employees.filter(employee=>employee.payee_type!=="service");
+    const employees=staff.filter(employee=>(!query||(employee.name+" "+employee.device_user_id).toLocaleLowerCase().includes(query))&&(employee.archived_at?status==="archived":status!=="archived"&&(!status||(employee.employment_status||(employee.active===false?"terminated":"active"))===status)));
+    $("staffCount").textContent=employees.length+"명 / "+staff.length;
     const end=app.bounds($("month").value).end;
     $("staffList").innerHTML=employees.map(employee=>{
       const term=state.terms.filter(item=>item.employee_id===employee.id&&item.effective_from<end).sort((a,b)=>b.effective_from.localeCompare(a.effective_from))[0];
@@ -60,8 +88,8 @@
       const hourly=term?.pay_type==="hourly"||(!term&&employee.employment_type==="part_time");
       const salaryAction=hourly?(term?"시급·조건 변경 / Đổi lương giờ":"시급 설정 / Đơn giá giờ"):(term?"월급·조건 변경 / Đổi lương":"급여 설정 / Thiết lập lương");
       const employment=employee.employment_status||(employee.active===false?"terminated":"active");
-      const statusText={active:"재직 / Đang làm",leave:"휴직 / Tạm nghỉ",terminated:"퇴사 / Đã nghỉ"}[employment]||employment;
-      return `<article class="staff-card" data-staff-id="${esc(employee.id)}"><div class="staff-identity"><span class="staff-avatar" aria-hidden="true">${esc(employee.name.slice(0,1))}</span><div><h3>${esc(employee.name)}</h3><p class="muted">ID ${esc(employee.device_user_id)} · ${employee.employment_type==="part_time"?"파트타임 / Bán thời gian":"정규직 / Toàn thời gian"}${employee.hire_date?" · 입사 "+esc(employee.hire_date):""}</p></div><span class="badge ${employment==="active"?"":"neutral"}">${esc(statusText)}</span></div><div class="staff-salary">${term?`<span>${payType}</span><strong>${money(Number(term.rate))} <small>VND</small></strong><p class="muted">${esc(term.effective_from)}부터 적용 / Từ ngày</p>`:'<span class="badge warn">급여조건 미등록 / Chưa có điều kiện lương</span><p class="muted">월급이나 시급을 등록해 주세요.</p>'}</div><div class="staff-actions"><button class="quiet" data-staff-action="info" data-staff-id="${esc(employee.id)}">정보 수정 / Thông tin</button><button data-staff-action="salary" data-staff-id="${esc(employee.id)}">${salaryAction}</button><button class="quiet" data-staff-action="attendance" data-staff-id="${esc(employee.id)}">근무 보기 / Chấm công</button><button class="quiet" data-staff-action="pay" data-staff-id="${esc(employee.id)}">지급·서명 / Trả &amp; ký</button></div></article>`;
+      const statusText=employee.archived_at?"삭제됨 · 이력 보존 / Đã ẩn":{active:"재직 / Đang làm",leave:"휴직 / Tạm nghỉ",terminated:"퇴사 / Đã nghỉ"}[employment]||employment;
+      return `<article class="staff-card" data-staff-id="${esc(employee.id)}"><div class="staff-identity"><span class="staff-avatar" aria-hidden="true">${esc(employee.name.slice(0,1))}</span><div><h3>${esc(employee.name)}</h3><p class="muted">ID ${esc(employee.device_user_id)} · ${employee.employment_type==="part_time"?"파트타임 / Bán thời gian":"정규직 / Toàn thời gian"}${employee.hire_date?" · 입사 "+esc(employee.hire_date):""}</p></div><span class="badge ${employment==="active"?"":"neutral"}">${esc(statusText)}</span></div><div class="staff-salary">${term?`<span>${payType}</span><strong>${money(Number(term.rate))} <small>VND</small></strong><p class="muted">${esc(term.effective_from)}부터 적용 / Từ ngày</p>`:'<span class="badge warn">급여조건 미등록 / Chưa có điều kiện lương</span><p class="muted">월급이나 시급을 등록해 주세요.</p>'}</div><div class="staff-actions">${employee.archived_at?`<button data-staff-action="restore" data-staff-id="${esc(employee.id)}">직원 복원 / Khôi phục</button><button class="quiet" data-staff-action="attendance" data-staff-id="${esc(employee.id)}">근무 이력 / Lịch sử công</button><button class="quiet" data-staff-action="history" data-staff-id="${esc(employee.id)}">지급 이력 / Lịch sử trả</button>`:`<button class="quiet" data-staff-action="info" data-staff-id="${esc(employee.id)}">정보 수정 / Thông tin</button><button data-staff-action="salary" data-staff-id="${esc(employee.id)}">${salaryAction}</button><button class="quiet" data-staff-action="attendance" data-staff-id="${esc(employee.id)}">근무 보기 / Chấm công</button><button class="quiet" data-staff-action="pay" data-staff-id="${esc(employee.id)}">지급·서명 / Trả &amp; ký</button><button class="quiet danger" data-staff-action="delete" data-staff-id="${esc(employee.id)}">직원 삭제 / Xóa khỏi danh sách</button>`}</div></article>`;
     }).join("")||`<div class="empty"><strong>${state.employees.length?"검색한 직원이 없습니다. / Không tìm thấy nhân viên.":"등록된 직원이 없습니다. / Chưa có nhân viên."}</strong><p>위의 직원 등록 버튼으로 시작하세요. / Dùng nút Thêm nhân viên ở trên.</p></div>`;
   }
   const attendanceLabel=day=>({recognized:"자동 반영 / Đã ghi nhận",in_progress:"퇴근 대기 / Chờ giờ ra",missing:"기록 누락 / Thiếu giờ",ambiguous:"기록 확인 / Kiểm tra"}[day.attendanceStatus]||"기록됨 / Đã ghi");
@@ -69,7 +97,7 @@
     const month=$("month").value,start=new Date(month+"-01T00:00:00Z"),count=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+1,0)).getUTCDate();
     teamDays=new Map();
     // The shared selected employee and ledger filter never narrow this calendar.
-    for(const row of state.summaries)for(const day of row.daily||[]){
+    for(const row of state.summaries.filter(row=>!state.employees.some(employee=>employee.id===row.employee_id&&employee.payee_type==="service")))for(const day of row.daily||[]){
       if(!day.date.startsWith(month)||!(day.rawCount||day.checkIn||day.checkOut||day.actualSeconds||day.isOpen))continue;
       if(!teamDays.has(day.date))teamDays.set(day.date,[]);
       teamDays.get(day.date).push({employee_id:row.employee_id,name:row.name,device_user_id:row.device_user_id,day});
@@ -101,23 +129,28 @@
     const employee=state.employees.find(e=>e.id===state.selected),end=app.bounds($("month").value).end;
     const term=state.terms.filter(t=>t.employee_id===state.selected&&t.effective_from<end).sort((a,b)=>b.effective_from.localeCompare(a.effective_from))[0];
     $("addTerms").textContent=term?.pay_type==="hourly"||(!term&&employee?.employment_type==="part_time")?"시급·근무조건 변경 / Đổi lương giờ & lịch làm":"월급·근무조건 변경 / Đổi điều kiện lương";
+    $("editEmployee").disabled=!!employee?.archived_at;$("addTerms").disabled=!!employee?.archived_at;
+    if($("addPayment")&&employee?.archived_at)$("addPayment").disabled=true;
+    $("archivedEmployeeNotice")?.remove();
+    if(employee?.archived_at)$("employeeDetail").insertAdjacentHTML("afterbegin",'<p id="archivedEmployeeNotice" class="notice">목록에서 삭제된 직원입니다. 과거 기록을 조회·정정할 수 있습니다. 신규 입력은 직원관리 → 삭제된 직원에서 복원 후 진행하세요. / Nhân viên đã ẩn. Có thể xem, sửa lịch sử; khôi phục trước khi thêm mới.</p>');
     const dynamic=$("detailTitle").parentElement.querySelector(".advanced-detail-actions");
     if(dynamic)$("employeeActionBar").append(dynamic);
     if($("sensitiveInfo"))$("sensitiveInfo").dataset.detailViews="employees";
     if($("viewAudit"))$("viewAudit").dataset.detailViews="employees";
     if($("monthSchedule"))$("monthSchedule").dataset.detailViews="attendance";
     if($("autoAttendanceSummary"))$("attendanceSummarySlot").append($("autoAttendanceSummary"));
-    $("paymentEmployee").value=state.selected;$("startPayment").disabled=!state.selected;
+    $("paymentEmployee").value=state.selected;$("startPayment").disabled=!state.selected||isArchived(state.selected);
     syncDetail();
   }
   function render(){
     if(!state.loaded)return;
     const selected=state.selected;
-    $("paymentEmployee").innerHTML='<option value="">직원 선택 / Chọn nhân viên</option>'+state.employees.map(employee=>`<option value="${esc(employee.id)}">${esc(employee.name)} · ID ${esc(employee.device_user_id)}</option>`).join("");
-    $("paymentEmployee").value=selected;$("startPayment").disabled=!selected;
+    $("paymentEmployee").innerHTML='<option value="">직원 선택 / Chọn nhân viên</option>'+state.employees.filter(employee=>employee.payee_type!=="service").map(employee=>`<option value="${esc(employee.id)}">${esc(employee.name)} · ID ${esc(employee.device_user_id)}${employee.archived_at?" · 삭제됨 / Đã ẩn":""}</option>`).join("");
+    $("paymentEmployee").value=selected;$("startPayment").disabled=!selected||isArchived(selected);
     renderStaff();renderTeam();syncDetail();
   }
   function invalidate(){
+    archiveGeneration++;deleteDialog.close();
     for(const id of ["staffList","teamCalendar","teamDayRows"])$(id).replaceChildren();
     for(const id of ["staffCount","teamMonthSummary","teamDayTitle"])$(id).textContent="";
     $("paymentEmployee").replaceChildren();$("startPayment").disabled=true;teamDays.clear();
@@ -137,10 +170,11 @@
     if(button.dataset.openView)showView(button.dataset.openView,{historyMode:"push"});
     if(button.dataset.staffAction&&selectEmployee(button.dataset.staffId)){
       const action=button.dataset.staffAction;
-      showView(action==="pay"?"payments":action==="attendance"?"attendance":"employees",{historyMode:"push"});
+      showView(action==="pay"||action==="history"?"payments":action==="attendance"?"attendance":"employees",{historyMode:"push"});
       if(action==="info")$("editEmployee").click();
       else if(action==="salary")$("addTerms").click();
       else if(action==="pay")$("addPayment")?.click();
+      else if(action==="delete"||action==="restore")employeeArchiveDialog(action==="delete");
       else $("employeeDetail").scrollIntoView({behavior:"smooth",block:"start"});
     }
     if(button.dataset.teamDate){

@@ -99,11 +99,12 @@
     return {payment,paid,net:reversals.length?0:paid,reversed:reversals.length?paid:0,reversals,evidence};
   }
   function buildRows(data,month) {
-    const monthRuns=data.runs.filter(run=>monthOf(run.month)===month);
-    const monthPayments=data.payments.map(payment=>({payment,scope:paymentScope(data,payment)})).filter(item=>item.scope.month===month);
+    const serviceIds=new Set(data.employees.filter(employee=>employee.payee_type==='service').map(employee=>employee.id));
+    const monthRuns=data.runs.filter(run=>monthOf(run.month)===month&&!serviceIds.has(run.employee_id));
+    const monthPayments=data.payments.map(payment=>({payment,scope:paymentScope(data,payment)})).filter(item=>item.scope.month===month&&!serviceIds.has(item.scope.employeeId));
     let summaries=data.summaries.filter(summary=>(summary.month||data.month)===month);
     if (!summaries.length && root.DGV_PAYROLL_CORE?.summarizeMonth) summaries=root.DGV_PAYROLL_CORE.summarizeMonth({month,employees:data.employees,terms:data.terms,records:data.records,days:data.days,today:data.today});
-    const employees=new Map(data.employees.map(employee=>[employee.id,employee]));
+    const employees=new Map(data.employees.filter(employee=>employee.payee_type!=='service').map(employee=>[employee.id,employee]));
     monthRuns.forEach(run=>{if(!employees.has(run.employee_id))employees.set(run.employee_id,{id:run.employee_id,name:run.snapshot?.name,device_user_id:run.snapshot?.device_user_id,active:false});});
     monthPayments.forEach(({scope})=>{if(!employees.has(scope.employeeId))employees.set(scope.employeeId,{id:scope.employeeId,active:false});});
     return [...employees.values()].filter(employee=>!data.employeeId||employee.id===data.employeeId).map(employee=>{

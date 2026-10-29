@@ -183,7 +183,7 @@
     const end = dateText(endMs);
     const today = input.today || dateText(Date.now() + 7 * 60 * MINUTE);
     if (!Number.isFinite(dayMs(today))) throw new Error("today must be YYYY-MM-DD");
-    return employees.map((employee) => {
+    return employees.filter(employee=>employee.payee_type!=="service").map((employee) => {
       const id = employee.id;
       const partTime = employee.employment_type === "part_time";
       const hireDate = Number.isFinite(dayMs(employee.hire_date)) ? employee.hire_date : null;
