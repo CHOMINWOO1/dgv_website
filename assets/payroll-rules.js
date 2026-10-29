@@ -95,7 +95,7 @@
   }
   function serialize(intervals) { return intervals.map(([a, b]) => ({ start: textStamp(a), end: textStamp(b) })); }
   function workedIntervals(daily) {
-    const values = Array.isArray(daily.workIntervals) ? daily.workIntervals : [{ start: daily.checkIn, end: daily.checkOut }];
+    const values = Array.isArray(daily.netWorkIntervals) ? daily.netWorkIntervals : Array.isArray(daily.workIntervals) ? daily.workIntervals : [{ start: daily.checkIn, end: daily.checkOut }];
     return values.map((item) => [stamp(item.start), stamp(item.end)]).filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a);
   }
   function approvedIntervals(value, allowed, label) {
@@ -156,7 +156,7 @@
     const first = dates[0], last = dates.at(-1), dayMap = new Map(days.filter((day) => day.employee_id === employee.id).map((day) => [day.work_date, day]));
     const employedDates = dates.filter((date) => withinEmployment(employee, date));
     const relevantTerms = effectiveMonthTerms(employee, employeeTerms, dates);
-    const ruleIssues = [], warnings = [], resolvedHireIssues = new Set();
+    const ruleIssues = [], warnings = [...(base.warnings || [])], resolvedHireIssues = new Set();
     let compensationIssues = [...(base.compensationIssues || [])];
     const issue = (text) => { if (!ruleIssues.includes(text)) ruleIssues.push(text); };
     const warning = (text) => { if (!warnings.includes(text)) warnings.push(text); };
@@ -218,12 +218,12 @@
     if (paidLeaveDays || unpaidLeaveDays || holidayDays) warning("휴가·공휴일의 예정시간은 월 기준시간에 포함합니다. 실제 출퇴근 없는 시간은 실근무에 더하지 않으며 부족시간으로 월급을 공제하지 않습니다 / Giờ lịch ngày nghỉ được tính vào chuẩn; không tạo giờ làm thực tế và không trừ lương tháng khi thiếu giờ");
     const pendingDates = [], reviewedDaily = base.daily.map((daily) => {
       const day = dayMap.get(daily.date), term = latest(employeeTerms, daily.date), schedule = scheduleBounds(term, daily.date);
-      const hasCompletedWork = Boolean(daily.checkIn && daily.checkOut && !daily.issues.length);
+      const hasCompletedWork = Boolean(daily.workIntervals?.length && !daily.isOpen && !daily.issues.length);
       const pending = withinEmployment(employee, daily.date) && day?.day_type === "work" && (daily.date > asOf || (daily.date === asOf && !hasCompletedWork));
       if (pending) pendingDates.push(daily.date);
       const futurePunch = [daily.checkIn, daily.checkOut].some((value) => value && value.slice(0, 10) > asOf);
       const futureIssue = "미래 출퇴근 시각 확인 필요 / Kiểm tra thời gian chấm công trong tương lai";
-      if (futurePunch) issue(daily.date + ": " + futureIssue);
+      if (futurePunch && !daily.issueCodes.includes("future")) issue(daily.date + ": " + futureIssue);
       if (daily.checkIn && daily.checkOut) {
         const actual = workedIntervals(daily);
         if (actual.every(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a)) {
@@ -231,7 +231,9 @@
           if (daily.checkOut.slice(0, 7) !== month && stamp(daily.checkOut) > dateMs(daily.checkOut.slice(0, 10))) warning("월말 야간근무는 근무 시작일의 급여월에 한 번만 포함됩니다 / Ca qua tháng chỉ được tính một lần theo tháng bắt đầu");
         }
       }
-      return { ...daily, ...(futurePunch ? { minutes: 0, actualSeconds: 0, status: "review", issues: [...daily.issues, futureIssue], issueCodes: [...daily.issueCodes, "future"] } : {}),
+      // Core excludes only the future/ambiguous interval; a later bad punch
+      // must not erase an earlier independently completed interval.
+      return { ...daily, ...(futurePunch ? { status: "review", attendanceStatus: "ambiguous", issues: [...new Set([...daily.issues, futureIssue])], issueCodes: [...new Set([...daily.issueCodes, "future"])] } : {}),
         settlementMode: "monthly_net", scheduledMinutes: day?.day_type === "rest" || !schedule ? 0 : Math.round(duration(schedule.normal)),
         scheduleDefaultUsed: day?._scheduleDefault === true, monthlyPending: pending,
         overtimeCandidates: [], nightCandidates: [], approvedOvertimeMinutes: 0, approvedNightMinutes: 0, statutoryAmount: 0 };
@@ -283,7 +285,7 @@
         return monthlyNetSummary({ month, dates, employee, employeeTerms, days, base: freshBase, today });
       }
       const dayMap = new Map(days.filter((day) => day.employee_id === base.employee_id).map((day) => [day.work_date, day]));
-      const wageBreakdown = [], warnings = [], ruleIssues = [], ruleIds = new Set();
+      const wageBreakdown = [], warnings = [...(base.warnings || [])], ruleIssues = [], ruleIds = new Set();
       const issue = (date, text) => { const value = (date ? date + ": " : "") + text; if (!ruleIssues.includes(value)) ruleIssues.push(value); };
       const warning = (text) => { if (!warnings.includes(text)) warnings.push(text); };
       const statutoryCodes = new Set(["ordinary_overtime", "rest_overtime", "holiday_overtime", "night_premium", "night_overtime_extra", "statutory_rounding"]);

@@ -217,10 +217,10 @@ const lastDate = "2026-06-30", nextDate = "2026-07-01";
 const monthEndNight = [interval(lastDate, "22:00", "06:00", nextDate)];
 const monthlyNight = { ...nightTerm, pay_type: "monthly", rate: 7000000 };
 const monthEndDays = schedule.map((value) => value.work_date === lastDate ? approve(lastDate, [], monthEndNight) : value);
-report = calc({ terms: [monthlyNight], days: monthEndDays, records: punches(lastDate, "22:00", "06:00", nextDate), today: "2026-06-01" });
+report = calc({ terms: [monthlyNight], days: monthEndDays, records: punches(lastDate, "22:00", "06:00", nextDate), today: "2026-07-01" });
 assert.ok(report.ruleUnresolved > 0, "June schedule cannot silently become July's hourly divisor");
 report = calc({ terms: [{ ...monthlyNight, overtime_hourly_rate: 30000 }], days: monthEndDays,
-  records: punches(lastDate, "22:00", "06:00", nextDate), today: "2026-06-01" });
+  records: punches(lastDate, "22:00", "06:00", nextDate), today: "2026-07-01" });
 assert.equal(report.unresolved, 0);
 assert.equal(report.statutoryAmount, 72000);
 assert.equal(report.minutes, 480, "cross-month check-out is paid once on its original shift");

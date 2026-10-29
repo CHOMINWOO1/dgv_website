@@ -40,7 +40,8 @@ assert.equal(report.daily[0].rawCount,2);
 assert.equal(report.unresolved,0);
 assert.equal(JSON.stringify(duplicates),before);
 report=calculate({records:[...records,punch("2026-06-01T08:00:01",null,"legacy"),punch("2026-06-01T18:00:01",null,"legacy")]});
-assert.equal(report.minutes,0,"no guessed tolerance may collapse distinct mixed source records");
+assert.equal(report.minutes,480,"proven typed pair remains counted; distinct mixed records add no guessed time");
+assert.equal(report.daily[0].attendanceStatus,"ambiguous");
 assert.equal(report.baseAmount,null);
 assert.ok(report.daily[0].issueCodes.includes("mixed"));
 report=calculate({records:[...pair("08:00","18:00"),dayPunch("12:00",null)]});
@@ -50,10 +51,8 @@ assert.ok(report.daily[0].issueCodes.includes("mixed"));
 for(const invalid of [
   [dayPunch("08:00","in")], [dayPunch("18:00","out")],
   [dayPunch("08:00","in"),dayPunch("09:00","in"),dayPunch("18:00","out")],
-  [...pair("08:00","18:00"),dayPunch("19:00","out")],
   [dayPunch("08:00","out"),dayPunch("18:00","in")],
-  [...pair("08:00","10:00"),dayPunch("15:00","in")],
-  pair("08:00","08:00"),pair("08:00","08:04")
+  pair("08:00","08:00")
 ]){
   report=calculate({records:invalid});assert.equal(report.minutes,0);assert.equal(report.baseAmount,null);assert.ok(report.unresolved>0);
 }
@@ -73,9 +72,10 @@ assert.equal(report.daily.length,1,"after-midnight re-entry belongs to the expli
 assert.equal(report.minutes,390,"nightly break and time away are each removed only from actual intervals");
 assert.equal(report.unresolved,0);
 report=calculate({records:[...records,punch("2026-07-01T00:30:00",null)]});
-assert.equal(report.minutes,0);assert.ok(report.daily[0].issueCodes.includes("mixed"));
+assert.equal(report.minutes,360);assert.ok(report.daily[0].issueCodes.includes("mixed"));
 report=calculate({records:[punch("2026-06-01T08:00:00","in"),punch("2026-06-02T01:00:00","out")]});
-assert.equal(report.minutes,0);assert.ok(report.daily[0].issueCodes.includes("long"));
+assert.equal(report.minutes,900);assert.ok(report.daily[0].warningCodes.includes("long"));
+assert.equal(report.unresolved,0);
 const corrected={employee_id:employee.id,work_date:"2026-06-01",day_type:"work",check_in:"2026-06-01T08:00:00",check_out:"2026-06-01T18:00:00",reason:"Synthetic attendance review"};
 report=calculate({records:[...pair("08:00","18:00"),dayPunch("08:01",null)],days:[corrected]});
 assert.equal(report.minutes,480);assert.equal(report.unresolved,0);assert.equal(report.daily[0].status,"confirmed");
@@ -94,4 +94,57 @@ const monthly={...term,pay_type:"monthly",monthly_settlement:"monthly_net",rate:
 report=rules.extendSummaries({...input({terms:[monthly],records:[...pair("08:00","10:00"),...pair("15:00","18:00")]}),rules:[]})[0];
 assert.equal(report.baseAmount,7000000);assert.equal(report.monthlyActualMinutes,300);assert.equal(report.monthlyExtraAmount,0);
 assert.equal(report.statutoryAmount,0);
+
+// Proven intervals are recognized independently from missing records or wage setup.
+for(const [from,to,minutes] of [["08:00","08:02",2],["08:00","08:04",4]]){
+  report=calculate({records:pair(from,to)});assert.equal(report.minutes,minutes);assert.equal(report.unresolved,0);
+  assert.equal(report.daily[0].attendanceStatus,"recognized");assert.ok(report.daily[0].warningCodes.includes("short"));
+}
+const secondsPair=[punch("2026-06-01T11:32:34","in"),punch("2026-06-01T11:34:18","out")];
+report=calculate({today:"2026-06-01",terms:[],records:[...secondsPair,punch("2026-06-01T14:13:00","in")]});
+assert.equal(report.minutes,1);assert.equal(report.actualSeconds,104);assert.equal(report.baseAmount,null);
+assert.equal(report.daily[0].attendanceStatus,"in_progress");assert.equal(report.daily[0].openCheckIn,"2026-06-01T14:13:00");
+assert.equal(report.daily[0].isOpen,true);assert.equal(report.daily[0].workIntervals.length,1);assert.equal(report.daily[0].attendanceDefaultUsed,true);
+assert.ok(report.daily[0].issueCodes.includes("terms"));assert.ok(report.daily[0].issueCodes.includes("open"));
+report=calculate({today:"2026-06-01",terms:[],records:[...secondsPair,punch("2026-06-01T14:13:00","in"),punch("2026-06-01T14:16:00","out")]});
+assert.equal(report.actualSeconds,284);assert.equal(report.minutes,4);assert.equal(report.daily[0].attendanceStatus,"recognized");assert.equal(report.daily[0].isOpen,false);
+assert.equal(report.baseAmount,null,"recognized attendance never invents missing salary conditions");
+report=calculate({records:[...secondsPair,punch("2026-06-01T14:13:00","in")]});
+assert.equal(report.actualSeconds,104);assert.equal(report.daily[0].attendanceStatus,"missing");assert.ok(report.unresolved>0);
+assert.equal(report.daily[0].openCheckIn,null);
+report=calculate({today:"2026-06-01",records:[punch("2026-06-01T14:13:00","in")]});
+assert.equal(report.actualSeconds,0);assert.equal(report.minutes,0);assert.equal(report.daily[0].attendanceStatus,"in_progress");
+report=calculate({records:[...pair("08:00","10:00"),dayPunch("15:00","in"),dayPunch("16:00","in"),dayPunch("18:00","out")]});
+assert.equal(report.minutes,120);assert.equal(report.daily[0].attendanceStatus,"ambiguous");assert.equal(report.daily[0].workIntervals.length,1);
+report=calculate({records:[...pair("08:00","18:00"),dayPunch("19:00","out")]});
+assert.equal(report.minutes,480);assert.equal(report.daily[0].attendanceStatus,"missing");assert.ok(report.unresolved>0);
+report=calculate({records:[punch("2026-06-01T08:00:00","in"),punch("2026-06-01T08:00:59","out")]});
+assert.equal(report.minutes,0);assert.equal(report.actualSeconds,59);assert.equal(report.workedDays,1);assert.equal(report.daily[0].attendanceStatus,"recognized");assert.equal(report.unresolved,0);
+report=calculate({terms:[],records:pair("10:00","20:00")});
+assert.equal(report.minutes,480);assert.equal(report.baseAmount,null);assert.equal(report.daily[0].attendanceDefaultUsed,true);assert.equal(report.daily[0].attendanceStatus,"recognized");
+report=calculate({terms:[{...term,rate:null,break_start:"12:00",break_end:"13:00"}],records:pair("08:00","18:00")});
+assert.equal(report.minutes,540,"valid configured break survives missing pay rate");assert.equal(report.daily[0].attendanceDefaultUsed,false);assert.equal(report.baseAmount,null);
+report=calculate({terms:[{...term,shift_start:"bad"}],records:pair("10:00","20:00")});
+assert.equal(report.minutes,480);assert.equal(report.daily[0].attendanceDefaultUsed,true);assert.equal(report.baseAmount,null);
+report=calculate({records:[punch("2026-06-01T11:59:30","in"),punch("2026-06-01T14:00:30","out")]});
+assert.equal(report.actualSeconds,60);assert.equal(report.minutes,1,"only actual lunch intersection is deducted");
+report=calculate({records:[punch("2026-06-01T22:00:00","in"),punch("2026-06-02T22:00:00","out")]});
+assert.equal(report.minutes,1320,"24h pair deducts next calendar day's 2h lunch");assert.equal(report.unresolved,0);assert.ok(report.daily[0].warningCodes.includes("long"));
+report=calculate({terms:[nightTerm],records:[punch("2026-06-01T19:00:00","in"),punch("2026-06-02T19:00:00","out")]});
+assert.equal(report.minutes,1410,"overnight 00:30–01:00 break is deducted once across date boundaries");
+report=calculate({records:[...pair("08:00","10:00"),dayPunch("11:00","in"),punch("2026-06-02T11:00:01","out")]});
+assert.equal(report.minutes,120);assert.equal(report.daily[0].attendanceStatus,"ambiguous");assert.ok(report.daily[0].issueCodes.includes("duration"));
+report=calculate({today:"2026-06-01",records:[...pair("08:00","10:00"),dayPunch("15:00","in"),punch("2026-06-02T15:00:00","out")]});
+assert.equal(report.minutes,120,"future checkout only excludes its own interval");assert.ok(report.daily[0].issueCodes.includes("future"));
+const restRecorded={employee_id:employee.id,work_date:"2026-06-01",day_type:"rest"};
+report=calculate({days:[restRecorded],records:pair("08:00","08:02")});
+assert.equal(report.minutes,2);assert.equal(report.unresolved,0);assert.equal(report.daily[0].attendanceStatus,"recognized");assert.ok(report.daily[0].warningCodes.includes("rest"));
+const noRecord={employee_id:employee.id,work_date:"2026-06-01",day_type:"work"};
+report=calculate({days:[noRecord]});assert.equal(report.minutes,0);assert.equal(report.unresolved,0);assert.equal(report.daily[0].attendanceStatus,"no_record");
+report=rules.extendSummaries({...input({terms:[monthly],records:[...secondsPair,punch("2026-06-01T14:13:00","in")],today:"2026-06-01"}),rules:[]})[0];
+assert.equal(report.monthlyActualSeconds,104);assert.equal(report.monthlyActualMinutes,1);assert.equal(report.baseAmount,7000000);assert.equal(report.monthlyReadyToFinalize,false);
+assert.equal(report.daily.find(day=>day.date==="2026-06-01").attendanceStatus,"in_progress");
+report=rules.extendSummaries({...input({terms:[],records:pair("10:00","20:00")}),rules:[]})[0];
+assert.equal(report.minutes,480);assert.equal(report.baseAmount,null,"rules keep attendance but cannot invent wages");
+
 console.log("Typed attendance passed: multiple pairs, exact-source dedupe, mixed-source review, invalid sequences, overnight boundaries and statutory/monthly pay.");

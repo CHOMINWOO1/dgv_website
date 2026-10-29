@@ -17,9 +17,9 @@ try{
   assert.equal(await page.locator("#evidenceDialog").isVisible(),false);
   assert.equal(await page.locator("#rangeReceiptPrint").isDisabled(),true);
   assert.equal(await page.locator('a[href="attendance.html"]').count(),0,"payroll header has no tablet attendance link");
-  const assets=["payroll.html","assets/payroll.js","assets/payroll-advanced.js","assets/payroll-receipts.js","assets/payroll-tax.js","assets/payroll.css"];
+  const assets=["payroll.html","assets/payroll-core.js","assets/payroll-rules.js","assets/payroll.js","assets/payroll-advanced.js","assets/payroll-receipts.js","assets/payroll-tax.js","assets/payroll.css"];
   for(const asset of assets){
-    const remote=await context.request.get(new URL(asset,url).href+"?release=signatures-20261029");
+    const remote=await context.request.get(new URL(asset,url).href+"?release=attendance-auto-20261029-6");
     assert.equal(remote.status(),200,asset);
     const local=await readFile(new URL("../"+asset,import.meta.url));
     const digest=bytes=>createHash("sha256").update(bytes).digest("hex");

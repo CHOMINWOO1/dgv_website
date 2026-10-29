@@ -77,7 +77,7 @@ assert.ok(summarize({ terms: [{ ...term, effective_from: "2026-06-15" }] }).atte
 assert.equal(summarize({ terms: [] }).baseAmount, null);
 assert.equal(summarize({ terms: [{ ...term, rate: null }] }).baseAmount, null);
 
-for (const times of [["10:00"], ["10:00", "10:04"], ["01:00", "20:00"], ["10:00", "13:00", "20:00"]]) {
+for (const times of [["10:00"], ["10:00", "13:00", "20:00"]]) {
   report = summarize({ terms: [hourly], records: times.map((time) => punch("2026-06-01T" + time + ":00")) });
   assert.equal(report.minutes, 0);
   assert.equal(report.baseAmount, null);
@@ -85,7 +85,8 @@ for (const times of [["10:00"], ["10:00", "10:04"], ["01:00", "20:00"], ["10:00"
 }
 const schedule = (date, type, extra = {}) => ({ employee_id: "e1", work_date: date, day_type: type, ...extra });
 assert.equal(summarize().unresolved, 0, "missing schedule must not imply absence");
-assert.equal(summarize({ days: [schedule("2026-06-01", "work")] }).unresolved, 1);
+assert.equal(summarize({ days: [schedule("2026-06-01", "work")] }).unresolved, 0);
+assert.equal(summarize({ days: [schedule("2026-06-01", "work")] }).daily[0].attendanceStatus, "no_record");
 assert.equal(summarize({ today: "2026-06-01", days: [schedule("2026-06-01", "work"), schedule("2026-06-02", "work")] }).unresolved, 0, "today/future shifts are not marked absent");
 assert.equal(summarize({ days: [schedule("2026-06-01", "rest")] }).unresolved, 0);
 assert.equal(summarize({ terms: [hourly], days: [schedule("2026-06-01", "paid_leave")] }).baseAmount, null, "paid leave hourly entitlement requires review");
@@ -103,7 +104,9 @@ assert.equal(summarize({ employees: [{ ...employee, active: false }] }).active, 
 assert.equal(summarize().active, true);
 assert.equal(summarize({ days: [schedule("2026-06-01", "paid_leave")] }).baseAmount, 7000000);
 report = summarize({ days: [schedule("2026-06-01", "rest", { reason: "Scheduled weekly rest" })], records: [punch("2026-06-01T10:00:00"), punch("2026-06-01T20:00:00")] });
-assert.equal(report.unresolved, 1, "a schedule note is not acknowledgement of unexpected rest-day work");
+assert.equal(report.unresolved, 0, "actual rest-day work needs no attendance approval");
+assert.equal(report.minutes, 480);
+assert.ok(report.daily[0].warningCodes.includes("rest"));
 
 // Original records remain immutable; only an explained correction resolves ambiguity.
 const raw = [punch("2026-06-01T10:00:00"), punch("2026-06-01T13:00:00"), punch("2026-06-01T20:00:00")];

@@ -135,12 +135,14 @@ assert.equal(report.unpaidLeaveDays, 1);
 assert.equal(report.holidayDays, 1);
 assert.equal(report.unresolved, 0);
 
-// Missing or ambiguous real attendance blocks finalization; no expected hours filled in.
+// No records means zero actual time and informational status; incomplete real records still block final pay.
 report = calculate({ records: fullRecords({ changes: { "2026-10-01": null } }) });
-assert.ok(report.attendanceUnresolved > 0);
+assert.equal(report.attendanceUnresolved, 0);
 assert.equal(report.monthlyActualMinutes, 208 * 60);
-assert.equal(report.monthlyReadyToFinalize, false);
-assert.ok(report.daily.find((row) => row.date === "2026-10-01").issueCodes.includes("missing"));
+assert.equal(report.monthlyReadyToFinalize, true);
+assert.equal(report.baseAmount, 7000000);
+assert.equal(report.daily.find((row) => row.date === "2026-10-01").attendanceStatus, "no_record");
+assert.ok(report.daily.find((row) => row.date === "2026-10-01").warningCodes.includes("missing"));
 report = calculate({ records: [...fullRecords({ changes: { "2026-10-01": null } }), punch("2026-10-01T10:00:00")] });
 assert.ok(report.daily.find((row) => row.date === "2026-10-01").issueCodes.includes("single"));
 assert.equal(report.monthlyActualMinutes, 208 * 60);
@@ -274,7 +276,8 @@ assert.ok(report.compensationUnresolved > 0, "a salary change during active empl
 report = calculate({ employees: [hired], terms: hireTerms, records: fullRecords({ employees: [hired], terms: hireTerms, changes: { "2026-10-15": null } }) });
 assert.equal(report.baseAmount, 3888889);
 assert.equal(report.compensationUnresolved, 0);
-assert.ok(report.attendanceUnresolved > 0, "automatic prorating never waives missing actual attendance");
+assert.equal(report.attendanceUnresolved, 0, "no punches create no invented hours and require no attendance approval");
+assert.equal(report.daily.find(row=>row.date==="2026-10-15").attendanceStatus,"no_record");
 report = calculate({ month: "2026-12", records: fullRecords({ month: "2026-12" }), today: "2027-01-01" });
 assert.equal(report.monthlyExpectedPayDate, "2027-01-05");
 report = calculate({ employees: [{ ...employee, termination_date: "2026-09-30" }], records: [] });
