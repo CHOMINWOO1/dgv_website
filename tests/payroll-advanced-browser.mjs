@@ -1,4 +1,5 @@
 import { installMock } from "./helpers/payroll-browser-mock.mjs";
+import { openPayrollView } from "./helpers/payroll-navigation.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
@@ -33,6 +34,7 @@ try{
   assert.equal(await page.locator('#taxCenter a[href="admin.html"],#taxCenter a[href="expense.html"]').count(),0,"payroll exports stay on payroll page");
   assert.equal(await page.locator('[name="fund_account_id"],#fundAccount').count(),0);
 
+  await openPayrollView(page,"employees");
   await page.locator("#editEmployee").click();
   await page.locator("#employeeDialog").waitFor({state:"visible"});
   await field("employeeForm","national_id").fill("001111111111");
@@ -56,12 +58,14 @@ try{
 
   await page.evaluate(id=>{__payrollTest.db.payroll_days.push({id:"preserved-day",employee_id:id,work_date:"2026-10-01",day_type:"work",reason:"Keep this manual day"});},employee);
   await refresh();const originalDay=await page.evaluate(()=>structuredClone(__payrollTest.db.payroll_days[0]));
+  await openPayrollView(page,"attendance");
   await page.locator("#monthSchedule").click();await submit("scheduleForm");
   assert.deepEqual(await page.evaluate(()=>__payrollTest.db.payroll_days.find(d=>d.id==="preserved-day")),originalDay);
   assert.equal(await page.evaluate(id=>__payrollTest.db.payroll_days.filter(d=>d.employee_id===id).length,employee),31);
   assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_days.find(d=>d.work_date==="2026-10-04").day_type),"rest");
   await page.evaluate(()=>{__payrollTest.db.payroll_days=__payrollTest.db.payroll_days.filter(d=>d.id==="preserved-day");});await refresh();
 
+  await openPayrollView(page,"ledger");
   await page.locator("#saveReview").click();await idle();
   assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_reviews.length),1);
   const reviewedRevision=await page.evaluate(()=>__payrollTest.db.payroll_revision[0].version);
@@ -72,13 +76,17 @@ try{
   await page.locator("#finalize").click();await page.locator('#confirmForm input[type="checkbox"]').check();await submit("confirmForm");
   const originalRun=await page.evaluate(()=>structuredClone(__payrollTest.db.payroll_runs[0]));assert.equal(originalRun.total,240000);
   assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_reviews.length),2,"finalize reuses the identical review without suppressing changed reviews");
+  await openPayrollView(page,"employees");
   await page.locator("#editEmployee").click();await page.locator("#employeeDialog").waitFor({state:"visible"});await field("employeeForm","payment_method").selectOption("bank");await submit("employeeForm");
+  await openPayrollView(page,"payments");
   for(const [method,amount] of [["cash",100000],["bank",50000]]){
     await page.locator("#addPayment").click();assert.equal(await field("paymentForm","method").inputValue(),"bank","employee preferred payment method opens by default");await field("paymentForm","paid_on").fill("2026-10-05");await field("paymentForm","amount").fill(String(amount));await field("paymentForm","method").selectOption(method);await field("paymentForm","reference").fill("TEST-REFERENCE");await submit("paymentForm");
     await page.locator("#evidenceDialog").waitFor({state:"visible"});await page.locator("#evidenceForm [data-close]").click();
   }
   const payments=await page.evaluate(()=>structuredClone(__payrollTest.db.payroll_payments));
+  await openPayrollView(page,"ledger");
   await page.locator("#adjustRun").click();await field("amendForm","amount").fill("10000");await field("amendForm","reason").fill("Synthetic approved adjustment");await submit("amendForm");
+  await openPayrollView(page,"payments");
   await page.locator(`[data-reverse="${payments[1].id}"]`).click();await field("amendForm","reason").fill("Synthetic duplicate payment reversal");await submit("amendForm");
   assert.deepEqual(await page.evaluate(()=>__payrollTest.db.payroll_runs[0]),originalRun);
   assert.deepEqual(await page.evaluate(()=>__payrollTest.db.payroll_payments),payments);
@@ -144,6 +152,8 @@ try{
   // Backups use the actual browser crypto path. Remote restore access/atomicity
   // is covered by SQL; this checks the UI's envelope, password, and retry flow.
   const password="Synthetic-archive-password-2026";
+  await openPayrollView(page,"employees");
+  if(!await page.locator("#advancedSettings").evaluate(node=>node.open))await page.locator("#advancedSettings > summary").click();
   await page.locator("#openBackup").click();await field("archiveForm","password").fill(password);await field("archiveForm","confirmed").check();
   const archiveEvent=page.waitForEvent("download");await submit("archiveForm");const archive=await archiveEvent,archiveBytes=await readFile(await archive.path());
   assert.match(archive.suggestedFilename(),/\.payroll$/);assert.doesNotMatch(archiveBytes.toString(),/SYNTHETIC-PRIVATE|Test A|synthetic-receipt/);assert.equal(JSON.parse(archiveBytes).format,"DGV_PAYROLL_ENCRYPTED");
@@ -160,6 +170,7 @@ try{
 
   if(process.env.PAYROLL_SCREENSHOTS){
     const folder=process.env.PAYROLL_SCREENSHOTS;await mkdir(folder,{recursive:true});
+    await openPayrollView(page,"payments");
     await page.locator("#exportKind").selectOption("tax");await page.locator("#previewTax").click();await idle();await page.locator("#taxReviewed").check();
     await page.evaluate(()=>{const banner=document.createElement("p");banner.textContent="화면 미리보기 · 예시 데이터 / Bản xem thử · Dữ liệu mẫu";banner.className="notice";document.getElementById("taxCenter").prepend(banner);});
     await page.locator("#taxCenter").screenshot({path:path.join(folder,"payroll-tax-desktop.png")});
@@ -172,8 +183,11 @@ try{
   // Effective rule and approval form: extra actual hours require explicit interval approval.
   await page.evaluate(id=>{__payrollTest.db.payroll_runs=[];__payrollTest.db.payroll_payments=[];__payrollTest.db.payroll_reviews=[];__payrollTest.db.payroll_run_adjustments=[];__payrollTest.db.payroll_payment_reversals=[];__payrollTest.db.payroll_attachments=[];__payrollTest.db.payroll_employees.find(e=>e.id===id).name="Test A";__payrollTest.db.payroll_attendance_raw.find(r=>r.employee_id===id&&r.occurred_at==="2026-10-01T20:00:00").occurred_at="2026-10-01T23:00:37";__payrollTest.db.payroll_revision[0].version++;},employee);await refresh();
   assert.equal(await page.locator("#finalize").isDisabled(),true);
+  await openPayrollView(page,"employees");
+  if(!await page.locator("#advancedSettings").evaluate(node=>node.open))await page.locator("#advancedSettings > summary").click();
   await page.locator("#newRule").click();await field("ruleForm","effective_from").fill("2026-10-01");await field("ruleForm","ot_enabled").check();await field("ruleForm","reason").fill("Synthetic reviewed overtime rules");await submit("ruleForm");
   assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_rule_versions.length),1);assert.equal(await page.locator("#finalize").isDisabled(),true,"rule alone does not approve hours");
+  await openPayrollView(page,"attendance");
   await page.locator('[data-day="2026-10-01"]').click();await page.locator("#fillCandidates").click();
   assert.match(await field("dayForm","overtime_intervals").inputValue(),/20:00:00.*23:00:37/);assert.match(await field("dayForm","night_intervals").inputValue(),/22:00:00.*23:00:37/);
   await field("dayForm","reason").fill("Synthetic verified times");await field("dayForm","approval_reason").fill("Synthetic manager verified overtime and night intervals");await submit("dayForm");
@@ -183,7 +197,8 @@ try{
 
   // Fresh fixture: review persistence includes monetary draft values, not just
   // the attendance snapshot and note. Reload must retain what was reviewed.
-  await page.reload();await page.locator("#ledgerBody [data-employee]").first().waitFor();
+  await page.reload();await page.waitForFunction(()=>window.DGV_PAYROLL_APP?.state.loaded);
+  await openPayrollView(page,"ledger");
   await page.locator("#month").fill("2026-10");await page.locator("#month").dispatchEvent("change");await idle();
   const otherEmployee="00000000-0000-4000-8000-000000000002";
   for(const [employeeId,finalAllowance] of [[employee,100],[otherEmployee,200]]){

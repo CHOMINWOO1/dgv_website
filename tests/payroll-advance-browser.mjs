@@ -1,4 +1,5 @@
 import { installMock } from "./helpers/payroll-browser-mock.mjs";
+import { openPayrollView } from "./helpers/payroll-navigation.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
@@ -34,8 +35,9 @@ const field=(form,name)=>page.locator(`#${form} [name="${name}"]`),idle=()=>page
 const submit=async form=>{await page.locator(`#${form} button[type="submit"]`).click();await idle();};
 const refresh=async()=>{await page.locator("#refresh").click();await idle();};
 const closeSignature=async()=>{await page.locator("#evidenceDialog").waitFor({state:"visible"});await page.locator("#evidenceForm [data-close]").click();};
-async function openPayment(amount,date,note){await page.locator("#addPayment").click();await field("paymentForm","amount").fill(String(amount));await field("paymentForm","paid_on").fill(date);await field("paymentForm","note").fill(note);}
+async function openPayment(amount,date,note){await openPayrollView(page,"payments");await page.locator("#addPayment").click();await field("paymentForm","amount").fill(String(amount));await field("paymentForm","paid_on").fill(date);await field("paymentForm","note").fill(note);}
 async function moneySummary(paid,remaining){
+  await openPayrollView(page,"payments");
   assert.match(await page.locator('[data-testid="payment-paid"]').innerText(),new RegExp(paid.toLocaleString("en-US").replaceAll(",","[.,]")));
   if(remaining!==null)assert.match(await page.locator('[data-testid="payment-remaining"]').innerText(),new RegExp(remaining.toLocaleString("en-US").replaceAll(",","[.,]")));
 }
@@ -43,7 +45,16 @@ async function sign(){
   await field("evidenceForm","signed_name").fill("DEMO · Monthly An");await page.locator("#signatureCanvas").scrollIntoViewIfNeeded();const box=await page.locator("#signatureCanvas").boundingBox();
   await page.mouse.move(box.x+20,box.y+50);await page.mouse.down();await page.mouse.move(box.x+90,box.y+20,{steps:8});await page.mouse.move(box.x+150,box.y+65,{steps:8});await page.mouse.up();await field("evidenceForm","acknowledged").check();await submit("evidenceForm");
 }
-async function reverse(id){await page.locator(`[data-reverse="${id}"]`).click();await field("amendForm","reason").fill("DEMO · Cancel duplicate advance");await submit("amendForm");}
+async function reverse(id){await openPayrollView(page,"payments");await page.locator(`[data-reverse="${id}"]`).click();await field("amendForm","reason").fill("DEMO · Cancel duplicate advance");await submit("amendForm");}
+async function comparison(period,count,total,paid,remaining){
+  const previous=await page.locator('[data-payroll-tab][aria-selected="true"]').getAttribute("data-payroll-tab");
+  await openPayrollView(page,"ledger");
+  if(!await page.locator("#comparisonDetails").evaluate(node=>node.open))await page.locator("#comparisonDetails > summary").click();
+  const cells=await page.locator("#comparisonResult tbody tr").filter({hasText:period}).locator("td").allTextContents();
+  assert.equal(cells[0],period);
+  assert.deepEqual(cells.slice(1).map(value=>Number(value.replace(/[^\d-]/g,""))),[count,total,paid,remaining],"monthly comparison credits each active finalized-month payment exactly once, including runless advances");
+  await openPayrollView(page,previous);
+}
 
 try{
   await page.goto(origin+"/payroll.html");await page.locator("#ledgerBody [data-employee]").first().waitFor();
@@ -85,18 +96,23 @@ try{
   assert.deepEqual(await page.evaluate(()=>__payrollTest.db.payroll_attendance_raw),originalAttendance,"ad hoc payouts must not synthesize worked hours");
   assert.equal(await page.evaluate(id=>__payrollTest.db.payroll_terms.some(t=>t.employee_id===id),parttime),false);
   assert.equal(await page.evaluate(id=>__payrollTest.db.payroll_runs.some(r=>r.employee_id===id),parttime),false);
+  await comparison("2026-09",0,0,0,0);
   if(process.env.PAYROLL_SCREENSHOTS){await page.evaluate(()=>{const label=document.createElement("p");label.className="notice";label.textContent="예시 · 파트타임 금액만 수시 지급 / DEMO";document.getElementById("paymentArea").prepend(label);});await page.locator("#paymentArea").screenshot({path:path.join(process.env.PAYROLL_SCREENSHOTS,"payroll-adhoc-parttime.png")});}
 
   // Finalization credits the existing advance rows without rebinding or copying.
-  await page.locator("#employeeFilter").selectOption(employee);await page.locator("#finalize").click();await page.locator('#confirmForm input[type="checkbox"]').check();await submit("confirmForm");
+  await page.locator("#employeeFilter").selectOption(employee);await openPayrollView(page,"ledger");await page.locator("#finalize").click();await page.locator('#confirmForm input[type="checkbox"]').check();await submit("confirmForm");
   const run=await page.evaluate(id=>structuredClone(__payrollTest.db.payroll_runs.find(r=>r.employee_id===id)),employee);assert.equal(run.total,7000000);
   await moneySummary(150000,6850000);assert.equal(await page.evaluate(id=>__payrollTest.db.payroll_payments.find(p=>p.id===id).run_id,first.id),null);
+  await comparison("2026-09",1,7000000,150000,6850000);
   assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_payments.length),3,"finalization must not duplicate advance payments");
   await reverse(second.id);await moneySummary(100000,6900000);
+  await comparison("2026-09",1,7000000,100000,6900000);
   await openPayment(200000,"2026-10-03","DEMO · Payment after finalization");await submit("paymentForm");await closeSignature();
   const regular=await page.evaluate(()=>structuredClone(__payrollTest.db.payroll_payments.at(-1)));assert.equal(regular.run_id,run.id);assert.equal(regular.employee_id,employee);assert.equal(regular.payroll_month,"2026-09-01");
   assert.equal(await page.evaluate(()=>__payrollTest.rpcs.filter(call=>call.name==="payroll_pay").length),1);await moneySummary(300000,6700000);
+  await comparison("2026-09",1,7000000,300000,6700000);
   await reverse(first.id);await moneySummary(200000,6800000);
+  await comparison("2026-09",1,7000000,200000,6800000);
   assert.equal(await page.evaluate(id=>__payrollTest.db.payroll_attachments.some(a=>a.payment_id===id),first.id),true,"cancelled advance keeps its original signature audit evidence");
   assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_payments.length),4);
   await page.locator("#addPayment").click();assert.equal(await field("paymentForm","amount").getAttribute("max"),"6800000","regular payout cap credits active advances and reversals once");await page.locator("#paymentForm [data-close]").click();
@@ -112,12 +128,15 @@ try{
     __payrollTest.db.payroll_revision[0].version++;
   },excessEmployee);await refresh();await page.locator("#employeeFilter").selectOption(excessEmployee);
   await openPayment(300000,"2026-09-15","DEMO · Previously agreed advance");await submit("paymentForm");await closeSignature();
-  await page.locator("#finalize").click();await page.locator('#confirmForm input[type="checkbox"]').check();await submit("confirmForm");
+  await openPayrollView(page,"ledger");await page.locator("#finalize").click();await page.locator('#confirmForm input[type="checkbox"]').check();await submit("confirmForm");
+  await openPayrollView(page,"payments");
   assert.equal(await page.evaluate(id=>__payrollTest.db.payroll_runs.find(r=>r.employee_id===id).total,excessEmployee),240000);
   assert.match(await page.locator('[data-testid="payment-paid"]').innerText(),/300[.,]000/);assert.match(await page.locator('[data-testid="payment-remaining"]').innerText(),/60[.,]000/);
   assert.match(await page.locator("#paymentArea").innerText(),/초과|vượt/i);assert.equal(await page.locator("#addPayment").isDisabled(),true);
   await page.locator("#month").fill("2026-10");await page.locator("#month").dispatchEvent("change");await idle();
   await moneySummary(0,null);assert.equal(await page.locator("#paymentArea .payment-card").count(),0,"September overpayment does not become an October payment or automatic deduction");
+  await comparison("2026-09",2,7240000,500000,6740000);
+  await comparison("2026-10",0,0,0,0);
 
   // Received kiosk records remain visible even when they cannot yet generate
   // payable hours: a two-minute pair, an unmatched arrival and absent terms.
@@ -127,11 +146,13 @@ try{
     for(const [index,time,punch_type] of [[1,"11:32:00","in"],[2,"11:34:00","out"],[3,"12:13:00","in"]])__payrollTest.db.payroll_attendance_raw.push({id:`typed-visible-${index}`,employee_id:id,occurred_at:`2026-10-29T${time}`,punch_type,source:"kiosk",device_id:"TEST-TABLET"});
     __payrollTest.db.payroll_revision[0].version++;
   },rawEmployee);await refresh();await page.locator("#employeeFilter").selectOption(rawEmployee);
+  await openPayrollView(page,"attendance");
   assert.match(await page.locator("#rawAttendanceSummary").innerText(),/3/);assert.equal(await page.locator("#rawAttendanceRows tr").count(),3);
   const rawText=await page.locator("#rawAttendanceRows").innerText();for(const time of ["11:32","11:34","12:13"])assert.ok(rawText.includes(time));assert.match(rawText,/출근|Vào/);assert.match(rawText,/퇴근|Ra/);
   assert.match(await page.locator("#ledgerBody").innerText(),/원본\s*3\s*건/);
   const unresolved=await page.evaluate(id=>DGV_PAYROLL_APP.state.summaries.find(row=>row.employee_id===id),rawEmployee);
   assert.equal(unresolved.minutes,2,"the completed two-minute pair is recognized even with a later open arrival and missing wage terms");assert.ok(unresolved.unresolved>0);assert.equal(unresolved.baseAmount,null);await moneySummary(0,null);
+  await openPayrollView(page,"attendance");
   if(process.env.PAYROLL_SCREENSHOTS){await page.setViewportSize({width:1100,height:850});await page.evaluate(()=>{const label=document.createElement("p");label.className="notice";label.textContent="예시 · 미계산 출퇴근도 원본 확인 / DEMO · Synthetic attendance";document.getElementById("rawAttendancePanel").prepend(label);});await page.locator("#rawAttendancePanel").screenshot({path:path.join(process.env.PAYROLL_SCREENSHOTS,"payroll-raw-attendance.png")});}
   assert.deepEqual(errors,[]);
   console.log("Payroll advances passed: money-only pre-finalization monthly and ad hoc part-time payments, exact replay, signature linkage, paid-date cross-month receipts, credited balances/cancellations, overpayment without cross-month carry and visible unpayable raw attendance.");

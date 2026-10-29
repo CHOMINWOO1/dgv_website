@@ -1,4 +1,5 @@
 import { installMock } from "./helpers/payroll-browser-mock.mjs";
+import { openPayrollView } from "./helpers/payroll-navigation.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
@@ -63,6 +64,7 @@ async function drawTouch(){
   await client.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});await client.detach();
 }
 async function search(from="2026-10-01",to="2026-10-31",id=employee){
+  await openPayrollView(page,"payments");
   for(const [selector,value] of [["#rangeFrom",from],["#rangeTo",to]]){await page.locator(selector).fill(value);await page.locator(selector).dispatchEvent("change");}
   await page.locator("#rangeEmployee").selectOption(id);await page.locator("#rangeSearch").click();await idle();
 }
@@ -84,6 +86,7 @@ try{
   assert.equal(await page.locator("#rangeEmployee option").count(),3,"initial cached admin load must initialize advanced controls without a month-change workaround");
   await page.locator("#month").fill("2026-10");await page.locator("#month").dispatchEvent("change");await idle();
   await page.locator("#employeeFilter").selectOption(employee);
+  await openPayrollView(page,"payments");
   await page.locator("#addPayment").click();await field("paymentForm","paid_on").fill("2026-10-20");await field("paymentForm","amount").fill("100000");await field("paymentForm","note").fill('DEMO <script>window.__receiptXss=1</script>');await submit("paymentForm");
   await page.locator("#evidenceDialog").waitFor({state:"visible"});
   const paid=await page.evaluate(()=>structuredClone(__payrollTest.db.payroll_payments.find(p=>p.request_id)));
@@ -164,7 +167,7 @@ try{
   assert.equal(await page.locator("#payrollApp").isVisible(),false);assert.equal(await page.locator("#rangeReceipts").innerText(),"");assert.equal(await page.locator("#rangeResult").innerText(),"");assert.equal(await page.locator("#rangeReceiptPrint").isDisabled(),true,"late range reads after logout cannot restore payroll signatures");
   // Fresh synthetic session: hold the print window during image decoding, then
   // sign out. Private receipt content must close before a deferred print runs.
-  await page.reload();await page.locator("#ledgerBody [data-employee]").first().waitFor();assert.equal(await page.locator("#rangeEmployee option").count(),3);await search("2026-10-01","2026-10-01",employee);
+  await page.reload();await page.waitForFunction(()=>window.DGV_PAYROLL_APP?.state.loaded);assert.equal(await page.locator("#rangeEmployee option").count(),3);await search("2026-10-01","2026-10-01",employee);
   await page.evaluate(()=>{
     const originalOpen=window.open.bind(window);window.__finishPrintDecodes=[];window.__receiptPrintCalls=0;
     window.open=(...args)=>{const popup=originalOpen(...args),nativeDecode=popup.HTMLImageElement.prototype.decode;

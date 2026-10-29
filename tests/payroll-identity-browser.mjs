@@ -1,4 +1,5 @@
 import { installMock } from "./helpers/payroll-browser-mock.mjs";
+import { openPayrollView } from "./helpers/payroll-navigation.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
@@ -25,12 +26,12 @@ const field=(form,name)=>page.locator(`#${form} [name="${name}"]`);
 const idle=()=>page.waitForFunction(()=>!document.getElementById("workspace").disabled);
 const submit=async form=>{await page.locator(`#${form} button[type="submit"]`).click();await idle();};
 const refresh=async()=>{await page.locator("#refresh").click();await idle();};
-async function ready(){await page.locator("#ledgerBody [data-employee]").first().waitFor();await page.locator("#month").fill("2026-10");await page.locator("#month").dispatchEvent("change");await idle();}
-async function selectEmployee(id){await page.locator("#employeeFilter").selectOption(id);await page.locator("#employeeDetail").waitFor({state:"visible"});}
-async function openNew(device,name,id){await page.locator("#addEmployee").click();await page.locator("#employeeDialog").waitFor({state:"visible"});await field("employeeForm","device_user_id").fill(device);await field("employeeForm","name").fill(name);if(id!==undefined)await field("employeeForm","national_id").fill(id);}
-async function openEdit(){await page.locator("#editEmployee").click();await page.locator("#employeeDialog").waitFor({state:"visible"});}
+async function ready(){await page.waitForFunction(()=>window.DGV_PAYROLL_APP?.state.loaded);await openPayrollView(page,"ledger");await page.locator("#month").fill("2026-10");await page.locator("#month").dispatchEvent("change");await idle();}
+async function selectEmployee(id){await openPayrollView(page,"ledger");await page.locator("#employeeFilter").selectOption(id);await page.locator("#employeeDetail").waitFor({state:"visible"});}
+async function openNew(device,name,id){await openPayrollView(page,"employees");await page.locator("#addEmployee").click();await page.locator("#employeeDialog").waitFor({state:"visible"});await field("employeeForm","device_user_id").fill(device);await field("employeeForm","name").fill(name);if(id!==undefined)await field("employeeForm","national_id").fill(id);}
+async function openEdit(){await openPayrollView(page,"employees");await page.locator("#editEmployee").click();await page.locator("#employeeDialog").waitFor({state:"visible"});}
 async function workbookDownload(){const event=page.waitForEvent("download");await page.locator("#downloadTax").click();const download=await event;await idle();return (await readFile(await download.path())).toString("utf8");}
-async function preview(kind){await page.locator("#exportKind").selectOption(kind);await page.locator("#previewTax").click();await idle();await page.locator("#taxPreview").waitFor({state:"visible"});}
+async function preview(kind){await openPayrollView(page,"payments");await page.locator("#exportKind").selectOption(kind);await page.locator("#previewTax").click();await idle();await page.locator("#taxPreview").waitFor({state:"visible"});}
 async function assertNoPublicIdentity(id){
   const text=await page.evaluate(()=>JSON.stringify({database:__payrollTest.db,app:DGV_PAYROLL_APP.state,writes:__payrollTest.calls.filter(call=>call.operation!=="select"),storage:{local:{...localStorage},session:{...sessionStorage}}}));
   assert.equal(text.includes(id),false,"national ID must not enter employee rows, public audit, payroll snapshots, app state or browser storage");
@@ -104,6 +105,7 @@ try{
   // Existing POS imports can still create employees without a manual identity field.
   const importedRows=[["User ID","Name","Dept","IN/OUT Time","Device ID"],["00303","Synthetic POS Imported","Test","2026-10-01 10:00",1],["00303","Synthetic POS Imported","Test","2026-10-01 20:00",1]];
   const bytes=await page.evaluate(rows=>Array.from(DGV_XLSX.buildWorkbookBytes({sheets:[{name:"Sheet",rows}]})),importedRows);
+  await openPayrollView(page,"attendance");
   await page.locator("#importFile").setInputFiles({name:"synthetic-identity-pos.xlsx",mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:Buffer.from(bytes)});
   await page.locator("#previewImport").click();await page.locator("#saveImport").waitFor({state:"visible"});await page.locator("#saveImport").click();await idle();
   const imported=await page.evaluate(()=>__payrollTest.db.payroll_employees.find(row=>row.device_user_id==="00303"));assert.ok(imported);
@@ -138,6 +140,7 @@ try{
   assert.equal(await page.locator("#taxPreview").isVisible(),false);assert.equal(await page.locator("#taxPreview").innerHTML(),"");
 
   // Identities never enter retained review/finalized payroll snapshots.
+  await openPayrollView(page,"ledger");
   await page.locator("#finalize").click();await page.locator('#confirmForm input[type="checkbox"]').check();await submit("confirmForm");
   await assertNoPublicIdentity(taxIdentity);
   assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_runs.length),1);
@@ -148,6 +151,7 @@ try{
   assert.equal(await page.locator("#employeeDialog").isVisible(),false);assert.equal(await field("employeeForm","national_id").inputValue(),"");
   for(const entry of ["editEmployee","sensitiveInfo","previewTax"]){
     await page.reload();await ready();await selectEmployee(existingEmployee);
+    await openPayrollView(page,entry==="previewTax"?"payments":"employees");
     await page.evaluate(({id,national,bank})=>{__payrollTest.sensitive[id]={national_id:national,bank_account:bank};__payrollTest.deferSensitiveRead=true;},{id:existingEmployee,national:taxIdentity,bank:bankAccount});
     if(entry==="previewTax")await page.locator("#exportKind").selectOption("tax");
     await page.locator("#"+entry).click();await page.waitForFunction(()=>typeof __payrollTest.releaseSensitiveRead==="function");

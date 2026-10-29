@@ -1,4 +1,5 @@
 import { installMock } from "./helpers/payroll-browser-mock.mjs";
+import { openPayrollView } from "./helpers/payroll-navigation.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -60,21 +61,27 @@ try{
   assert.equal(await page.evaluate(()=>__payrollTest.rpcs.filter(call=>call.name==="payroll_get_sensitive").length),0,"background polling never fetches encrypted identity or bank data");
 
   await page.locator("#employeeFilter").selectOption(employeeId);await page.locator("#allowances").fill("100");await page.locator("h1").click();
+  for(const view of ["employees","attendance","payments","ledger"])await openPayrollView(page,view);
+  assert.equal(await page.locator("#allowances").inputValue(),"100","switching menus preserves unsaved ledger edits");
   const editedRevision=await revision(page);await bump(page);await poll(page);
   assert.equal(await revision(page),editedRevision);assert.equal(await page.locator("#allowances").inputValue(),"100");
   assert.match(await page.locator("#payrollRefreshStatus").textContent(),/입력·미리보기는 유지/);
   await page.locator("#refresh").click();await page.waitForFunction(()=>DGV_PAYROLL_APP.state.loaded&&!DGV_PAYROLL_APP.state.busy);
   assert.equal(await page.locator("#allowances").inputValue(),"0","the explicit reload, unlike polling, may reset unsaved fields");
 
-  await page.locator('[data-day="2026-10-02"]').click();await page.locator('#dayForm [name="reason"]').fill("Unsaved attendance note");
+  await openPayrollView(page,"attendance");
+  await page.locator('#calendar [data-day="2026-10-02"]').click();await page.locator('#dayForm [name="reason"]').fill("Unsaved attendance note");
   const dialogRevision=await revision(page);await bump(page);await poll(page);
   assert.equal(await revision(page),dialogRevision);assert.equal(await page.locator("#dayDialog").isVisible(),true);
   assert.equal(await page.locator('#dayForm [name="reason"]').inputValue(),"Unsaved attendance note");
   await page.locator("#dayDialog [data-close]").click();await page.locator("h1").click();await poll(page);
   assert.equal(await revision(page),dialogRevision+1);
 
+  await openPayrollView(page,"payments");
   await page.locator("#exportKind").selectOption("ledger");await page.locator("#previewTax").click();await page.locator("#taxPreview").waitFor({state:"visible"});
   await page.locator("#taxReviewed").check();const previewText=await page.locator("#taxPreview").textContent(),previewRevision=await revision(page);
+  await openPayrollView(page,"ledger");await openPayrollView(page,"payments");
+  assert.equal(await page.locator("#taxPreview").textContent(),previewText,"switching menus preserves the prepared report preview");assert.equal(await page.locator("#taxReviewed").isChecked(),true);
   await bump(page);await poll(page);
   assert.equal(await revision(page),previewRevision);assert.equal(await page.locator("#taxPreview").textContent(),previewText);assert.equal(await page.locator("#taxReviewed").isChecked(),true);
   await page.locator("#closeTaxPreview").click();await page.locator("h1").click();await poll(page);assert.equal(await revision(page),previewRevision+1);
@@ -93,6 +100,23 @@ try{
   assert.match(await page.locator("#payrollRefreshStatus").textContent(),/자동 갱신을 확인하지 못했습니다/);
   await page.evaluate(()=>{__payrollTest.failRead=false;});await poll(page);assert.equal(await page.locator("#payrollRefreshStatus").isVisible(),false,"an unchanged successful check clears a connection failure");
   await page.evaluate(()=>{__payrollTest.failRead=false;__payrollTest.db.payroll_revision[0].version++;});await poll(page);assert.equal(await revision(page),failureRevision+1);
+
+  // A failed explicit month load must not label the old team's hours or salary
+  // cards as the newly selected month. Search cannot repopulate stale cards.
+  await openPayrollView(page,"attendance");
+  assert.ok(await page.locator("#teamCalendar [data-team-date]").count()>0);
+  await page.evaluate(()=>{__payrollTest.failRead=true;});
+  await page.locator("#month").fill("2026-11");await page.locator("#month").dispatchEvent("change");
+  await page.waitForFunction(()=>!DGV_PAYROLL_APP.state.busy);
+  assert.equal(await page.evaluate(()=>DGV_PAYROLL_APP.state.loaded),false);
+  for(const id of ["teamCalendar","teamDayRows","teamMonthSummary","teamDayTitle","staffList","staffCount"])
+    assert.equal(await page.locator("#"+id).textContent(),"",id+" cannot retain the previous month's snapshot");
+  await openPayrollView(page,"employees");await page.locator("#staffSearch").fill("staff");
+  assert.equal(await page.locator("#staffList").textContent(),"");
+  await page.evaluate(()=>{__payrollTest.failRead=false;});await page.locator("#refresh").click();
+  await page.waitForFunction(()=>DGV_PAYROLL_APP.state.loaded&&!DGV_PAYROLL_APP.state.busy);
+  await openPayrollView(page,"attendance");
+  assert.equal(await page.locator("#teamCalendar [data-team-date]").first().getAttribute("data-team-date"),"2026-11-01");
 
   // Slow refresh responses are invalid after logout, including a response to
   // the full load that was started before the session was removed.

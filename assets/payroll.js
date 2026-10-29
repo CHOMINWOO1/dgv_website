@@ -29,7 +29,7 @@
   function clearAuthenticatedState() {
     employeeDialogGeneration++;loadGeneration++;reviewDirty=false;state.loaded=false;
     $("payrollApp").hidden=true;state.records=[];state.payments=[];state.preview=null;refreshNotice("");
-    window.DGV_PAYROLL_ADVANCED?.invalidate();$("employeeForm").reset();$("sensitiveForm")?.reset();
+    window.DGV_PAYROLL_WORKSPACE?.invalidate();window.DGV_PAYROLL_ADVANCED?.invalidate();$("employeeForm").reset();$("sensitiveForm")?.reset();
     document.querySelectorAll("dialog[open]").forEach((dialog)=>dialog.close());
   }
   function hasActiveWork() {
@@ -98,6 +98,7 @@
   async function load() {
     const generation=++loadGeneration;
     state.loaded = false; $("export").disabled = true; $("employeeDetail").hidden = true;
+    window.DGV_PAYROLL_WORKSPACE?.invalidate();
     window.DGV_PAYROLL_ADVANCED?.invalidate();
     $("ledgerBody").innerHTML = '<tr><td colspan="7" class="empty">불러오는 중 / Đang tải…</td></tr>'; $("metrics").innerHTML = "";
     const month = $("month").value, dates = bounds(month);
@@ -147,11 +148,12 @@
       const shown=row;
       const timeCell=(shown.settlementMode==="monthly_net"?`<strong>${hours(shown.monthlyActualMinutes)}</strong><span class="muted">월 기준 / Chuẩn ${hours(shown.monthlyPlannedMinutes)}<br />${Number(shown.monthlyBalanceMinutes)<0?"−":"+"}${hours(shown.monthlyBalanceMinutes)} · 추가 / Thêm ${money(shown.monthlyExtraAmount)} VND</span>`:`${hours(shown.minutes)}<span class="muted">${shown.workedDays}일 / ngày</span>`)+(received?`<span class="badge ${row.attendanceUnresolved?"warn":"neutral"}">출퇴근 원본 ${received}건 / ${received} lần chấm công</span>`:"");
       const status = run ? (paid>totalFor(run)?"초과 지급 / Trả dư":paid === totalFor(run) ? "지급 완료 / Đã trả" : paid ? "일부 지급 / Trả một phần" : "급여 확정 / Đã chốt") : paid?"선지급 · 미확정 / Tạm ứng, chưa chốt":review ? (row.monthlyPendingDays>0&&row.unresolved===1?"월 집계 중 / Đang tổng hợp tháng":"정산 확인 필요 / Cần kiểm tra lương") : reviewed?"검토 완료 / Đã duyệt":"계산 완료 / Đã tính";
-      return `<tr><td><strong>${esc(row.name)}</strong><span class="muted">ID ${esc(row.device_user_id)}</span></td><td>${timeCell}</td><td>${money(run?totalFor(run):row.baseAmount==null?null:row.baseAmount+(row.statutoryAmount||0)+(row.monthlyExtraAmount||0))}<span class="muted">${run?"확정 / Đã chốt":"계산 급여 / Lương dự kiến"}</span></td><td>${money(paid)}</td><td>${run?money(totalFor(run)-paid):"—"}</td><td><span class="badge ${!run&&review?"warn":!run?"neutral":""}">${status}</span></td><td><button class="quiet" data-employee="${esc(row.employee_id)}">보기 / Xem</button></td></tr>`;
+      return `<tr><td><strong>${esc(row.name)}</strong><span class="muted">ID ${esc(row.device_user_id)}</span></td><td>${timeCell}</td><td>${money(run?totalFor(run):row.baseAmount==null?null:row.baseAmount+(row.statutoryAmount||0)+(row.monthlyExtraAmount||0))}<span class="muted">${run?"확정 / Đã chốt":"계산 급여 / Lương dự kiến"}</span></td><td>${money(paid)}</td><td>${run?money(totalFor(run)-paid):"—"}</td><td><span class="badge ${!run&&review?"warn":!run?"neutral":""}">${status}</span></td><td><button class="quiet" data-employee="${esc(row.employee_id)}">급여 상세 / Chi tiết</button><button class="quiet" data-staff-id="${esc(row.employee_id)}" data-staff-action="pay">지급·서명 / Trả &amp; ký</button></td></tr>`;
     }).join("") : '<tr><td colspan="7" class="empty">엑셀을 가져오거나 직원을 등록해 주세요.<br />Nhập tệp Excel hoặc thêm nhân viên để bắt đầu.</td></tr>';
     $("importHistory").innerHTML = state.imports.length ? state.imports.map((entry) => `<p class="term-row"><strong>${esc(entry.filename)}</strong> · 신규 / Mới ${entry.inserted_count} · 중복 / Trùng ${entry.duplicate_count}<br /><span class="muted">${esc(new Date(entry.created_at).toLocaleString("ko-KR",{timeZone:"Asia/Ho_Chi_Minh"}))} (VN)</span></p>`).join("") : '<p class="muted">가져오기 이력이 없습니다. / Chưa nhập dữ liệu.</p>';
     renderDetail();
     window.DGV_PAYROLL_ADVANCED?.render();
+    window.DGV_PAYROLL_WORKSPACE?.render();
   }
   function renderDetail() {
     reviewDirty=false;
@@ -181,6 +183,7 @@
     const payments = run ? state.payments.filter((payment)=>payment.run_id===run.id).sort((a,b)=>a.paid_on.localeCompare(b.paid_on)) : [];
     $("paymentArea").innerHTML = run ? `<p>확정 / Đã chốt <strong>${money(run.total)}</strong> · 지급 / Đã trả <strong>${money(paidFor(run))}</strong> · 잔액 / Còn lại <strong>${money(Number(run.total)-paidFor(run))} VND</strong></p><button class="quiet" id="addPayment" ${paidFor(run)>=Number(run.total)?"disabled":""}>+ 지급내역 / Thêm thanh toán</button><div class="table-scroll"><table><thead><tr><th>날짜 / Ngày</th><th>방법 / Cách trả</th><th>금액 / Số tiền</th><th>확인·비고 / Ghi chú</th></tr></thead><tbody>${payments.map((payment)=>`<tr><td>${esc(payment.paid_on)}</td><td>${payment.method==="cash"?"현금 / Tiền mặt":"이체 / Chuyển khoản"}</td><td>${money(payment.amount)}</td><td>${esc(payment.reference||"")}<span class="muted">${esc(payment.note||"")}</span></td></tr>`).join("")||'<tr><td colspan="4">지급내역 없음 / Chưa thanh toán</td></tr>'}</tbody></table></div>` : '<p class="muted">급여를 확정한 다음 지급내역을 기록할 수 있습니다. / Chốt lương trước khi ghi nhận thanh toán.</p>';
     window.DGV_PAYROLL_ADVANCED?.renderDetail(row,run);
+    window.DGV_PAYROLL_WORKSPACE?.renderDetail(row,run);
   }
   function openDialog(id) { const dialog = $(id); dialog.querySelector(".dialog-error")?.remove(); dialog.showModal(); }
   function field(form, name) { return form.elements.namedItem(name); }
