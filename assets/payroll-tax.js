@@ -57,7 +57,15 @@
       runs:unique([...list(options.previousRuns),...list(options.runs)],"id"),
       payments:unique([...list(options.previousPayments),...list(options.payments)],"id"),
       adjustments:unique([...list(options.previousAdjustments),...list(options.adjustments)].map((row,index)=>({...row,id:row.id||`adjustment-${index}`})),"id"),
-      reversals:list(options.reversals),attachments:list(options.attachments),summaries:list(options.summaries)};
+      reversals:list(options.reversals),attachments:list(options.attachments),summaries:list(options.summaries),identities:list(options.identities)};
+  }
+  function taxIdentity(data,employeeId) {
+    const matching=data.identities.filter(identity=>identity?.employee_id===employeeId);
+    if(matching.length!==1)return null;
+    const value=matching[0];
+    // Keep identifiers as strings: numeric coercion destroys leading zeroes.
+    if(typeof value.national_id!=="string"||!value.national_id.trim()||value.national_id.trim().length>300)return null;
+    return {national_id:value.national_id.trim(),tax_id:typeof value.tax_id==="string"?value.tax_id.trim():""};
   }
   function effectiveTerms(data,employeeId,month) {
     const end=new Date(`${month}-01T00:00:00Z`);end.setUTCMonth(end.getUTCMonth()+1);
@@ -104,12 +112,14 @@
     const warnings=[];
     const warn=(row,code,message,reference="")=>warnings.push({employee_id:row.employee_id,name:row.name,code,message,reference});
     for(const row of rows) {
+      const identity=data.kind==="tax"?taxIdentity(data,row.employee_id):null;
+      if(data.kind==="tax"&&!identity)warn(row,"MISSING_NATIONAL_ID","Thiếu hoặc cần kiểm tra số định danh nhân viên / 직원 신분증 번호를 입력·확인하세요");
       if(!row.run) warn(row,"UNFINALIZED","Kiểm tra và chốt lương trước khi nộp / 급여 검토·확정 필요");
       for(const issue of list(row.snapshot.issues)) warn(row,"ATTENDANCE_OR_TERMS",text(issue));
       if(row.snapshot.reviewedBase) warn(row,"REVIEWED_BASE",`Lương đã xét: ${row.snapshot.reviewedBase.amount}; ${text(row.snapshot.reviewedBase.reason)} / 기본급 수동 검토`);
       if(row.outstanding<0) warn(row,"OVERPAYMENT","Số trả vượt lương được duyệt / 확정급여 초과 지급");
       if(row.snapshot.statutoryAmount==null && !list(row.snapshot.wageBreakdown).length) warn(row,"STATUTORY_REVIEW","Kiểm tra tăng ca, ngày nghỉ, ban đêm, thuế và bảo hiểm / 연장·휴일·야간·세금·보험 검토 필요");
-      if(!row.employee.tax_reference && !row.employee.tax_id_masked) warn(row,"TAX_INFORMATION","Xác minh thông tin khai thuế với kế toán / 세무대리인에게 신고 인적사항 확인");
+      if(!row.employee.tax_reference && !row.employee.tax_id_masked && !identity?.tax_id) warn(row,"TAX_INFORMATION","Xác minh thông tin khai thuế với kế toán / 세무대리인에게 신고 인적사항 확인");
       for(const item of row.payments.filter(item=>item.net>0)) {
         if(!item.evidence.length) warn(row,"MISSING_EVIDENCE","Thiếu chứng từ thanh toán / 지급 증빙 누락",item.payment.id);
         if(item.payment.method==="cash" && !item.evidence.some(file=>file.evidence_type==="signature"||file.evidence_type==="receipt") && !item.payment.reference) warn(row,"CASH_ACKNOWLEDGEMENT","Thiếu xác nhận nhận tiền mặt / 현금 수령 확인 누락",item.payment.id);
@@ -156,7 +166,11 @@
   function buildPayrollWorkbook(options) {
     const kind=options.kind||"tax";
     if(!KINDS.includes(kind))throw new Error("Unknown payroll export kind");
-    const data=inputs(options),model=summarizePayroll(data),rows=model.rows;
+    const data=inputs({...options,kind}),model=summarizePayroll(data),rows=model.rows;
+    if(kind==="tax"){
+      const missing=rows.filter(row=>!taxIdentity(data,row.employee_id)).length;
+      if(missing)throw new Error(`신분증 번호를 확인해야 하는 직원 ${missing}명 / Cần số định danh cho ${missing} nhân viên.`);
+    }
     const scope=data.fromDate&&["attendance","cash","bank","parttime"].includes(kind)?`${data.fromDate}_${data.toDate}`:data.month;
     const title=`HANA · ${scope} · VND`;
     const includeMonthly=rows.some(row=>row.snapshot.settlementMode==="monthly_net");
@@ -179,6 +193,7 @@
     else if(["cash","bank","parttime"].includes(kind))sheets=[payments()];
     else if(kind==="outstanding")sheets=[outstanding()];
     else {
+      const identities=sheet("Định danh thuế",title+" · Thông tin định danh / 세무 신고 식별정보",["ID nhân viên / 직원 ID","Nhân viên / 직원","Số định danh (CCCD/CMND) / 신분증 번호(주민등록번호/CCCD)","Mã số thuế / 세금코드"],rows.map(row=>{const identity=taxIdentity(data,row.employee_id);return [row.device_user_id,row.name,identity.national_id,identity.tax_id];}),[18,30,60,40],["Chỉ kèm hồ sơ lương nộp thuế / 세무 제출용 급여자료에만 포함"]);
       const employees=sheet("Nhân viên",title+" · Nhân viên / 직원정보",["ID","Nhân viên / 직원","Loại / 고용형태","Điện thoại / 연락처","Ngày vào / 입사일","Ngày nghỉ / 퇴사일","Tình trạng / 재직상태","Cách trả / 지급방법","Hồ sơ thuế / 세무정보"],rows.map(row=>[row.device_user_id,row.name,row.parttime?"Bán thời gian / 파트타임":"Toàn thời gian / 정규직",text(row.employee.phone),dateCell(row.employee.hire_date),dateCell(row.employee.termination_date),text(row.employee.employment_status||(row.employee.active!==false?"Đang làm / 재직":"Ngừng làm / 비활성")),text(row.employee.payment_method),text(row.employee.tax_reference||row.employee.tax_id_masked||"Xác minh riêng / 별도 확인")]),[14,26,30,25,23,23,27,24,50]);
       const legal=sheet("Khoản lương",title+" · Chi tiết tiền lương / 급여 세부항목",["Nhân viên / 직원","Ngày / 일자","Loại ngày / 구분","Mã / 항목코드","Khoản / 항목","Phút / 분","Đơn giá / 단가","Hệ số / 배율","VND","Phiên bản / 계산 버전"],rows.flatMap(row=>list(row.snapshot.wageBreakdown).map(item=>[row.name,dateCell(item.date),text(item.dayType),text(item.code),text(item.label),item.minutes==null?null:number(item.minutes,"item minutes"),item.rate==null?null:number(item.rate,"item rate"),item.multiplier==null?null:number(item.multiplier,"item multiplier"),number(item.amount,"item amount"),text(row.snapshot.calculationVersion)])),[26,23,22,24,45,18,20,18,22,23],["Các khoản theo bản đã duyệt; kế toán kiểm tra nghĩa vụ pháp lý / 승인된 계산 내역, 법정·신고 판단은 세무 검토"]);
       const corrections=sheet("Điều chỉnh",title+" · Điều chỉnh và hoàn tác / 정정·취소",["Nhân viên / 직원","Loại / 구분","Mã gốc / 원기록 ID","Ngày ghi / 기록일","VND (+/-)","Lý do / 사유","Người ghi / 담당자"],rows.flatMap(row=>[
@@ -188,7 +203,7 @@
       const reviews=sheet("Cần kiểm tra",title+" · Kế toán kiểm tra / 세무 검토",["Nhân viên / 직원","Mã / 코드","Nội dung / 확인 사항","Tham chiếu / 관련 ID"],model.warnings.map(warning=>[warning.name,warning.code,warning.message,warning.reference]),[26,30,95,40]);
       const comparison=sheet("So sánh tháng",title+" · So sánh kỳ trước / 전월 비교",["Nhân viên / 직원","Kỳ trước / 전월","Lương kỳ trước / 전월 확정","Kỳ này / 당월","Lương kỳ này / 당월 확정","Chênh lệch / 차이","Đã trả kỳ trước / 전월 순지급","Đã trả kỳ này / 당월 순지급"],model.comparison.map(row=>[row.name,row.previousMonth,row.previousApproved,data.month,row.currentApproved,row.difference,row.previousPaid,row.currentPaid]),[26,18,25,18,25,22,29,29]);
       const cover=sheet("Hồ sơ lương",title+" · Hồ sơ gửi kế toán / 세무대리인 전달자료",["Chỉ tiêu / 항목","Giá trị / 값"],[["Kỳ lương / 급여 대상월",data.month],["Lương đã duyệt, gồm điều chỉnh / 정정 포함 확정급여",model.totals.approved],["Đã thanh toán ròng / 취소 반영 순지급",model.totals.paid],["Còn phải trả / 미지급",model.totals.outstanding],["Nhân viên chưa chốt / 미확정 직원",model.totals.unfinalized],["Mục cần kiểm tra / 검토 사항",model.warnings.length],["Cơ sở / 기준","Kỳ lương; ngày trả thực tế được ghi riêng / 급여 대상월, 실제 지급일 별도"],["Tránh ghi trùng / 중복 계상 방지","Không cộng lương và tiền đã trả thành chi phí. Không tự ghi vào chi phí nhà hàng. / 급여와 지급액을 비용으로 합산하지 않으며 식당 지출에 자동 전기하지 않습니다."],["Kế toán xác nhận / 세무 검토","Xác minh thuế TNCN, bảo hiểm, hợp đồng và chứng từ trước khi khai / 신고 전 개인소득세·보험·계약·증빙 확인"]],[75,105]);
-      sheets=[cover,ledger(),employees,attendance(),...(monthlyRows.length?[monthly()]:[]),...(prorationRows.length?[proration()]:[]),payments(),outstanding(),legal,corrections,evidence,reviews,comparison];
+      sheets=[cover,ledger(),employees,identities,attendance(),...(monthlyRows.length?[monthly()]:[]),...(prorationRows.length?[proration()]:[]),payments(),outstanding(),legal,corrections,evidence,reviews,comparison];
     }
     return {filename:`HANA_${names[kind]}_${scope}${data.employeeId?"_Nhan_vien":""}.xlsx`,sheets};
   }

@@ -30,6 +30,7 @@ adjustments:[{id:"ad1",run_id:"r1",amount:500000,reason:"Approved correction",cr
 reversals:[{id:"rv1",payment_id:"p2",reason:"Wrong transfer record",created_at:"2026-11-06T00:00:00Z"}],
 attachments:[{id:"ev1",payment_id:"p1",evidence_type:"signature",signed_name:"Test receiver",acknowledged_at:"2026-10-30T03:00:00Z",created_at:"2026-10-30T03:01:00Z",filename:"signature.png",storage_path:"p1/signature.png",mime_type:"image/png",byte_size:100}]
 };
+data.identities=[{employee_id:"a",national_id:"000012345678",tax_id:"00-TAX-001"},{employee_id:"b",national_id:"001-2345678"}];
 const untouched=JSON.stringify(data);
 const model=tax.summarizePayroll(data);
 assert.equal(model.rows.length,2,"inactive without activity is omitted");
@@ -65,6 +66,7 @@ for(const kind of tax.KINDS) {
   assert.doesNotMatch(xml,/<f(?:\s|>)/,"formula-like employee names remain string cells");
   assert.doesNotMatch(xml,/MUST-NOT-EXPORT/);
   assert.doesNotMatch(xml,/자금 출처|Nguồn tiền/);
+  if(kind!=="tax")assert.doesNotMatch(xml,/000012345678|001-2345678|00-TAX-001|Định danh thuế/,"identities are absent from all regular payroll reports");
 }
 const cash=tax.buildPayrollWorkbook({...data,kind:"cash"});
 assert.equal(body(cash.sheets[0]).length,1,"month-based cash file scopes payroll month, not paid month");
@@ -86,7 +88,13 @@ const attendance=tax.buildPayrollWorkbook({...data,kind:"attendance",fromDate:"2
 assert.equal(body(attendance.sheets[0]).length,2,"cross-month attendance combines supplied finalized snapshots");
 assert.ok(body(attendance.sheets[0]).every(row=>row[2] instanceof Date));
 const taxBook=tax.buildPayrollWorkbook({...data,kind:"tax"});
-assert.equal(taxBook.sheets.length,11);
+assert.equal(taxBook.sheets.length,12);
+const identityRows=body(lookup(taxBook,"Định danh thuế"));
+assert.equal(identityRows[0][2],"000012345678");assert.equal(identityRows[1][2],"001-2345678");assert.equal(identityRows[0][3],"00-TAX-001");
+assert.equal(typeof identityRows[0][2],"string","leading zeroes and hyphens are preserved as text");
+const identityBookXml=new TextDecoder().decode(context.DGV_XLSX.buildWorkbookBytes(taxBook));
+assert.match(identityBookXml,/t="inlineStr"><is><t xml:space="preserve">000012345678<\/t>/);
+assert.match(identityBookXml,/t="inlineStr"><is><t xml:space="preserve">001-2345678<\/t>/);
 const evidence=body(lookup(taxBook,"Chứng từ"));
 assert.equal(evidence[0][4],"Test receiver");
 assert.equal(evidence[0][5].getHours(),10,"UTC evidence acknowledgement displayed in Vietnam time");
@@ -118,7 +126,7 @@ const monthlyAttendance=tax.buildPayrollWorkbook({...monthlyData,kind:"attendanc
 assert.equal(monthlyAttendance.sheets.length,2);
 assert.deepEqual(Array.from(body(lookup(monthlyAttendance,"Đối chiếu tháng"))[0].slice(4,10)),[12480,12510,30,30,33653.85,16827]);
 const monthlyTax=tax.buildPayrollWorkbook({...monthlyData,kind:"tax"});
-assert.equal(monthlyTax.sheets.length,12);assert.equal(body(lookup(monthlyTax,"Khoản lương"))[0][8],16827);
+assert.equal(monthlyTax.sheets.length,13);assert.equal(body(lookup(monthlyTax,"Khoản lương"))[0][8],16827);
 assert.equal(tax.summarizePayroll(monthlyData).totals.approved,7016927);
 const monthlyPrint=tax.buildPayrollPrintHtml({...monthlyData,kind:"ledger"});
 assert.match(monthlyPrint,/월 기준분/);assert.match(monthlyPrint,/자동 계산 시급/);assert.match(monthlyPrint,/월 초과수당/);assert.match(monthlyPrint,/12\.480/);assert.match(monthlyPrint,/33\.653,85/);assert.match(monthlyPrint,/16\.827/);
@@ -152,6 +160,7 @@ for(const kind of tax.KINDS) {
   assert.doesNotMatch(print,/<script|\sonerror\s*=|\sonload\s*=/i);
   assert.doesNotMatch(print,/href=["'](?:admin|expense)\.html/);
   assert.match(print,/CÔNG TY TNHH DGV · HANA/);
+  if(kind!=="tax")assert.doesNotMatch(print,/000012345678|001-2345678|00-TAX-001|Định danh thuế/);
 }
 const malicious=structuredClone(data);
 malicious.runs[0].snapshot.name='<img src=x onerror="alert(1)"><script>evil()</script>&';
@@ -160,6 +169,23 @@ assert.doesNotMatch(safePrint,/<img|<script/);
 assert.match(safePrint,/&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
 assert.match(safePrint,/1,5/,'fractional statutory multipliers remain visible in print');
 assert.equal(tax.buildCombinedWorkbook,undefined,"payroll reporting does not mix sales or expense exports");
+
+const missingIdentityModel=tax.summarizePayroll({...data,kind:"tax",identities:[]});
+assert.equal(missingIdentityModel.warnings.filter(warning=>warning.code==="MISSING_NATIONAL_ID").length,2);
+assert.equal(tax.summarizePayroll({...data,kind:"ledger",identities:[]}).warnings.some(warning=>warning.code==="MISSING_NATIONAL_ID"),false,"regular reports do not require identity disclosure");
+assert.equal(tax.summarizePayroll({...data,identities:[]}).warnings.some(warning=>warning.code==="MISSING_NATIONAL_ID"),false,"default preview model remains compatible without a tax scope");
+assert.doesNotMatch(JSON.stringify(tax.summarizePayroll({...data,kind:"tax"})),/000012345678|001-2345678|00-TAX-001/,"ephemeral identity values never enter report model rows or warnings");
+assert.throws(()=>tax.buildPayrollWorkbook({...data,kind:"tax",identities:[]}),/신분증 번호/);
+assert.throws(()=>tax.buildPayrollPrintHtml({...data,kind:"tax",identities:[{employee_id:"a",national_id:"   "}]}),/신분증 번호/);
+assert.throws(()=>tax.buildPayrollWorkbook({...data,kind:"tax",identities:[{employee_id:"a",national_id:12345678},{employee_id:"b",national_id:"001-2345678"}]}),/신분증 번호/,"numeric IDs cannot preserve their original leading zeroes");
+assert.throws(()=>tax.buildPayrollWorkbook({...data,kind:"tax",identities:[...data.identities,{employee_id:"a",national_id:"conflicting value"}]}),/신분증 번호/,"ambiguous identity entries cannot silently overwrite one another");
+assert.throws(()=>tax.buildPayrollWorkbook({...data,kind:"tax",identities:[],employees:data.employees.map(employee=>({...employee,national_id:"PUBLIC-FIELD-MUST-NOT-COUNT"}))}),/신분증 번호/,"tax IDs must come from explicit private identity input");
+const scopedIdentity=tax.buildPayrollWorkbook({...data,kind:"tax",employeeId:"a",identities:[data.identities[0]]});
+assert.equal(body(lookup(scopedIdentity,"Định danh thuế")).length,1,"selected employee scope does not demand or export unrelated identities");
+const hostileIdentity={...data,identities:[{employee_id:"a",national_id:'=HYPERLINK("bad")',tax_id:'<img src=x onerror="evil()">',bank_account:"BANK-MUST-NOT-EXPORT"},data.identities[1]]};
+const identityXml=new TextDecoder().decode(context.DGV_XLSX.buildWorkbookBytes(tax.buildPayrollWorkbook({...hostileIdentity,kind:"tax"})));
+assert.doesNotMatch(identityXml,/<f(?:\s|>)/);assert.match(identityXml,/HYPERLINK/);assert.doesNotMatch(identityXml,/BANK-MUST-NOT-EXPORT/);
+const identityPrint=tax.buildPayrollPrintHtml({...hostileIdentity,kind:"tax"});assert.doesNotMatch(identityPrint,/<img|<script/);assert.match(identityPrint,/&lt;img src=x onerror=&quot;evil\(\)&quot;&gt;/);assert.doesNotMatch(identityPrint,/BANK-MUST-NOT-EXPORT/);
 
 assert.throws(()=>tax.buildPayrollWorkbook({...data,month:"2026-13"}));
 assert.throws(()=>tax.buildPayrollWorkbook({...data,kind:"unknown"}));

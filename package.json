@@ -8,6 +8,7 @@
     "test:payroll:browser": "node tests/payroll-browser.mjs",
     "test:payroll:advanced": "node tests/payroll-advanced-browser.mjs",
     "test:payroll:monthly:browser": "node tests/payroll-monthly-browser.mjs",
+    "test:payroll:identity:browser": "node tests/payroll-identity-browser.mjs",
     "test:payroll:monthly": "node tests/payroll-monthly.mjs",
     "test:payroll:rules": "node tests/payroll-rules.mjs",
     "test:payroll:tax": "node tests/payroll-tax.mjs",

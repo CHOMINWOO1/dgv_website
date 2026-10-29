@@ -10,6 +10,7 @@
   const state = {busy:false, loaded:false, employees:[], terms:[], records:[], days:[], runs:[], payments:[], imports:[], summaries:[], selected:"", preview:null, revision:null, paymentRequest:null, confirmation:null};
   const typeLabels = {work:"근무 / Làm",rest:"휴무 / Nghỉ",paid_leave:"유급휴가 / Nghỉ có lương",unpaid_leave:"무급휴가 / Nghỉ không lương",holiday:"공휴일 / Lễ"};
   const payLabels = {monthly:"월급 / Tháng",hourly:"시급 / Giờ",daily:"일급 / Ngày"};
+  let employeeDialogGeneration=0;
   const selected = () => state.summaries.find((row) => row.employee_id === state.selected);
   const runFor = (id) => state.runs.find((run) => run.employee_id === id);
   const paidFor = (run) => run ? state.payments.filter((payment) => payment.run_id === run.id && !(state.reversals||[]).some((item)=>item.payment_id===payment.id)).reduce((sum,payment) => sum + Number(payment.amount),0) : 0;
@@ -129,10 +130,14 @@
   }
   function openDialog(id) { const dialog = $(id); dialog.querySelector(".dialog-error")?.remove(); dialog.showModal(); }
   function field(form, name) { return form.elements.namedItem(name); }
-  function employeeDialog(edit) {
+  async function employeeDialog(edit) {
+    const generation=++employeeDialogGeneration;
     const form = $("employeeForm"), employee = edit ? state.employees.find((item)=>item.id===state.selected) : null;
-    form.reset(); form.dataset.employeeId = employee?.id || ""; field(form,"device_user_id").value=employee?.device_user_id||""; field(form,"device_user_id").readOnly=!!employee;
-    field(form,"name").value=employee?.name||""; field(form,"active").checked=employee?.active??true; window.DGV_PAYROLL_ADVANCED?.employeeEdit(employee,form); openDialog("employeeDialog");
+    if(edit&&!employee)throw new Error("직원을 선택해 주세요. / Chọn nhân viên.");
+    form.reset(); form.dataset.employeeId = employee?.id || crypto.randomUUID();form.dataset.create=String(!employee);form.dataset.revision=String(state.revision);field(form,"device_user_id").value=employee?.device_user_id||""; field(form,"device_user_id").readOnly=!!employee;
+    field(form,"name").value=employee?.name||""; field(form,"active").checked=employee?.active??true; window.DGV_PAYROLL_ADVANCED?.employeeEdit(employee,form);
+    if(employee){const data=await result(db.rpc("payroll_get_sensitive",{p_employee_id:employee.id}));if(!state.loaded||generation!==employeeDialogGeneration)return;field(form,"national_id").value=data?.national_id||"";}
+    openDialog("employeeDialog");
   }
   function dayDialog(date) {
     const form=$("dayForm"), day=(state.effectiveDays||state.days).find((item)=>item.employee_id===state.selected&&item.work_date===date);
@@ -224,8 +229,8 @@
   $("previewImport").addEventListener("click",()=>task(previewImport));
   $("importFile").addEventListener("change",()=>{state.preview=null;$("importPreview").hidden=true;});
   $("export").addEventListener("click",()=>task(exportLedger));
-  $("addEmployee").addEventListener("click",()=>employeeDialog(false));
-  $("editEmployee").addEventListener("click",()=>employeeDialog(true));
+  $("addEmployee").addEventListener("click",()=>task(()=>employeeDialog(false)));
+  $("editEmployee").addEventListener("click",()=>task(()=>employeeDialog(true)));
   $("addTerms").addEventListener("click",()=>{const form=$("termsForm");form.reset();field(form,"effective_from").value=`${$("month").value}-01`;window.DGV_PAYROLL_ADVANCED?.termsEdit(form);openDialog("termsDialog");});
   $("logout").addEventListener("click",()=>DGV.signOut());
   document.addEventListener("click",(event)=>{
@@ -243,12 +248,14 @@
   $("reviewArea").addEventListener("input",()=>{try{const values=draft();$("draftTotal").textContent=money(values.total)+" VND";window.DGV_PAYROLL_ADVANCED?.renderMonthlyDraft(values);}catch{$("draftTotal").textContent="입력 확인 / Kiểm tra";}});
   $("employeeForm").addEventListener("submit",(event)=>{event.preventDefault();task(async()=>{
     const form=event.currentTarget||$("employeeForm"); // event.currentTarget can be cleared after await in task.
-    const values={name:field(form,"name").value.trim(),active:field(form,"active").checked,...window.DGV_PAYROLL_ADVANCED?.employeeValues(form)};
+    const values={name:field(form,"name").value.trim(),device_user_id:field(form,"device_user_id").value.trim(),active:field(form,"active").checked,...window.DGV_PAYROLL_ADVANCED?.employeeValues(form)};
     if(!values.name)throw new Error("이름을 입력해 주세요. / Nhập tên.");
-    if(form.dataset.employeeId)await result(db.from("payroll_employees").update(values).eq("id",form.dataset.employeeId));
-    else await result(db.from("payroll_employees").insert({...values,device_user_id:field(form,"device_user_id").value.trim()}));
-    $("employeeDialog").close();await load();notice("직원 정보를 저장했습니다. / Đã lưu nhân viên.");
+    const nationalId=field(form,"national_id").value.trim();
+    if(!nationalId||nationalId.length>300||/[\u0000-\u001f\u007f]/.test(nationalId))throw new Error("신분증 번호를 입력해 주세요. / Nhập số định danh.");
+    await result(db.rpc("payroll_save_employee",{p_employee_id:form.dataset.employeeId,p_employee:values,p_national_id:nationalId,p_expected_revision:Number(form.dataset.revision),p_create:form.dataset.create==="true"}));
+    $("employeeDialog").close();await load();notice("직원 정보와 신분증 번호를 저장했습니다. / Đã lưu nhân viên và số định danh.");
   });});
+  $("employeeDialog").addEventListener("close",()=>{employeeDialogGeneration++;const form=$("employeeForm");form.reset();delete form.dataset.employeeId;delete form.dataset.create;delete form.dataset.revision;});
   $("termsForm").addEventListener("submit",(event)=>{event.preventDefault();task(async()=>{
     const form=$("termsForm"),values=Object.fromEntries(new FormData(form));values.employee_id=state.selected;values.rate=Number(values.rate);
     if("overtime_hourly_rate" in values)values.overtime_hourly_rate=values.overtime_hourly_rate===""?null:Number(values.overtime_hourly_rate);
@@ -278,7 +285,7 @@
     await result(db.rpc("payroll_pay",{p_run_id:runFor(state.selected).id,p_amount:values.amount,p_paid_on:values.paid_on,p_method:values.method,p_reference:values.reference.trim(),p_note:values.note.trim(),p_request_id:state.paymentRequest}));
     $("paymentDialog").close();await load();notice("실제 지급내역을 기록했습니다. / Đã ghi thanh toán thực tế.");
   });});
-  db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_OUT"||(session&&DGV.roleOf(session.user)!=="admin")){state.loaded=false;$("payrollApp").hidden=true;state.records=[];state.payments=[];document.querySelectorAll("dialog[open]").forEach((dialog)=>dialog.close());}});
+  db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_OUT"||(session&&DGV.roleOf(session.user)!=="admin")){employeeDialogGeneration++;state.loaded=false;$("payrollApp").hidden=true;state.records=[];state.payments=[];window.DGV_PAYROLL_ADVANCED?.invalidate();$("employeeForm").reset();$("sensitiveForm")?.reset();document.querySelectorAll("dialog[open]").forEach((dialog)=>dialog.close());}});
   window.DGV_PAYROLL_APP={state,db,$,esc,money,hours,today,rows,result,task,load,render,renderDetail,selected,runFor,paidFor,totalFor,openDialog,field,bounds,notice,draft};
   (async()=>{try{await QRStaff.requireLogin({roles:["admin"],preferredRole:"admin"});await DGV.requireAuth({roles:["admin"]});$("payrollApp").hidden=false;await task(load);}catch(error){$("pageError").textContent=messageOf(error);$("pageError").hidden=false;}})();
 })();

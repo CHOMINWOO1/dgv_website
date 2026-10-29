@@ -18,6 +18,7 @@ Apply these migrations in order to a local or staging database with the existing
 4. `supabase/migrations/20261028070047_hana_payroll_consistent_reads.sql`
 5. `supabase/migrations/20261029021538_hana_payroll_monthly_net.sql`
 6. `supabase/migrations/20261029023034_hana_payroll_derived_monthly_rate.sql`
+7. `supabase/migrations/20261029025813_hana_payroll_employee_identity.sql`
 
 Run `supabase/tests/payroll.sql`, `payroll-complete.sql`, `payroll-backup.sql`,
 `payroll-consistency.sql` and `payroll-monthly-net.sql`
@@ -303,6 +304,47 @@ fields are stored in the existing snapshot JSON; no schema migration is needed.
 
 ## Encrypted bank and identity fields
 
+Manual employee registration uses the atomic administrator RPC:
+
+```text
+payroll_save_employee(p_employee_id uuid, p_employee jsonb, p_national_id text,
+                      p_expected_revision bigint, p_create boolean) -> uuid
+```
+
+Generate the employee UUID once before creating a record and reuse it on retry.
+The national ID/CCCD value is required, trimmed, limited to 300 characters and
+cannot contain control characters or newlines. Do not coerce it to a number or
+reformat it. `p_employee` accepts only `device_user_id`, `name`, `active`, `phone`,
+`employment_type`, `hire_date`, `termination_date`, `employment_status` and
+`payment_method`; the identity belongs solely in `p_national_id`. Creation uses
+normal employee defaults for optional fields. Updates may supply a field patch.
+The existing immutable POS user ID and authoritative employment status remain
+enforced.
+
+The RPC uses SECURITY INVOKER, verified administrator checks and existing RLS.
+It locks the source revision, saves employee changes and calls the existing
+narrow Vault helpers in one transaction. It merges `national_id` into the latest
+encrypted object, preserving bank and tax keys. Any encryption/version failure
+rolls back the employee change, audit and revision as well. Public employee rows,
+payroll snapshots and audit records must never contain the identity value.
+
+An exact normalized create/update retry returns the same UUID without writing
+another audit/version, even when the response to the previous successful save
+was lost and its original revision is stale. A conflicting create UUID, changed
+stale update or missing update target is rejected. Importing an unknown POS
+employee continues to work without an identity value; an administrator completes
+the field through the employee form. Decrypt only the employee records needed for
+editing or an administrator-requested tax export, and keep those values in memory.
+
+`payroll-employee-identity.sql` verifies create/update atomicity by injecting a
+failure into a fixture's private version insert, plus exact retries, conflicts,
+field merging, plaintext exclusion and role denial. Its temporary trigger and
+all data are rolled back. `payroll-employee-live.sql` is a separate live-safe
+smoke test without trigger changes: it creates UUID-named fixtures, checks the
+RPC and unchanged import behavior, rolls the fixtures back, then compares every
+original payroll table count, encrypted-version count and revision. Neither test
+updates an existing employee or exports existing private identity values.
+
 `payroll_set_sensitive(employee_id, data, reason)` accepts only `bank_name`,
 `bank_account`, `account_holder`, `national_id` and `tax_id`, each a string of up
 to 300 characters. Each save creates a new authenticated-encrypted Vault secret.
@@ -310,6 +352,12 @@ Private version rows preserve references and metadata; audit logs never contain
 those plaintext field values. Do not put private account numbers in a reason or
 other ordinary note. `payroll_get_sensitive(employee_id)` returns the latest
 version only after an administrator check.
+
+The current bank/tax form uses the four-argument overload
+`payroll_set_sensitive(employee_id, data, reason, expected_revision)`. Capture the
+revision when opening the form; the RPC locks and compares it before replacing
+the encrypted object. A stale form cannot overwrite an identity changed through
+employee registration. The older three-argument RPC remains for compatibility.
 
 Public RPC wrappers use SECURITY INVOKER. The two private Vault helpers use
 SECURITY DEFINER solely to access the non-exposed Vault objects, set an empty

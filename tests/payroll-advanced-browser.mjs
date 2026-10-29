@@ -34,6 +34,8 @@ try{
   assert.equal(await page.locator('[name="fund_account_id"],#fundAccount').count(),0);
 
   await page.locator("#editEmployee").click();
+  await page.locator("#employeeDialog").waitFor({state:"visible"});
+  await field("employeeForm","national_id").fill("001111111111");
   await field("employeeForm","phone").fill("090-TEST-0001");
   await field("employeeForm","employment_type").selectOption("part_time");
   await field("employeeForm","hire_date").fill("2026-06-01");
@@ -70,7 +72,7 @@ try{
   await page.locator("#finalize").click();await page.locator('#confirmForm input[type="checkbox"]').check();await submit("confirmForm");
   const originalRun=await page.evaluate(()=>structuredClone(__payrollTest.db.payroll_runs[0]));assert.equal(originalRun.total,240000);
   assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_reviews.length),2,"finalize reuses the identical review without suppressing changed reviews");
-  await page.locator("#editEmployee").click();await field("employeeForm","payment_method").selectOption("bank");await submit("employeeForm");
+  await page.locator("#editEmployee").click();await page.locator("#employeeDialog").waitFor({state:"visible"});await field("employeeForm","payment_method").selectOption("bank");await submit("employeeForm");
   for(const [method,amount] of [["cash",100000],["bank",50000]]){
     await page.locator("#addPayment").click();assert.equal(await field("paymentForm","method").inputValue(),"bank","employee preferred payment method opens by default");await field("paymentForm","paid_on").fill("2026-10-05");await field("paymentForm","amount").fill(String(amount));await field("paymentForm","method").selectOption(method);await field("paymentForm","reference").fill("TEST-REFERENCE");await submit("paymentForm");
   }
@@ -123,7 +125,8 @@ try{
   for(const kind of ["ledger","attendance","parttime","cash","bank","outstanding","tax"]){
     await page.locator("#exportKind").selectOption(kind);await page.locator("#previewTax").click();await idle();
     assert.equal(await page.locator("#downloadTax").isDisabled(),true);assert.equal(await page.locator("#printTax").isDisabled(),true);
-    await page.locator("#taxReviewed").check();const workbook=await download("#downloadTax");assert.match(workbook.name,/\.xlsx$/);assert.doesNotMatch(workbook.text,/SYNTHETIC-PRIVATE/);
+    await page.locator("#taxReviewed").check();const workbook=await download("#downloadTax");assert.match(workbook.name,/\.xlsx$/);assert.doesNotMatch(workbook.text,/SYNTHETIC-PRIVATE-ACCOUNT/);
+    if(kind==="tax")assert.match(workbook.text,/SYNTHETIC-PRIVATE-ID/);else assert.doesNotMatch(workbook.text,/SYNTHETIC-PRIVATE-ID/);
     const popupEvent=page.waitForEvent("popup");await page.locator("#printTax").click();const popup=await popupEvent;await popup.waitForFunction(()=>window.__printed===true);
     assert.equal(await popup.locator("script,img").count(),0);assert.equal(await popup.evaluate(()=>window.__payrollXss),undefined);assert.equal(await popup.locator("table").count()>0,true);assert.match(await popup.locator("body").innerText(),/2026-10/);
     assert.equal(await popup.evaluate(()=>window.opener===null),true);await popup.close();
