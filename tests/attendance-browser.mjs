@@ -98,9 +98,22 @@ try{
   assert.equal(await page.evaluate(()=>__attendanceTest.events.length),2);assert.equal(await page.evaluate(()=>DGV_ATTENDANCE_STORE.get("pending")),null);
   assert.equal(await page.locator("#pending").isVisible(),false);
 
+  // A completed morning shift does not close attendance for the whole day.
+  // The same employee can verify again and create a second distinct in/out pair.
+  await page.locator("#employee").selectOption(ids[0]);assert.equal(await page.locator("#clockIn").isEnabled(),true);
+  await page.locator("#clockIn").click();await idle();assert.match(await page.locator("#employeeState").innerText(),/출근/);
+  await page.locator("#clockOut").click();await idle();assert.match(await page.locator("#employeeState").innerText(),/퇴근/);
+  const twoCycles=await page.evaluate(()=>structuredClone(__attendanceTest.events));
+  assert.deepEqual(twoCycles.map(event=>event.punch_type),["in","out","in","out"]);
+  assert.equal(new Set(twoCycles.map(event=>event.event_id)).size,4);assert.equal(new Set(twoCycles.map(event=>event.occurred_at.slice(0,10))).size,1,"both shifts belong to the same day");
+  assert.equal(await rpcCount("payroll_kiosk_punch"),4,"each successful face action creates exactly one new attendance request");
+  await reload();await page.locator("#employee").selectOption(ids[0]);
+  assert.match(await page.locator("#employeeState").innerText(),/퇴근/);assert.equal(await page.locator("#clockIn").isEnabled(),true,"a reload preserves both cycles and permits another return to work");
+  assert.deepEqual(await page.evaluate(()=>__attendanceTest.events),twoCycles);
+
   await page.locator("#employee").selectOption(ids[0]);await page.evaluate(()=>{__attendanceTest.losePunchBeforeCommit=true;});await page.locator("#clockIn").click();await idle();
   const failedCount=await rpcCount("payroll_kiosk_punch");await page.locator("#checkReceipt").click();await idle();
-  assert.equal(await rpcCount("payroll_kiosk_punch"),failedCount);assert.equal(await page.evaluate(()=>__attendanceTest.events.length),2);assert.match(await page.locator("#notice").textContent(),/저장된 기록이 없습니다/);
+  assert.equal(await rpcCount("payroll_kiosk_punch"),failedCount);assert.equal(await page.evaluate(()=>__attendanceTest.events.length),4);assert.match(await page.locator("#notice").textContent(),/저장된 기록이 없습니다/);
 
   await page.evaluate(()=>{__storageTest.deferPending=true;});await page.locator("#clockIn").click();await page.waitForFunction(()=>typeof __storageTest.release==="function");
   const beforeStorageCancel=await rpcCount("payroll_kiosk_punch");await page.locator("#cancelFace").click();await page.evaluate(()=>__storageTest.release());await idle();
@@ -150,5 +163,5 @@ try{
   assert.ok(await page.evaluate(()=>DGV_ATTENDANCE_STORE.get("registration")),"the encrypted registration draft remains available for an explicit safe retry");
   assert.equal(await page.evaluate(()=>__attendanceTest.calls.filter(call=>call.table).every(call=>["payroll_employees","payroll_attendance_raw"].includes(call.table)&&call.role==="admin")),true,"payroll reads occur only in the ephemeral administrator client");
   assert.deepEqual(errors,[]);
-  console.log("Attendance browser passed: admin-only setup, real encrypted local storage, consent, no photo/template uploads, face mismatch/test-only paths, server in/out, receipt-only recovery across reload, cancellation retry, closed-session enrollment guard and revoked-device lockout.");
+  console.log("Attendance browser passed: admin-only setup, real encrypted local storage, consent, face mismatch/test-only paths, two same-day in/out cycles, receipt-only recovery across reload, cancellation retry, closed-session enrollment guard and revoked-device lockout.");
 }finally{await context.close();await browser.close();await new Promise(resolve=>server.close(resolve));}

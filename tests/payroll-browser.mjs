@@ -1,4 +1,5 @@
 import { installMock } from "./helpers/payroll-browser-mock.mjs";
+import { openPayrollView } from "./helpers/payroll-navigation.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
@@ -89,12 +90,14 @@ try {
     return {name,mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",buffer:Buffer.from(bytes)};
   }
   async function importFile(file,inserted,duplicates) {
+    await openPayrollView(page,"attendance");
     await page.locator("#importFile").setInputFiles(file);
     await page.locator("#previewImport").click();
     await page.locator("#saveImport").waitFor({state:"visible"});
     await page.locator("#saveImport").click();
     await page.waitForFunction(()=>!document.getElementById("workspace").disabled);
     assert.match(await page.locator("#notice").innerText(),new RegExp(`신규 ${inserted}건, 중복 ${duplicates}건`));
+    await openPayrollView(page,"ledger");
   }
   const headers=["User ID","Name","Dept","IN/OUT Time","Device ID"];
   const file=await workbookFile([headers,
@@ -112,6 +115,7 @@ try {
   await importFile(missing,1,0);
   await page.locator("#employeeFilter").selectOption(employeeB);
   assert.equal(await page.locator("#finalize").isDisabled(),true);
+  await openPayrollView(page,"attendance");
   await page.locator('[data-day="2026-10-03"]').click();
   await page.locator('#dayForm [name="check_in"]').fill("2026-10-03T10:00");
   await page.locator('#dayForm [name="check_out"]').fill("2026-10-03T20:00");
@@ -119,6 +123,7 @@ try {
   await page.locator('#dayForm button[type="submit"]').click();
   await page.locator("#dayDialog").waitFor({state:"hidden"});
   await page.waitForFunction(()=>!document.getElementById("workspace").disabled);
+  await openPayrollView(page,"ledger");
   assert.equal(await page.locator("#finalize").isDisabled(),false);
   assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_attendance_raw.length),7);
 
@@ -128,6 +133,7 @@ try {
   await page.locator('#confirmForm input[type="checkbox"]').check();
   await page.locator('#confirmForm button[type="submit"]').click();
   await page.locator("#confirmDialog").waitFor({state:"hidden"});
+  await openPayrollView(page,"payments");
   await page.locator("#addPayment").waitFor();
   for(const [amount,method] of [[100000,"cash"],[150000,"bank"]]) {
     await page.locator("#addPayment").click();
@@ -143,6 +149,7 @@ try {
   assert.match(await page.locator("#paymentArea").innerText(),/250[.,]000/);
   assert.match(await page.locator("#paymentArea").innerText(),/230[.,]000/);
   assert.deepEqual(await page.evaluate(()=>__payrollTest.db.payroll_payments.map(row=>row.method)),["cash","bank"]);
+  await openPayrollView(page,"ledger");
   const download=page.waitForEvent("download");
   await page.locator("#export").click();
   const exported=await download;
@@ -228,7 +235,8 @@ try {
   assert.equal(await page.locator("#ledgerBody [data-employee]").count(),1);
   assert.equal(await page.locator("#ledgerBody [data-employee]").getAttribute("data-employee"),employeeA);
   assert.match(await page.locator("#ledgerBody").innerText(),/250[.,]000/);
-  assert.match(await page.locator("#ledgerBody").innerText(),/16h 0m/,"finalized history keeps its original worked hours");
+  assert.match(await page.locator("#ledgerBody").innerText(),/0h 0m/,"ledger attendance reflects the currently available records");
+  assert.equal(await page.evaluate(id=>__payrollTest.db.payroll_runs.find(run=>run.employee_id===id).snapshot.minutes,employeeA),960,"finalized payroll keeps its original sixteen-hour snapshot separately");
   await page.evaluate(originalDb=>{__payrollTest.db=structuredClone(originalDb);},originalDb);
   await page.locator("#refresh").click();
   await page.waitForFunction(()=>!document.getElementById("workspace").disabled);

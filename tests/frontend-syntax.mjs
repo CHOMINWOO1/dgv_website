@@ -35,6 +35,7 @@ const externalScripts = [
   "assets/attendance-store.js",
   "assets/attendance-face.js",
   "assets/payroll.js",
+  "assets/payroll-workspace.js",
   "assets/payroll-core.js",
   "assets/payroll-rules.js",
   "assets/payroll-tax.js",

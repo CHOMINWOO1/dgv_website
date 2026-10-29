@@ -6,6 +6,7 @@
     "test:payroll": "node tests/payroll-core.mjs",
     "test:payroll:db": "node tests/payroll-db.mjs",
     "test:payroll:browser": "node tests/payroll-browser.mjs",
+    "test:payroll:navigation": "node tests/payroll-navigation-browser.mjs",
     "test:payroll:advanced": "node tests/payroll-advanced-browser.mjs",
     "test:payroll:monthly:browser": "node tests/payroll-monthly-browser.mjs",
     "test:payroll:identity:browser": "node tests/payroll-identity-browser.mjs",

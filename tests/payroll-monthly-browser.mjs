@@ -1,4 +1,5 @@
 import { installMock } from "./helpers/payroll-browser-mock.mjs";
+import { openPayrollView } from "./helpers/payroll-navigation.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
@@ -34,12 +35,16 @@ try{
     __payrollTest.db.payroll_revision[0].version++;
   },employee);
   await page.locator("#month").fill("2026-09");await page.locator("#month").dispatchEvent("change");await idle();await page.locator("#employeeFilter").selectOption(employee);
-  await page.locator("#addTerms").click();await field("termsForm","pay_type").selectOption("monthly");
-  assert.equal(await field("termsForm","break_start").inputValue(),"12:00");assert.equal(await field("termsForm","break_end").inputValue(),"14:00");
-  assert.equal(await field("termsForm","monthly_settlement").inputValue(),"monthly_net");assert.equal(await field("termsForm","weekly_rest_day").inputValue(),"0");
+  await openPayrollView(page,"employees");
+  await page.locator("#addTerms").click();
+  assert.equal(await field("termsForm","pay_type").inputValue(),"hourly","salary edits start from the existing contract");
+  assert.equal(await field("termsForm","break_start").inputValue(),"13:00");assert.equal(await field("termsForm","break_end").inputValue(),"15:00");
+  await field("termsForm","pay_type").selectOption("monthly");await field("termsForm","monthly_settlement").selectOption("monthly_net");
+  await field("termsForm","break_start").fill("12:00");await field("termsForm","break_end").fill("14:00");
+  assert.equal(await field("termsForm","weekly_rest_day").inputValue(),"0");
   await field("termsForm","rate").fill("7000000");await field("termsForm","weekly_rest_day").selectOption("3");
   assert.equal(await field("termsForm","monthly_extra_hourly_rate").count(),0,"monthly extra hourly rate is calculated automatically without a separate input");
-  await submit("termsForm");
+  await submit("termsForm");await openPayrollView(page,"ledger");
   let row=await summary();
   assert.equal(row.settlementMode,"monthly_net");assert.equal(row.monthlyPlannedMinutes,12000);assert.equal(row.monthlyActualMinutes,12000);assert.equal(row.monthlyBalanceMinutes,0);assert.equal(row.monthlyExtraAmount,0);assert.equal(row.baseAmount,7000000);assert.equal(row.statutoryAmount,0);assert.equal(row.scheduleDefaultUsed,true);
   assert.equal(row.daily.find(day=>day.date==="2026-09-01").minutes,480,"12–14 break is excluded from ten-hour presence");
@@ -58,24 +63,27 @@ try{
 
   // A manual work day overrides the Wednesday default without touching punches.
   const raw=await page.evaluate(()=>structuredClone(__payrollTest.db.payroll_attendance_raw));
-  await page.locator('[data-day="2026-09-02"]').click();await closeDay("work",true);row=await summary();
+  await openPayrollView(page,"attendance");
+  await page.locator('#calendar [data-day="2026-09-02"]').click();await closeDay("work",true);row=await summary();
   assert.equal(row.monthlyPlannedMinutes,12480);assert.equal(row.monthlyActualMinutes,12510);assert.equal(row.monthlyExtraAmount,16827,"calendar changes recalculate the automatic rate; payable amount rounds only at the end");
   assert.deepEqual(await page.evaluate(()=>__payrollTest.db.payroll_attendance_raw),raw);
-  await page.locator('[data-day="2026-09-02"]').click();await closeDay("rest");row=await summary();assert.equal(row.monthlyPlannedMinutes,12000);assert.equal(row.monthlyActualMinutes,12030);
+  await page.locator('#calendar [data-day="2026-09-02"]').click();await closeDay("rest");row=await summary();assert.equal(row.monthlyPlannedMinutes,12000);assert.equal(row.monthlyActualMinutes,12030);
 
+  await openPayrollView(page,"ledger");
   await page.locator("#allowances").fill("100");await page.locator("#deductions").fill("50");await page.locator("#adjustmentNote").fill("Synthetic additional approved amounts");
   await page.locator("#saveReview").click();await idle();assert.match(await page.locator("#draftTotal").innerText(),/7[.,]017[.,]550/);
   await page.locator("#finalize").click();await page.locator('#confirmForm input[type="checkbox"]').check();await submit("confirmForm");
   const run=await page.evaluate(()=>__payrollTest.db.payroll_runs[0]);assert.equal(run.base_amount,7000000);assert.equal(run.allowances,17600);assert.equal(run.deductions,50);assert.equal(run.total,7017550);assert.equal(run.snapshot.monthlyExtraAmount,17500);assert.equal(run.snapshot.statutoryAmount,0);
   await page.evaluate(id=>{const term=__payrollTest.db.payroll_terms.find(t=>t.employee_id===id&&t.monthly_settlement==="monthly_net");term.rate=9000000;__payrollTest.db.payroll_revision[0].version++;},employee);await refresh();
   assert.match(await page.locator('[data-testid="month-extra-amount"]').innerText(),/17[.,]500/,"finalized monthly view keeps its saved rate and premium");
+  await openPayrollView(page,"payments");
   await page.locator("#exportKind").selectOption("ledger");await page.locator("#previewTax").click();await idle();await page.locator("#taxReviewed").check();
   const downloadEvent=page.waitForEvent("download");await page.locator("#downloadTax").click();const workbook=await downloadEvent,bytes=await readFile(await workbook.path()),xml=bytes.toString();
   assert.equal(bytes.readUInt32LE(),0x04034b50);assert.match(xml,/월 기준분/);assert.match(xml,/자동 계산 시급/);assert.match(xml,/<v>12000<\/v>/);assert.match(xml,/<v>12030<\/v>/);assert.match(xml,/<v>35000<\/v>/);assert.match(xml,/<v>17500<\/v>/);assert.match(xml,/<v>7017550<\/v>/);
   const popupEvent=page.waitForEvent("popup");await page.locator("#printTax").click();const popup=await popupEvent;await popup.waitForFunction(()=>window.__printed===true);assert.match(await popup.locator("body").innerText(),/월 초과수당/);assert.equal(await popup.locator("table").count(),2);
+  await page.locator("#closeTaxPreview").click();await openPayrollView(page,"ledger");
   if(process.env.PAYROLL_SCREENSHOTS){
     await page.evaluate(id=>{__payrollTest.db.payroll_terms.find(t=>t.employee_id===id&&t.monthly_settlement==="monthly_net").rate=7000000;__payrollTest.db.payroll_revision[0].version++;},employee);await refresh();
-    await page.evaluate(()=>{document.getElementById("dailyBody").closest("details").open=false;});
   }
   if(process.env.PAYROLL_SCREENSHOTS){const folder=process.env.PAYROLL_SCREENSHOTS;await mkdir(folder,{recursive:true});await page.evaluate(()=>{const p=document.createElement("p");p.textContent="화면 미리보기 · 예시 데이터 / Bản xem thử · Dữ liệu mẫu";p.className="notice";document.getElementById("employeeDetail").prepend(p);});await page.locator("#employeeDetail").screenshot({path:path.join(folder,"payroll-monthly-desktop.png")});await popup.evaluate(()=>{const p=document.createElement("p");p.textContent="화면 미리보기 · 예시 데이터 / Bản xem thử · Dữ liệu mẫu";document.body.prepend(p);});await popup.screenshot({path:path.join(folder,"payroll-monthly-print.png"),fullPage:true});await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.locator("#employeeDetail").screenshot({path:path.join(folder,"payroll-monthly-mobile.png")});await page.setViewportSize({width:1440,height:1000});}await popup.close();
   // Current month displays progress against the full-month plan before closing.
@@ -83,8 +91,10 @@ try{
   await page.locator("#month").fill(currentMonth);await page.locator("#month").dispatchEvent("change");await idle();
   assert.equal(await page.locator("#monthlyTimeSummary").isVisible(),true);assert.match(await page.locator("#detailSummary").innerText(),/예상값|Dự kiến/);
   const beforeSalaryEdit=await page.evaluate(()=>structuredClone(__payrollTest.db.payroll_terms));
+  await openPayrollView(page,"employees");
   await page.locator("#addTerms").click();await field("termsForm","effective_from").fill("2026-11-01");await field("termsForm","pay_type").selectOption("monthly");await field("termsForm","rate").fill("8000000");await submit("termsForm");
   assert.deepEqual(await page.evaluate(ids=>__payrollTest.db.payroll_terms.filter(term=>ids.includes(term.id)),beforeSalaryEdit.map(term=>term.id)),beforeSalaryEdit,"salary edit appends an effective-date version and preserves all prior conditions");
+  await openPayrollView(page,"ledger");
   await page.locator("#month").fill("2026-11");await page.locator("#month").dispatchEvent("change");await idle();assert.equal((await summary()).baseAmount,8000000);
   await page.locator("#month").fill("2026-09");await page.locator("#month").dispatchEvent("change");await idle();assert.match(await page.locator('[data-testid="month-extra-amount"]').innerText(),/17[.,]500/);assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_runs[0].total),7017550,"new salary version keeps the finalized September payroll intact");
 
@@ -98,12 +108,16 @@ try{
     __payrollTest.db.payroll_revision[0].version++;
   },employee);
   await page.locator("#month").fill("2026-09");await page.locator("#month").dispatchEvent("change");await idle();await page.locator("#employeeFilter").selectOption(employee);
+  await openPayrollView(page,"employees");
   await page.locator("#addTerms").click();assert.equal(await field("termsForm","pay_type").inputValue(),"monthly");assert.equal(await field("termsForm","weekly_rest_day").inputValue(),"3");assert.equal(await field("termsForm","monthly_extra_hourly_rate").count(),0);await page.locator("#termsForm [data-close]").click();
+  await openPayrollView(page,"attendance");
   await page.locator("#monthSchedule").click();assert.equal(await page.locator('#scheduleForm input[name="rest"]:checked').count(),1);assert.equal(await page.locator('#scheduleForm input[name="rest"]:checked').inputValue(),"3");assert.equal(await page.locator('#scheduleForm input[name="rest"]:checked').getAttribute("type"),"radio");await page.locator("#scheduleForm [data-close]").click();
   row=await summary();assert.equal(row.monthlyActualMinutes,961,"two 30-second tails carry once to a full minute in the monthly total");
   assert.equal(row.monthlyPlannedMinutes,6240);assert.equal(row.baseAmount,3640000,"September 15 hire earns 13 active days / 25 full-month days of the agreed salary");assert.equal(row.compensationUnresolved,0);assert.equal(row.monthlyExtraHourlyRate,35000,"hire proration keeps the full-month hourly basis");
   assert.equal(row.monthlyProration.fullPlannedMinutes,12000);assert.equal(row.monthlyProration.activePlannedMinutes,6240);assert.equal(row.monthlyExpectedPayDate,"2026-10-05");
+  await openPayrollView(page,"ledger");
   assert.match(await page.locator('[data-testid="month-proration"]').innerText(),/3[.,]640[.,]000/);assert.match(await page.locator('[data-testid="month-pay-date"]').innerText(),/2026-10-05/);
+  await openPayrollView(page,"payments");
   await page.locator("#rangeFrom").fill("2026-09-15");await page.locator("#rangeTo").fill("2026-09-17");await page.locator("#rangeEmployee").selectOption(employee);await page.locator("#rangeSearch").click();await idle();
   assert.match(await page.locator("#rangeResult .range-summary").innerText(),/16h 1m/,"range header agrees with the monthly seconds carry");assert.match(await page.locator("#rangeResult").innerText(),/실제 초|giây thực tế/);
   const rangeDownloadEvent=page.waitForEvent("download");await page.locator("#rangeExport").click();const rangeDownload=await rangeDownloadEvent,rangeXml=(await readFile(await rangeDownload.path())).toString();
@@ -114,7 +128,7 @@ try{
       for(const time of ["10:00:00","20:00:00"])__payrollTest.db.payroll_attendance_raw.push({id:`hire-${date}-${time}`,employee_id:id,occurred_at:`${date}T${time}`,device_id:"1"});
     }
     __payrollTest.db.payroll_revision[0].version++;
-  },employee);await refresh();row=await summary();
+  },employee);await refresh();await openPayrollView(page,"ledger");row=await summary();
   assert.equal(row.monthlyActualMinutes,6241);assert.equal(row.monthlyExtraMinutes,1);assert.equal(row.monthlyExtraAmount,583);assert.equal(row.baseAmount,3640000);assert.equal(await page.locator("#finalize").isDisabled(),false,"a complete first hire month finalizes with automatic proration");
   await page.locator("#finalize").click();await page.locator('#confirmForm input[type="checkbox"]').check();await submit("confirmForm");
   const hireRun=await page.evaluate(()=>__payrollTest.db.payroll_runs[0]);assert.equal(hireRun.total,3640583);assert.equal(hireRun.snapshot.monthlyProration.baseAmount,3640000);assert.equal(hireRun.snapshot.monthlyExtraBasisAmount,7000000);assert.equal(hireRun.snapshot.monthlyExtraBasisMinutes,12000);assert.equal(hireRun.snapshot.monthlyExpectedPayDate,"2026-10-05");
@@ -123,7 +137,7 @@ try{
   await setToday("2026-10-05T05:00:00Z");assert.doesNotMatch(await page.locator("#payrollAlerts").innerText(),/지급기한 경과|Quá hạn/);
   await setToday("2026-10-06T05:00:00Z");assert.match(await page.locator("#payrollAlerts").innerText(),/지급기한 경과|Quá hạn/);
   await page.evaluate(()=>{window.Date=window.__payrollRealDate;});await refresh();
-  if(process.env.PAYROLL_SCREENSHOTS){await page.evaluate(()=>{document.getElementById("dailyBody").closest("details").open=false;const p=document.createElement("p");p.textContent="화면 미리보기 · 예시 데이터 / Bản xem thử · Dữ liệu mẫu";p.className="notice";document.getElementById("employeeDetail").prepend(p);});await page.locator("#employeeDetail").screenshot({path:path.join(process.env.PAYROLL_SCREENSHOTS,"payroll-hire-proration.png")});}
+  if(process.env.PAYROLL_SCREENSHOTS){await page.evaluate(()=>{const p=document.createElement("p");p.textContent="화면 미리보기 · 예시 데이터 / Bản xem thử · Dữ liệu mẫu";p.className="notice";document.getElementById("employeeDetail").prepend(p);});await page.locator("#employeeDetail").screenshot({path:path.join(process.env.PAYROLL_SCREENSHOTS,"payroll-hire-proration.png")});}
 
   // A reviewed monthly base also drives the automatic hourly rate, premium,
   // reviewed snapshot and final wage breakdown consistently.

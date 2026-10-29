@@ -1,4 +1,5 @@
 import { installMock } from "./helpers/payroll-browser-mock.mjs";
+import { openPayrollView } from "./helpers/payroll-navigation.mjs";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
@@ -38,7 +39,7 @@ await context.route("**/*",route=>{const url=route.request().url();if(url.starts
 page.on("pageerror",error=>errors.push(error.message));page.setDefaultTimeout(10000);
 const idle=()=>page.waitForFunction(()=>DGV_PAYROLL_APP.state.loaded&&!DGV_PAYROLL_APP.state.busy);
 const summary=id=>page.evaluate(id=>structuredClone(DGV_PAYROLL_APP.state.summaries.find(row=>row.employee_id===id)),id);
-const select=async id=>{await page.locator("#employeeFilter").selectOption(id);await page.locator("h1").click();};
+const select=async(id,view="attendance")=>{await openPayrollView(page,"ledger");await page.locator("#employeeFilter").selectOption(id);await openPayrollView(page,view);await page.locator("h1").click();};
 const field=(form,name)=>page.locator(`#${form} [name="${name}"]`);
 const submit=async form=>{await page.locator(`#${form} button[type="submit"]`).click();await idle();};
 const poll=()=>page.evaluate(async()=>{for(const callback of __automaticPayrollPolls)await callback();});
@@ -61,14 +62,18 @@ try{
 
   await select(hourly);row=await summary(hourly);day=row.daily.find(day=>day.date==="2026-10-28");
   assert.equal(row.minutes,2);assert.equal(row.baseAmount,1000);assert.equal(row.unresolved,0);assert.equal(day.attendanceStatus,"recognized");assert.equal(day.isOpen,false);
-  assert.match(await page.locator('[data-testid="auto-attendance-status"]').innerText(),/자동|Tự/);assert.equal(await page.locator("#finalize").isEnabled(),true,"a complete short pair needs no manual work confirmation");
-  await page.locator('[data-day="2026-10-28"]').click();assert.match(await page.locator("#dayDialog h2").innerText(),/수정/);await page.locator("#dayForm [data-close]").click();
+  assert.match(await page.locator('[data-testid="auto-attendance-status"]').innerText(),/자동|Tự/);
+  await openPayrollView(page,"ledger");assert.equal(await page.locator("#finalize").isEnabled(),true,"a complete short pair needs no manual work confirmation");
+  await openPayrollView(page,"attendance");
+  await page.locator('#calendar [data-day="2026-10-28"]').click();assert.match(await page.locator("#dayDialog h2").innerText(),/수정/);await page.locator("#dayForm [data-close]").click();
   assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_days.length),0);assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_reviews.length),0);assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_runs.length),0);
   assert.equal(await page.evaluate(()=>__payrollTest.calls.some(call=>call.operation&&call.operation!=="select")),false,"automatic recognition only reads original records; it never writes approval/correction rows");
   assert.equal(await page.evaluate(()=>__payrollTest.rpcs.length),0);
 
   // Salary finalization and actual payment remain explicit administrator actions.
+  await openPayrollView(page,"ledger");
   await page.locator("#finalize").click();await page.locator('#confirmForm input[type="checkbox"]').check();await submit("confirmForm");
+  await openPayrollView(page,"payments");
   await page.locator("#addPayment").click();await field("paymentForm","amount").fill("400");await field("paymentForm","paid_on").fill("2026-10-29");await submit("paymentForm");
   await page.locator("#evidenceDialog").waitFor({state:"visible"});await field("evidenceForm","signed_name").fill("DEMO · Hourly B");await page.locator("#signatureCanvas").scrollIntoViewIfNeeded();const box=await page.locator("#signatureCanvas").boundingBox();
   await page.mouse.move(box.x+20,box.y+50);await page.mouse.down();await page.mouse.move(box.x+110,box.y+20,{steps:8});await page.mouse.move(box.x+180,box.y+70,{steps:8});await page.mouse.up();await field("evidenceForm","acknowledged").check();await submit("evidenceForm");
@@ -86,9 +91,11 @@ try{
   assert.equal(await page.locator("#rawAttendanceRows tr").count(),4);assert.match(await page.locator('[data-testid="auto-attendance-minutes"]').innerText(),/0h 4m/);
   await screenshot("payroll-auto-attendance-completed.png","#autoAttendanceSummary");
   assert.deepEqual(await page.evaluate(()=>({runs:__payrollTest.db.payroll_runs,payments:__payrollTest.db.payroll_payments,attachments:__payrollTest.db.payroll_attachments,objects:__payrollTest.storageObjects,dayWrites:__payrollTest.db.payroll_days})),frozen,"late attendance must preserve finalized salary, payment, signature and correction history");
-  await select(hourly);assert.equal((await summary(hourly)).minutes,4);assert.match(await page.locator('[data-testid="payment-expected"]').innerText(),/1[.,]000/);assert.match(await page.locator('[data-testid="payment-paid"]').innerText(),/400/);assert.match(await page.locator('[data-testid="payment-remaining"]').innerText(),/600/);
+  await select(hourly,"payments");assert.equal((await summary(hourly)).minutes,4);assert.match(await page.locator('[data-testid="payment-expected"]').innerText(),/1[.,]000/);assert.match(await page.locator('[data-testid="payment-paid"]').innerText(),/400/);assert.match(await page.locator('[data-testid="payment-remaining"]').innerText(),/600/);
+  await openPayrollView(page,"attendance");
   const currentDay=page.locator("#dailyBody tr").filter({hasText:"2026-10-29"});assert.equal(await currentDay.count(),1);assert.match(await currentDay.innerText(),/15:00/);assert.match(await currentDay.innerText(),/15:02/);assert.match(await currentDay.innerText(),/0h 2m/);
   assert.match(await page.locator('[data-testid="auto-attendance-minutes"]').innerText(),/0h 4m/);assert.match(await page.locator("#autoAttendanceSummary").innerText(),/확정 급여.*유지/);
+  await openPayrollView(page,"ledger");
   assert.match(await page.locator("#ledgerBody tr td").nth(1).innerText(),/0h 4m/,"the ledger also shows current automatic attendance after payroll was finalized");assert.match(await page.locator("#ledgerBody tr td").nth(2).innerText(),/1[.,]000/,"the current attendance display does not recalculate the finalized wage");
   assert.equal(await page.evaluate(()=>__payrollTest.db.payroll_days.length),0);assert.equal(await page.evaluate(()=>__payrollTest.rpcs.filter(call=>call.name==="payroll_finalize").length),1);assert.equal(await page.evaluate(()=>__payrollTest.rpcs.filter(call=>call.name==="payroll_pay").length),1);
   assert.deepEqual(errors,[]);
