@@ -2,7 +2,7 @@ export function installMock(initialRole) {
   const a = "00000000-0000-4000-8000-000000000001";
   const b = "00000000-0000-4000-8000-000000000002";
   const state = window.__payrollTest = {
-    role: initialRole, calls: [], rpcs: [], failRead: false, sensitive:{}, uploads:[], storageObjects:{},
+    role: initialRole, calls: [], rpcs: [], failRead: false, sensitive:{}, uploads:[], storageObjects:{}, authSubscribers:[],
     db: {
       payroll_employees: [{ id: a, device_user_id: "2", name: "Test A", active: true }, { id: b, device_user_id: "9", name: "Test B", active: true }],
       payroll_terms: [a, b].map((employee_id, i) => ({ id: `term-${i}`, employee_id, effective_from: "2026-06-01", pay_type: "hourly", rate: 30000, shift_start: "10:00:00", shift_end: "20:00:00", break_start: "13:00:00", break_end: "15:00:00" })),
@@ -30,7 +30,7 @@ export function installMock(initialRole) {
     update(value) { this.operation="update"; this.value=value; return this; }
     async then(resolve, reject) {
       try {
-        state.calls.push({table:this.table,operation:this.operation});
+        state.calls.push({table:this.table,operation:this.operation,...(this.value?{payload:structuredClone(this.value)}:{})});
         if(state.failRead && this.operation==="select") return resolve({data:null,error:{message:"Synthetic read failure"}});
         if(this.operation==="select"&&state.bumpRevisionReadFor===this.table){state.bumpRevisionReadFor=null;state.db.payroll_revision[0].version++;}
         if(this.table==="payroll_attachments"&&this.operation==="insert"&&state.failAttachmentOnce){state.failAttachmentOnce=false;return resolve({data:null,error:{message:"Synthetic attachment metadata failure"}});}
@@ -74,12 +74,33 @@ export function installMock(initialRole) {
           || password!==`dgv-v2/${requestedRole}/${requestedRole}-test`) return {data:null,error:new Error("Invalid test credentials")};
         state.role=requestedRole;return {data:{user:{id:"test-user",app_metadata:{role:state.role}}},error:null};
       },
-      signOut:async()=>{state.role=null;return {error:null};},
-      onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})
+      signOut:async()=>{state.role=null;state.authSubscribers.forEach(callback=>callback("SIGNED_OUT",null));return {error:null};},
+      onAuthStateChange:callback=>{state.authSubscribers.push(callback);return {data:{subscription:{unsubscribe(){state.authSubscribers=state.authSubscribers.filter(item=>item!==callback);}}}};}
     },
     rpc:async(name,args)=>{
       state.rpcs.push({name,args});
       if(state.role!=="admin") return {data:null,error:{message:"Forbidden"}};
+      if(name==="payroll_save_employee") {
+        const fail=message=>({data:null,error:{message}}), p=args.p_employee||{}, id=args.p_employee_id;
+        if(typeof args.p_national_id!=="string"||!args.p_national_id.trim()||args.p_national_id.trim().length>300||/[\u0000-\u001f\u007f]/.test(args.p_national_id))return fail("PAYROLL_NATIONAL_ID_REQUIRED");
+        const nationalId=args.p_national_id.trim();
+        const allowed=["device_user_id","name","active","phone","employment_type","hire_date","termination_date","employment_status","payment_method"];
+        if(Object.keys(p).some(key=>!allowed.includes(key)))return fail("PAYROLL_INVALID_EMPLOYEE_FIELDS");
+        const old=state.db.payroll_employees.find(row=>row.id===id), unchanged=old&&Object.keys(p).every(key=>JSON.stringify(old[key])===JSON.stringify(p[key]))&&state.sensitive[id]?.national_id===nationalId;
+        if(unchanged)return {data:id,error:null}; // Exact replay is safe even with the pre-commit revision.
+        if(args.p_expected_revision!==state.db.payroll_revision[0].version)return fail("PAYROLL_STALE_RELOAD_REQUIRED");
+        if(args.p_create&&old)return fail("PAYROLL_EMPLOYEE_ALREADY_EXISTS");
+        if(!args.p_create&&!old)return fail("PAYROLL_EMPLOYEE_NOT_FOUND");
+        if(state.db.payroll_employees.some(row=>row.id!==id&&row.device_user_id===p.device_user_id))return fail("PAYROLL_DEVICE_ID_EXISTS");
+        if(state.failEmployeeSaveOnce){state.failEmployeeSaveOnce=false;return fail("Synthetic atomic employee save failure");}
+        const row={...(old||{id,created_at:new Date().toISOString()}),...structuredClone(p)};
+        if(old)Object.assign(old,row);else state.db.payroll_employees.push(row);
+        state.sensitive[id]={...(state.sensitive[id]||{}),national_id:nationalId};
+        state.db.payroll_audit.push({id:crypto.randomUUID(),table_name:"payroll_employees",record_id:id,action:old?"UPDATE":"INSERT",after_data:structuredClone(row),created_at:new Date().toISOString()});
+        state.db.payroll_revision[0].version++;
+        if(state.loseEmployeeSaveResponseOnce){state.loseEmployeeSaveResponseOnce=false;return fail("Synthetic lost employee save response");}
+        return {data:id,error:null};
+      }
       if(name==="payroll_import") {
         let inserted=0;
         for(const record of args.p_records) {
@@ -111,10 +132,17 @@ export function installMock(initialRole) {
         state.db.payroll_reviews.push(review);return {data:review.id,error:null};
       }
       if(name==="payroll_set_sensitive") {
+        if(args.p_expected_revision!==undefined&&args.p_expected_revision!==state.db.payroll_revision[0].version)return {data:null,error:{message:"PAYROLL_STALE_RELOAD_REQUIRED"}};
         state.sensitive[args.p_employee_id]=structuredClone(args.p_data);
+        state.db.payroll_revision[0].version++;
         return {data:crypto.randomUUID(),error:null};
       }
-      if(name==="payroll_get_sensitive")return {data:structuredClone(state.sensitive[args.p_employee_id]||{}),error:null};
+      if(name==="payroll_get_sensitive") {
+        const data=structuredClone(state.sensitive[args.p_employee_id]||{});
+        if(state.deferSensitiveRead){state.deferSensitiveRead=false;await new Promise(resolve=>{state.releaseSensitiveRead=resolve;});}
+        if(state.failSensitiveReadOnce){state.failSensitiveReadOnce=false;return {data:null,error:{message:"Synthetic sensitive read failure"}};}
+        return {data,error:null};
+      }
       if(name==="payroll_adjust_run") {
         const row={id:crypto.randomUUID(),run_id:args.p_run_id,amount:args.p_amount,reason:args.p_reason,request_id:args.p_request_id,created_at:new Date().toISOString()};
         state.db.payroll_run_adjustments.push(row);state.db.payroll_revision[0].version++;return {data:row.id,error:null};
