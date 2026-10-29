@@ -20,7 +20,7 @@ begin
       jsonb_build_object('device_user_id','BACKUP-'||suffix,'name','Backup fixture','occurred_at','2096-01-01T10:00:00','device_id','1'),
       jsonb_build_object('device_user_id','BACKUP-'||suffix,'name','Backup fixture','occurred_at','2096-01-01T20:00:00','device_id','1')));
     select id into v_employee from public.payroll_employees where device_user_id='BACKUP-'||suffix;
-    insert into public.payroll_terms(employee_id,effective_from,pay_type,rate) values(v_employee,'2096-01-01','monthly',1000);
+    insert into public.payroll_terms(employee_id,effective_from,pay_type,rate,monthly_settlement) values(v_employee,'2096-01-01','monthly',1000,'statutory');
     insert into public.payroll_rule_versions(effective_from,reason) values('2096-01-01','Backup rule') returning version into v_rules_version;
     v_sensitive:=public.payroll_set_sensitive(v_employee,'{"bank_account":"BACKUP-PRIVATE-ACCOUNT"}','Backup encrypted test');
     select version into v_revision from public.payroll_revision where id=1;

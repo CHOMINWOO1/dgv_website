@@ -97,6 +97,52 @@ assert.equal(body(lookup(taxBook,"Điều chỉnh"))[1][4],-2000000);
 assert.equal(body(lookup(taxBook,"Nhân viên"))[0][4].getDate(),2);
 assert.equal(JSON.stringify(data),untouched,"export builders never mutate source records");
 
+// Monthly net settlement details are already included in run.allowances. The
+// report exposes the basis without adding the same premium a second time.
+const monthlyData=structuredClone(data);
+monthlyData.runs=monthlyData.runs.slice(0,1);monthlyData.employees=monthlyData.employees.slice(0,1);
+monthlyData.adjustments=[];monthlyData.payments=[];monthlyData.previousRuns=[];monthlyData.previousPayments=[];
+const monthlyRun=monthlyData.runs[0];
+monthlyRun.allowances=16927;monthlyRun.total=7016927;
+Object.assign(monthlyRun.snapshot,{settlementMode:"monthly_net",monthlyPlannedMinutes:12480,monthlyActualMinutes:12510,monthlyBalanceMinutes:30,monthlyExtraMinutes:30,monthlyExtraHourlyRate:7000000/208,monthlyExtraAmount:16827,scheduleDefaultUsed:true,statutoryAmount:0,
+  wageBreakdown:[{code:"monthly_net_extra",category:"monthly_extra",label:"Phần vượt tháng / 월 초과수당",minutes:30,rate:7000000/208,multiplier:1,amount:16827}]});
+// Deliberately different current terms/calculation must never rewrite final history.
+monthlyData.terms=[{employee_id:"a",effective_from:"2026-01-01",pay_type:"monthly",monthly_settlement:"monthly_net",rate:9000000,weekly_rest_day:1}];
+monthlyData.summaries=[{...monthlyRun.snapshot,employee_id:"a",monthlyPlannedMinutes:12000,monthlyActualMinutes:13000,monthlyExtraMinutes:1000,monthlyExtraAmount:750000,monthlyExtraHourlyRate:45000}];
+const monthlyBook=tax.buildPayrollWorkbook({...monthlyData,kind:"ledger"});
+const monthlyLedger=body(monthlyBook.sheets[0])[0];
+assert.equal(monthlyLedger[5],16927);assert.equal(monthlyLedger[9],7016927,"monthly extra is not added twice to approved payroll");
+assert.deepEqual(Array.from(monthlyLedger.slice(16,22)),[12480,12510,30,30,33653.85,16827]);
+assert.equal(monthlyLedger[22],"Có / 사용");
+const monthlyAttendance=tax.buildPayrollWorkbook({...monthlyData,kind:"attendance"});
+assert.equal(monthlyAttendance.sheets.length,2);
+assert.deepEqual(Array.from(body(lookup(monthlyAttendance,"Đối chiếu tháng"))[0].slice(4,10)),[12480,12510,30,30,33653.85,16827]);
+const monthlyTax=tax.buildPayrollWorkbook({...monthlyData,kind:"tax"});
+assert.equal(monthlyTax.sheets.length,12);assert.equal(body(lookup(monthlyTax,"Khoản lương"))[0][8],16827);
+assert.equal(tax.summarizePayroll(monthlyData).totals.approved,7016927);
+const monthlyPrint=tax.buildPayrollPrintHtml({...monthlyData,kind:"ledger"});
+assert.match(monthlyPrint,/월 기준분/);assert.match(monthlyPrint,/자동 계산 시급/);assert.match(monthlyPrint,/월 초과수당/);assert.match(monthlyPrint,/12\.480/);assert.match(monthlyPrint,/33\.653,85/);assert.match(monthlyPrint,/16\.827/);
+assert.equal((monthlyPrint.match(/<table /g)||[]).length,2,"wide ledger prints readable parts with repeated employee identifiers");
+
+const firstMonth=structuredClone(monthlyData);firstMonth.month="2026-09";firstMonth.summaries=[];
+const firstRun=firstMonth.runs[0];Object.assign(firstRun,{month:"2026-09-01",base_amount:3640000,allowances:583,total:3640583});
+Object.assign(firstRun.snapshot,{baseAmount:3640000,monthlyPlannedMinutes:6240,monthlyActualMinutes:6241,monthlyBalanceMinutes:1,monthlyExtraMinutes:1,monthlyExtraHourlyRate:35000,monthlyExtraAmount:583,monthlyExpectedPayDate:"2026-10-05",monthlyExtraBasisAmount:7000000,monthlyExtraBasisMinutes:12000,
+  monthlyProration:{applied:true,reason:"hire_date",hireDate:"2026-09-15",fullSalary:7000000,fullPlannedMinutes:12000,activePlannedMinutes:6240,ratio:0.52,unroundedBase:3640000,baseAmount:3640000}});
+for(const kind of ["ledger","attendance","tax"]){
+  const firstBook=tax.buildPayrollWorkbook({...firstMonth,kind});
+  const firstRow=body(lookup(firstBook,"Lương tháng đầu"))[0];
+  assert.equal(firstRow[2].getDate(),15);assert.deepEqual(Array.from(firstRow.slice(3,9)),[7000000,12000,6240,52,3640000,35000]);assert.equal(firstRow[9].getDate(),5);assert.equal(firstRow[9].getMonth(),9);
+  const firstPrint=tax.buildPayrollPrintHtml({...firstMonth,kind});assert.match(firstPrint,/입사 첫 달 급여/);assert.match(firstPrint,/2026-10-05/);assert.match(firstPrint,/3\.640\.000/);
+}
+assert.equal(tax.summarizePayroll(firstMonth).totals.approved,3640583,"first-month report uses stored prorated base and premium without recalculation from current terms");
+
+// A nonpositive balance does not reduce the agreed monthly base in exported totals.
+Object.assign(monthlyRun.snapshot,{monthlyActualMinutes:12420,monthlyBalanceMinutes:-60,monthlyExtraMinutes:0,monthlyExtraAmount:0});monthlyRun.allowances=0;monthlyRun.total=7000000;
+const under=body(tax.buildPayrollWorkbook({...monthlyData,kind:"ledger"}).sheets[0])[0];
+assert.equal(under[4],7000000);assert.equal(under[9],7000000);assert.equal(under[18],-60);assert.equal(under[19],0);assert.equal(under[21],0);
+const legacyLedger=body(tax.buildPayrollWorkbook({...data,kind:"ledger"}).sheets[0]);
+assert.ok(legacyLedger.every(row=>row.length===15),"legacy monthly/hourly reports retain their original columns without invented net-settlement amounts");
+
 for(const kind of tax.KINDS) {
   const print=tax.buildPayrollPrintHtml({...data,kind});
   assert.match(print,/<!doctype html>/i);

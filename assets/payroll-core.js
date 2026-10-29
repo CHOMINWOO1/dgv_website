@@ -239,22 +239,27 @@
         if (!manual && punches.length >= 2 && b - a < 5 * MINUTE) issues.push(message.short);
         if (!manual && punches.length >= 2 && b - a > 16 * 60 * MINUTE) issues.push(message.long);
         const approvedRestWork = day && day.overtime_approved === true && String(day.approval_reason || "").trim();
-        if (!manual && punches.length && dayType !== "work" && !approvedRestWork) issues.push(message.rest);
+        const monthlyNet = term && term.pay_type === "monthly" && term.monthly_settlement === "monthly_net";
+        // Monthly net settlement counts real work on every day. It does not use
+        // individual statutory overtime approvals to accept a complete punch pair.
+        if (!manual && punches.length && dayType !== "work" && !approvedRestWork && !monthlyNet) issues.push(message.rest);
         if (!manual && !punches.length && dayType === "work" && day && date < today && employedOn(date)) issues.push(message.missing);
         const hasWork = manual || punches.length > 0;
         if (hasWork && !employedOn(date)) issues.push(message.employment);
         if (hasWork && !validTerm(term)) issues.push(message.terms);
-        if (!hasWork && ["paid_leave", "holiday"].includes(dayType)) {
+        if (!hasWork && ["paid_leave", "holiday"].includes(dayType) && employedOn(date)) {
           if (!validTerm(term)) issues.push(message.terms);
           else if (term.pay_type !== "monthly") issues.push(message.paidLeave);
         }
         let minutes = 0;
+        let actualSeconds = 0;
         let lateMinutes = 0;
         let earlyMinutes = 0;
         let extraMinutes = 0;
         if (!issues.length && hasWork && validTerm(term)) {
           const shift = shiftBounds(term, date);
-          minutes = Math.max(0, Math.round((b - a - overlap(a, b, shift.breakStart, shift.breakEnd)) / MINUTE));
+          actualSeconds = Math.max(0, (b - a - overlap(a, b, shift.breakStart, shift.breakEnd)) / 1000);
+          minutes = monthlyNet ? Math.floor(actualSeconds / 60) : Math.round(actualSeconds / 60);
           lateMinutes = Math.round(Math.max(0, Math.min(a, shift.end) - shift.start) / MINUTE);
           earlyMinutes = Math.round(Math.max(0, shift.end - Math.max(b, shift.start)) / MINUTE);
           extraMinutes = Math.round((Math.max(0, Math.min(b, shift.start) - a) + Math.max(0, b - Math.max(a, shift.end))) / MINUTE);
@@ -263,15 +268,19 @@
         }
         daily.push({ date, checkIn: Number.isFinite(a) ? timestampText(a) : null,
           checkOut: Number.isFinite(b) && (manual || punches.length > 1) ? timestampText(b) : null,
-          minutes, lateMinutes, earlyMinutes, extraMinutes,
+          minutes, actualSeconds, lateMinutes, earlyMinutes, extraMinutes,
           status: issues.length ? "review" : manual ? "confirmed" : dayType === "work" ? "ok" : dayType,
           issues, issueCodes: issues.map((issue) => Object.keys(message).find((key) => message[key] === issue) || "unknown"),
           rawCount: punches.length, dayType, payType: term && term.pay_type, rate: term ? Number(term.rate) : null });
       }
-      const relevantTerms = employeeTerms.filter((t) => t.effective_from < end && (t.effective_from >= start || t === activeTerm(employeeTerms, start)));
-      const payTypes = [...new Set(relevantTerms.map((t) => t.pay_type))];
       const employmentStart = hireDate && hireDate > start ? hireDate : start;
+      const employmentEnd = terminationDate && terminationDate < end ? dateText(dayMs(terminationDate) + DAY) : end;
+      const relevantTerms = employeeTerms.filter((t) => t.effective_from < employmentEnd && (t.effective_from >= employmentStart || t === activeTerm(employeeTerms, employmentStart)));
+      const payTypes = [...new Set(relevantTerms.map((t) => t.pay_type))];
       const startTerm = activeTerm(employeeTerms, employmentStart);
+      const employmentProrationReasons = [];
+      if (hireDate && hireDate > start && hireDate < end) employmentProrationReasons.push("hire");
+      if (terminationDate && terminationDate >= start && terminationDate < dateText(endMs - DAY)) employmentProrationReasons.push("termination");
       const hasMonthly = payTypes.includes("monthly");
       let baseAmount = Math.round(hourlyAmount + dailyAmount);
       const outsideEmployment = (hireDate && hireDate >= end) || (terminationDate && terminationDate < start);
@@ -290,7 +299,7 @@
           baseAmount = null;
         } else {
           baseAmount = Number(startTerm.rate);
-          if ((hireDate && hireDate > start && hireDate < end) || (terminationDate && terminationDate >= start && terminationDate < dateText(endMs - DAY))) summaryIssues.push(message.employmentProration);
+          if (employmentProrationReasons.length) summaryIssues.push(message.employmentProration);
         }
       }
       if (!hasMonthly && daily.some((d) => d.status === "review")) baseAmount = null;
@@ -311,7 +320,7 @@
         lateMinutes, earlyMinutes, extraMinutes, balanceMinutes: extraMinutes - lateMinutes - earlyMinutes,
         baseAmount, unresolved: attendanceUnresolved + compensationUnresolved,
         attendanceUnresolved, compensationUnresolved, compensationIssues,
-        summaryIssueCodes: summaryIssues.map((issue) => Object.keys(message).find((key) => message[key] === issue) || "unknown"),
+        summaryIssueCodes: summaryIssues.map((issue) => Object.keys(message).find((key) => message[key] === issue) || "unknown"), employmentProrationReasons,
         issues: [...summaryIssues, ...daily.flatMap((d) => d.issues.map((issue) => d.date + ": " + issue))],
         daily, payTypes, termsSummary: relevantTerms.map((t) => t.effective_from + " · " + t.pay_type + " · " + Number(t.rate).toLocaleString("en-US") + " VND").join(" / ") };
     });

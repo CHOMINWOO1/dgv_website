@@ -64,9 +64,10 @@
       const payments = runs.length ? await rows("payroll_payments", (q) => q.in("run_id",runs.map((run) => run.id))) : [];
       const extra = window.DGV_PAYROLL_ADVANCED ? await DGV_PAYROLL_ADVANCED.load({month,dates,employees,runs,payments}) : {};
       if (before !== await revision()) continue;
-      Object.assign(state,{employees,terms,records,days,runs,payments,imports,...extra,revision:before,loaded:true});
-      let summaries = core.summarizeMonth({month,employees,terms,records,days,today:today()});
-      if(window.DGV_PAYROLL_RULES) summaries=DGV_PAYROLL_RULES.extendSummaries({month,employees,terms,records,days,rules:state.rules||[],baseSummaries:summaries,yearToDateRuns:state.historyRuns||[],today:today()});
+      const effectiveDays=window.DGV_PAYROLL_RULES?.buildEffectiveDays({month,employees,terms,days})||days;
+      Object.assign(state,{employees,terms,records,days,effectiveDays,runs,payments,imports,...extra,revision:before,loaded:true});
+      let summaries = core.summarizeMonth({month,employees,terms,records,days:effectiveDays,today:today()});
+      if(window.DGV_PAYROLL_RULES) summaries=DGV_PAYROLL_RULES.extendSummaries({month,employees,terms,records,days:effectiveDays,rules:state.rules||[],baseSummaries:summaries,yearToDateRuns:state.historyRuns||[],today:today()});
       state.summaries = summaries.map((row) => {
         if(row.active===false && !row.daily.some((day)=>day.checkIn) && !runs.some((run)=>run.employee_id===row.employee_id)) return {...row,baseAmount:null,unresolved:row.unresolved+1,attendanceUnresolved:row.attendanceUnresolved+1,issues:[...row.issues,"비활성 직원입니다. 직원 정보에서 재직 상태를 확인하세요. / Nhân viên ngừng làm việc, kiểm tra trạng thái."]};
         return row;
@@ -89,8 +90,10 @@
     $("ledgerBody").innerHTML = visible.length ? visible.map((row) => {
       const run = runFor(row.employee_id), paid = paidFor(run), review = row.unresolved || row.baseAmount == null;
       const reviewed=(state.reviews||[]).some((item)=>item.employee_id===row.employee_id&&Number(item.source_revision)===state.revision);
+      const shown=run?.snapshot||row;
+      const timeCell=shown.settlementMode==="monthly_net"?`<strong>${hours(shown.monthlyActualMinutes)}</strong><span class="muted">월 기준 / Chuẩn ${hours(shown.monthlyPlannedMinutes)}<br />${Number(shown.monthlyBalanceMinutes)<0?"−":"+"}${hours(shown.monthlyBalanceMinutes)} · 추가 / Thêm ${money(shown.monthlyExtraAmount)} VND</span>`:`${hours(shown.minutes)}<span class="muted">${shown.workedDays}일 / ngày</span>`;
       const status = run ? (paid >= totalFor(run) ? "지급 완료 / Đã trả" : paid ? "일부 지급 / Trả một phần" : "급여 확정 / Đã chốt") : review ? "확인 필요 / Cần kiểm tra" : reviewed?"검토 완료 / Đã duyệt":"계산 완료 / Đã tính";
-      return `<tr><td><strong>${esc(row.name)}</strong><span class="muted">ID ${esc(row.device_user_id)}</span></td><td>${hours(run?.snapshot?.minutes ?? row.minutes)}<span class="muted">${run?.snapshot?.workedDays ?? row.workedDays}일 / ngày</span></td><td>${money(run?totalFor(run):row.baseAmount==null?null:row.baseAmount+(row.statutoryAmount||0))}<span class="muted">${run?"확정 / Đã chốt":"계산 급여 / Lương dự kiến"}</span></td><td>${money(paid)}</td><td>${run?money(totalFor(run)-paid):"—"}</td><td><span class="badge ${!run&&review?"warn":!run?"neutral":""}">${status}</span></td><td><button class="quiet" data-employee="${esc(row.employee_id)}">보기 / Xem</button></td></tr>`;
+      return `<tr><td><strong>${esc(row.name)}</strong><span class="muted">ID ${esc(row.device_user_id)}</span></td><td>${timeCell}</td><td>${money(run?totalFor(run):row.baseAmount==null?null:row.baseAmount+(row.statutoryAmount||0)+(row.monthlyExtraAmount||0))}<span class="muted">${run?"확정 / Đã chốt":"계산 급여 / Lương dự kiến"}</span></td><td>${money(paid)}</td><td>${run?money(totalFor(run)-paid):"—"}</td><td><span class="badge ${!run&&review?"warn":!run?"neutral":""}">${status}</span></td><td><button class="quiet" data-employee="${esc(row.employee_id)}">보기 / Xem</button></td></tr>`;
     }).join("") : '<tr><td colspan="7" class="empty">엑셀을 가져오거나 직원을 등록해 주세요.<br />Nhập tệp Excel hoặc thêm nhân viên để bắt đầu.</td></tr>';
     $("importHistory").innerHTML = state.imports.length ? state.imports.map((entry) => `<p class="term-row"><strong>${esc(entry.filename)}</strong> · 신규 / Mới ${entry.inserted_count} · 중복 / Trùng ${entry.duplicate_count}<br /><span class="muted">${esc(new Date(entry.created_at).toLocaleString("ko-KR",{timeZone:"Asia/Ho_Chi_Minh"}))} (VN)</span></p>`).join("") : '<p class="muted">가져오기 이력이 없습니다. / Chưa nhập dữ liệu.</p>';
     renderDetail();
@@ -104,7 +107,7 @@
     const month = $("month").value, start = new Date(`${month}-01T00:00:00Z`), count = new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+1,0)).getUTCDate();
     let calendar = ["일 / CN","월 / T2","화 / T3","수 / T4","목 / T5","금 / T6","토 / T7"].map((day)=>`<div class="weekday">${day}</div>`).join("") + '<span></span>'.repeat(start.getUTCDay());
     for (let day=1;day<=count;day++) {
-      const date = `${month}-${String(day).padStart(2,"0")}`, daily = row.daily.find((item)=>item.date===date), schedule = state.days.find((item)=>item.employee_id===row.employee_id&&item.work_date===date);
+      const date = `${month}-${String(day).padStart(2,"0")}`, daily = row.daily.find((item)=>item.date===date), schedule = (state.effectiveDays||state.days).find((item)=>item.employee_id===row.employee_id&&item.work_date===date);
       const label = daily?.issues?.length ? "확인 / Kiểm tra" : schedule?.day_type && schedule.day_type!=="work" ? typeLabels[schedule.day_type] : daily?.minutes ? hours(daily.minutes) : "";
       calendar += `<button class="${daily?.issues?.length?"review":schedule?.day_type&&schedule.day_type!=="work"?"rest":""}" data-day="${date}" title="${date}">${day}<small>${esc(label)}</small></button>`;
     }
@@ -132,7 +135,7 @@
     field(form,"name").value=employee?.name||""; field(form,"active").checked=employee?.active??true; window.DGV_PAYROLL_ADVANCED?.employeeEdit(employee,form); openDialog("employeeDialog");
   }
   function dayDialog(date) {
-    const form=$("dayForm"), day=state.days.find((item)=>item.employee_id===state.selected&&item.work_date===date);
+    const form=$("dayForm"), day=(state.effectiveDays||state.days).find((item)=>item.employee_id===state.selected&&item.work_date===date);
     form.reset(); field(form,"work_date").value=date; field(form,"day_type").value=day?.day_type||"work";
     field(form,"check_in").value=day?.check_in?.slice(0,16)||""; field(form,"check_out").value=day?.check_out?.slice(0,16)||""; field(form,"reason").value=day?.reason||"";
     const punches=state.records.filter((item)=>item.employee_id===state.selected&&item.occurred_at.startsWith(date));
@@ -186,11 +189,16 @@
     if (manual && (!$("reviewedBase")?.value || !Number.isSafeInteger(baseAmount) || baseAmount < 0 || baseAmount > 1e9 || !reviewedReason)) throw new Error("검토한 기본급과 계산 근거를 입력해 주세요. / Nhập lương đã kiểm tra và căn cứ.");
     if (![allowances,deductions].every((amount)=>Number.isSafeInteger(amount)&&amount>=0&&amount<=1e9)) throw new Error("수당·공제는 0 이상의 정수 VND로 입력하세요. / Nhập số tiền nguyên không âm.");
     const statutoryAmount=Number(row.statutoryAmount||0);
-    const total=baseAmount+statutoryAmount+allowances-deductions;
+    const monthlySalaryBasis=!manual&&row?.monthlyProration?.applied?{salaryBasisAmount:row.monthlyProration.fullSalary,salaryBasisMinutes:row.monthlyProration.fullPlannedMinutes}:{};
+    const monthlyExtra=row.settlementMode==="monthly_net"?DGV_PAYROLL_RULES.calculateMonthlyExtra({baseAmount,plannedMinutes:row.monthlyPlannedMinutes,extraMinutes:row.monthlyExtraMinutes,...monthlySalaryBasis}):null;
+    if(row.settlementMode==="monthly_net"&&(monthlyExtra?.amount==null||monthlyExtra?.hourlyRate==null))throw new Error("월 기준시간과 기본급을 확인해 주세요. / Kiểm tra giờ chuẩn tháng và lương cơ bản.");
+    const monthlyExtraAmount=monthlyExtra?.amount??Number(row.monthlyExtraAmount||0);
+    const monthlyExtraHourlyRate=monthlyExtra?.hourlyRate??row.monthlyExtraHourlyRate;
+    const total=baseAmount+statutoryAmount+monthlyExtraAmount+allowances-deductions;
     if (total<0) throw new Error("공제가 급여보다 클 수 없습니다. / Khấu trừ vượt quá lương.");
     const note=$("adjustmentNote").value.trim();
     if ((allowances||deductions)&&!note) throw new Error("수당·공제 근거를 입력해 주세요. / Nhập căn cứ phụ cấp và khấu trừ.");
-    return {row,allowances,deductions,total,note,baseAmount,manual,reviewedReason,statutoryAmount};
+    return {row,allowances,deductions,total,note,baseAmount,manual,reviewedReason,statutoryAmount,monthlyExtraAmount,monthlyExtraHourlyRate,monthlyExtraBasisAmount:monthlySalaryBasis.salaryBasisAmount??baseAmount,monthlyExtraBasisMinutes:monthlySalaryBasis.salaryBasisMinutes??row.monthlyPlannedMinutes};
   }
   function exportLedger() {
     if (!state.loaded) return;
@@ -218,7 +226,7 @@
   $("export").addEventListener("click",()=>task(exportLedger));
   $("addEmployee").addEventListener("click",()=>employeeDialog(false));
   $("editEmployee").addEventListener("click",()=>employeeDialog(true));
-  $("addTerms").addEventListener("click",()=>{const form=$("termsForm");form.reset();field(form,"effective_from").value=`${$("month").value}-01`;openDialog("termsDialog");});
+  $("addTerms").addEventListener("click",()=>{const form=$("termsForm");form.reset();field(form,"effective_from").value=`${$("month").value}-01`;window.DGV_PAYROLL_ADVANCED?.termsEdit(form);openDialog("termsDialog");});
   $("logout").addEventListener("click",()=>DGV.signOut());
   document.addEventListener("click",(event)=>{
     const button=event.target.closest("button");if(!button||state.busy)return;
@@ -232,7 +240,7 @@
       const run=runFor(state.selected),form=$("paymentForm");form.reset();field(form,"paid_on").value=today();field(form,"paid_on").max=today();field(form,"amount").max=String(totalFor(run)-paidFor(run));field(form,"method").value=state.employees.find(e=>e.id===state.selected)?.payment_method==="bank"?"bank":"cash";state.paymentRequest=crypto.randomUUID();openDialog("paymentDialog");
     }
   });
-  $("reviewArea").addEventListener("input",()=>{try{$("draftTotal").textContent=money(draft().total)+" VND";}catch{$("draftTotal").textContent="입력 확인 / Kiểm tra";}});
+  $("reviewArea").addEventListener("input",()=>{try{const values=draft();$("draftTotal").textContent=money(values.total)+" VND";window.DGV_PAYROLL_ADVANCED?.renderMonthlyDraft(values);}catch{$("draftTotal").textContent="입력 확인 / Kiểm tra";}});
   $("employeeForm").addEventListener("submit",(event)=>{event.preventDefault();task(async()=>{
     const form=event.currentTarget||$("employeeForm"); // event.currentTarget can be cleared after await in task.
     const values={name:field(form,"name").value.trim(),active:field(form,"active").checked,...window.DGV_PAYROLL_ADVANCED?.employeeValues(form)};
@@ -244,6 +252,7 @@
   $("termsForm").addEventListener("submit",(event)=>{event.preventDefault();task(async()=>{
     const form=$("termsForm"),values=Object.fromEntries(new FormData(form));values.employee_id=state.selected;values.rate=Number(values.rate);
     if("overtime_hourly_rate" in values)values.overtime_hourly_rate=values.overtime_hourly_rate===""?null:Number(values.overtime_hourly_rate);
+    window.DGV_PAYROLL_ADVANCED?.termsValues(values,form);
     if(!Number.isSafeInteger(values.rate)||values.rate<0)throw new Error("급여 단가를 확인해 주세요. / Kiểm tra mức lương.");
     await result(db.from("payroll_terms").insert(values));$("termsDialog").close();await load();notice("적용일과 함께 급여조건을 저장했습니다. / Đã lưu điều kiện và ngày hiệu lực.");
   });});
@@ -260,7 +269,7 @@
     const snapshot=window.DGV_PAYROLL_ADVANCED?.reviewSnapshot(values)||{...values.row,adjustmentNote:values.note,calculationVersion:2};
     if(values.manual){snapshot.originalUnresolved=values.row.unresolved;snapshot.unresolved=0;snapshot.reviewedBase={amount:values.baseAmount,reason:values.reviewedReason};}
     if(window.DGV_PAYROLL_ADVANCED)await DGV_PAYROLL_ADVANCED.recordReview(values,snapshot);
-    await result(db.rpc("payroll_finalize",{p_employee_id:values.row.employee_id,p_month:values.month+"-01",p_base_amount:values.baseAmount,p_allowances:values.allowances+values.statutoryAmount,p_deductions:values.deductions,p_snapshot:snapshot,p_expected_revision:values.revision}));
+    await result(db.rpc("payroll_finalize",{p_employee_id:values.row.employee_id,p_month:values.month+"-01",p_base_amount:values.baseAmount,p_allowances:values.allowances+values.statutoryAmount+values.monthlyExtraAmount,p_deductions:values.deductions,p_snapshot:snapshot,p_expected_revision:values.revision}));
     state.confirmation=null;$("confirmDialog").close();await load();notice("급여를 확정했습니다. 실제 지급은 별도로 기록해 주세요. / Đã chốt lương. Ghi thanh toán riêng.");
   });});
   $("paymentForm").addEventListener("submit",(event)=>{event.preventDefault();task(async()=>{

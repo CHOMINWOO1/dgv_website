@@ -2,6 +2,8 @@
   "use strict";
   const KINDS = Object.freeze(["ledger", "attendance", "parttime", "cash", "bank", "outstanding", "tax"]);
   const names = { ledger:"Bang_luong", attendance:"Cham_cong", parttime:"Ban_thoi_gian", cash:"Tien_mat", bank:"Chuyen_khoan", outstanding:"Con_phai_tra", tax:"Ho_so_luong" };
+  const monthlyHeadings=["Cách tính / 정산방식","Phút chuẩn tháng / 월 기준분","Phút thực tế tháng / 월 실제분","Chênh lệch ròng / 월 순차이분","Phút vượt dương / 월 양수초과분","Đơn giá giờ tự tính / 자동 계산 시급","Tiền vượt tháng / 월 초과수당","Lịch mặc định / 기본근무표 사용"];
+  const monthlyNote="Khi chốt lương, phần vượt tháng nằm trong tổng phụ cấp; không cộng thêm lần nữa. Số phút là toàn tháng, không phải tổng riêng của khoảng ngày lọc. / 월 초과수당은 확정 시 수당 합계에 포함됩니다. 시간은 선택기간이 아닌 해당 월 전체 기준입니다.";
   const headings = {
     ledger:["ID", "Nhân viên / 직원", "Kỳ lương / 급여월", "Trạng thái / 상태", "Cơ bản / 기본급", "Phụ cấp / 추가수당", "Khấu trừ / 공제", "Đã chốt ban đầu / 최초 확정", "Điều chỉnh / 정정", "Phải trả / 확정급여", "Đã trả ròng / 순지급", "Còn phải trả / 미지급", "Phút làm / 근무분", "Ngày làm / 근무일", "Cần kiểm tra / 확인 필요"],
     attendance:["ID", "Nhân viên / 직원", "Ngày làm / 근무일", "Vào / 출근", "Ra / 퇴근", "Phút làm / 근무분", "Đi muộn / 지각분", "Về sớm / 조퇴분", "Thêm giờ ứng viên / 추가근무 후보분", "Loại ngày / 근무일 구분", "Tình trạng / 상태", "Ghi chú kiểm tra / 검토 사항", "Nguồn / 기준"],
@@ -20,6 +22,9 @@
     return result;
   };
   const amount = (value, label) => number(value, label, 0);
+  // Round the displayed hourly rate only; exported payable amounts always use
+  // the saved calculation result, never this rounded display value.
+  const displayedRate=(value)=>value==null?null:Math.round(number(value,"display hourly rate")*100)/100;
   const sum = (rows, getter) => rows.reduce((total,row)=>total+getter(row),0);
   function validateDate(value) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(text(value))) throw new Error("Invalid report date");
@@ -75,7 +80,7 @@
   }
   function buildRows(data,month) {
     const monthRuns=data.runs.filter(run=>monthOf(run.month)===month);
-    let summaries=data.summaries.filter(summary=>!summary.month || summary.month===month);
+    let summaries=data.summaries.filter(summary=>(summary.month||data.month)===month);
     if (!summaries.length && root.DGV_PAYROLL_CORE?.summarizeMonth) summaries=root.DGV_PAYROLL_CORE.summarizeMonth({month,employees:data.employees,terms:data.terms,records:data.records,days:data.days,today:data.today});
     const employees=new Map(data.employees.map(employee=>[employee.id,employee]));
     monthRuns.forEach(run=>{if(!employees.has(run.employee_id))employees.set(run.employee_id,{id:run.employee_id,name:run.snapshot?.name,device_user_id:run.snapshot?.device_user_id,active:false});});
@@ -130,7 +135,12 @@
       rows:raw.map((row,index)=>row.map(value=>cell(value,index===0?"title":index===headerIndex?"header":index<headerIndex?"wrapped":undefined)))};
   }
   function column(count) {let result="";for(let n=count;n>0;n=Math.floor((n-1)/26))result=String.fromCharCode(65+(n-1)%26)+result;return result;}
-  function ledgerBody(rows) {return rows.map(row=>[row.device_user_id,row.name,row.month,row.status,row.base,amount(row.run?.allowances,"allowances"),amount(row.run?.deductions,"deductions"),row.run?number(row.run.total,"total"):null,row.correction,row.approved,row.paid,row.outstanding,amount(row.snapshot.minutes,"minutes"),amount(row.snapshot.workedDays,"worked days"),row.run?0:amount(row.snapshot.unresolved,"unresolved")]);}
+  function monthlyValues(snapshot) {
+    if(snapshot.settlementMode!=="monthly_net")return [snapshot.settlementMode==="statutory"?"Theo quy tắc / 규칙 정산":"",null,null,null,null,null,null,""];
+    const optional=(key)=>snapshot[key]==null?null:number(snapshot[key],key);
+    return ["Bù trừ toàn tháng / 월간 상계",...['monthlyPlannedMinutes','monthlyActualMinutes','monthlyBalanceMinutes','monthlyExtraMinutes'].map(optional),displayedRate(snapshot.monthlyExtraHourlyRate),optional('monthlyExtraAmount'),snapshot.scheduleDefaultUsed?"Có / 사용":"Không / 미사용"];
+  }
+  function ledgerBody(rows,includeMonthly) {return rows.map(row=>[row.device_user_id,row.name,row.month,row.status,row.base,amount(row.run?.allowances,"allowances"),amount(row.run?.deductions,"deductions"),row.run?number(row.run.total,"total"):null,row.correction,row.approved,row.paid,row.outstanding,amount(row.snapshot.minutes,"minutes"),amount(row.snapshot.workedDays,"worked days"),row.run?0:amount(row.snapshot.unresolved,"unresolved"),...(includeMonthly?monthlyValues(row.snapshot):[])]);}
   function paymentBody(data,rows) {
     return rows.flatMap(row=>row.payments.map(item=>[item.payment.id,row.device_user_id,row.name,row.month,dateCell(item.payment.paid_on),item.payment.method==="cash"?"Tiền mặt / 현금":"Chuyển khoản / 이체",item.paid,item.reversed,item.net,text(item.payment.reference),text(item.payment.note),item.evidence.length,item.evidence.filter(file=>file.evidence_type==="signature").map(file=>text(file.signed_name)).join("; "),item.reversals.map(reversal=>text(reversal.reason)).join("; ")]));
   }
@@ -141,7 +151,7 @@
       months.add(date.toISOString().slice(0,7));
       if(months.size>1200)throw new Error("Report range is too large");
     }
-    return [...months].sort().flatMap(month=>buildRows({...data,summaries:[]},month));
+    return [...months].sort().flatMap(month=>buildRows({...data,summaries:data.summaries.filter(summary=>summary.settlementMode==="monthly_net"&&(summary.month||data.month)===month)},month));
   }
   function buildPayrollWorkbook(options) {
     const kind=options.kind||"tax";
@@ -149,16 +159,23 @@
     const data=inputs(options),model=summarizePayroll(data),rows=model.rows;
     const scope=data.fromDate&&["attendance","cash","bank","parttime"].includes(kind)?`${data.fromDate}_${data.toDate}`:data.month;
     const title=`HANA · ${scope} · VND`;
-    const ledger=()=>sheet("Bảng lương",title+" · Bảng lương / 급여대장",headings.ledger,ledgerBody(rows),[14,26,15,25,20,20,20,22,20,22,22,22,20,20,24]);
+    const includeMonthly=rows.some(row=>row.snapshot.settlementMode==="monthly_net");
+    const expectedDates=[...new Set(rows.map(row=>row.snapshot.monthlyExpectedPayDate).filter(Boolean))];
+    const payDateNotes=expectedDates.length?[`Ngày trả dự kiến / 예정 지급일: ${expectedDates.join(", ")}`]:[];
+    const ledger=()=>sheet("Bảng lương",title+" · Bảng lương / 급여대장",[...headings.ledger,...(includeMonthly?monthlyHeadings:[])],ledgerBody(rows,includeMonthly),[14,26,15,25,20,20,20,22,20,22,22,22,20,20,24,...(includeMonthly?[30,24,24,24,24,27,26,26]:[])],includeMonthly?[monthlyNote,...payDateNotes]:[]);
     const selectedRows=["attendance","cash","bank","parttime"].includes(kind)?rangeRows(data):rows;
     const inRange=(date)=>!data.fromDate||(text(date).slice(0,10)>=data.fromDate&&text(date).slice(0,10)<=data.toDate);
     const attendance=()=>sheet("Chấm công",title+" · Chấm công / 출퇴근",headings.attendance,selectedRows.flatMap(row=>list(row.snapshot.daily).filter(day=>inRange(day.date)).map(day=>[row.device_user_id,row.name,dateCell(day.date),dateCell(day.checkIn),dateCell(day.checkOut),amount(day.minutes,"minutes"),amount(day.lateMinutes,"late"),amount(day.earlyMinutes,"early"),amount(day.extraMinutes,"extra"),text(day.dayType),text(day.status),list(day.issues).join("; "),row.run?"Bản đã chốt / 확정 당시":"Hiện tại / 현재"])),[14,26,23,23,23,20,20,20,27,22,22,65,24]);
+    const monthlyRows=selectedRows.filter(row=>row.snapshot.settlementMode==="monthly_net"&&(!data.fromDate||row.month>=monthOf(data.fromDate)&&row.month<=monthOf(data.toDate)));
+    const monthly=()=>sheet("Đối chiếu tháng",title+" · Đối chiếu giờ toàn tháng / 월간 근무 정산",["ID","Nhân viên / 직원","Kỳ lương / 급여월",...monthlyHeadings,"Nguồn / 기준","Ngày trả dự kiến / 예정 지급일"],monthlyRows.map(row=>[row.device_user_id,row.name,row.month,...monthlyValues(row.snapshot),row.run?"Bản đã chốt / 확정 당시":"Chưa chốt / 미확정",dateCell(row.snapshot.monthlyExpectedPayDate)]),[14,26,18,30,24,24,24,24,27,26,26,26,27],[monthlyNote]);
+    const prorationRows=monthlyRows.filter(row=>row.snapshot.monthlyProration?.applied);
+    const proration=()=>sheet("Lương tháng đầu",title+" · Lương tháng đầu / 입사 첫 달 급여",["ID","Nhân viên / 직원","Ngày vào / 입사일","Lương cả tháng / 약정 월급","Phút chuẩn cả tháng / 전체 월 기준분","Phút từ ngày vào / 입사 후 기준분","Tỷ lệ % / 적용 비율 %","Lương cơ bản kỳ này / 당월 기본급","Đơn giá giờ tự tính / 자동 계산 시급","Ngày trả dự kiến / 예정 지급일"],prorationRows.map(row=>{const p=row.snapshot.monthlyProration;return [row.device_user_id,row.name,dateCell(p.hireDate),number(p.fullSalary,"full monthly salary"),number(p.fullPlannedMinutes,"full planned minutes"),number(p.activePlannedMinutes,"active planned minutes"),Math.round(number(p.ratio,"hire proration ratio")*10000)/100,number(p.baseAmount,"prorated base amount"),displayedRate(row.snapshot.monthlyExtraHourlyRate),dateCell(row.snapshot.monthlyExpectedPayDate)];}),[14,26,23,26,27,27,24,28,27,27],["Lương tháng đầu = lương cả tháng × phút chuẩn từ ngày vào ÷ phút chuẩn cả tháng. Đơn giá vượt giờ vẫn dùng lương và giờ chuẩn cả tháng. / 첫 달 기본급은 입사 후 기준시간 비율로 계산하며, 초과 시급은 전체 월 약정급여·기준시간으로 계산합니다."]);
     const selectedPayments=selectedRows.filter(row=>kind!=="parttime"||row.parttime).map(row=>({...row,payments:row.payments.filter(item=>inRange(item.payment.paid_on)&&(!["cash","bank"].includes(kind)||item.payment.method===kind))}));
     const payments=()=>sheet(kind==="cash"?"Tiền mặt":kind==="bank"?"Chuyển khoản":kind==="parttime"?"Bán thời gian":"Thanh toán",title+" · Thanh toán / 지급내역",headings.payment,paymentBody(data,selectedPayments),[40,14,26,16,23,23,22,20,22,40,55,18,30,55],[data.fromDate?"Theo ngày trả thực tế / 실제 지급일 기준":"Theo kỳ lương; ngày trả có thể khác tháng / 급여 대상월 기준, 실제 지급일 별도"]);
     const outstanding=()=>sheet("Còn phải trả",title+" · Còn phải trả / 미지급",headings.outstanding,rows.filter(row=>row.run&&row.outstanding!==0).map(row=>[row.device_user_id,row.name,row.month,row.approved,row.paid,row.outstanding,row.status]),[14,26,16,22,22,22,30]);
     let sheets;
-    if(kind==="ledger")sheets=[ledger()];
-    else if(kind==="attendance")sheets=[attendance()];
+    if(kind==="ledger")sheets=[ledger(),...(prorationRows.length?[proration()]:[])];
+    else if(kind==="attendance")sheets=[attendance(),...(monthlyRows.length?[monthly()]:[]),...(prorationRows.length?[proration()]:[])];
     else if(["cash","bank","parttime"].includes(kind))sheets=[payments()];
     else if(kind==="outstanding")sheets=[outstanding()];
     else {
@@ -171,7 +188,7 @@
       const reviews=sheet("Cần kiểm tra",title+" · Kế toán kiểm tra / 세무 검토",["Nhân viên / 직원","Mã / 코드","Nội dung / 확인 사항","Tham chiếu / 관련 ID"],model.warnings.map(warning=>[warning.name,warning.code,warning.message,warning.reference]),[26,30,95,40]);
       const comparison=sheet("So sánh tháng",title+" · So sánh kỳ trước / 전월 비교",["Nhân viên / 직원","Kỳ trước / 전월","Lương kỳ trước / 전월 확정","Kỳ này / 당월","Lương kỳ này / 당월 확정","Chênh lệch / 차이","Đã trả kỳ trước / 전월 순지급","Đã trả kỳ này / 당월 순지급"],model.comparison.map(row=>[row.name,row.previousMonth,row.previousApproved,data.month,row.currentApproved,row.difference,row.previousPaid,row.currentPaid]),[26,18,25,18,25,22,29,29]);
       const cover=sheet("Hồ sơ lương",title+" · Hồ sơ gửi kế toán / 세무대리인 전달자료",["Chỉ tiêu / 항목","Giá trị / 값"],[["Kỳ lương / 급여 대상월",data.month],["Lương đã duyệt, gồm điều chỉnh / 정정 포함 확정급여",model.totals.approved],["Đã thanh toán ròng / 취소 반영 순지급",model.totals.paid],["Còn phải trả / 미지급",model.totals.outstanding],["Nhân viên chưa chốt / 미확정 직원",model.totals.unfinalized],["Mục cần kiểm tra / 검토 사항",model.warnings.length],["Cơ sở / 기준","Kỳ lương; ngày trả thực tế được ghi riêng / 급여 대상월, 실제 지급일 별도"],["Tránh ghi trùng / 중복 계상 방지","Không cộng lương và tiền đã trả thành chi phí. Không tự ghi vào chi phí nhà hàng. / 급여와 지급액을 비용으로 합산하지 않으며 식당 지출에 자동 전기하지 않습니다."],["Kế toán xác nhận / 세무 검토","Xác minh thuế TNCN, bảo hiểm, hợp đồng và chứng từ trước khi khai / 신고 전 개인소득세·보험·계약·증빙 확인"]],[75,105]);
-      sheets=[cover,ledger(),employees,attendance(),payments(),outstanding(),legal,corrections,evidence,reviews,comparison];
+      sheets=[cover,ledger(),employees,attendance(),...(monthlyRows.length?[monthly()]:[]),...(prorationRows.length?[proration()]:[]),payments(),outstanding(),legal,corrections,evidence,reviews,comparison];
     }
     return {filename:`HANA_${names[kind]}_${scope}${data.employeeId?"_Nhan_vien":""}.xlsx`,sheets};
   }
@@ -186,13 +203,18 @@
   }
   function buildPayrollPrintHtml(options) {
     const workbook=buildPayrollWorkbook(options);
-    const sections=workbook.sheets.map(sheet=>{
+    const sections=workbook.sheets.flatMap(sheet=>{
       const raw=sheet.rows.map(row=>row.map(item=>item&&typeof item==="object"&&"value"in item?item.value:item));
       const headerIndex=sheet.freezeRows-1;
       const headers=raw[headerIndex]||[];
       const notes=raw.slice(1,headerIndex).map(row=>`<p class="note">${row.map(value=>htmlEscape(printValue(value))).join(" · ")}</p>`).join("");
       const body=raw.slice(sheet.freezeRows);
-      return `<section class="report"><header><p class="brand">CÔNG TY TNHH DGV · HANA</p><h1>${htmlEscape(raw[0]?.[0]||sheet.name)}</h1>${notes}</header><table class="${headers.length>10?"wide":""}"><thead><tr>${headers.map(value=>`<th scope="col">${htmlEscape(printValue(value))}</th>`).join("")}</tr></thead><tbody>${body.length?body.map(row=>`<tr>${headers.map((_,index)=>`<td${typeof row[index]==="number"?' class="number"':""}>${htmlEscape(printValue(row[index]))}</td>`).join("")}</tr>`).join(""):`<tr><td colspan="${headers.length}">Không có dữ liệu / 해당 자료 없음</td></tr>`}</tbody></table><footer>Hồ sơ lương nội bộ — kế toán xác nhận trước khi khai / 급여 내부자료 · 신고 전 세무대리인 확인</footer></section>`;
+      // Repeat the employee identifiers when the ledger needs more than one
+      // landscape page, instead of shrinking 23 columns into unreadable text.
+      const parts=[];
+      if(headers.length>16){for(let start=2;start<headers.length;start+=11)parts.push([0,1,...Array.from({length:Math.min(11,headers.length-start)},(_,i)=>start+i)]);}
+      else parts.push(headers.map((_,index)=>index));
+      return parts.map((indices,part)=>`<section class="report"><header><p class="brand">CÔNG TY TNHH DGV · HANA</p><h1>${htmlEscape(raw[0]?.[0]||sheet.name)}${parts.length>1?` · ${part+1}/${parts.length}`:""}</h1>${notes}</header><table class="${indices.length>10?"wide":""}"><thead><tr>${indices.map(index=>`<th scope="col">${htmlEscape(printValue(headers[index]))}</th>`).join("")}</tr></thead><tbody>${body.length?body.map(row=>`<tr>${indices.map(index=>`<td${typeof row[index]==="number"?' class="number"':""}>${htmlEscape(printValue(row[index]))}</td>`).join("")}</tr>`).join(""):`<tr><td colspan="${indices.length}">Không có dữ liệu / 해당 자료 없음</td></tr>`}</tbody></table><footer>Hồ sơ lương nội bộ — kế toán xác nhận trước khi khai / 급여 내부자료 · 신고 전 세무대리인 확인</footer></section>`);
     }).join("");
     return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'none'"><title>${htmlEscape(workbook.filename.replace(/\.xlsx$/,""))}</title><style>
       @page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{margin:0;color:#171717;background:#eaeaea;font-family:Arial,"Malgun Gothic",sans-serif;font-size:10pt}.report{background:white;max-width:277mm;margin:8mm auto;padding:8mm;border:1px solid #333;break-after:page}.report:last-child{break-after:auto}.brand{font-size:10pt;font-weight:bold;margin:0 0 4mm}h1{font-size:15pt;margin:0 0 5mm;overflow-wrap:anywhere}.note{font-size:9pt;line-height:1.45;margin:2mm 0}table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9pt;margin-top:4mm}table.wide{font-size:8pt}th,td{border:1px solid #555;padding:2mm 1.5mm;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eee;font-weight:bold}td.number{text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:normal}thead{display:table-header-group}tr{break-inside:avoid}footer{font-size:8pt;margin-top:4mm;line-height:1.5}@media print{body{background:white}.report{max-width:none;margin:0;padding:0;border:0}.report+ .report{break-before:page}th{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
