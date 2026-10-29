@@ -137,6 +137,8 @@ try {
     await page.locator('#paymentForm button[type="submit"]').click();
     await page.locator("#paymentDialog").waitFor({state:"hidden"});
     await page.waitForFunction(()=>!document.getElementById("workspace").disabled);
+    await page.locator("#evidenceDialog").waitFor({state:"visible"});
+    await page.locator("#evidenceForm [data-close]").click(); // Signature may be collected later; covered by the mobile signature suite.
   }
   assert.match(await page.locator("#paymentArea").innerText(),/250[.,]000/);
   assert.match(await page.locator("#paymentArea").innerText(),/230[.,]000/);

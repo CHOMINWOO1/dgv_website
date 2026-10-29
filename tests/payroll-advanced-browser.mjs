@@ -75,6 +75,7 @@ try{
   await page.locator("#editEmployee").click();await page.locator("#employeeDialog").waitFor({state:"visible"});await field("employeeForm","payment_method").selectOption("bank");await submit("employeeForm");
   for(const [method,amount] of [["cash",100000],["bank",50000]]){
     await page.locator("#addPayment").click();assert.equal(await field("paymentForm","method").inputValue(),"bank","employee preferred payment method opens by default");await field("paymentForm","paid_on").fill("2026-10-05");await field("paymentForm","amount").fill(String(amount));await field("paymentForm","method").selectOption(method);await field("paymentForm","reference").fill("TEST-REFERENCE");await submit("paymentForm");
+    await page.locator("#evidenceDialog").waitFor({state:"visible"});await page.locator("#evidenceForm [data-close]").click();
   }
   const payments=await page.evaluate(()=>structuredClone(__payrollTest.db.payroll_payments));
   await page.locator("#adjustRun").click();await field("amendForm","amount").fill("10000");await field("amendForm","reason").fill("Synthetic approved adjustment");await submit("amendForm");
@@ -112,7 +113,7 @@ try{
   // Another admin's correction must be fetched by range search even without page refresh.
   await page.evaluate(id=>{__payrollTest.db.payroll_payment_reversals.push({id:"remote-reversal",payment_id:"prior-2026-10-01",reason:"Remote correction"});__payrollTest.db.payroll_employees.find(e=>e.id===id).name="Remote refreshed A";__payrollTest.db.payroll_revision[0].version++;},employee);
   await page.locator("#rangeSearch").click();await idle();
-  assert.match(await page.locator("#rangeResult .range-summary").innerText(),/20[.,]000/);assert.doesNotMatch(await page.locator("#rangeResult .range-summary").innerText(),/40[.,]000/);assert.match(await page.locator("#rangeResult").innerText(),/Remote refreshed A/);assert.match(await page.locator("#rangeResult").innerText(),/Đã hủy/);
+  assert.match(await page.locator("#rangeResult .range-summary").innerText(),/20[.,]000/);assert.doesNotMatch(await page.locator("#rangeResult .range-summary").innerText(),/40[.,]000/);assert.match(await page.locator("#rangeResult").innerText(),/Remote refreshed A/);assert.match(await page.locator("#rangeReceipts").innerText(),/Đã hủy/);
   assert.match((await download("#rangeExport")).text,/Remote correction/,"range export uses freshly fetched reversals");
   const rangeReads=await page.evaluate(()=>__payrollTest.calls.filter(c=>c.table==="payroll_payments"&&c.operation==="select").length);
   await page.evaluate(()=>{__payrollTest.bumpRevisionReadFor="payroll_payments";});await page.locator("#rangeSearch").click();await idle();

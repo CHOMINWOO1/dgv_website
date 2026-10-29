@@ -2,7 +2,7 @@ export function installMock(initialRole) {
   const a = "00000000-0000-4000-8000-000000000001";
   const b = "00000000-0000-4000-8000-000000000002";
   const state = window.__payrollTest = {
-    role: initialRole, calls: [], rpcs: [], failRead: false, sensitive:{}, uploads:[], storageObjects:{}, authSubscribers:[],
+    role: initialRole, calls: [], rpcs: [], failRead: false, sensitive:{}, uploads:[], storageReads:[], storageObjects:{}, authSubscribers:[],
     db: {
       payroll_employees: [{ id: a, device_user_id: "2", name: "Test A", active: true }, { id: b, device_user_id: "9", name: "Test B", active: true }],
       payroll_terms: [a, b].map((employee_id, i) => ({ id: `term-${i}`, employee_id, effective_from: "2026-06-01", pay_type: "hourly", rate: 30000, shift_start: "10:00:00", shift_end: "20:00:00", break_start: "13:00:00", break_end: "15:00:00" })),
@@ -31,6 +31,7 @@ export function installMock(initialRole) {
     async then(resolve, reject) {
       try {
         state.calls.push({table:this.table,operation:this.operation,...(this.value?{payload:structuredClone(this.value)}:{})});
+        if(this.operation==="select"&&state.deferReadFor===this.table){state.deferReadFor=null;await new Promise(resolve=>{state.releaseRead=resolve;});}
         if(state.failRead && this.operation==="select") return resolve({data:null,error:{message:"Synthetic read failure"}});
         if(this.operation==="select"&&state.bumpRevisionReadFor===this.table){state.bumpRevisionReadFor=null;state.db.payroll_revision[0].version++;}
         if(this.table==="payroll_attachments"&&this.operation==="insert"&&state.failAttachmentOnce){state.failAttachmentOnce=false;return resolve({data:null,error:{message:"Synthetic attachment metadata failure"}});}
@@ -60,8 +61,13 @@ export function installMock(initialRole) {
         state.storageObjects[storagePath]={bytes:Array.from(new Uint8Array(await file.arrayBuffer())),mime:options?.contentType||file.type};
         return {data:{path:storagePath},error:null};
       },
-      createSignedUrl:async(storagePath,expiresIn)=>({data:{signedUrl:`${location.origin}/test-private-evidence/${encodeURIComponent(storagePath)}?expires=${expiresIn}`},error:null}),
-      download:async(storagePath)=>state.storageObjects[storagePath]?{data:new Blob([new Uint8Array(state.storageObjects[storagePath].bytes)],{type:state.storageObjects[storagePath].mime}),error:null}:{data:null,error:{message:"Synthetic missing object"}}
+      createSignedUrl:async(storagePath,expiresIn)=>{state.storageReads.push({method:"createSignedUrl",path:storagePath,expiresIn,role:state.role});return {data:{signedUrl:`${location.origin}/test-private-evidence/${encodeURIComponent(storagePath)}?expires=${expiresIn}`},error:null};},
+      download:async(storagePath)=>{
+        state.storageReads.push({method:"download",path:storagePath,role:state.role});
+        if(state.deferStorageDownload){state.deferStorageDownload=false;await new Promise(resolve=>{state.releaseStorageDownload=resolve;});}
+        if(state.failDownloadOnce){state.failDownloadOnce=false;return {data:null,error:{message:"Synthetic download failure"}};}
+        return state.storageObjects[storagePath]?{data:new Blob([new Uint8Array(state.storageObjects[storagePath].bytes)],{type:state.storageObjects[storagePath].mime}),error:null}:{data:null,error:{message:"Synthetic missing object"}};
+      }
     })},
     auth:{
       getSession:async()=>({data:{session:state.role?{access_token:"synthetic-test-token"}:null},error:null}),
@@ -119,8 +125,13 @@ export function installMock(initialRole) {
         state.db.payroll_runs.push(run);state.db.payroll_revision[0].version++;return {data:run.id,error:null};
       }
       if(name==="payroll_pay") {
+        const existing=state.db.payroll_payments.find(row=>row.request_id===args.p_request_id);
+        if(existing)return {data:existing.id,error:null};
+        if(state.failPaymentOnce){state.failPaymentOnce=false;return {data:null,error:{message:"Synthetic payment failure"}};}
         const payment={id:crypto.randomUUID(),run_id:args.p_run_id,amount:args.p_amount,paid_on:args.p_paid_on,method:args.p_method,reference:args.p_reference,note:args.p_note,request_id:args.p_request_id};
-        state.db.payroll_payments.push(payment);state.db.payroll_revision[0].version++;return {data:payment.id,error:null};
+        state.db.payroll_payments.push(payment);state.db.payroll_revision[0].version++;
+        if(state.losePaymentResponseOnce){state.losePaymentResponseOnce=false;return {data:null,error:{message:"Synthetic lost payment response"}};}
+        return {data:payment.id,error:null};
       }
       if(name==="payroll_review") {
         if(args.p_expected_revision!==state.db.payroll_revision[0].version)return {data:null,error:{message:"PAYROLL_STALE_RELOAD_REQUIRED"}};
