@@ -328,13 +328,23 @@
   $("paymentForm").addEventListener("submit",(event)=>{event.preventDefault();task(async()=>{
     const values=Object.fromEntries(new FormData($("paymentForm")));values.amount=Number(values.amount);
     if(!Number.isSafeInteger(values.amount)||values.amount<=0)throw new Error("지급액을 확인해 주세요. / Kiểm tra số tiền.");
-    await result(db.rpc("payroll_pay",{p_run_id:runFor(state.selected).id,p_amount:values.amount,p_paid_on:values.paid_on,p_method:values.method,p_reference:values.reference.trim(),p_note:values.note.trim(),p_request_id:state.paymentRequest}));
-    $("paymentDialog").close();await load();notice("실제 지급내역을 기록했습니다. / Đã ghi thanh toán thực tế.");
+    const run=runFor(state.selected),employee=state.employees.find(e=>e.id===run.employee_id);
+    const paymentId=await result(db.rpc("payroll_pay",{p_run_id:run.id,p_amount:values.amount,p_paid_on:values.paid_on,p_method:values.method,p_reference:values.reference.trim(),p_note:values.note.trim(),p_request_id:state.paymentRequest}));
+    $("paymentDialog").close();
+    // The payment is committed once. A signature retry must never pay again,
+    // including when the subsequent ledger refresh fails.
+    window.DGV_PAYROLL_ADVANCED?.openEvidence(paymentId,"signature",{payment:{id:paymentId,run_id:run.id,...values},run,employee});
+    try{await load();}catch(error){if(error.message==="AUTH_REQUIRED")throw error;throw new Error("지급은 이미 저장되었습니다. 조회 갱신에 실패했지만 아래에서 서명을 저장할 수 있습니다. / Đã lưu thanh toán; tải lại thất bại nhưng vẫn có thể ký nhận.");}
+    notice("지급을 기록했습니다. 직원의 수령 서명을 받아 주세요. / Đã ghi thanh toán. Vui lòng lấy chữ ký nhận lương.");
   });});
   db.auth.onAuthStateChange((event,session)=>{if(event==="SIGNED_OUT"||(session&&DGV.roleOf(session.user)!=="admin"))clearAuthenticatedState();});
   setInterval(checkForUpdates,30000);
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)void checkForUpdates();});
   window.addEventListener("focus",()=>void checkForUpdates());
   window.DGV_PAYROLL_APP={state,db,$,esc,money,hours,today,rows,result,task,load,render,renderDetail,selected,runFor,paidFor,totalFor,openDialog,field,bounds,notice,draft};
-  (async()=>{try{await QRStaff.requireLogin({roles:["admin"],preferredRole:"admin"});await DGV.requireAuth({roles:["admin"]});$("payrollApp").hidden=false;await task(load);}catch(error){$("pageError").textContent=messageOf(error);$("pageError").hidden=false;}})();
+  const startPayroll=async()=>{try{await QRStaff.requireLogin({roles:["admin"],preferredRole:"admin"});await DGV.requireAuth({roles:["admin"]});$("payrollApp").hidden=false;await task(load);}catch(error){$("pageError").textContent=messageOf(error);$("pageError").hidden=false;}};
+  // Register advanced UI/report modules before even a cached session can load
+  // the ledger; otherwise fast responses can skip their data and rendering.
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",startPayroll,{once:true});
+  else void startPayroll();
 })();

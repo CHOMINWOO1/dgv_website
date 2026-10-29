@@ -19,6 +19,7 @@ Apply these migrations in order to a local or staging database with the existing
 5. `supabase/migrations/20261029021538_hana_payroll_monthly_net.sql`
 6. `supabase/migrations/20261029023034_hana_payroll_derived_monthly_rate.sql`
 7. `supabase/migrations/20261029025813_hana_payroll_employee_identity.sql`
+8. `supabase/migrations/20261029035509_hana_payroll_kiosk_attendance.sql`
 
 Run `supabase/tests/payroll.sql`, `payroll-complete.sql`, `payroll-backup.sql`,
 `payroll-consistency.sql` and `payroll-monthly-net.sql`
@@ -381,6 +382,62 @@ as a receipt. Signature evidence must be a PNG with `signed_name` and
 `acknowledged_at`. A stored signature documents receipt acknowledgement; it does
 not replace every document an accountant may require. Tax-invoice files are
 attachments, not an electronic invoice issuing or tax-filing service.
+
+### Capturing a receipt signature on the administrator's phone
+
+The existing attachment schema supports phone capture without another database
+migration. The administrator remains signed in through the normal protected
+payroll page. There is no anonymous signing link or attendance-kiosk capability
+for accessing payments or signatures. Before the recipient signs on the phone,
+show the employee, salary month, actual payment date, payment method and amount
+for the selected `payroll_payments.id`. Several installments in one salary month
+are separate receipts and need independent signature statuses.
+
+Require a visible pen stroke, the recipient's name and deliberate receipt
+acknowledgement in the capture UI. A blank canvas must not be submitted. The
+database checks signer name, finite acknowledgement time, PNG type and actual
+Storage size/MIME metadata; it cannot decide whether PNG pixels contain a real
+signature. The stored acknowledgement time records signing time, not a change
+to the original payment date or amount.
+
+Upload the PNG under that payment UUID with `upsert:false`, then append one
+`payroll_attachments` row with `evidence_type:'signature'`. Keep the draft's
+attachment UUID, object path and exact bytes stable while retrying an uncertain
+save. If upload succeeded but its response was lost, verify the existing object
+bytes before proceeding; never overwrite it. If metadata already exists with
+the same UUID/path, reuse that saved result rather than inserting a second row.
+The unique storage path prevents accidental duplicate metadata. Report success
+only once both the object and its per-payment metadata are confirmed.
+
+An unsigned payment remains an actual payment with a visible unsigned status;
+the application must not invent a signature or change the paid amount. A
+signature is linked through `attachment.payment_id`, not just employee or month.
+Show signer name and acknowledgement time with the corresponding receipt.
+Additional signatures or corrected supporting evidence append new records;
+saved signature rows and objects are not edited, reassigned or deleted.
+
+Cancelling a payment preserves its previous signatures for audit. Receipt and
+payroll reports must visibly mark that payment as cancelled and exclude it from
+active paid totals, even though its image remains available to administrators.
+The phone capture UI should offer new signing only for a current, uncancelled
+payment and recheck that status before saving. The general evidence backend
+also permits historical evidence on a cancelled payment; that does not restore
+the payment or authorize counting it as an active receipt.
+
+Load signature images through authenticated Storage downloads or short-lived
+signed URLs, never public bucket URLs. A report must wait for its intended
+images to load before printing and identify any missing file instead of silently
+printing an unsigned receipt as signed. Optional encrypted evidence backup
+includes these PNG bytes alongside attachment metadata; metadata alone does not
+restore the image. Unsaved canvas strokes should stay in memory only.
+
+`supabase/tests/payroll-signatures.sql` runs only in the isolated PostgreSQL
+harness. It covers unsigned installments, path binding to individual payments,
+missing signer/acknowledgement, wrong MIME/size, missing objects, duplicate paths,
+immutable metadata and files, cancelled-payment history, stale report revision
+invalidation, and denial for manager/staff/anonymous/kiosk callers. Its Storage
+metadata fixtures do not verify actual PNG encoding, mobile touch events,
+Storage HTTP uploads or printing; those are separate browser checks.
 
 ## Encrypted backup and safe restoration
 
