@@ -163,7 +163,7 @@
   }
   function column(count) {let result="";for(let n=count;n>0;n=Math.floor((n-1)/26))result=String.fromCharCode(65+(n-1)%26)+result;return result;}
   function monthlyValues(snapshot) {
-    if(snapshot.settlementMode!=="monthly_net")return [snapshot.settlementMode==="statutory"?"Theo quy tắc / 규칙 정산":"",null,null,null,null,null,null,""];
+    if(snapshot.settlementMode!=="monthly_net")return [snapshot.settlementMode==="hourly_actual"?"Giờ thực làm / 실제 근무 시급":snapshot.settlementMode==="statutory"?"Theo quy tắc / 규칙 정산":"",null,null,null,null,null,null,""];
     const optional=(key)=>snapshot[key]==null?null:number(snapshot[key],key);
     return ["Bù trừ toàn tháng / 월간 상계",...['monthlyPlannedMinutes','monthlyActualMinutes','monthlyBalanceMinutes','monthlyExtraMinutes'].map(optional),displayedRate(snapshot.monthlyExtraHourlyRate),optional('monthlyExtraAmount'),snapshot.scheduleDefaultUsed?"Có / 사용":"Không / 미사용"];
   }
