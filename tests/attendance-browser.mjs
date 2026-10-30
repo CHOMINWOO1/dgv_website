@@ -34,9 +34,10 @@ async function login(){
   await page.locator("#settings").click();await page.locator("#adminPassword").fill("admin-test");await page.locator("#adminLogin button").click();await page.locator("#adminWorkspace").waitFor({state:"visible"});await idle();
 }
 async function localFaces(){return page.evaluate(()=>DGV_ATTENDANCE_STORE.faces());}
+async function sharedFaces(){return page.evaluate(()=>DGV_ATTENDANCE_STORE.sharedFaces());}
 async function tick(){await page.evaluate(()=>{for(const callback of __attendanceIntervals)callback();});await page.waitForFunction(()=>!document.getElementById("settings").disabled);}
 async function reload(){
-  seed=await page.evaluate(()=>{const {devices,grants,events,receipts,sequence,employees,calls}=__attendanceTest;return {devices,grants,events,receipts,sequence,employees,calls};});
+  seed=await page.evaluate(()=>{const {devices,grants,faceProfiles,faceRequests,events,receipts,sequence,employees,calls}=__attendanceTest;return {devices,grants,faceProfiles,faceRequests,events,receipts,sequence,employees,calls};});
   await page.reload();await page.waitForFunction(()=>__attendanceTest.calls.some(call=>call.rpc==="payroll_kiosk_roster")&&document.getElementById("deviceLabel").textContent.includes("DEMO"));
   await page.waitForFunction(()=>document.getElementById("connection").textContent.includes("서버 연결됨"));
 }
@@ -55,9 +56,10 @@ try{
   await page.locator("#deviceName").fill("DEMO · HANA tablet");await page.locator("#registerDevice button").click();await idle();await page.locator("#enrollSection").waitFor({state:"visible"});
   const ids=await page.evaluate(()=>__attendanceTest.employees.map(row=>row.id));
   await page.locator("#enrollEmployee").selectOption(ids[0]);await page.locator("#enrollFace").click();await idle();
-  assert.equal(await rpcCount("payroll_kiosk_enroll"),0,"no biometric capture/storage without recorded employee consent");
+  assert.equal(await rpcCount("payroll_kiosk_face_save"),0,"no biometric capture/storage without recorded employee consent");
   await page.locator("#consent").check();await page.locator("#enrollFace").click();await idle();
-  assert.equal(await rpcCount("payroll_kiosk_enroll"),1);assert.equal((await localFaces()).length,1);
+  assert.equal(await rpcCount("payroll_kiosk_face_save"),1);assert.equal((await localFaces()).length,0,"new shared registration does not create a legacy per-device enrollment");
+  assert.equal(await page.evaluate(()=>__attendanceTest.faceProfiles.length),1);
   assert.equal(await page.evaluate(()=>__faceTest.cameraStops>0),true,"enrollment closes its media tracks");
   const device=await page.evaluate(()=>DGV_ATTENDANCE_STORE.get("device"));assert.match(device.token,/^[a-f0-9]{64}$/);
   const encrypted=await page.evaluate(async()=>{
@@ -72,7 +74,12 @@ try{
   await page.locator("#closeAdmin").click();await page.locator("#adminDialog").waitFor({state:"hidden"});
   assert.equal(await page.evaluate(()=>__attendanceTest.clients.some(client=>client.role)),false,"administrator session is discarded when settings close");
   assert.equal(await page.locator("#enrollEmployee option").count(),0);assert.equal(await page.locator("#adminPassword").inputValue(),"");
+  assert.equal(await page.locator(`#employee option[value="${ids[1]}"]`).count(),1,"unregistered active staff remain selectable in the shared roster");
+  await page.locator("#employee").selectOption(ids[1]);await idle();
+  assert.equal(await page.locator("#clockIn").isDisabled(),true);assert.equal(await page.locator("#testFace").isDisabled(),true);
+  assert.match(await page.locator("#employeeAvailability").innerText(),/등록|đăng ký/);
   await page.locator("#employee").selectOption(ids[0]);
+  await page.waitForFunction(async()=>(await DGV_ATTENDANCE_STORE.sharedFaces()).length===1);assert.equal((await sharedFaces())[0].faceRevision,1);
 
   await page.evaluate(()=>{__faceTest.matched=false;});await page.locator("#clockIn").click();await idle();
   assert.equal(await rpcCount("payroll_kiosk_punch"),0);assert.match(await page.locator("#notice").textContent(),/일치하지 않습니다/);
@@ -87,7 +94,8 @@ try{
   await page.evaluate(()=>{__faceTest.ignoreAbort=false;});await page.locator("#clockIn").click();await idle();
   assert.equal(await rpcCount("payroll_kiosk_punch"),1);assert.match(await page.locator("#employeeState").textContent(),/출근/);
   const punchArgs=await page.evaluate(()=>__attendanceTest.calls.find(call=>call.rpc==="payroll_kiosk_punch").args);
-  assert.deepEqual(Object.keys(punchArgs).sort(),["p_employee_id","p_kind","p_request_id","p_token"],"no photo, template, browser time or payroll information is submitted");
+  assert.deepEqual(Object.keys(punchArgs).sort(),["p_employee_id","p_kind","p_request_id","p_token","p_face_revision"].sort(),"only the reviewed central face revision accompanies the punch, never a photo, template, browser time or payroll information");
+  assert.equal(punchArgs.p_face_revision,1);
 
   await page.evaluate(()=>{__attendanceTest.losePunchResponse=true;});await page.locator("#clockOut").click();await idle();
   assert.equal(await page.locator("#pending").isVisible(),true);assert.equal(await page.locator("#clockIn").isDisabled(),true);
@@ -123,8 +131,8 @@ try{
   // Closing setup while face enrollment is pending discards the late result.
   await login();await page.locator("#enrollEmployee").selectOption(ids[1]);await page.locator("#consent").check();
   await page.evaluate(()=>{__faceTest.defer=true;__faceTest.ignoreAbort=true;});await page.locator("#enrollFace").click();await page.waitForFunction(()=>typeof __faceTest.release==="function");
-  const grantCount=await rpcCount("payroll_kiosk_enroll");await page.locator("#closeAdmin").click();await page.evaluate(()=>{__faceTest.release();__faceTest.release=null;});await idle();
-  assert.equal(await rpcCount("payroll_kiosk_enroll"),grantCount);assert.equal((await localFaces()).length,1);assert.equal(await page.locator("#adminDialog").isVisible(),false);
+  const saveCount=await rpcCount("payroll_kiosk_face_save");await page.locator("#closeAdmin").click();await page.evaluate(()=>{__faceTest.release();__faceTest.release=null;});await idle();
+  assert.equal(await rpcCount("payroll_kiosk_face_save"),saveCount);assert.equal((await localFaces()).length,0);assert.equal((await sharedFaces()).length,1);assert.equal(await page.locator("#adminDialog").isVisible(),false);
   assert.equal(await page.evaluate(()=>__attendanceTest.clients.some(client=>client.role)),false);
   await page.evaluate(()=>{__faceTest.ignoreAbort=false;});await page.locator("#employee").selectOption(ids[0]);await page.locator("#testFace").click();await idle();assert.match(await page.locator("#notice").textContent(),/테스트 완료/);
 
@@ -150,7 +158,7 @@ try{
   assert.equal((await page.evaluate(()=>DGV_ATTENDANCE_STORE.get("pending"))).requestId,revokedPending.requestId,"failed privileged receipt lookup must retain the recoverable pending request");
   assert.ok(await page.evaluate(()=>DGV_ATTENDANCE_STORE.get("device")));
   await page.locator("#forgetDevice").click();await idle();assert.equal(await page.evaluate(()=>DGV_ATTENDANCE_STORE.get("device")),null);
-  assert.equal(await page.evaluate(()=>DGV_ATTENDANCE_STORE.get("pending")),null);assert.equal((await localFaces()).length,0);
+  assert.equal(await page.evaluate(()=>DGV_ATTENDANCE_STORE.get("pending")),null);assert.equal((await localFaces()).length,0);assert.equal((await sharedFaces()).length,0);
   assert.equal(await page.evaluate(()=>__attendanceTest.events.length),savedEventCount,"clearing a revoked browser preserves the committed attendance record");
   const recoveryReads=await page.evaluate(()=>__attendanceTest.calls.filter(call=>call.table==="payroll_attendance_raw"));
   assert.ok(recoveryReads.length);for(const read of recoveryReads){assert.equal(read.role,"admin");assert.deepEqual(read.conditions,[["kiosk_request_id",revokedPending.requestId],["kiosk_device_id",device.device_id]]);}
@@ -163,5 +171,5 @@ try{
   assert.ok(await page.evaluate(()=>DGV_ATTENDANCE_STORE.get("registration")),"the encrypted registration draft remains available for an explicit safe retry");
   assert.equal(await page.evaluate(()=>__attendanceTest.calls.filter(call=>call.table).every(call=>["payroll_employees","payroll_attendance_raw"].includes(call.table)&&call.role==="admin")),true,"payroll reads occur only in the ephemeral administrator client");
   assert.deepEqual(errors,[]);
-  console.log("Attendance browser passed: admin-only setup, real encrypted local storage, consent, face mismatch/test-only paths, two same-day in/out cycles, receipt-only recovery across reload, cancellation retry, closed-session enrollment guard and revoked-device lockout.");
+  console.log("Attendance browser passed: admin-only setup, shared-roster unregistered guidance, real encrypted local storage, central face consent/revision, face mismatch/test-only paths, two same-day in/out cycles, receipt-only recovery across reload, cancellation retry, closed-session enrollment guard and revoked-device lockout.");
 }finally{await context.close();await browser.close();await new Promise(resolve=>server.close(resolve));}

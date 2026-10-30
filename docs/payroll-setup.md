@@ -606,7 +606,11 @@ continuity, missing-file reporting and identical restore retry behavior.
 Migration `20261029035509_hana_payroll_kiosk_attendance.sql` adds an online-only
 tablet capability without modifying existing staff, POS punches or finalized
 payroll values. Apply it after the seven earlier payroll migrations. Face
-templates and images are not sent to the database. The recorded verification
+templates were initially local to each browser. Migration
+`20261030020322_hana_payroll_shared_faces.sql` stores
+validated numeric templates in Supabase Vault, with one current version per
+employee, and makes them available only to active registered devices. Original
+images and camera video are never stored or uploaded. The recorded verification
 label is `trusted_kiosk_verification`: it means the enrolled device asserted a
 successful local comparison. This is not server-verified biometric identity or
 a guarantee against a modified browser, stolen device token or presentation
@@ -626,27 +630,34 @@ Administrator RPCs:
 | `payroll_kiosk_register` | `p_device_id` stable UUID, `p_name`, `p_token` | `{device_id,name,status}`; an exact retry is safe |
 | `payroll_kiosk_devices` | none | Array of device ID/name/status, creation/revocation times and active enrollment count |
 | `payroll_kiosk_revoke` | `p_device_id`, `p_reason` | Device UUID; capability is immediately unusable |
-| `payroll_kiosk_enroll` | `p_device_id`, `p_employee_id`, `p_consent_version` | Enrollment UUID; server records administrator and consent time |
-| `payroll_kiosk_unenroll` | `p_device_id`, `p_employee_id`, `p_reason` | Employee UUID; active grant is withdrawn |
+| `payroll_kiosk_face_save` | `p_employee_id`, `p_template`, `p_consent_version`, `p_expected_revision`, `p_request_id` | Shared face metadata; exact retries are safe, stale edits fail |
+| `payroll_kiosk_face_delete` | `p_employee_id`, `p_expected_revision`, `p_reason`, `p_request_id` | Shared face removed for every device; tombstone prevents old uploads restoring it |
 
 Employee enrollment requires a deliberate administrator confirmation of the
-selected employee and consent. Re-enrollment after withdrawal gets a new grant
-UUID. Store that UUID with the local template and compare it to the current
-roster so a withdrawn template is not reused. Device and grant revocations
-preserve their private administrator audit history. Raw tokens and hashes do
-not appear in those audit details. Existing managers cannot manage devices.
+selected employee and consent to shared storage. Face writes use a per-employee
+revision (initially 0), plus a stable request UUID, to reject concurrent stale
+edits without creating duplicate versions on retry. Replacement/deletion removes
+the previous Vault secret. Audit/request records contain metadata and hashes,
+never numeric face samples. Existing managers cannot manage devices or faces.
+The old per-device enroll/unenroll RPCs remain for compatibility with old pages;
+they cannot override a shared face or its deletion tombstone.
 
 Runtime RPCs accept the publishable/anonymous client plus a valid device token;
 they do not require or return an administrator session:
 
 | RPC | Arguments | Result |
 | --- | --- | --- |
-| `payroll_kiosk_roster` | `p_token` | `{device_id,name,employees:[{id,device_user_id,name,enrollment_id,last_punch}]}` |
-| `payroll_kiosk_punch` | `p_token`, `p_employee_id`, `p_kind` (`in`/`out`), `p_request_id` UUID | `{event_id,employee_id,punch_type,occurred_at,server_received_at,replayed,verification}` |
+| `payroll_kiosk_roster` | `p_token` | Device identity and active employees with `face_registered`, `face_revision`, `has_legacy_enrollment`, current-device `enrollment_id`, and `last_punch` |
+| `payroll_kiosk_face_get` | `p_token`, `p_employee_id` | Current shared template and revision, or null when absent |
+| `payroll_kiosk_face_migrate` | `p_token`, `p_employee_id`, `p_enrollment_id`, `p_template`, `p_request_id` | Create-only transfer of a matching legacy enrollment; never replaces shared history |
+| `payroll_kiosk_punch` | `p_token`, `p_employee_id`, `p_kind` (`in`/`out`), `p_request_id` UUID, `p_face_revision` | `{event_id,employee_id,punch_type,occurred_at,server_received_at,replayed,verification}` |
 | `payroll_kiosk_receipt` | `p_token`, `p_request_id` | The stored event with `replayed:true`, or null if absent/owned by another device |
 
 `last_punch` is null or `{punch_type,occurred_at}`. The roster exposes only
-currently enrolled, active employees within their hire/termination dates.
+active employees within their hire/termination dates, including those whose face
+has not yet been registered. Archived employees and outside-service payees are
+excluded. Selection does not depend on a local browser cache. Recording still
+requires a matching current shared face revision and successful local comparison.
 It contains no contact details, identity numbers, wages or bank information.
 Anonymous callers receive no direct table privileges. Kiosk implementation
 objects live in the dedicated, non-exposed `payroll_kiosk` schema. The migration
@@ -655,7 +666,19 @@ A private, NOLOGIN
 `payroll_kiosk_writer` role owns only the three capability RPC implementations;
 its grants are limited to minimum employee columns, private registration reads,
 raw event insertion and trigger-controlled audit/revision writes. API roles
-cannot assume this role. Other payroll administrator gates remain in place.
+cannot assume this role. Vault reads use separate narrow, capability-checked
+private functions; the writer role receives no general Vault access. Other
+payroll administrator gates remain in place.
+
+Legacy transfer runs only for an active token with the same active device/employee
+enrollment UUID as the saved local template. It is permitted only before any
+shared-face history exists. Opening the updated page in each original browser
+transfers those existing templates; metadata on the server cannot recreate a
+template erased from every browser. The original four-argument punch RPC works
+only for employees with no shared-face history. Once a shared face or deletion
+exists, old pages must refresh; they cannot use stale local faces to bypass a
+replacement or deletion. New punches check the face revision under the same lock
+as employee status and device revocation.
 
 The server sets `occurred_at` using `clock_timestamp()` in
 `Asia/Ho_Chi_Minh` wall time; no punch RPC accepts a client timestamp. UTC receipt
@@ -689,7 +712,7 @@ the `source` and device UUID identify that this is a kiosk assertion, not a
 fresh administrator verification of the employee's face.
 
 Encrypted payroll archives preserve typed raw attendance. Device credentials,
-enrollment grants and their private setup audit are intentionally excluded;
+enrollment grants, shared face templates and their private setup audit are intentionally excluded;
 after restoration, register the tablet and enroll employees again. Old version-2
 archives missing the new raw fields restore as Excel records. Explicit invalid
 or null provenance is rejected rather than silently changed.

@@ -22,6 +22,7 @@
     "test:attendance:face": "node tests/attendance-face.mjs",
     "test:attendance:models": "node tests/attendance-face-browser.mjs",
     "test:attendance:browser": "node tests/attendance-browser.mjs",
+    "test:attendance:shared": "node tests/attendance-shared-browser.mjs",
     "test:payroll:monthly": "node tests/payroll-monthly.mjs",
     "test:payroll:rules": "node tests/payroll-rules.mjs",
     "test:payroll:tax": "node tests/payroll-tax.mjs",

@@ -26,7 +26,7 @@ begin
     grant_id:=public.payroll_kiosk_enroll(dev,emp,'rollback-smoke-consent');
     perform pg_temp.kiosk_live_assert(grant_id is not null,'administrator can register and enroll test fixture');
     perform set_config('request.jwt.claims','{}',true);execute 'set local role anon';
-    perform pg_temp.kiosk_live_assert(public.payroll_kiosk_roster(token)->'employees'->0->>'enrollment_id'=grant_id::text,'capability exposes only matching enrollment');
+    perform pg_temp.kiosk_live_assert((select value->>'enrollment_id'=grant_id::text from jsonb_array_elements(public.payroll_kiosk_roster(token)->'employees') where value->>'id'=emp::text),'capability exposes matching enrollment for fixture employee');
     event:=public.payroll_kiosk_punch(token,emp,'in',request);
     perform pg_temp.kiosk_live_assert(event->>'punch_type'='in' and event->>'verification'='trusted_kiosk_verification'
       and abs(extract(epoch from (clock_timestamp() at time zone 'Asia/Ho_Chi_Minh')-(event->>'occurred_at')::timestamp))<5,'anonymous device punch uses server Vietnamese time');
