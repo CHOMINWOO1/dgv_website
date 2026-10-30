@@ -40,6 +40,28 @@ recording attendance. Late camera responses are closed rather than reopening the
 camera after cancellation. Timeout messages distinguish camera setup from model
 loading. An operation in progress is shown beside the employee selector.
 
+Face model loading and inference now run in a dedicated same-origin Worker with
+OffscreenCanvas. Model loading is limited to 60 seconds, each inference to 15
+seconds, and sampling to 45 seconds after loading. Cancel, tab hiding, timeouts,
+and worker failures terminate pending inference. Failed/cancelled verification
+and enrollment close camera tracks, release the employee selector, and allow a
+fresh attempt. An old worker cannot complete a later attempt or record a punch.
+Cancellation also covers the initial pending-receipt read and roster/admin
+preflight; a delayed response cannot start a new authentication after tab hiding.
+An already submitted punch retains its pending reference when its outcome is
+uncertain, and recovery still reads the receipt without resubmitting attendance.
+Successful verification also closes the camera while retaining the loaded worker
+for the next attempt. Camera preview opened explicitly remains available until
+stopped. Browsers without Worker/OffscreenCanvas fail with an upgrade message;
+there is no UI-thread model fallback. CSP deployments must allow same-origin
+workers (`worker-src 'self'`) and the existing same-origin WASM/model assets.
+
+This isolates synchronous inference stalls from the UI; it does not guarantee
+recovery from a renderer/process OOM, browser termination, or device shutdown.
+On the actual tablet, use the test-only face button first with authorized camera
+access, check cancel/retry and employee changes, and verify memory and latency.
+No production face data or attendance submissions are needed for automated tests.
+
 New punches require an online connection. An uncertain response is kept in
 encrypted local storage. **저장 여부 확인** reads that request's server receipt;
 it never inserts a delayed event. If absent, the user must make a fresh face

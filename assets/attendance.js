@@ -7,6 +7,8 @@
   const kiosk = supabase.createClient(config.url,config.publishableKey,options("hana-attendance-public"));
   const admin = supabase.createClient(config.url,config.publishableKey,options("hana-attendance-admin"));
   let engine = DGV_ATTENDANCE_FACE.create();
+  let faceAction=false;
+  let cancelGeneration=0,cancelPreflight=null;
   const CAMERA_START_TIMEOUT_MS=18000;
   let cameraGeneration=0,cancelCameraStartup=null;
   const state = {device:null,roster:[],faces:[],pending:null,busy:false,busyReason:"",actionNotice:"",connected:false,admin:false,adminGeneration:0,adminTimer:null,abort:null,stream:null,adminEmployees:[],refreshing:false,deviceEpoch:0,faceGeneration:0,faceLoading:false,migrationIssues:new Map(),storageIssue:""};
@@ -145,12 +147,27 @@
   }
   async function action(operation,adminOnly=false) {
     if(state.busy)return;state.busy=true;state.busyReason="작업을 처리하고 있습니다. 잠시 기다려 주세요. / Đang xử lý. Vui lòng chờ.";state.actionNotice="";render();
+    const generation=cancelGeneration;
     try {
-      const run=async()=>{state.pending=await storage.get("pending");await operation();};
+      const run=async()=>{
+        if(generation!==cancelGeneration)throw new DOMException("Cancelled","AbortError");
+        const controller=new AbortController(),cancel=()=>controller.abort();cancelPreflight=cancel;
+        try{state.pending=await faceWait(()=>storage.get("pending"),controller.signal);}
+        finally{if(cancelPreflight===cancel)cancelPreflight=null;}
+        if(generation!==cancelGeneration)throw new DOMException("Cancelled","AbortError");
+        await operation();
+      };
       if(navigator.locks)await navigator.locks.request("hana-attendance-action",{ifAvailable:true},async lock=>{if(!lock)throw new Error("다른 출퇴근 탭에서 작업 중입니다. / Một thẻ chấm công khác đang hoạt động.");await run();});
       else await run();
-    }catch(error){state.actionNotice=errorText(error);notice(state.actionNotice,true,adminOnly);}
-    finally{state.busy=false;state.busyReason="";state.abort=null;$("cancelFace").hidden=true;$("cancelEnrollment").hidden=true;render();}
+    }catch(error){
+      if(state.abort){state.abort.abort();stopCamera();}
+      if(faceAction){engine.dispose();engine=DGV_ATTENDANCE_FACE.create();}
+      state.actionNotice=errorText(error);notice(state.actionNotice,true,adminOnly);
+    }
+    finally{
+      if(faceAction){stopCamera();faceAction=false;}
+      state.busy=false;state.busyReason="";state.abort=null;$("cancelFace").hidden=true;$("cancelEnrollment").hidden=true;render();
+    }
   }
   async function migrateLegacy(roster,device,epoch) {
     let changed=false;state.migrationIssues.clear();
@@ -266,21 +283,34 @@
       }).catch(fail);
     });
   }
-  function cancelFace() {state.abort?.abort();engine.dispose();engine=DGV_ATTENDANCE_FACE.create();stopCamera();}
-  function progress(id) {return value=>{const message=value.message+(value.total?` (${(value.sampleIndex||0)+1}/${value.total})`:"");$(id).textContent=message;if(state.busy){state.busyReason=message;$("employeeAvailability").textContent=availability(selected());}};}
+  function cancelFace() {cancelGeneration++;cancelPreflight?.();state.abort?.abort();engine.dispose();engine=DGV_ATTENDANCE_FACE.create();stopCamera();}
+  function faceWait(operation,signal) {
+    return new Promise((resolve,reject)=>{
+      let settled=false;
+      const finish=(error,value)=>{if(settled)return;settled=true;signal.removeEventListener("abort",cancel);if(error)reject(error);else resolve(value);};
+      const cancel=()=>finish(new DOMException("Cancelled","AbortError"));
+      signal.addEventListener("abort",cancel,{once:true});
+      // The preflight may finish late, but cannot continue this cancelled
+      // authentication. Only read/refresh operations use this wrapper.
+      Promise.resolve().then(()=>{if(signal.aborted)throw new DOMException("Cancelled","AbortError");return operation();}).then(value=>finish(null,value),error=>finish(error));
+      if(signal.aborted)cancel();
+    });
+  }
+  function progress(id) {const signal=state.abort?.signal;return value=>{if(signal?.aborted||!state.busy)return;const message=value.message+(value.total?` (${(value.sampleIndex||0)+1}/${value.total})`:"");$(id).textContent=message;state.busyReason=message;$("employeeAvailability").textContent=availability(selected());};}
   async function confirmFace(kind) {
     const row=selected(),registered=faceFor(row);
     if(!row||!registered||!state.device||state.pending)return;
+    faceAction=true;
+    const controller=new AbortController(),signal=controller.signal;state.abort=controller;render();$("cancelFace").hidden=false;
     notice("");
-    await refresh();
+    await faceWait(()=>refresh({quiet:true}),signal);
     const current=state.roster.find(item=>item.id===row.id);
     if(!state.connected||!current||!faceFor(current))throw new Error("직원 또는 기기 등록을 확인해 주세요. / Kiểm tra đăng ký nhân viên và thiết bị.");
     const currentFace=faceFor(current);
-    state.abort=new AbortController();render();$("cancelFace").hidden=false;
     await camera($("camera"));
     const started=performance.now();
-    const result=await engine.verify($("camera"),currentFace.template,{signal:state.abort.signal,onProgress:progress("faceProgress")});
-    if(state.abort.signal.aborted||document.hidden)throw new DOMException("Cancelled","AbortError");
+    const result=await engine.verify($("camera"),currentFace.template,{signal,onProgress:progress("faceProgress")});
+    if(signal.aborted||document.hidden)throw new DOMException("Cancelled","AbortError");
     const seconds=((performance.now()-started)/1000).toFixed(1);
     if(!result.matched){notice("등록된 얼굴과 일치하지 않습니다. 이름과 조명을 확인해 주세요. / Khuôn mặt không khớp. Kiểm tra tên và ánh sáng.",true);return;}
     $("faceProgress").textContent=`얼굴 확인 완료 · ${seconds}초 / Đã nhận diện · ${seconds}s`;
@@ -288,7 +318,7 @@
     if(!navigator.onLine)throw new Error("인터넷에 연결한 뒤 다시 찍어 주세요. 아직 출퇴근 기록을 저장하지 않았습니다. / Kết nối Internet rồi chấm công lại; chưa lưu giờ làm.");
     const request={requestId:uid(),employeeId:row.id,name:row.name,kind,deviceId:state.device.device_id,attemptedAt:new Date().toISOString()};
     await storage.put("pending",request);state.pending=request;render();
-    if(state.abort.signal.aborted||document.hidden){await storage.remove("pending");state.pending=null;throw new DOMException("Cancelled","AbortError");}
+    if(signal.aborted||document.hidden){await storage.remove("pending");state.pending=null;throw new DOMException("Cancelled","AbortError");}
     // A cancelled response can still have committed. The durable request receipt
     // is checked instead of manufacturing a later clock time by blind retries.
     try {
@@ -376,25 +406,27 @@
     },true);
   }
   async function enroll() {
-    const generation=await requireAdmin(),employeeId=$("enrollEmployee").value,row=state.adminEmployees.find(item=>item.id===employeeId);
+    faceAction=true;
+    const controller=new AbortController(),signal=controller.signal;state.abort=controller;render();$("cancelEnrollment").hidden=false;
+    const generation=await faceWait(requireAdmin,signal),employeeId=$("enrollEmployee").value,row=state.adminEmployees.find(item=>item.id===employeeId);
     if(!row||!state.device)throw new Error("직원을 선택해 주세요. / Chọn nhân viên.");
     if(!$("consent").checked)throw new Error("얼굴정보 사용에 대한 직원 동의를 확인해 주세요. / Xác nhận sự đồng ý của nhân viên.");
     const deviceId=state.device.device_id,epoch=state.deviceEpoch;
-    await refresh({quiet:true});
+    await faceWait(()=>refresh({quiet:true}),signal);
     if(!state.admin||generation!==state.adminGeneration)throw new Error("AUTH_REQUIRED");
     const person=state.roster.find(item=>item.id===employeeId);
     if(!person||!state.connected||!deviceCurrent(deviceId,epoch))throw new Error("PAYROLL_KIOSK_EMPLOYEE_NOT_ACTIVE");
-    let draft=await storage.get("shared-enrollment-draft");
+    let draft=await faceWait(()=>storage.get("shared-enrollment-draft"),signal);
     if(!draft||draft.employeeId!==employeeId||draft.deviceId!==deviceId){
-      state.abort=new AbortController();render();$("cancelEnrollment").hidden=false;notice("",false,true);
+      notice("",false,true);
       await camera($("enrollCamera"));
-      const template=await engine.enroll($("enrollCamera"),{signal:state.abort.signal,onProgress:progress("enrollProgress")});
-      if(state.abort.signal.aborted||!state.admin||generation!==state.adminGeneration||!deviceCurrent(deviceId,epoch))throw new DOMException("Cancelled","AbortError");
+      const template=await engine.enroll($("enrollCamera"),{signal,onProgress:progress("enrollProgress")});
+      if(signal.aborted||!state.admin||generation!==state.adminGeneration||!deviceCurrent(deviceId,epoch))throw new DOMException("Cancelled","AbortError");
       draft={employeeId,deviceId,template,expectedRevision:Number(person.face_revision),requestId:uid()};
       await storage.put("shared-enrollment-draft",draft);
     }
-    if(state.abort?.signal.aborted||!state.admin||generation!==state.adminGeneration||!deviceCurrent(deviceId,epoch)){await storage.remove("shared-enrollment-draft");throw new DOMException("Cancelled","AbortError");}
-    await requireAdmin();
+    if(signal.aborted||!state.admin||generation!==state.adminGeneration||!deviceCurrent(deviceId,epoch)){await storage.remove("shared-enrollment-draft");throw new DOMException("Cancelled","AbortError");}
+    await faceWait(requireAdmin,signal);
     try{
       const result=await rpc(admin,"payroll_kiosk_face_save",{p_employee_id:employeeId,p_template:draft.template,p_consent_version:"hana-shared-face-v1",p_expected_revision:draft.expectedRevision,p_request_id:draft.requestId});
       if(!result||result.employee_id!==employeeId||!result.face_registered||!(Number(result.face_revision)>0))throw new Error("PAYROLL_KIOSK_FACE_REFRESH_REQUIRED");
