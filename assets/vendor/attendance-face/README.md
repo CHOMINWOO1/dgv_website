@@ -44,10 +44,18 @@ existing templates from another model ID are rejected and must be reenrolled.
 
 ## Runtime and test boundaries
 
-- WASM is preferred, with WebGL and CPU fallback. Every selected backend runs all
+- WASM is preferred in a dedicated Worker, with CPU fallback. Every selected backend runs all
   three networks on synthetic pixels before becoming ready. The three WASM
   variants are self-hosted; multi-threading is disabled to work without special
   cross-origin-isolation headers. Sites with CSP need `wasm-unsafe-eval` for WASM.
+- The UI captures at most 640 by 480 pixels, transfers one frame at a time to a
+  same-origin Worker, and applies a 15-second inference watchdog. Cancellation or
+  timeout terminates the Worker rather than leaving a running kernel behind.
+  OffscreenCanvas and Worker support are required in production browsers. There
+  is no model execution fallback on the UI thread. CSP also needs same-origin
+  worker permission. Models stay cached in the worker after a successful check;
+  a failed or cancelled UI action disposes them. Renderer OOM remains outside
+  this recovery guarantee and requires testing on the deployment tablet.
 - Processing happens only during the explicit enrollment/attendance action. The
   camera provider must stop its MediaStream when leaving/canceling the UI.
 - Enrollment takes three distinct frontal frames automatically. Verification

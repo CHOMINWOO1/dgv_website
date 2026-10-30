@@ -3,9 +3,10 @@ import {readFile} from "node:fs/promises";
 import vm from "node:vm";
 
 const source=await readFile(new URL("../assets/attendance-face.js",import.meta.url),"utf8");
+new vm.Script(await readFile(new URL("../assets/attendance-face-worker.js",import.meta.url),"utf8"),{filename:"attendance-face-worker.js"});
 function descriptor(value=.1){return Array(128).fill(value);}
 function landmarks(yaw=0,roll=0){const points=Array.from({length:68},()=>({x:200,y:180}));for(let i=36;i<42;i++)points[i]={x:175,y:160};for(let i=42;i<48;i++)points[i]={x:225,y:160+Math.tan(roll)*50};points[30]={x:200+yaw*50,y:190};return points;}
-function harness({failedBackends=[],failedWarmupBackends=[],backendError=false,initializationGate=null}={}){
+function harness({failedBackends=[],failedWarmupBackends=[],backendError=false,initializationGate=null,useWorker=false}={}){
   const stats={loads:0,captures:0,backends:[],yaw:0,sample:descriptor(),faceCount:1};
   const modelTimers=new Set();
   class Video{constructor(){this.readyState=2;this.videoWidth=640;this.videoHeight=480;this.paused=false;this.srcObject={getVideoTracks:()=>[{readyState:"live",enabled:true}]};this.tick=0;}get currentTime(){return ++this.tick/10;}}
@@ -14,10 +15,25 @@ function harness({failedBackends=[],failedWarmupBackends=[],backendError=false,i
   let selected;
   const faceapi={tf:{zeros:()=>({dispose(){}}),setWasmPaths(){},env:()=>({set(){}}),async setBackend(name){stats.backends.push(name);if(backendError)throw new Error("backend unavailable");if(failedBackends.includes(name))return false;selected=name;return true;},async ready(){},getBackend:()=>selected},nets:{tinyFaceDetector:net(),faceLandmark68TinyNet:net(),faceRecognitionNet:net()},TinyFaceDetectorOptions:class{},detectAllFaces(){stats.captures++;return {withFaceLandmarks(){return {async withFaceDescriptors(){return Array.from({length:stats.faceCount},()=>({detection:{score:.95,box:{x:120,y:70,width:220,height:290}},landmarks:{positions:landmarks(stats.yaw)},descriptor:stats.sample}));}};}};}};
   const context={console,URL,Date,Float32Array,Uint8Array,Uint8ClampedArray,AbortController,DOMException,HTMLVideoElement:Video,document:{createElement:canvas},crypto:{getRandomValues(array){array[0]=1;return array;}},faceapi,
-    setTimeout(callback,milliseconds){if(milliseconds===60000){const timer={callback};modelTimers.add(timer);return timer;}return setTimeout(callback,1);},
+    setTimeout(callback,milliseconds){if(milliseconds>=15000){const timer={callback,milliseconds};modelTimers.add(timer);return timer;}return setTimeout(callback,1);},
     clearTimeout(timer){if(!modelTimers.delete(timer))clearTimeout(timer);}};
+  if(useWorker){
+    stats.workers=[];stats.requests=[];
+    context.document.currentScript={src:"https://synthetic.invalid/assets/attendance-face.js"};
+    context.OffscreenCanvas=class {};
+    context.Worker=class {
+      constructor(){this.terminated=false;stats.workers.push(this);}
+      terminate(){this.terminated=true;}
+      postMessage(message){
+        const request={worker:this,message,reply:(value,error)=>this.onmessage?.({data:{id:message.id,value,error}})};stats.requests.push(request);
+        if(message.type==="load")queueMicrotask(()=>request.reply({backend:"wasm",model:"dlib-resnet128-faceapi-1.7.15-tiny68-v1"}));
+        else if(stats.workerMode==="auto")queueMicrotask(()=>request.reply([{detection:{score:.95,box:{x:120,y:70,width:220,height:290}},landmarks:{positions:landmarks()},descriptor:stats.sample}]));
+      }
+    };
+  }
   vm.createContext(context);vm.runInContext(source,context);return {api:context.DGV_ATTENDANCE_FACE,stats,Video,modelTimers,
-    fireModelTimeouts(){for(const timer of [...modelTimers]){modelTimers.delete(timer);timer.callback();}}};
+    fireModelTimeouts(){for(const timer of [...modelTimers]){modelTimers.delete(timer);timer.callback();}},
+    fireTimers(milliseconds){for(const timer of [...modelTimers])if(timer.milliseconds===milliseconds){modelTimers.delete(timer);timer.callback();}}};
 }
 const {api,stats,Video}=harness({failedBackends:["wasm"]});
 const template={version:1,model:api.MODEL,samples:[descriptor(),descriptor(.101),descriptor(.099)],createdAt:new Date().toISOString()};
@@ -106,4 +122,34 @@ const failedEngine=lateFailure.api.create(),failedWait=failedEngine.load();
 const failedCheck=assert.rejects(failedWait,error=>error.name==="AbortError");
 await flush();failedEngine.dispose();await failedCheck;rejectGate.reject(new Error("late model download failure"));await flush();
 assert.equal(lateFailure.modelTimers.size,0,"late initialization rejection is consumed after the caller has cancelled");
+
+// A never-settling inference is killed, not merely abandoned. No second kernel
+// can overlap it, and callbacks from the old worker cannot complete a retry.
+const isolated=harness({useWorker:true}),isolatedEngine=isolated.api.create();
+await Promise.all([isolatedEngine.load(),isolatedEngine.load()]);
+assert.equal(isolated.stats.requests.filter(request=>request.message.type==="load").length,1,"concurrent initialization shares one worker load");
+for(const mode of ["cancel","timeout","deadline","dispose","error"]){
+  const currentEngine=mode==="dispose"?isolated.api.create():isolatedEngine;
+  const signal=new AbortController();
+  const wait=currentEngine.verify(new isolated.Video(),template,{signal:signal.signal});
+  const rejected=assert.rejects(wait,error=>mode==="timeout"?error.code==="inference_timeout":mode==="deadline"?error.code==="timeout":mode==="error"?error.code==="worker":error.name==="AbortError");
+  await flush();
+  const request=isolated.stats.requests.at(-1);
+  assert.equal(request.message.type,"frame");
+  await assert.rejects(isolated.api.create().verify(new isolated.Video(),template),error=>error.code==="busy");
+  if(mode==="cancel")signal.abort();
+  if(mode==="timeout")isolated.fireTimers(15000);
+  if(mode==="deadline")isolated.fireTimers(45000);
+  if(mode==="dispose")currentEngine.dispose();
+  if(mode==="error")request.worker.onerror({preventDefault(){}});
+  await rejected;
+  assert.equal(request.worker.terminated,true,mode+" terminates the old execution realm");
+  request.reply([],undefined);await flush();
+  assert.equal(isolated.modelTimers.size,0,mode+" removes timers");
+  isolated.stats.workerMode="auto";
+  const retry=await isolatedEngine.verify(new isolated.Video(),template);
+  assert.equal(retry.matched,true,mode+" allows a fresh retry");
+  isolated.stats.workerMode=null;
+}
+isolatedEngine.dispose();
 console.log("Attendance face unit tests passed: strict template/model validation, conservative 1:1 match, quality, live samples, fallback, abort, concurrency and bounded cancellable shared model loading.");

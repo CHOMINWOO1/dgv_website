@@ -6,8 +6,11 @@
   const MODEL = "dlib-resnet128-faceapi-1.7.15-tiny68-v1";
   const THRESHOLD = 0.48;
   const MODEL_LOAD_TIMEOUT_MS = 60000;
+  const FRAME_TIMEOUT_MS = 15000;
+  const SEQUENCE_TIMEOUT_MS = 45000;
+  const workerRealm = typeof root.importScripts === "function" && !root.document;
   const scriptUrl = root.document?.currentScript?.src;
-  const baseUrl = scriptUrl ? new URL("vendor/attendance-face/", scriptUrl).href : "assets/vendor/attendance-face/";
+  const baseUrl = scriptUrl || workerRealm ? new URL("vendor/attendance-face/", scriptUrl || root.location.href).href : "assets/vendor/attendance-face/";
   let loading = null, loaded = null, running = false;
   const messages = {
     loading:"얼굴 확인 모델을 준비합니다. / Đang tải mô hình nhận diện.",
@@ -26,6 +29,8 @@
     inconsistent:"세 번의 얼굴이 일치하지 않습니다. 한 사람이 다시 등록해 주세요. / Ba mẫu không khớp. Một người hãy đăng ký lại.",
     model:"얼굴 모델을 준비하지 못했습니다. 연결과 브라우저를 확인하세요. / Không tải được mô hình. Kiểm tra kết nối và trình duyệt.",
     model_timeout:"얼굴 모델을 불러오는 데 시간이 오래 걸립니다. 인터넷 연결을 확인하고 다시 시도하세요. / Tải mô hình quá lâu. Kiểm tra kết nối mạng rồi thử lại.",
+    inference_timeout:"얼굴 확인이 응답하지 않아 중단했습니다. 다른 앱을 닫고 다시 시도해 주세요. / Đã dừng nhận diện không phản hồi. Đóng ứng dụng khác rồi thử lại.",
+    worker:"이 브라우저에서 얼굴 확인을 안전하게 실행하지 못했습니다. 최신 Chrome으로 다시 열어 주세요. / Không chạy được nhận diện an toàn. Mở lại bằng Chrome mới nhất.",
     busy:"이미 얼굴을 확인하고 있습니다. / Đang kiểm tra khuôn mặt.",
     template:"얼굴 등록정보를 다시 등록해 주세요. / Hãy đăng ký lại dữ liệu khuôn mặt."
   };
@@ -108,6 +113,14 @@
   }
   async function library() {
     if(root.faceapi)return root.faceapi;
+    if(workerRealm){
+      root.importScripts(baseUrl+"face-api-1.7.15.js");
+      // FaceAPI's browser adapter expects DOM constructors. Only its canvas
+      // operations are needed here; no video, image decoding or DOM is exposed.
+      const unsupported=class {};
+      root.faceapi.env.setEnv({Canvas:root.OffscreenCanvas,CanvasRenderingContext2D:root.OffscreenCanvasRenderingContext2D,Image:unsupported,Video:unsupported,ImageData:root.ImageData,createCanvasElement:()=>new root.OffscreenCanvas(1,1),createImageElement:()=>{throw failure("worker");},fetch:root.fetch.bind(root),readFile:()=>{throw failure("worker");}});
+      return root.faceapi;
+    }
     await new Promise((resolve,reject)=>{const script=root.document.createElement("script");script.src=baseUrl+"face-api-1.7.15.js";script.integrity="sha256-AWD3rzqMeM7ORcfsx2U4O610vs/UOLt4fN1iey1vLPY=";script.async=true;script.onload=resolve;script.onerror=()=>{script.remove();reject(failure("model"));};root.document.head.append(script);});
     if(!root.faceapi)throw failure("model");return root.faceapi;
   }
@@ -117,7 +130,7 @@
     tf.setWasmPaths(baseUrl+"wasm/");
     // Avoid SharedArrayBuffer/cross-origin-isolation requirements on older tablets.
     tf.env().set("WASM_HAS_MULTITHREAD_SUPPORT",false);
-    for(const backend of [...new Set([preferred||"wasm","webgl","cpu"])]){
+    for(const backend of [...new Set(workerRealm?[preferred||"wasm","cpu"]:[preferred||"wasm","webgl","cpu"])]){
       try{
         if(!await tf.setBackend(backend))continue;
         await tf.ready();
@@ -130,36 +143,107 @@
           await api.nets.faceLandmark68TinyNet.detectLandmarks(pixels);
           await api.nets.faceRecognitionNet.computeFaceDescriptor(pixels);
         }finally{pixels.dispose();}
-        loaded={backend:tf.getBackend(),model:MODEL};return loaded;
+        loaded={backend:tf.getBackend(),model:MODEL,version:tf.version?.tfjs};return loaded;
       }catch{
         for(const net of nets(api))if(net.isLoaded)net.dispose();
       }
     }
     throw failure("model");
   }
+  // A Worker can be terminated even while a WASM/CPU kernel blocks its event
+  // loop. A Promise timeout on the UI thread alone cannot provide that isolation.
+  function workerChannel() {
+    let worker=null,status=null,serial=0;
+    const pending=new Map();
+    function reset(error=new DOMException("Cancelled","AbortError")){
+      const previous=worker;worker=null;status=null;previous?.terminate();
+      for(const finish of [...pending.values()])finish(error);
+    }
+    function request(type,data,signal,timeout,transfer=[]){
+      abort(signal);
+      if(!worker){
+        if(!root.Worker||!root.OffscreenCanvas)throw failure("worker");
+        worker=new root.Worker(new URL("attendance-face-worker.js?v=20261030-3",scriptUrl));
+        const owner=worker;
+        worker.onmessage=event=>{if(worker!==owner)return;const message=event.data;pending.get(message.id)?.(message.error?failure(message.error):null,message.value);};
+        worker.onerror=event=>{event.preventDefault();if(worker===owner)reset(failure("worker"));};
+        worker.onmessageerror=()=>{if(worker===owner)reset(failure("worker"));};
+      }
+      return new Promise((resolve,reject)=>{
+        const id=++serial;
+        const finish=(error,value)=>{if(!pending.delete(id))return;clearTimeout(timer);signal?.removeEventListener("abort",cancel);if(error)reject(error);else{if(type==="load")status=value;resolve(value);}};
+        const cancel=()=>reset(new DOMException("Cancelled","AbortError"));
+        const timer=setTimeout(()=>reset(failure(type==="load"?"model_timeout":"inference_timeout")),timeout);
+        pending.set(id,finish);signal?.addEventListener("abort",cancel,{once:true});
+        try{worker.postMessage({id,type,...data},transfer);}catch{reset(failure("worker"));}
+      });
+    }
+    return {request,reset,get status(){return status;}};
+  }
+  async function infer(canvas){
+    const api=root.faceapi;
+    const faces=await api.detectAllFaces(canvas,new api.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:.35})).withFaceLandmarks(true).withFaceDescriptors();
+    // Explicit plain values cross the worker boundary; never return pixels.
+    return faces.map(face=>({detection:{score:face.detection.score,box:{x:face.detection.box.x,y:face.detection.box.y,width:face.detection.box.width,height:face.detection.box.height}},landmarks:{positions:face.landmarks.positions.map(point=>({x:point.x,y:point.y}))},descriptor:Array.from(face.descriptor)}));
+  }
+  if(workerRealm){
+    let occupied=false;
+    root.onmessage=async event=>{
+      const {id,type,width,height,pixels,backend}=event.data;
+      if(occupied){root.postMessage({id,error:"busy"});return;}
+      occupied=true;let canvas;
+      try{
+        let value;
+        if(type==="load")value=loaded||await initialize(backend);
+        else if(type==="frame"&&loaded&&width>0&&width<=640&&height>0&&height<=480&&pixels?.byteLength===width*height*4){
+          canvas=new root.OffscreenCanvas(width,height);
+          canvas.getContext("2d").putImageData(new root.ImageData(new Uint8ClampedArray(pixels),width,height),0,0);
+          value=await infer(canvas);
+        }else throw failure("worker");
+        root.postMessage({id,value});
+      }catch(error){root.postMessage({id,error:messages[error.code]?error.code:"model"});}
+      finally{if(canvas){canvas.width=0;canvas.height=0;}occupied=false;}
+    };
+    return;
+  }
   function create(options={}) {
     if(options.backend && !["wasm","webgl","cpu"].includes(options.backend))throw failure("model");
-    let disposed=false,controller=null;const lifetime=new AbortController();
+    let disposed=false,controller=null,workerLoading=null;const lifetime=new AbortController();
+    // The inline path exists for DOM-free unit tests only. Browsers fail closed
+    // when Worker/OffscreenCanvas is unavailable rather than freezing the UI.
+    const channel=root.window===root||root.Worker?workerChannel():null;
     function check(signal){abort(signal);if(disposed)throw new DOMException("Disposed","AbortError");}
     async function load({signal}={}){
+      if(channel){
+        check(signal);if(channel.status)return {...channel.status};
+        if(!workerLoading)workerLoading=channel.request("load",{backend:options.backend},lifetime.signal,MODEL_LOAD_TIMEOUT_MS).finally(()=>{workerLoading=null;});
+        const result=await waitForModels(workerLoading,[signal,lifetime.signal]);check(signal);return {...result};
+      }
       check(signal);if(loaded)return {...loaded};
       if(!loading)loading=initialize(options.backend).finally(()=>{loading=null;});
       const result=await waitForModels(loading,[signal,lifetime.signal]);check(signal);return {...result};
     }
-    async function frame(video,signal){
+    async function frame(video,signal,timeout){
       check(signal);liveVideo(video);
-      const canvas=root.document.createElement("canvas"),scale=Math.min(1,640/video.videoWidth);
+      const canvas=root.document.createElement("canvas"),scale=Math.min(1,640/video.videoWidth,480/video.videoHeight);
       canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);
-      const context=canvas.getContext("2d",{willReadFrequently:true});context.drawImage(video,0,0,canvas.width,canvas.height);
+      const context=canvas.getContext("2d",{willReadFrequently:true});
       try{
-        const api=root.faceapi,faces=await api.detectAllFaces(canvas,new api.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:.35})).withFaceLandmarks(true).withFaceDescriptors();
+        if(!context)throw failure("worker");
+        context.drawImage(video,0,0,canvas.width,canvas.height);
+        const pixels=channel?context.getImageData(0,0,canvas.width,canvas.height).data:null;
+        const faces=channel?await channel.request("frame",{width:canvas.width,height:canvas.height,pixels:pixels.buffer},signal,timeout,[pixels.buffer]):await infer(canvas);
         check(signal);liveVideo(video);
         if(faces.length!==1)return {issue:faces.length?"multiple_faces":"no_face"};
         const found=faces[0],box=found.detection.box,pose=poseFromLandmarks(found.landmarks.positions);
         const crop=root.document.createElement("canvas");crop.width=96;crop.height=96;
-        const cropContext=crop.getContext("2d",{willReadFrequently:true});
-        cropContext.drawImage(canvas,box.x,box.y,box.width,box.height,0,0,96,96);
-        const quality=imageQuality(cropContext.getImageData(0,0,96,96).data,96,96);crop.width=0;crop.height=0;
+        let quality;
+        try{
+          const cropContext=crop.getContext("2d",{willReadFrequently:true});
+          if(!cropContext)throw failure("worker");
+          cropContext.drawImage(canvas,box.x,box.y,box.width,box.height,0,0,96,96);
+          quality=imageQuality(cropContext.getImageData(0,0,96,96).data,96,96);
+        }finally{crop.width=0;crop.height=0;}
         const issue=qualityIssue({box,score:found.detection.score,pose},{width:canvas.width,height:canvas.height},quality);
         const sample=descriptor(found.descriptor);
         return issue?{issue}:!sample?{issue:"low_confidence"}:{sample,pose};
@@ -169,10 +253,12 @@
       check(signal);if(running)throw failure("busy");running=true;controller=new AbortController();
       const cancel=()=>controller?.abort();signal?.addEventListener("abort",cancel,{once:true});
       const localSignal=controller.signal;
+      let timer,expired=false;
       try{
         check(signal);liveVideo(video);onProgress?.({step:"loading",message:messages.loading,attempt:0});await load({signal:localSignal});check(localSignal);
         const samples=[];let attempt=0,lastTime=-1;
-        const deadline=Date.now()+45000;
+        const deadline=Date.now()+SEQUENCE_TIMEOUT_MS;
+        timer=setTimeout(()=>{expired=true;controller?.abort();},SEQUENCE_TIMEOUT_MS);
         for(let sampleIndex=0;sampleIndex<count;sampleIndex++){
           const step="front";let accepted=null;
           onProgress?.({step,message:messages.front,attempt,sampleIndex,total:count});
@@ -181,7 +267,7 @@
             // Distinct live frames only; there is deliberately no pose challenge.
             if(video.currentTime===lastTime){await pause(200,localSignal);continue;}
             lastTime=video.currentTime;
-            const result=await frame(video,localSignal);attempt++;
+            const result=await frame(video,localSignal,Math.min(FRAME_TIMEOUT_MS,Math.max(1,deadline-Date.now())));attempt++;
             if(result.issue){onProgress?.({step,message:messages[result.issue],issue:result.issue,attempt,sampleIndex,total:count});}
             else{
               if(Math.abs(result.pose.yaw)<.20){accepted=result;break;}
@@ -194,7 +280,8 @@
           await pause(300,localSignal);
         }
         return {samples};
-      }finally{signal?.removeEventListener("abort",cancel);controller=null;running=false;}
+      }catch(error){if(expired)throw failure("timeout");throw error;}
+      finally{clearTimeout(timer);signal?.removeEventListener("abort",cancel);controller=null;running=false;}
     }
     async function enroll(video,settings){
       const {samples}=await sequence(video,settings),template={version:1,model:MODEL,samples,createdAt:new Date().toISOString()};
@@ -204,9 +291,9 @@
       if(!validateTemplate(template))throw failure("template");
       const {samples}=await sequence(video,settings,2);
       const results=samples.map(sample=>compare(sample,template));
-      return {matched:results.every(result=>result.matched),distance:Math.max(...results.map(result=>result.distance)),threshold:THRESHOLD,challenge:"none",model:MODEL,backend:loaded.backend};
+      return {matched:results.every(result=>result.matched),distance:Math.max(...results.map(result=>result.distance)),threshold:THRESHOLD,challenge:"none",model:MODEL,backend:(channel?.status||loaded).backend};
     }
-    function dispose(){disposed=true;lifetime.abort();controller?.abort();}
+    function dispose(){disposed=true;lifetime.abort();controller?.abort();channel?.reset();}
     return Object.freeze({load,enroll,verify,dispose});
   }
   root.DGV_ATTENDANCE_FACE=Object.freeze({create,validateTemplate,MODEL,THRESHOLD,compare,poseFromLandmarks,imageQuality,qualityIssue});
