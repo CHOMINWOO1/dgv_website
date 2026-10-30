@@ -7,7 +7,9 @@
   const kiosk = supabase.createClient(config.url,config.publishableKey,options("hana-attendance-public"));
   const admin = supabase.createClient(config.url,config.publishableKey,options("hana-attendance-admin"));
   let engine = DGV_ATTENDANCE_FACE.create();
-  const state = {device:null,roster:[],faces:[],pending:null,busy:false,connected:false,admin:false,adminGeneration:0,adminTimer:null,abort:null,stream:null,adminEmployees:[],refreshing:false,deviceEpoch:0,faceGeneration:0,faceLoading:false,migrationIssues:new Map(),storageIssue:""};
+  const CAMERA_START_TIMEOUT_MS=18000;
+  let cameraGeneration=0,cancelCameraStartup=null;
+  const state = {device:null,roster:[],faces:[],pending:null,busy:false,busyReason:"",actionNotice:"",connected:false,admin:false,adminGeneration:0,adminTimer:null,abort:null,stream:null,adminEmployees:[],refreshing:false,deviceEpoch:0,faceGeneration:0,faceLoading:false,migrationIssues:new Map(),storageIssue:""};
   let refreshing,refreshingDevice,refreshingEpoch;
   const esc = value => String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const selected = () => state.roster.find(row=>row.id===$("employee").value);
@@ -22,6 +24,7 @@
   function errorText(error) {
     const value=String(error?.message||error||"");
     const messages={
+      ATTENDANCE_CAMERA_START_TIMEOUT:"카메라를 18초 안에 시작하지 못했습니다. 카메라 권한을 허용하고 다른 카메라 앱을 닫은 뒤 다시 시도해 주세요. / Không bật được máy ảnh trong 18 giây. Cho phép máy ảnh, đóng ứng dụng khác đang dùng máy ảnh rồi thử lại.",
       PAYROLL_KIOSK_INVALID_TOKEN:"기기 등록이 해제되었거나 유효하지 않습니다. 관리자 설정에서 확인해 주세요. / Thiết bị không còn được phép chấm công.",
       PAYROLL_KIOSK_DEVICE_NOT_ACTIVE:"사용 중지된 기기입니다. / Thiết bị đã bị vô hiệu hóa.",
       PAYROLL_KIOSK_EMPLOYEE_NOT_ACTIVE:"재직 상태와 근무 시작일을 확인해 주세요. / Kiểm tra trạng thái và ngày bắt đầu làm việc.",
@@ -73,6 +76,9 @@
     select.dataset.options=signature;
   }
   function availability(row) {
+    if(state.pending)return "출퇴근 저장 결과 확인이 필요합니다. ‘저장 여부 확인’을 먼저 눌러 주세요. / Cần kiểm tra kết quả chấm công. Nhấn Kiểm tra trước.";
+    if(state.busy)return state.busyReason||"작업을 처리하고 있습니다. 잠시 기다려 주세요. / Đang xử lý. Vui lòng chờ.";
+    if(state.actionNotice)return state.actionNotice;
     if(!state.device)return "관리자 설정에서 이 기기를 등록해 주세요. / Đăng ký thiết bị trong phần quản trị.";
     if(!row)return state.roster.length?"이름을 선택하면 공유 얼굴정보를 준비합니다. / Chọn tên để tải khuôn mặt dùng chung.":"출퇴근 가능한 재직 직원이 없습니다. / Chưa có nhân viên đang làm việc.";
     if(!state.connected)return "서버 연결을 확인한 뒤 다시 시도해 주세요. / Kiểm tra kết nối máy chủ rồi thử lại.";
@@ -138,13 +144,13 @@
     document.querySelectorAll("[data-revoke]").forEach(button=>button.disabled=state.busy||button.dataset.revoked==="true");
   }
   async function action(operation,adminOnly=false) {
-    if(state.busy)return;state.busy=true;render();
+    if(state.busy)return;state.busy=true;state.busyReason="작업을 처리하고 있습니다. 잠시 기다려 주세요. / Đang xử lý. Vui lòng chờ.";state.actionNotice="";render();
     try {
       const run=async()=>{state.pending=await storage.get("pending");await operation();};
       if(navigator.locks)await navigator.locks.request("hana-attendance-action",{ifAvailable:true},async lock=>{if(!lock)throw new Error("다른 출퇴근 탭에서 작업 중입니다. / Một thẻ chấm công khác đang hoạt động.");await run();});
       else await run();
-    }catch(error){notice(errorText(error),true,adminOnly);}
-    finally{state.busy=false;state.abort=null;$("cancelFace").hidden=true;$("cancelEnrollment").hidden=true;render();}
+    }catch(error){state.actionNotice=errorText(error);notice(state.actionNotice,true,adminOnly);}
+    finally{state.busy=false;state.busyReason="";state.abort=null;$("cancelFace").hidden=true;$("cancelEnrollment").hidden=true;render();}
   }
   async function migrateLegacy(roster,device,epoch) {
     let changed=false;state.migrationIssues.clear();
@@ -211,6 +217,7 @@
     try{await refreshing;}finally{refreshing=null;}
   }
   function stopCamera() {
+    const cancel=cancelCameraStartup;cancelCameraStartup=null;cameraGeneration++;cancel?.();
     state.stream?.getTracks().forEach(track=>track.stop());state.stream=null;
     for(const id of ["camera","enrollCamera"]){$(id).srcObject=null;$(id).hidden=true;}
     $("cameraPlaceholder").hidden=false;$("stopCamera").hidden=true;
@@ -218,16 +225,49 @@
   }
   async function camera(video) {
     if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia)throw new Error("HTTPS 주소에서 최신 Chrome으로 열어 주세요. / Mở địa chỉ HTTPS bằng Chrome mới nhất.");
+    const signal=state.abort?.signal,adminGeneration=state.adminGeneration;
+    if(document.hidden||signal?.aborted||(video.id==="enrollCamera"&&!state.admin))throw new DOMException("Cancelled","AbortError");
     if(state.stream&&video.srcObject===state.stream&&state.stream.active)return;
     stopCamera();
-    const generation=state.adminGeneration;
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480},frameRate:{ideal:15,max:15}},audio:false});
-    if(document.hidden||(video.id==="enrollCamera"&&(!state.admin||state.adminGeneration!==generation))||state.abort?.signal.aborted){stream.getTracks().forEach(track=>track.stop());throw new DOMException("Cancelled","AbortError");}
-    state.stream=stream;video.srcObject=stream;video.hidden=false;await video.play();
-    if(video.id==="camera"){$("cameraPlaceholder").hidden=true;$("stopCamera").hidden=false;$("cameraState").textContent="카메라 켜짐 / Máy ảnh đang bật";}
+    const generation=++cameraGeneration,progressId=video.id==="enrollCamera"?"enrollProgress":"faceProgress";
+    const current=()=>generation===cameraGeneration&&!document.hidden&&!signal?.aborted&&(video.id!=="enrollCamera"||(state.admin&&state.adminGeneration===adminGeneration));
+    state.busyReason="카메라를 시작하고 있습니다. 권한 요청을 확인해 주세요. 최대 18초 후 다시 시도할 수 있습니다. / Đang bật máy ảnh. Kiểm tra quyền truy cập; tối đa 18 giây.";
+    $(progressId).textContent=state.busyReason;$("cameraState").textContent="카메라 시작 중 / Đang bật máy ảnh";render();
+    // A browser may leave permission requests or video.play() unresolved. Race
+    // the entire startup against cancellation/timeout; own late streams never
+    // become the active camera or stop a newer attempt's stream.
+    await new Promise((resolve,reject)=>{
+      let stream=null,settled=false,timer;
+      const release=()=>{
+        stream?.getTracks().forEach(track=>track.stop());
+        if(stream&&state.stream===stream)state.stream=null;
+        if(stream&&video.srcObject===stream){video.srcObject=null;video.hidden=true;}
+      };
+      const cleanup=()=>{clearTimeout(timer);signal?.removeEventListener("abort",cancel);if(cancelCameraStartup===cancel)cancelCameraStartup=null;};
+      const fail=error=>{
+        if(settled)return;settled=true;cleanup();release();
+        if(generation===cameraGeneration){$(progressId).textContent=errorText(error);$("cameraState").textContent="카메라 꺼짐 / Máy ảnh tắt";if(video.id==="camera"){$("cameraPlaceholder").hidden=false;$("stopCamera").hidden=true;}}
+        reject(error);
+      };
+      const cancel=()=>fail(new DOMException("Cancelled","AbortError"));
+      cancelCameraStartup=cancel;signal?.addEventListener("abort",cancel,{once:true});
+      timer=setTimeout(()=>fail(new Error("ATTENDANCE_CAMERA_START_TIMEOUT")),CAMERA_START_TIMEOUT_MS);
+      if(!current()){cancel();return;}
+      Promise.resolve().then(()=>navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480},frameRate:{ideal:15,max:15}},audio:false})).then(async acquired=>{
+        stream=acquired;
+        if(settled||!current()){release();if(!settled)cancel();return;}
+        state.stream=stream;video.srcObject=stream;video.hidden=false;
+        await video.play();
+        if(settled||!current()){release();if(!settled)cancel();return;}
+        settled=true;cleanup();
+        if(video.id==="camera"){$("cameraPlaceholder").hidden=true;$("stopCamera").hidden=false;$("cameraState").textContent="카메라 켜짐 / Máy ảnh đang bật";}
+        $(progressId).textContent="카메라가 준비되었습니다. / Máy ảnh đã sẵn sàng.";
+        resolve();
+      }).catch(fail);
+    });
   }
   function cancelFace() {state.abort?.abort();engine.dispose();engine=DGV_ATTENDANCE_FACE.create();stopCamera();}
-  function progress(id) {return value=>{$(id).textContent=value.message+(value.total?` (${(value.sampleIndex||0)+1}/${value.total})`:"");};}
+  function progress(id) {return value=>{const message=value.message+(value.total?` (${(value.sampleIndex||0)+1}/${value.total})`:"");$(id).textContent=message;if(state.busy){state.busyReason=message;$("employeeAvailability").textContent=availability(selected());}};}
   async function confirmFace(kind) {
     const row=selected(),registered=faceFor(row);
     if(!row||!registered||!state.device||state.pending)return;
@@ -408,9 +448,9 @@
   }
   let wakeLock;
   async function wake() {try{if(navigator.wakeLock&&!document.hidden)wakeLock=await navigator.wakeLock.request("screen");}catch{/* The tablet's display settings remain authoritative. */}}
-  $("employee").addEventListener("change",()=>{notice("");void ensureSelectedFace();});
+  $("employee").addEventListener("change",()=>{state.actionNotice="";notice("");void ensureSelectedFace();});
   $("syncFaces").addEventListener("click",()=>void action(()=>refresh()));
-  $("openCamera").addEventListener("click",()=>void action(()=>camera($("camera"))));
+  $("openCamera").addEventListener("click",()=>void action(()=>{state.abort=new AbortController();$("cancelFace").hidden=false;return camera($("camera"));}));
   $("stopCamera").addEventListener("click",stopCamera);
   $("clockIn").addEventListener("click",()=>void action(()=>confirmFace("in")));
   $("clockOut").addEventListener("click",()=>void action(()=>confirmFace("out")));

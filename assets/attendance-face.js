@@ -5,6 +5,7 @@
   // No identification search, images, attributes, network upload or persistence.
   const MODEL = "dlib-resnet128-faceapi-1.7.15-tiny68-v1";
   const THRESHOLD = 0.48;
+  const MODEL_LOAD_TIMEOUT_MS = 60000;
   const scriptUrl = root.document?.currentScript?.src;
   const baseUrl = scriptUrl ? new URL("vendor/attendance-face/", scriptUrl).href : "assets/vendor/attendance-face/";
   let loading = null, loaded = null, running = false;
@@ -24,6 +25,7 @@
     timeout:"시간이 초과되었습니다. 자세와 조명을 확인하고 다시 시도하세요. / Hết thời gian. Kiểm tra tư thế, ánh sáng rồi thử lại.",
     inconsistent:"세 번의 얼굴이 일치하지 않습니다. 한 사람이 다시 등록해 주세요. / Ba mẫu không khớp. Một người hãy đăng ký lại.",
     model:"얼굴 모델을 준비하지 못했습니다. 연결과 브라우저를 확인하세요. / Không tải được mô hình. Kiểm tra kết nối và trình duyệt.",
+    model_timeout:"얼굴 모델을 불러오는 데 시간이 오래 걸립니다. 인터넷 연결을 확인하고 다시 시도하세요. / Tải mô hình quá lâu. Kiểm tra kết nối mạng rồi thử lại.",
     busy:"이미 얼굴을 확인하고 있습니다. / Đang kiểm tra khuôn mặt.",
     template:"얼굴 등록정보를 다시 등록해 주세요. / Hãy đăng ký lại dữ liệu khuôn mặt."
   };
@@ -87,6 +89,23 @@
     abort(signal);
     return new Promise((resolve,reject)=>{const cancel=()=>{clearTimeout(timer);signal?.removeEventListener("abort",cancel);reject(new DOMException("Cancelled","AbortError"));};const timer=setTimeout(()=>{signal?.removeEventListener("abort",cancel);resolve();},milliseconds);signal?.addEventListener("abort",cancel,{once:true});});
   }
+  function waitForModels(promise, signals) {
+    signals.forEach(abort);
+    return new Promise((resolve,reject)=>{
+      let settled=false;
+      const finish=(error,value)=>{
+        if(settled)return;settled=true;clearTimeout(timer);
+        signals.forEach(signal=>signal?.removeEventListener("abort",cancel));
+        if(error)reject(error);else resolve(value);
+      };
+      const cancel=()=>finish(new DOMException("Cancelled","AbortError"));
+      const timer=setTimeout(()=>finish(failure("model_timeout")),MODEL_LOAD_TIMEOUT_MS);
+      signals.forEach(signal=>signal?.addEventListener("abort",cancel,{once:true}));
+      // Cancel only this waiter. A shared initialization must not be duplicated
+      // or dispose the networks while another caller is still awaiting it.
+      promise.then(value=>finish(null,value),error=>finish(error));
+    });
+  }
   async function library() {
     if(root.faceapi)return root.faceapi;
     await new Promise((resolve,reject)=>{const script=root.document.createElement("script");script.src=baseUrl+"face-api-1.7.15.js";script.integrity="sha256-AWD3rzqMeM7ORcfsx2U4O610vs/UOLt4fN1iey1vLPY=";script.async=true;script.onload=resolve;script.onerror=()=>{script.remove();reject(failure("model"));};root.document.head.append(script);});
@@ -120,9 +139,13 @@
   }
   function create(options={}) {
     if(options.backend && !["wasm","webgl","cpu"].includes(options.backend))throw failure("model");
-    let disposed=false,controller=null;
+    let disposed=false,controller=null;const lifetime=new AbortController();
     function check(signal){abort(signal);if(disposed)throw new DOMException("Disposed","AbortError");}
-    async function load(){check();if(loaded)return {...loaded};if(!loading)loading=initialize(options.backend).finally(()=>{loading=null;});const result=await loading;check();return {...result};}
+    async function load({signal}={}){
+      check(signal);if(loaded)return {...loaded};
+      if(!loading)loading=initialize(options.backend).finally(()=>{loading=null;});
+      const result=await waitForModels(loading,[signal,lifetime.signal]);check(signal);return {...result};
+    }
     async function frame(video,signal){
       check(signal);liveVideo(video);
       const canvas=root.document.createElement("canvas"),scale=Math.min(1,640/video.videoWidth);
@@ -147,7 +170,7 @@
       const cancel=()=>controller?.abort();signal?.addEventListener("abort",cancel,{once:true});
       const localSignal=controller.signal;
       try{
-        check(signal);liveVideo(video);onProgress?.({step:"loading",message:messages.loading,attempt:0});await load();check(localSignal);
+        check(signal);liveVideo(video);onProgress?.({step:"loading",message:messages.loading,attempt:0});await load({signal:localSignal});check(localSignal);
         const samples=[];let attempt=0,lastTime=-1;
         const deadline=Date.now()+45000;
         for(let sampleIndex=0;sampleIndex<count;sampleIndex++){
@@ -183,7 +206,7 @@
       const results=samples.map(sample=>compare(sample,template));
       return {matched:results.every(result=>result.matched),distance:Math.max(...results.map(result=>result.distance)),threshold:THRESHOLD,challenge:"none",model:MODEL,backend:loaded.backend};
     }
-    function dispose(){disposed=true;controller?.abort();}
+    function dispose(){disposed=true;lifetime.abort();controller?.abort();}
     return Object.freeze({load,enroll,verify,dispose});
   }
   root.DGV_ATTENDANCE_FACE=Object.freeze({create,validateTemplate,MODEL,THRESHOLD,compare,poseFromLandmarks,imageQuality,qualityIssue});

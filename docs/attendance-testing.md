@@ -34,6 +34,12 @@ snapshots remain immutable. Existing salary/hour rules continue to apply.
 
 ## Connection failures and missed punches
 
+Camera startup and model preparation have bounded waits. If camera permission or
+model loading stalls, use **취소 / Hủy**; the employee selector is released without
+recording attendance. Late camera responses are closed rather than reopening the
+camera after cancellation. Timeout messages distinguish camera setup from model
+loading. An operation in progress is shown beside the employee selector.
+
 New punches require an online connection. An uncertain response is kept in
 encrypted local storage. **저장 여부 확인** reads that request's server receipt;
 it never inserts a delayed event. If absent, the user must make a fresh face
