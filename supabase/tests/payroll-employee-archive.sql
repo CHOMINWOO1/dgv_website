@@ -145,7 +145,7 @@ begin
   perform pg_temp.employee_archive_assert(rejected,'archived staff cannot be enrolled again');
   perform set_config('request.jwt.claims','{}',true);execute 'set local role anon';
   roster:=public.payroll_kiosk_roster(token);
-  perform pg_temp.employee_archive_assert(jsonb_array_length(roster->'employees')=0,'archived employee disappears from device roster');
+  perform pg_temp.employee_archive_assert(not exists(select 1 from jsonb_array_elements(roster->'employees') where value->>'id'=emp::text),'archived employee disappears from device roster');
   rejected:=false;begin perform public.payroll_kiosk_punch(token,emp,'out',gen_random_uuid());
     exception when others then rejected:=sqlerrm='PAYROLL_KIOSK_EMPLOYEE_NOT_ACTIVE';end;
   perform pg_temp.employee_archive_assert(rejected,'archived staff cannot punch using a retained device grant');
@@ -169,7 +169,7 @@ begin
     and before_data->>'archived_at' is not null and after_data->>'archived_at' is null and after_data->>'archived_reason'='Restore original employee'),'restoration reason remains in immutable audit');
   perform set_config('request.jwt.claims','{}',true);execute 'set local role anon';
   roster:=public.payroll_kiosk_roster(token);
-  perform pg_temp.employee_archive_assert(jsonb_array_length(roster->'employees')=1 and roster->'employees'->0->>'enrollment_id'=grant_id::text,'restored active employee reuses original enrollment');
+  perform pg_temp.employee_archive_assert((select value->>'enrollment_id'=grant_id::text from jsonb_array_elements(roster->'employees') where value->>'id'=emp::text),'restored active employee reuses original enrollment');
 
   execute 'set local role authenticated';
   perform set_config('request.jwt.claims',jsonb_build_object('sub',actor,'app_metadata',jsonb_build_object('role','admin'))::text,true);

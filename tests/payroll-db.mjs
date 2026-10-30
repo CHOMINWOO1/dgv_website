@@ -37,7 +37,9 @@ try {
     -- Vault is stubbed only to test the app's access checks and immutable version
     -- references. This harness does not verify Supabase Vault's encryption.
     create schema vault;
+    select set_config('app.payroll_test_vault_stub','true',false);
     create table vault.test_secrets(id uuid primary key default gen_random_uuid(),secret text,name text,description text);
+    create view vault.secrets as select * from vault.test_secrets;
     create view vault.decrypted_secrets as select id,secret as decrypted_secret from vault.test_secrets;
     create function vault.create_secret(new_secret text,new_name text default null,new_description text default null,new_key_id uuid default null)
       returns uuid language plpgsql as $$
@@ -48,6 +50,7 @@ try {
   const migrations = process.env.PAYROLL_MIGRATION_FILE ? [process.env.PAYROLL_MIGRATION_FILE] : (await readdir(path.join(root, "supabase/migrations")))
     .filter(name => name.includes("payroll") && name.endsWith(".sql")).sort()
     .map(name => path.join(root, "supabase/migrations", name));
+  if (process.env.PAYROLL_EXTRA_MIGRATION_FILE) migrations.push(process.env.PAYROLL_EXTRA_MIGRATION_FILE);
   assert.ok(migrations.length, "payroll migration is required");
   for (const file of migrations) {
     await db.exec(await readFile(file, "utf8"));

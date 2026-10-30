@@ -1,9 +1,9 @@
 // Isolated remote boundary for the actual attendance page. Never contacts a
 // production account; encryption and IndexedDB stay real in the browser.
 export function installAttendanceMock(seed){
-  const state=window.__attendanceTest={clients:[],calls:[],events:[],receipts:{},devices:[],grants:[],sequence:0,
-    employees:[{id:"00000000-0000-4000-8000-000000000001",device_user_id:"TEST-1",name:"DEMO · Nguyễn An",active:true},
-      {id:"00000000-0000-4000-8000-000000000002",device_user_id:"TEST-2",name:"DEMO · Trần Bình",active:true}]};
+  const state=window.__attendanceTest={clients:[],calls:[],events:[],receipts:{},devices:[],grants:[],faceProfiles:[],faceRequests:{},sequence:0,
+    employees:[{id:"00000000-0000-4000-8000-000000000001",device_user_id:"TEST-1",name:"DEMO · Nguyễn An",active:true,payee_type:"employee",employment_status:"active",archived_at:null},
+      {id:"00000000-0000-4000-8000-000000000002",device_user_id:"TEST-2",name:"DEMO · Trần Bình",active:true,payee_type:"employee",employment_status:"active",archived_at:null}]};
   if(seed)Object.assign(state,seed);
   const failure=(message,code="P0001")=>({data:null,error:{message,code}}),success=data=>({data:structuredClone(data),error:null});
   function deviceFor(token){return state.devices.find(row=>row.token===token&&row.status==="active");}
@@ -39,9 +39,27 @@ export function installAttendanceMock(seed){
     }
     const rpc=async(name,args={})=>{
       state.calls.push({client:instance.id,role:instance.role,rpc:name,args:structuredClone(args)});
-      const privileged=["payroll_kiosk_register","payroll_kiosk_devices","payroll_kiosk_revoke","payroll_kiosk_enroll","payroll_kiosk_unenroll"];
+      // A multi-device suite can route both isolated contexts to one synthetic
+      // backend while the ordinary suite keeps its existing local fixture.
+      if(typeof window.__attendanceRemote==="function")return window.__attendanceRemote({role:instance.role,name,args});
+      const privileged=["payroll_kiosk_register","payroll_kiosk_devices","payroll_kiosk_revoke","payroll_kiosk_enroll","payroll_kiosk_unenroll","payroll_kiosk_face_save","payroll_kiosk_face_delete"];
       if(privileged.includes(name)&&instance.role!=="admin")return failure("PAYROLL_ADMIN_REQUIRED","42501");
       if(state.failRpcOnce===name){state.failRpcOnce=null;return failure("Synthetic network failure","FETCH_ERROR");}
+      const activeEmployee=id=>state.employees.find(employee=>employee.id===id&&employee.active&&employee.employment_status!=="terminated"&&employee.employment_status!=="leave"&&employee.payee_type!=="service"&&!employee.archived_at);
+      const faceResponse=profile=>({employee_id:profile.employee_id,face_revision:profile.face_revision,face_registered:!!profile.template,replayed:false});
+      if(name==="payroll_kiosk_face_save"||name==="payroll_kiosk_face_delete"){
+        if(!activeEmployee(args.p_employee_id))return failure("PAYROLL_KIOSK_EMPLOYEE_NOT_ACTIVE");
+        const prior=state.faceRequests[args.p_request_id],fingerprint=JSON.stringify({name,args});
+        if(prior)return prior.fingerprint===fingerprint?success({...prior.response,replayed:true}):failure("PAYROLL_KIOSK_REQUEST_CONFLICT");
+        let profile=state.faceProfiles.find(row=>row.employee_id===args.p_employee_id);
+        if((profile?.face_revision||0)!==args.p_expected_revision)return failure("PAYROLL_KIOSK_FACE_REFRESH_REQUIRED");
+        if(name==="payroll_kiosk_face_save"&&(!args.p_consent_version||!args.p_template?.samples))return failure("PAYROLL_KIOSK_INVALID_FACE_TEMPLATE");
+        if(name==="payroll_kiosk_face_delete"&&!args.p_reason?.trim())return failure("PAYROLL_KIOSK_REASON_REQUIRED");
+        if(!profile){profile={employee_id:args.p_employee_id,face_revision:0,template:null};state.faceProfiles.push(profile);}
+        profile.face_revision++;profile.template=name==="payroll_kiosk_face_save"?structuredClone(args.p_template):null;
+        const response=faceResponse(profile);state.faceRequests[args.p_request_id]={fingerprint,response};
+        return success(response);
+      }
       if(name==="payroll_kiosk_register"){
         let device=state.devices.find(row=>row.device_id===args.p_device_id);
         if(!device){device={device_id:args.p_device_id,name:args.p_name,token:args.p_token,status:"active",created_at:"2026-10-29T01:00:00Z",revoked_at:null};state.devices.push(device);}
@@ -57,11 +75,28 @@ export function installAttendanceMock(seed){
       }
       if(name==="payroll_kiosk_unenroll"){state.grants=state.grants.filter(row=>row.device_id!==args.p_device_id||row.employee_id!==args.p_employee_id);return success(args.p_employee_id);}
       const device=deviceFor(args.p_token);if(!device)return failure("PAYROLL_KIOSK_INVALID_TOKEN","42501");
-      if(name==="payroll_kiosk_roster")return success({device_id:device.device_id,name:device.name,employees:state.employees.filter(employee=>employee.active&&state.grants.some(grant=>grant.device_id===device.device_id&&grant.employee_id===employee.id)).map(employee=>({id:employee.id,name:employee.name,device_user_id:employee.device_user_id,enrollment_id:state.grants.find(grant=>grant.device_id===device.device_id&&grant.employee_id===employee.id).id,last_punch:state.events.filter(event=>event.employee_id===employee.id).at(-1)||null}))});
+      if(name==="payroll_kiosk_roster")return success({device_id:device.device_id,name:device.name,employees:state.employees.filter(employee=>activeEmployee(employee.id)).map(employee=>{const grant=state.grants.find(grant=>grant.device_id===device.device_id&&grant.employee_id===employee.id),profile=state.faceProfiles.find(row=>row.employee_id===employee.id);return {id:employee.id,name:employee.name,device_user_id:employee.device_user_id,enrollment_id:grant?.id||null,has_legacy_enrollment:!!grant,face_registered:!!profile?.template,face_revision:profile?.face_revision||0,last_punch:state.events.filter(event=>event.employee_id===employee.id).at(-1)||null};})});
+      if(name==="payroll_kiosk_face_get"){
+        if(!activeEmployee(args.p_employee_id))return failure("PAYROLL_KIOSK_EMPLOYEE_NOT_ACTIVE");
+        const profile=state.faceProfiles.find(row=>row.employee_id===args.p_employee_id);
+        return success(profile?.template?{employee_id:profile.employee_id,face_revision:profile.face_revision,template:profile.template}:null);
+      }
+      if(name==="payroll_kiosk_face_migrate"){
+        if(!activeEmployee(args.p_employee_id))return failure("PAYROLL_KIOSK_EMPLOYEE_NOT_ACTIVE");
+        if(!state.grants.some(grant=>grant.device_id===device.device_id&&grant.employee_id===args.p_employee_id&&grant.id===args.p_enrollment_id))return failure("PAYROLL_KIOSK_EMPLOYEE_NOT_ENROLLED");
+        const prior=state.faceRequests[args.p_request_id],fingerprint=JSON.stringify({name,args});
+        if(prior)return prior.fingerprint===fingerprint?success({...prior.response,replayed:true}):failure("PAYROLL_KIOSK_REQUEST_CONFLICT");
+        if(state.faceProfiles.some(profile=>profile.employee_id===args.p_employee_id))return failure("PAYROLL_KIOSK_FACE_EXISTS");
+        const profile={employee_id:args.p_employee_id,face_revision:1,template:structuredClone(args.p_template)};state.faceProfiles.push(profile);
+        const response=faceResponse(profile);state.faceRequests[args.p_request_id]={fingerprint,response};return success(response);
+      }
       if(name==="payroll_kiosk_receipt"){const receipt=state.receipts[args.p_request_id];return success(receipt?.device_id===device.device_id?{...receipt,replayed:true}:null);}
       if(name==="payroll_kiosk_punch"){
         const receipt=state.receipts[args.p_request_id];if(receipt)return receipt.device_id===device.device_id?success({...receipt,replayed:true}):failure("PAYROLL_KIOSK_REQUEST_CONFLICT");
-        if(!state.grants.some(grant=>grant.device_id===device.device_id&&grant.employee_id===args.p_employee_id))return failure("PAYROLL_KIOSK_NOT_ENROLLED");
+        if(!activeEmployee(args.p_employee_id))return failure("PAYROLL_KIOSK_EMPLOYEE_NOT_ACTIVE");
+        const profile=state.faceProfiles.find(profile=>profile.employee_id===args.p_employee_id);
+        if(profile){if(!profile.template||args.p_face_revision!==profile.face_revision)return failure("PAYROLL_KIOSK_FACE_REFRESH_REQUIRED");}
+        else if(!state.grants.some(grant=>grant.device_id===device.device_id&&grant.employee_id===args.p_employee_id))return failure("PAYROLL_KIOSK_NOT_ENROLLED");
         const latest=state.events.filter(event=>event.employee_id===args.p_employee_id).at(-1);
         if((!latest&&args.p_kind!=="in")||latest?.punch_type===args.p_kind)return failure("PAYROLL_KIOSK_INVALID_SEQUENCE");
         if(state.losePunchBeforeCommit){state.losePunchBeforeCommit=false;return failure("Synthetic result unknown","FETCH_ERROR");}
@@ -80,14 +115,14 @@ export function installAttendanceMock(seed){
 export function installAttendanceFaceMock(){
   const MODEL="dlib-resnet128-faceapi-1.7.15-tiny68-v1",THRESHOLD=0.48;
   const state=window.__faceTest={matched:true,loadCalls:0,enrollCalls:0,verifyCalls:0,disposeCalls:0,cameraStarts:0,cameraStops:0};
-  const template=()=>({version:1,model:MODEL,samples:Array.from({length:3},()=>Array.from({length:128},(_,i)=>(i+1)/1000)),createdAt:"2026-10-29T00:00:00.000Z"});
+  const template=()=>({version:1,model:MODEL,samples:Array.from({length:3},()=>Array.from({length:128},(_,i)=>(i+1)/1000+(state.marker||0))),createdAt:"2026-10-29T00:00:00.000Z"});
   const delay=async signal=>{
     if(state.defer){state.defer=false;await new Promise(resolve=>{state.release=resolve;});}
     if(signal?.aborted&&!state.ignoreAbort)throw new DOMException("Synthetic cancel","AbortError");
   };
   window.DGV_ATTENDANCE_FACE={MODEL,THRESHOLD,validateTemplate:value=>value?.model===MODEL&&Array.isArray(value.samples)&&value.samples.length===3,
     create:()=>{let disposed=false;const check=()=>{if(disposed)throw new DOMException("Disposed","AbortError");};return {load:async()=>{check();state.loadCalls++;return {backend:"wasm",model:MODEL};},enroll:async(video,{signal,onProgress}={})=>{check();state.enrollCalls++;onProgress?.({step:"front",message:"DEMO · 정면 확인 중 / Nhìn thẳng"});await delay(signal);return template();},
-      verify:async(video,value,{signal,onProgress}={})=>{check();state.verifyCalls++;onProgress?.({step:"front",message:"DEMO · 얼굴 확인 중 / Kiểm tra khuôn mặt"});await delay(signal);return {matched:state.matched,distance:state.matched?0.2:0.8,threshold:THRESHOLD,challenge:"none",model:MODEL,backend:"wasm"};},dispose:()=>{disposed=true;state.disposeCalls++;}};}};
+      verify:async(video,value,{signal,onProgress}={})=>{check();state.verifyCalls++;state.lastTemplate=structuredClone(value);onProgress?.({step:"front",message:"DEMO · 얼굴 확인 중 / Kiểm tra khuôn mặt"});await delay(signal);return {matched:state.matched,distance:state.matched?0.2:0.8,threshold:THRESHOLD,challenge:"none",model:MODEL,backend:"wasm"};},dispose:()=>{disposed=true;state.disposeCalls++;}};}};
   navigator.mediaDevices.getUserMedia=async()=>{
     state.cameraStarts++;const canvas=document.createElement("canvas");canvas.width=640;canvas.height=480;const ctx=canvas.getContext("2d");ctx.fillStyle="#d9e7e3";ctx.fillRect(0,0,640,480);ctx.fillStyle="#49635b";ctx.font="28px sans-serif";ctx.fillText("DEMO · Synthetic camera",125,240);
     const stream=canvas.captureStream(1);for(const track of stream.getTracks()){const stop=track.stop.bind(track);track.stop=()=>{state.cameraStops++;stop();};}return stream;

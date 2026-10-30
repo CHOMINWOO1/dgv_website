@@ -56,9 +56,9 @@ begin
   rejected:=false;begin perform 1 from payroll_kiosk.payroll_kiosk_devices;exception when insufficient_privilege then rejected:=true;end;
   perform pg_temp.kiosk_assert(rejected,'device has no direct credential table access');
   roster:=public.payroll_kiosk_roster(token);
-  perform pg_temp.kiosk_assert(jsonb_array_length(roster->'employees')=1 and roster->'employees'->0->>'enrollment_id'=grant_id::text
-    and roster->'employees'->0->'last_punch'='null'::jsonb,'roster contains only enrolled employee and grant UUID');
-  perform pg_temp.kiosk_assert((roster->'employees'->0)-array['id','device_user_id','name','enrollment_id','last_punch']='{}'::jsonb,'roster excludes sensitive and salary fields');
+  perform pg_temp.kiosk_assert(jsonb_array_length(roster->'employees')=2 and roster->'employees'->0->>'enrollment_id'=grant_id::text
+    and roster->'employees'->0->'last_punch'='null'::jsonb,'roster contains active employees and only matching legacy grant UUID');
+  perform pg_temp.kiosk_assert((roster->'employees'->0)-array['id','device_user_id','name','enrollment_id','last_punch','has_legacy_enrollment','face_registered','face_revision']='{}'::jsonb,'roster excludes sensitive and salary fields');
   rejected:=false;begin perform public.payroll_kiosk_punch(token,other_emp,'in',gen_random_uuid());exception when others then rejected:=sqlerrm='PAYROLL_KIOSK_EMPLOYEE_NOT_ENROLLED';end;
   perform pg_temp.kiosk_assert(rejected,'valid device cannot punch arbitrary existing employee');
   rejected:=false;begin perform public.payroll_kiosk_punch(token,emp,'out',gen_random_uuid());exception when others then rejected:=sqlerrm='PAYROLL_KIOSK_CHECK_IN_REQUIRED';end;
@@ -122,7 +122,7 @@ begin
     values(emp,local_now,'kiosk:'||dev,'kiosk','out',dev,gen_random_uuid());exception when others then rejected:=sqlerrm='PAYROLL_KIOSK_RPC_REQUIRED';end;
   perform pg_temp.kiosk_assert(rejected,'direct administrator raw insert cannot claim kiosk-verification provenance');
   perform public.payroll_kiosk_unenroll(dev,emp,'Consent withdrawn');
-  perform pg_temp.kiosk_assert(jsonb_array_length(public.payroll_kiosk_roster(token)->'employees')=0,'consent withdrawal immediately removes roster access');
+  perform pg_temp.kiosk_assert(public.payroll_kiosk_roster(token)->'employees'->0->'enrollment_id'='null'::jsonb,'legacy consent withdrawal immediately removes matching grant');
   rejected:=false;begin perform public.payroll_kiosk_punch(token,emp,'out',gen_random_uuid());exception when others then rejected:=sqlerrm='PAYROLL_KIOSK_EMPLOYEE_NOT_ENROLLED';end;
   perform pg_temp.kiosk_assert(rejected,'withdrawn grant cannot create new punches');
   grant2:=public.payroll_kiosk_enroll(dev,emp,'local-face-consent-v2');

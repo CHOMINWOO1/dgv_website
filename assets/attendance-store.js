@@ -36,12 +36,14 @@
       tx.oncomplete = () => resolve(selected); tx.onerror = tx.onabort = () => reject(tx.error);
     });
   }
-  async function put(id, value) {
+  async function put(id, value, current = () => true) {
     const secret = await key(), iv = crypto.getRandomValues(new Uint8Array(12));
     const plaintext = new TextEncoder().encode(JSON.stringify(value));
     try {
       const cipher = await crypto.subtle.encrypt({name:"AES-GCM",iv,additionalData:new TextEncoder().encode(id)}, secret, plaintext);
-      await transaction("records","readwrite",s=>s.put({iv,cipher},id));
+      // Recheck inside the transaction, after async encryption. A revoked
+      // device or superseded selection must not leave a late shared cache.
+      await transaction("records","readwrite",s=>current()?s.put({iv,cipher},id):s.get(id));
     } finally { plaintext.fill(0); }
   }
   async function get(id) {
@@ -51,14 +53,26 @@
     try { return JSON.parse(new TextDecoder().decode(plain)); } finally { plain.fill(0); }
   }
   const remove = id => transaction("records","readwrite",s=>s.delete(id));
-  async function faces() {
+  async function records(prefix) {
     const ids = await transaction("records","readonly",s=>s.getAllKeys());
-    return (await Promise.all(ids.filter(id=>String(id).startsWith("face:")).map(get))).filter(Boolean);
+    const keys=ids.filter(id=>String(id).startsWith(prefix)),results=await Promise.allSettled(keys.map(get));
+    return {faces:results.filter(item=>item.status==="fulfilled").map(item=>item.value).filter(Boolean),errors:results.flatMap((item,index)=>item.status==="rejected"?[{id:String(keys[index]),error:item.reason}]:[])};
+  }
+  // Legacy enrollments remain intact until the server validates their original
+  // device and enrollment IDs. Shared caches use separate encrypted records.
+  const readFaces = () => records("face:");
+  const readSharedFaces = () => records("shared-face:");
+  const faces = async () => (await readFaces()).faces;
+  const sharedFaces = async () => (await readSharedFaces()).faces;
+  const putSharedFace = (face,current) => put(`shared-face:${face.employeeId}`,face,current);
+  async function clearSharedFaces() {
+    const ids = await transaction("records","readonly",s=>s.getAllKeys());
+    await Promise.all(ids.filter(id=>String(id).startsWith("shared-face:")).map(remove));
   }
   async function clear() {
     // Keep the non-extractable key so an already-open tab cannot leave ciphertext
     // encrypted with a discarded key. All attendance credentials/templates go.
     await transaction("records","readwrite",s=>s.clear());
   }
-  root.DGV_ATTENDANCE_STORE = Object.freeze({get,put,remove,faces,clear});
+  root.DGV_ATTENDANCE_STORE = Object.freeze({get,put,remove,faces,readFaces,sharedFaces,readSharedFaces,putSharedFace,clearSharedFaces,clear});
 })(window);

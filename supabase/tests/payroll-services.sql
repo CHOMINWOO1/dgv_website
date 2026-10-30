@@ -85,7 +85,7 @@ begin
     perform pg_temp.service_assert(rejected,'service provider cannot be finalized into an employee wage ledger');
     perform public.payroll_kiosk_register(device,'Synthetic service regression tablet',token);
     rejected:=false;begin perform public.payroll_kiosk_enroll(device,provider,'synthetic-consent');
-      exception when others then rejected:=sqlerrm='PAYROLL_SERVICE_NOT_EMPLOYEE';end;
+      exception when others then rejected:=sqlerrm='PAYROLL_KIOSK_EMPLOYEE_NOT_ACTIVE';end;
     perform pg_temp.service_assert(rejected,'service provider cannot register employee face attendance');
 
     -- Model a mistaken employee entry with one historical signed advance and
