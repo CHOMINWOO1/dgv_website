@@ -12,7 +12,7 @@ try{
   page.on("pageerror",error=>errors.push(error.message));
   const response=await page.goto(url,{waitUntil:"networkidle"});assert.equal(response.status(),200);
   for(const asset of ["attendance.html","assets/attendance.js","assets/attendance-store.js","assets/attendance-face.js","assets/attendance.css"]){
-    const remote=await context.request.get(new URL(asset,url).href+"?release=shared-faces-20261030-1");
+    const remote=await context.request.get(new URL(asset,url).href+"?release="+encodeURIComponent(new URL(url).searchParams.get("v")||"current"));
     assert.equal(remote.status(),200,asset);
     const local=await readFile(new URL("../"+asset,import.meta.url));
     const digest=bytes=>createHash("sha256").update(bytes).digest("hex");

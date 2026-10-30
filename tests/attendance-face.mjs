@@ -5,15 +5,19 @@ import vm from "node:vm";
 const source=await readFile(new URL("../assets/attendance-face.js",import.meta.url),"utf8");
 function descriptor(value=.1){return Array(128).fill(value);}
 function landmarks(yaw=0,roll=0){const points=Array.from({length:68},()=>({x:200,y:180}));for(let i=36;i<42;i++)points[i]={x:175,y:160};for(let i=42;i<48;i++)points[i]={x:225,y:160+Math.tan(roll)*50};points[30]={x:200+yaw*50,y:190};return points;}
-function harness({failedBackends=[],failedWarmupBackends=[],backendError=false}={}){
+function harness({failedBackends=[],failedWarmupBackends=[],backendError=false,initializationGate=null}={}){
   const stats={loads:0,captures:0,backends:[],yaw:0,sample:descriptor(),faceCount:1};
+  const modelTimers=new Set();
   class Video{constructor(){this.readyState=2;this.videoWidth=640;this.videoHeight=480;this.paused=false;this.srcObject={getVideoTracks:()=>[{readyState:"live",enabled:true}]};this.tick=0;}get currentTime(){return ++this.tick/10;}}
   function canvas(){return {width:0,height:0,getContext(){return {drawImage(){},getImageData(){const data=new Uint8ClampedArray(96*96*4);for(let i=0;i<data.length;i+=4){data[i]=data[i+1]=data[i+2]=(i/4%2)?150:90;data[i+3]=255;}return {data};}};}};}
-  const net=()=>({isLoaded:false,async loadFromUri(){stats.loads++;this.isLoaded=true;},async detectLandmarks(){return {};},async computeFaceDescriptor(){if(failedWarmupBackends.includes(selected))throw new Error("missing synthetic kernel");return descriptor();},dispose(){this.isLoaded=false;}});
+  const net=()=>({isLoaded:false,async loadFromUri(){stats.loads++;if(initializationGate)await initializationGate;this.isLoaded=true;},async detectLandmarks(){return {};},async computeFaceDescriptor(){if(failedWarmupBackends.includes(selected))throw new Error("missing synthetic kernel");return descriptor();},dispose(){this.isLoaded=false;}});
   let selected;
   const faceapi={tf:{zeros:()=>({dispose(){}}),setWasmPaths(){},env:()=>({set(){}}),async setBackend(name){stats.backends.push(name);if(backendError)throw new Error("backend unavailable");if(failedBackends.includes(name))return false;selected=name;return true;},async ready(){},getBackend:()=>selected},nets:{tinyFaceDetector:net(),faceLandmark68TinyNet:net(),faceRecognitionNet:net()},TinyFaceDetectorOptions:class{},detectAllFaces(){stats.captures++;return {withFaceLandmarks(){return {async withFaceDescriptors(){return Array.from({length:stats.faceCount},()=>({detection:{score:.95,box:{x:120,y:70,width:220,height:290}},landmarks:{positions:landmarks(stats.yaw)},descriptor:stats.sample}));}};}};}};
-  const context={console,URL,Date,Float32Array,Uint8Array,Uint8ClampedArray,AbortController,DOMException,HTMLVideoElement:Video,document:{createElement:canvas},crypto:{getRandomValues(array){array[0]=1;return array;}},faceapi,setTimeout:callback=>setTimeout(callback,1),clearTimeout};
-  vm.createContext(context);vm.runInContext(source,context);return {api:context.DGV_ATTENDANCE_FACE,stats,Video};
+  const context={console,URL,Date,Float32Array,Uint8Array,Uint8ClampedArray,AbortController,DOMException,HTMLVideoElement:Video,document:{createElement:canvas},crypto:{getRandomValues(array){array[0]=1;return array;}},faceapi,
+    setTimeout(callback,milliseconds){if(milliseconds===60000){const timer={callback};modelTimers.add(timer);return timer;}return setTimeout(callback,1);},
+    clearTimeout(timer){if(!modelTimers.delete(timer))clearTimeout(timer);}};
+  vm.createContext(context);vm.runInContext(source,context);return {api:context.DGV_ATTENDANCE_FACE,stats,Video,modelTimers,
+    fireModelTimeouts(){for(const timer of [...modelTimers]){modelTimers.delete(timer);timer.callback();}}};
 }
 const {api,stats,Video}=harness({failedBackends:["wasm"]});
 const template={version:1,model:api.MODEL,samples:[descriptor(),descriptor(.101),descriptor(.099)],createdAt:new Date().toISOString()};
@@ -59,4 +63,47 @@ let concurrent;const running=engine.enroll(new Video(),{onProgress(progress){mov
 const disposal=api.create();await assert.rejects(disposal.enroll(new Video(),{onProgress(progress){if(progress.step==="front")disposal.dispose();}}),error=>error.name==="AbortError");
 const fail=harness({backendError:true});await assert.rejects(fail.api.create().load(),error=>error.code==="model");
 const kernelFail=harness({failedWarmupBackends:["wasm"]});assert.equal((await kernelFail.api.create().load()).backend,"webgl");assert.equal(kernelFail.stats.loads,6,"unsupported inference kernels trigger model disposal/reload on the fallback backend");
-console.log("Attendance face unit tests passed: strict template/model validation, conservative 1:1 match, quality, three changing live samples, fallback, abort and concurrency.");
+
+// A stalled shared download cannot trap the sequence busy lock. Cancelling one
+// waiter must leave the single initialization available to other/new callers.
+function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
+async function flush(){for(let i=0;i<12;i++)await Promise.resolve();}
+const gate=deferred(),delayed=harness({initializationGate:gate.promise});
+const abortedEngine=delayed.api.create(),loadingAbort=new AbortController(),loadingSteps=[];
+let cancelledCompleted=false;
+const abortWait=abortedEngine.enroll(new delayed.Video(),{signal:loadingAbort.signal,onProgress:value=>loadingSteps.push(value.step)})
+  .then(value=>{cancelledCompleted=true;return value;});
+const abortCheck=assert.rejects(abortWait,error=>error.name==="AbortError");
+await flush();assert.equal(delayed.stats.loads,1);assert.equal(delayed.modelTimers.size,1);
+loadingAbort.abort();await abortCheck;
+assert.equal(delayed.modelTimers.size,0,"cancel cleans the 60-second timer immediately");
+
+const timeoutEngine=delayed.api.create();
+const timeoutWait=timeoutEngine.enroll(new delayed.Video());
+const timeoutCheck=assert.rejects(timeoutWait,error=>error.code==="model_timeout");
+await flush();assert.equal(delayed.modelTimers.size,1,"new sequence starts while the same initialization remains pending");
+assert.equal(delayed.stats.loads,1,"cancelled waiter did not start another model download");
+delayed.fireModelTimeouts();await timeoutCheck;
+assert.equal(delayed.modelTimers.size,0);
+
+const disposedEngine=delayed.api.create();
+const disposalWait=disposedEngine.load();
+const disposalCheck=assert.rejects(disposalWait,error=>error.name==="AbortError");
+await flush();disposedEngine.dispose();await disposalCheck;
+assert.equal(delayed.modelTimers.size,0,"dispose also cancels direct load calls");
+const liveEngine=delayed.api.create(),liveWait=liveEngine.load();
+gate.resolve();assert.equal((await liveWait).backend,"wasm");await flush();
+assert.equal(delayed.stats.loads,3,"all callers shared one three-network initialization");
+assert.equal(delayed.stats.backends.length,1);assert.equal(delayed.stats.captures,1,"late resolution runs synthetic warmup only, never a cancelled face capture");
+assert.deepEqual(loadingSteps,["loading"]);assert.equal(cancelledCompleted,false);
+assert.equal(delayed.modelTimers.size,0,"successful completion also clears its timeout");
+const recovered=await timeoutEngine.enroll(new delayed.Video());
+assert.equal(delayed.api.validateTemplate(recovered),true,"timed-out engine can retry after shared loading recovers");
+await assert.rejects(disposedEngine.load(),error=>error.name==="AbortError");
+
+const rejectGate=deferred(),lateFailure=harness({initializationGate:rejectGate.promise});
+const failedEngine=lateFailure.api.create(),failedWait=failedEngine.load();
+const failedCheck=assert.rejects(failedWait,error=>error.name==="AbortError");
+await flush();failedEngine.dispose();await failedCheck;rejectGate.reject(new Error("late model download failure"));await flush();
+assert.equal(lateFailure.modelTimers.size,0,"late initialization rejection is consumed after the caller has cancelled");
+console.log("Attendance face unit tests passed: strict template/model validation, conservative 1:1 match, quality, live samples, fallback, abort, concurrency and bounded cancellable shared model loading.");
