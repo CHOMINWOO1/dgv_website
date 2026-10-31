@@ -343,6 +343,35 @@
     if(!current()||finalRevision!==state.revision)throw new Error("자료가 변경되었습니다. 다시 조회하세요. / Tra cuu lai.");
     return {input:{...input,identities,signatureImages},current};
   }
+  async function receiptMonthSummaries(input,model,current) {
+    // The paid-date filter can include a different salary month. Calculate
+    // whole salary months separately; never reuse range-clipped attendance.
+    const pending=new Map(),summaries=[];
+    for(const row of model.rows){
+      if(row.payrollStatus==="finalized")continue;
+      if(!pending.has(row.month))pending.set(row.month,new Set());
+      pending.get(row.month).add(row.employeeId);
+    }
+    const months=[...pending.keys()].sort();let next=0;
+    await Promise.all(Array.from({length:Math.min(2,months.length)},async()=>{
+      while(current()&&next<months.length){
+        const month=months[next++],dates=app.bounds(month),ids=pending.get(month);
+        const employees=input.employees.filter(employee=>ids.has(employee.id));
+        const [records,days,terms,rules]=await Promise.all([
+          rows("payroll_attendance_raw",q=>{q=q.gte("occurred_at",dates.before).lt("occurred_at",dates.after);return input.employeeId?q.eq("employee_id",input.employeeId):q;}),
+          rows("payroll_days",q=>{q=q.gte("work_date",dates.before).lt("work_date",dates.after);return input.employeeId?q.eq("employee_id",input.employeeId):q;}),
+          rows("payroll_terms",q=>q.lt("effective_from",dates.after)),
+          rows("payroll_rule_versions",q=>q.lt("effective_from",dates.after))
+        ]);
+        if(!current())return;
+        const effectiveDays=DGV_PAYROLL_RULES.buildEffectiveDays({month,employees,terms,days});
+        const baseSummaries=DGV_PAYROLL_CORE.summarizeMonth({month,employees,terms,records,days:effectiveDays,today:today()});
+        const calculated=DGV_PAYROLL_RULES.extendSummaries({month,employees,terms,records,days:effectiveDays,rules,baseSummaries,yearToDateRuns:input.runs,today:today()});
+        summaries.push(...calculated.map(row=>({...row,month})));
+      }
+    }));
+    return summaries;
+  }
   async function renderReceiptRange(input) {
     const generation=receiptGeneration,scope=receiptScope(),images=Object.create(null);
     const model=DGV_PAYROLL_RECEIPTS.buildModel(input),paymentIds=new Set(model.rows.map(row=>row.paymentId));
@@ -352,6 +381,8 @@
     const before=Number((await result(db.from("payroll_revision").select("version").eq("id",1).single())).version);
     if(!current())return;
     if(before!==input.revision){clearReceiptPreview();throw new Error("자료가 변경되었습니다. 다시 조회해 주세요. / Dữ liệu đã đổi; tra cứu lại.");}
+    const receiptSummaries=await receiptMonthSummaries(input,model,current);
+    if(!current())return;
     // Only administrators can retrieve identities, and only employees with an
     // active payment in this report need to be requested. Keep them in memory.
     const employeeIds=[...new Set(model.rows.map(row=>row.employeeId))],identities=[];
@@ -380,7 +411,7 @@
     const after=Number((await result(db.from("payroll_revision").select("version").eq("id",1).single())).version);
     if(!current())return;
     if(before!==after){clearReceiptPreview();throw new Error("자료가 변경되었습니다. 다시 조회해 주세요. / Dữ liệu đã đổi; tra cứu lại.");}
-    const finalModel=DGV_PAYROLL_RECEIPTS.buildModel({...input,identities,signatureImages:images});
+    const finalModel=DGV_PAYROLL_RECEIPTS.buildModel({...input,receiptSummaries,identities,signatureImages:images});
     receiptPreview={model:finalModel,scope,revision:input.revision,generation};
     $("rangeReceipts").innerHTML=DGV_PAYROLL_RECEIPTS.buildTableHtml(finalModel);
     for(const row of finalModel.rows.filter(row=>row.status==="paid"&&row.signatureStatus==="unsigned")){

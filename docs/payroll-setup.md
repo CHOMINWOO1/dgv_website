@@ -742,11 +742,24 @@ payroll revision and active administrator view before downloading. Filtering,
 reloading or logging out invalidates both report actions. The existing general
 Excel exports retain their own contents.
 
-Each row is an actual payment, with its paid date and salary month kept separate.
-Payments have no allocation to specific worked days, hours or wage components,
-so this report does not invent those allocations. Monthly calculations remain
-in the separate monthly ledger. The reports need no database migration. Run
+The print and signed Excel share the reference's 11 columns: sequence, employee,
+worked dates, actual hours, hourly rate, base pay, allowances, deductions, actual
+payment, payment method and receipt signature. Part-time payments come first,
+then full-time payments; unknown employment types remain a separate final group.
+Identity and phone remain below the employee name, and each payment retains its
+own amount, paid date and signatures. No qualifying payment is collapsed or omitted.
+
+Work and wage details belong to the employee's salary month, so they appear only
+once for each employee/month even when several instalments are shown. Finalized
+snapshots take precedence. Unfinalized months are recalculated from complete
+salary-month attendance, terms and rules under the same revision guard, even if
+the payment occurs in a later month. These are labelled current estimates, not
+historical payment allocations; unsaved manual allowances/deductions stay unknown.
+Unclassified salary corrections remain separate notes. Monthly hours/base pay
+are not added as though they were each payment's wage allocation. The reports
+need no database migration. Run
 `test:payroll:receipts`, `test:payroll:receipts:print`,
+`test:payroll:receipts:details`,
 `test:payroll:receipts:xlsx`, `test:payroll:receipts:xlsx:browser`,
 `test:xlsx:images` and `test:payroll:signatures` to verify totals, page layout,
 embedded images and private-data guards.

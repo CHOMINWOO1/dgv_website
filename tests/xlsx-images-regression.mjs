@@ -97,10 +97,13 @@ assert.doesNotMatch([...entries].filter(([name])=>name.endsWith(".rels")).map(([
 const styles = xml("xl/styles.xml");
 const styleXfs = /<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/.exec(styles);
 assert.equal(Number(styleXfs[1]), (styleXfs[2].match(/<xf /g) || []).length);
-assert.equal(Number(styleXfs[1]), 25);
+assert.equal(Number(styleXfs[1]), 27);
 const xfs = styleXfs[2].match(/<xf\b[^>]*\/>|<xf\b[^>]*>[\s\S]*?<\/xf>/g);
 assert.match(xfs[21], /vertical="bottom" wrapText="1"/);
 assert.match(xfs[23], /numFmtId="165"/);
+assert.match(xfs[25], /numFmtId="166"/);
+assert.match(xfs[26], /numFmtId="166"[^>]*fillId="5"/);
+assert.match(styles, /numFmtId="166" formatCode="#,##0\.00"/);
 assert.doesNotMatch(xml("xl/worksheets/sheet1.xml"), /<drawing|<pageSetup|showGridLines|customHeight/, "New options do not affect legacy sheets");
 
 function expectBadImage(patch, pattern) {
