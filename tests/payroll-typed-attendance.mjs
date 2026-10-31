@@ -61,6 +61,34 @@ assert.equal(report.daily[0].checkIn,null,"an out-only event is never shown as a
 assert.equal(report.daily[0].checkOut,"2026-06-01T18:00:00");
 assert.equal(calculate({records:[dayPunch("08:00","bogus")]}).baseAmount,null);
 
+// A missed checkout from an earlier raw calendar date cannot invalidate a
+// later arrival. The old session stays unresolved and receives no invented end.
+records=[punch("2026-06-01T08:00:00","in"),punch("2026-06-02T08:00:00","in"),punch("2026-06-02T18:00:00","out")];
+const restartSource=JSON.stringify(records);
+report=calculate({records,today:"2026-06-02"});
+assert.equal(report.minutes,480);assert.equal(report.actualSeconds,28800);
+assert.equal(report.unresolved,1,"only the old incomplete work date needs review");
+assert.equal(report.daily[0].attendanceStatus,"missing");assert.equal(report.daily[0].minutes,0);assert.equal(report.daily[0].checkOut,null);
+assert.deepEqual(plain(report.daily[0].workIntervals),[]);assert.deepEqual(plain(report.daily[0].issueCodes),["single"]);
+assert.equal(report.daily[1].attendanceStatus,"recognized");assert.equal(report.daily[1].minutes,480);
+assert.deepEqual(plain(report.daily[1].issueCodes),[]);
+assert.deepEqual(plain(report.daily[1].workIntervals),[{start:"2026-06-02T08:00:00",end:"2026-06-02T18:00:00"}]);
+assert.equal(JSON.stringify(records),restartSource,"calculating a day restart never edits the stored punches");
+report=calculate({records:records.slice(0,2),today:"2026-06-02"});
+assert.equal(report.minutes,0);assert.equal(report.daily[0].attendanceStatus,"missing");
+assert.equal(report.daily[1].attendanceStatus,"in_progress");assert.equal(report.daily[1].openCheckIn,"2026-06-02T08:00:00");
+// A new day also clears an old same-day ambiguity for the new session only.
+report=calculate({records:[dayPunch("08:00","in"),dayPunch("09:00","in"),punch("2026-06-02T08:00:00","in"),punch("2026-06-02T10:00:00","out")]});
+assert.equal(report.daily[0].attendanceStatus,"ambiguous");assert.equal(report.daily[0].minutes,0);
+assert.equal(report.daily[1].attendanceStatus,"recognized");assert.equal(report.daily[1].minutes,120);
+for(const [priorDate,currentDate] of [["2026-06-30","2026-07-01"],["2026-12-31","2027-01-01"]]){
+  const boundaryRecords=[punch(priorDate+"T23:59:00","in"),punch(currentDate+"T00:00:00","in"),punch(currentDate+"T02:00:00","out")];
+  const previous=calculate({month:priorDate.slice(0,7),today:currentDate,records:boundaryRecords});
+  const current=calculate({month:currentDate.slice(0,7),today:currentDate,records:boundaryRecords});
+  assert.equal(previous.minutes,0);assert.equal(previous.daily.length,1);assert.equal(previous.daily[0].attendanceStatus,"missing");assert.equal(previous.daily[0].checkOut,null);
+  assert.equal(current.minutes,120);assert.equal(current.daily.length,1);assert.equal(current.daily[0].date,currentDate);assert.equal(current.daily[0].attendanceStatus,"recognized");assert.equal(current.unresolved,0);
+}
+
 // Explicit directions can prove an overnight pair even if the usual schedule is daytime.
 records=[punch("2026-06-30T19:00:00","in"),punch("2026-07-01T01:00:00","out")];
 report=calculate({records});
@@ -71,6 +99,13 @@ report=calculate({terms:[nightTerm],records:[punch("2026-06-30T19:00:00","in"),p
 assert.equal(report.daily.length,1,"after-midnight re-entry belongs to the explicitly scheduled overnight work date");
 assert.equal(report.minutes,390,"nightly break and time away are each removed only from actual intervals");
 assert.equal(report.unresolved,0);
+report=calculate({terms:[nightTerm],records:[punch("2026-06-30T19:00:00","in"),punch("2026-07-01T00:00:00","in"),punch("2026-07-01T03:00:00","out")]});
+assert.equal(report.daily.length,1);assert.equal(report.daily[0].date,"2026-06-30","night schedule retains its work-date assignment after a raw-date restart");
+assert.equal(report.minutes,150,"only the fresh midnight-to-03:00 interval minus its break counts");
+assert.equal(report.daily[0].attendanceStatus,"missing");assert.ok(report.daily[0].issueCodes.includes("single"));assert.equal(report.daily[0].issueCodes.includes("sequence"),false);
+assert.deepEqual(plain(report.daily[0].workIntervals),[{start:"2026-07-01T00:00:00",end:"2026-07-01T03:00:00"}]);
+report=calculate({terms:[nightTerm],records:[punch("2026-07-01T00:00:00","in"),punch("2026-07-01T19:00:00","in"),punch("2026-07-01T21:00:00","out")],month:"2026-07",today:"2026-07-02"});
+assert.equal(report.minutes,0,"different assigned work dates within one raw calendar day do not authorize an IN-to-IN reset");assert.equal(report.daily[0].attendanceStatus,"ambiguous");
 report=calculate({records:[...records,punch("2026-07-01T00:30:00",null)]});
 assert.equal(report.minutes,360);assert.ok(report.daily[0].issueCodes.includes("mixed"));
 report=calculate({records:[punch("2026-06-01T08:00:00","in"),punch("2026-06-02T01:00:00","out")]});
@@ -147,4 +182,4 @@ assert.equal(report.daily.find(day=>day.date==="2026-06-01").attendanceStatus,"i
 report=rules.extendSummaries({...input({terms:[],records:pair("10:00","20:00")}),rules:[]})[0];
 assert.equal(report.minutes,480);assert.equal(report.baseAmount,null,"rules keep attendance but cannot invent wages");
 
-console.log("Typed attendance passed: multiple pairs, exact-source dedupe, mixed-source review, invalid sequences, overnight boundaries and statutory/monthly pay.");
+console.log("Typed attendance passed: multiple pairs, exact-source dedupe, mixed-source review, same-day invalid sequences, next-day restart without invented checkout, month/year rollover, overnight work-date assignment and statutory/monthly pay.");

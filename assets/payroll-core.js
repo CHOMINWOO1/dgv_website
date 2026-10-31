@@ -234,7 +234,18 @@
       let pending = null;
       for (const record of typed) {
         if (record.type === "in") {
-          if (pending) { pending.issues.push(message.sequence, message.single); record.issues.push(message.sequence); record.ambiguous = true; }
+          if (pending) {
+            // A fresh arrival on a later calendar date starts a new session.
+            // Keep the missed checkout unresolved, without inventing an out or
+            // letting it invalidate the next day's proven interval. Compare
+            // raw wall dates: an overnight schedule can reassign work dates.
+            if (dateText(record.ms) > dateText(pending.ms)) pending.issues.push(message.single);
+            else {
+              pending.issues.push(message.sequence, message.single);
+              record.issues.push(message.sequence);
+              record.ambiguous = true;
+            }
+          }
           pending = record;
         } else if (pending) {
           // A declared out belongs to its in even after midnight. Legacy

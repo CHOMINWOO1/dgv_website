@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#173e39" />
   <meta name="robots" content="noindex,nofollow" />
   <title>HANA · 터치 출퇴근 / Chấm công bằng số</title>
-  <link rel="stylesheet" href="assets/attendance-touch.css?v=20261031-1" />
+  <link rel="stylesheet" href="assets/attendance-touch.css?v=20261031-2" />
 </head>
 <body>
   <main class="shell">
@@ -14,31 +14,38 @@
     <div class="status-row"><span class="pill" id="connection">연결 확인 중 / Đang kết nối</span><span id="deviceLabel">등록되지 않은 기기 / Chưa đăng ký thiết bị</span><button class="text-button" id="refreshRoster" type="button" disabled>새로고침 / Cập nhật</button><button class="text-button" id="fullscreen" type="button">전체 화면 / Toàn màn hình</button></div>
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
     <section id="setup" class="setup-card" hidden><div><p class="eyebrow">DEVICE SETUP</p><h2 id="setupTitle">이 기기를 등록해 주세요 / Đăng ký thiết bị</h2><p id="setupText">관리자 비밀번호로 한 번 등록하면 사용할 수 있습니다.<br />Đăng ký một lần bằng mật khẩu quản trị.</p></div><button id="setupButton" class="primary" type="button">기기 설정 / Thiết lập</button></section>
+    <section id="pending" class="pending" aria-live="polite" hidden><h2>저장 결과 확인이 필요합니다<span>Cần kiểm tra kết quả</span></h2><p id="pendingText"></p><button id="checkReceipt" class="secondary" type="button">저장 여부 확인 / Kiểm tra</button></section>
+    <section id="otherPending" class="pending" hidden><h2>이전 출퇴근 결과를 먼저 확인해 주세요<span>Kiểm tra lần chấm công trước</span></h2><p id="otherPendingText"></p><a class="button secondary" href="attendance.html">이전 화면에서 확인 / Mở trang trước</a></section>
     <section class="punch-card" aria-labelledby="punchTitle">
+      <div class="employee-step">
       <div class="section-heading"><span class="step-number">1</span><div><h2 id="punchTitle">내 이름을 선택해 주세요<span>Chọn tên của bạn</span></h2><p id="rosterStatus" class="muted"></p></div></div>
       <label for="employee">직원 이름 / Nhân viên</label><select id="employee" aria-describedby="employeeAvailability" disabled><option value="">직원 목록을 준비합니다 / Đang tải nhân viên</option></select>
       <p id="employeeAvailability" class="availability" role="status" aria-live="polite"></p>
       <div class="employee-state"><span>최근 기록 / Lần gần nhất</span><strong id="employeeState">이름을 선택해 주세요 / Chọn tên</strong></div>
+      </div>
+      <div class="punch-step">
       <div class="section-heading action-heading"><span class="step-number">2</span><h2>출근 또는 퇴근<span>Chọn Vào ca hoặc Tan ca</span></h2></div>
       <div class="punch-actions"><button id="clockIn" class="primary" type="button" disabled><span>출근</span><small>Vào ca</small></button><button id="clockOut" class="secondary" type="button" disabled><span>퇴근</span><small>Tan ca</small></button></div>
+      </div>
     </section>
-    <section id="pending" class="pending" aria-live="polite" hidden><h2>저장 결과 확인이 필요합니다<span>Cần kiểm tra kết quả</span></h2><p id="pendingText"></p><button id="checkReceipt" class="secondary" type="button">저장 여부 확인 / Kiểm tra</button></section>
-    <section id="otherPending" class="pending" hidden><h2>이전 출퇴근 결과를 먼저 확인해 주세요<span>Kiểm tra lần chấm công trước</span></h2><p id="otherPendingText"></p><a class="button secondary" href="attendance.html">이전 화면에서 확인 / Mở trang trước</a></section>
     <footer><p>출퇴근 기록은 급여 페이지에 자동 반영됩니다.<br />Chấm công tự động cập nhật vào bảng lương.</p><button id="settings" class="text-button" type="button">관리자 설정 / Thiết lập quản trị</button></footer>
   </main>
   <dialog id="touchDialog" aria-labelledby="touchTitle">
     <div class="dialog-head"><div><p class="eyebrow">CONFIRM ATTENDANCE</p><h2 id="touchTitle">출퇴근 확인<span>Xác nhận chấm công</span></h2></div><button id="touchCancel" class="text-button" type="button">취소 / Hủy</button></div>
+    <div class="touch-layout"><div class="touch-details">
     <p id="touchEmployee" class="touch-employee"></p><p id="touchInstruction" class="touch-instruction"></p>
     <div id="challengePanel" class="challenge-panel" hidden><span>확인번호 / Mã xác nhận</span><strong id="challengeCode"></strong><span id="challengeExpiry"></span></div>
-    <div id="touchDigits" class="touch-digits" role="status" aria-live="polite" aria-label="입력한 번호 / Số đã nhập">— — — —</div>
     <p id="touchNotice" class="notice" role="status" aria-live="polite" hidden></p>
+    </div><div class="touch-entry">
+    <div id="touchDigits" class="touch-digits" role="status" aria-live="polite" aria-label="입력한 번호 / Số đã nhập">— — — —</div>
     <div id="keypad" class="keypad" aria-label="숫자 키패드 / Bàn phím số">
       <button type="button" data-digit="1">1</button><button type="button" data-digit="2">2</button><button type="button" data-digit="3">3</button>
       <button type="button" data-digit="4">4</button><button type="button" data-digit="5">5</button><button type="button" data-digit="6">6</button>
       <button type="button" data-digit="7">7</button><button type="button" data-digit="8">8</button><button type="button" data-digit="9">9</button>
       <button id="touchClear" class="key-function" type="button">지우기<span>Xóa hết</span></button><button type="button" data-digit="0">0</button><button id="touchBackspace" class="key-function" type="button" aria-label="한 자리 지우기 / Xóa một số">⌫<span>Xóa một số</span></button>
     </div>
-    <button id="touchConfirm" class="primary confirm-button" type="button" disabled>확인 / Xác nhận</button><button id="touchRenew" class="secondary confirm-button" type="button" hidden>새 확인번호 받기 / Lấy mã mới</button>
+    <div class="touch-submit"><button id="touchConfirm" class="primary confirm-button" type="button" disabled>확인 / Xác nhận</button><button id="touchRenew" class="secondary confirm-button" type="button" hidden>새 확인번호 받기 / Lấy mã mới</button></div>
+    </div></div>
   </dialog>
   <dialog id="adminDialog" aria-labelledby="adminTitle">
     <div class="dialog-head"><h2 id="adminTitle">관리자 설정<span>Thiết lập quản trị</span></h2><button id="closeAdmin" class="secondary" type="button">닫기 / Đóng</button></div><p id="adminNotice" class="notice" role="status" hidden></p>
@@ -53,6 +60,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
   <script src="assets/supabase-config.js"></script>
   <script src="assets/attendance-store.js?v=20261030-1"></script>
-  <script src="assets/attendance-touch.js?v=20261031-1"></script>
+  <script src="assets/attendance-touch.js?v=20261031-2"></script>
 </body>
 </html>
