@@ -100,11 +100,13 @@ try{
   const completed=await page.evaluate(()=>structuredClone(__touchTest.challenges.find(row=>row.status==="completed")));
   const replay=await page.evaluate(async({device,completed})=>await supabase.createClient().rpc("payroll_kiosk_touch_confirm",{p_token:device.token,p_challenge_id:completed.id,p_code:completed.code}),{device,completed});assert.equal(replay.data.event.replayed,true);assert.equal((await events()).length,1);
 
+  await page.evaluate(()=>{__touchTest.now=Date.parse("2026-10-31T03:00:00Z");});
   code=await begin("out");assert.notEqual(code,"0042");await type(code);await page.locator("#touchConfirm").click();await idle();await page.locator("#touchDialog").waitFor({state:"hidden"});
   const pair=await events();assert.equal(pair.length,2);assert.equal(pair[1].occurred_at,"2026-10-31T10:00:00");
   const scope={console};scope.globalThis=scope;vm.runInNewContext(await readFile(path.join(root,"assets/payroll-core.js"),"utf8"),scope);
   const summary=scope.DGV_PAYROLL_CORE.summarizeMonth({month:"2026-10",today:"2026-11-01",employees:[{id:employeeId,device_user_id:"TEST-1",name:"DEMO",active:true,employment_type:"part_time"}],terms:[{employee_id:employeeId,effective_from:"2026-10-01",pay_type:"hourly",rate:40000,shift_start:"08:00",shift_end:"18:00",break_start:"12:00",break_end:"14:00"}],days:[],records:pair})[0];
   assert.equal(summary.minutes,120);assert.equal(summary.baseAmount,80000,"touch server timestamps feed the same typed payroll calculation");
+  await page.evaluate(()=>{__touchTest.now+=31000;});
 
   // Cancel and expire attempts never create an extra event; a new attempt gets
   // a new server challenge rather than reusing a completed code as a fixed PIN.
@@ -137,6 +139,7 @@ try{
   // A new face/touch event on another device invalidates an older challenge.
   code=await begin("in",otherEmployeeId);await page.evaluate(id=>{__attendanceTest.events.push({event_id:"00000000-0000-4000-8000-000000000066",employee_id:id,punch_type:"in",occurred_at:"2026-10-31T09:00:00",source:"kiosk",verification:"trusted_kiosk_verification"});},otherEmployeeId);
   await type(code);await page.locator("#touchConfirm").click();await idle();await page.locator("#touchDialog").waitFor({state:"hidden"});assert.equal((await events()).length,4);assert.equal(await page.evaluate(()=>__touchTest.challenges.at(-1).status),"stale_state");
+  await page.evaluate(()=>{__touchTest.now+=31000;});
   code=await begin("out");for(let index=0;index<5;index++){await type(code==="9999"?"8888":"9999");await page.locator("#touchConfirm").click();await idle();}
   await page.locator("#touchDialog").waitFor({state:"hidden"});assert.equal((await events()).length,4);assert.equal(await page.evaluate(()=>__touchTest.challenges.at(-1).status),"locked");
 
@@ -162,8 +165,34 @@ try{
   const landscapeConfirm=await page.locator("#touchConfirm").boundingBox();assert.ok(landscapeConfirm.y>=0&&landscapeConfirm.y+landscapeConfirm.height<=720,"landscape tablet confirmation stays reachable inside the dialog");assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   for(const button of await page.locator("[data-digit]").all()){const box=await button.boundingBox();assert.ok(box.width>=44&&box.height>=44);}
   await page.screenshot({path:path.join(outputs,"attendance-touch-landscape.png"),fullPage:false});await cancel();
+
+  // A missed checkout on the prior Vietnam day must not block the next day's
+  // check-in. This is a server-day rule, not a midnight guess by the tablet.
+  const priorDayEvents=await events(),priorDayIn=priorDayEvents.filter(row=>row.employee_id===employeeId).at(-1);
+  assert.equal(priorDayIn.punch_type,"in");
+  await page.evaluate(()=>{
+    __touchTest.now=Date.parse("2026-11-01T01:00:00Z");delete __touchTest.eventTimes;
+    const NativeDate=Date;window.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:["2099-01-01T00:00:00Z"]));}static now(){return NativeDate.parse("2099-01-01T00:00:00Z");}};
+  });
+  await page.locator("#refreshRoster").click();await idle();await page.locator("#employee").selectOption(employeeId);
+  assert.match(await page.locator("#employeeState").innerText(),/이전 날짜 기록/);
+  assert.match(await page.locator("#employeeAvailability").innerText(),/오늘 새로 출근/);
+  assert.equal(await page.evaluate(()=>new Date().getUTCFullYear()),2099,"fixture skews the entire tablet clock, not the server");
+  code=await begin("in");await page.evaluate(()=>{__touchTest.loseConfirmResponse=true;});await type(code);await page.locator("#touchConfirm").click();await idle();await page.locator("#pending").waitFor({state:"visible"});
+  const todaySaved=(await events()).at(-1),todayConfirmCount=await rpcCount("payroll_kiosk_touch_confirm");
+  assert.equal(todaySaved.occurred_at,"2026-11-01T08:00:00");assert.equal(todaySaved.punch_type,"in");assert.equal((await events()).length,priorDayEvents.length+1);
+  assert.deepEqual((await events()).find(row=>row.event_id===priorDayIn.event_id),priorDayIn,"new-day check-in never changes the prior IN or inserts an automatic OUT");
+  await reload();await page.locator("#checkReceipt").click();await idle();assert.equal(await rpcCount("payroll_kiosk_touch_confirm"),todayConfirmCount);assert.deepEqual((await events()).at(-1),todaySaved,"unknown new-day confirmation recovers the original event exactly once");
+  await page.locator("#employee").selectOption(employeeId);assert.doesNotMatch(await page.locator("#employeeState").innerText(),/이전 날짜 기록/);
+  await page.locator("#clockIn").click();await idle();assert.equal(await page.locator("#touchDialog").isVisible(),false);assert.match(await page.locator("#notice").innerText(),/이미 같은/);assert.equal((await events()).length,priorDayEvents.length+1,"same-day repeated IN remains rejected");
+  await page.locator("#clockOut").click();await idle();assert.equal(await page.locator("#touchDialog").isVisible(),false);assert.match(await page.locator("#notice").innerText(),/30초/);assert.equal((await events()).length,priorDayEvents.length+1,"new-day exception retains the 30-second cooldown");
+  await page.evaluate(()=>{__touchTest.now+=31000;});code=await begin("out");await type(code);await page.locator("#touchConfirm").click();await idle();assert.equal((await events()).at(-1).punch_type,"out");assert.equal((await events()).at(-1).occurred_at,"2026-11-01T08:00:31");
+  // An actual overnight shift still ends with OUT; it is not reset at midnight.
+  const overnightIn=(await events()).filter(row=>row.employee_id===otherEmployeeId).at(-1);assert.equal(overnightIn.punch_type,"in");assert.match(overnightIn.occurred_at,/^2026-10-31/);
+  code=await begin("out",otherEmployeeId);await type(code);await page.locator("#touchConfirm").click();await idle();assert.equal((await events()).at(-1).employee_id,otherEmployeeId);assert.equal((await events()).at(-1).punch_type,"out");assert.deepEqual((await events()).find(row=>row.event_id===overnightIn.event_id),overnightIn);
+  await page.evaluate(()=>{__touchTest.omitRosterServerDate=true;});await page.locator("#refreshRoster").click();await idle();assert.equal(await page.locator("#employee").isDisabled(),false,"older roster payloads without server_date remain compatible");assert.doesNotMatch(await page.locator("#employeeState").innerText(),/이전 날짜 기록/);
   await assertNoCamera();assert.deepEqual(errors,[]);
-  console.log("Touch attendance browser passed: admin-only device reuse/recovery, camera-free employee scope, fresh server code with leading zeroes, wrong/expired/cancelled attempts, exactly-once confirmation, atomic receipt recovery, shared face pending protection, keypad layouts, and typed payroll integration.");
+  console.log("Touch attendance browser passed: admin-only device reuse/recovery, camera-free employee scope, fresh server code, exactly-once/atomic recovery, keypad layouts, payroll integration, prior-day IN to new-day IN under a skewed tablet clock, same-day duplicate/cooldown rejection, and valid overnight OUT.");
 }finally{
   await context.close();await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
 }

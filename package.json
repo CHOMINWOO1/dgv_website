@@ -26,6 +26,7 @@
     "test:attendance:shared": "node tests/attendance-shared-browser.mjs",
     "test:attendance:recovery": "node tests/attendance-recovery-browser.mjs",
     "test:attendance:touch": "node tests/attendance-touch-browser.mjs",
+    "test:attendance:touch:layout": "node tests/attendance-touch-layout-browser.mjs",
     "test:attendance:touch:live": "node tests/attendance-touch-live.mjs",
     "test:payroll:monthly": "node tests/payroll-monthly.mjs",
     "test:payroll:rules": "node tests/payroll-rules.mjs",

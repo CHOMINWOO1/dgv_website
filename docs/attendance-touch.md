@@ -16,6 +16,13 @@ identity. No face data, camera permission, AI model, or employee PIN is required
 Each new attempt receives a new server-generated code, including possible leading
 zeroes. Codes expire after two minutes and cannot be used to create a second event.
 
+In landscape tablet view, employee selection and check-in/check-out sit side by
+side. The confirmation dialog places the displayed code beside the keypad and
+confirm button, so normal attendance does not require vertical scrolling even
+with browser toolbars visible. Fullscreen is optional. Phone and portrait views
+retain a stacked layout. Uncertain-result recovery appears before the disabled
+attendance controls; administrator setup can scroll when needed.
+
 ## Devices and recovery
 
 The page reuses the existing encrypted attendance device registration in the same
@@ -28,14 +35,25 @@ confirmation, so a delayed network request cannot later create an event after th
 screen has reported it was not saved. Recovery never manufactures a later clock
 time. Employee changes and fresh punches remain blocked until recovery completes.
 
-The server applies the same employee eligibility, direction alternation, duplicate
-request, and cooldown rules as the face page. A challenge also becomes stale if
-another device or the face page changes that employee's last attendance event.
+The server applies employee eligibility, direction alternation, duplicate-request
+and 30-second cooldown checks. Touch check-in has one recovery exception: if the
+last check-in belongs to an earlier Vietnam calendar date, a new check-in is
+allowed. The old unmatched check-in stays in history and contributes no invented
+hours; today's valid check-in/check-out pair is calculated normally. A same-day
+duplicate check-in is still rejected, and an actual overnight check-out remains
+supported. The roster distinguishes earlier records using the server's date,
+independent of the tablet clock.
+
+A challenge becomes stale if another device or the face page changes that
+employee's latest attendance event. Date rollover does not bypass this check,
+the cooldown, device revocation, code expiry or uncertain-result recovery.
 
 ## Validation
 
 - `npm run test:attendance:touch`: real page and encrypted browser storage with
   isolated synthetic API fixtures, keypad and recovery checks, payroll calculation.
+- `npm run test:attendance:touch:layout`: synthetic tablet and phone viewport
+  checks for visible attendance controls, keypad touch targets and recovery.
 - `npm run test:payroll:db`: isolated database authorization, challenge, duplicate,
   expiry, restore, and payroll regression checks.
 - `npm run test:attendance:touch:live`: read-only deployment byte comparison,

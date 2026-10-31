@@ -5,7 +5,7 @@
   const authOptions=key=>({auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,storageKey:key}});
   const kiosk=supabase.createClient(config.url,config.publishableKey,authOptions("hana-touch-public"));
   const admin=supabase.createClient(config.url,config.publishableKey,authOptions("hana-touch-admin"));
-  const state={device:null,roster:[],connected:false,revoked:false,busy:false,refreshing:false,pending:null,otherPending:null,challenge:null,digits:"",admin:false,adminGeneration:0,adminTimer:null,deviceEpoch:0,devices:[],storageReady:false};
+  const state={device:null,roster:[],serverDate:null,connected:false,revoked:false,busy:false,refreshing:false,pending:null,otherPending:null,challenge:null,digits:"",admin:false,adminGeneration:0,adminTimer:null,deviceEpoch:0,devices:[],storageReady:false};
   let refreshing=null,wakeLock;
   const selected=()=>state.roster.find(row=>row.id===$("employee").value);
   const kindText=kind=>kind==="in"?"출근 / Vào ca":"퇴근 / Tan ca";
@@ -13,6 +13,9 @@
   const token=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,"0")).join("");
   // Raw attendance uses Vietnam wall time, independent of the tablet timezone.
   const timeText=value=>{const text=String(value||"").replace(" ","T"),date=new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)?text:`${text}+07:00`);return Number.isFinite(date.getTime())?new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Ho_Chi_Minh",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:false}).format(date):"";};
+  // Compare the stored Vietnam wall date with the server's roster date. An old
+  // tablet's timezone or incorrect clock must not decide a new-day check-in.
+  const punchDay=value=>{const text=String(value||"").replace(" ","T"),time=Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)?text:`${text}+07:00`);return Number.isFinite(time)?new Date(time+7*3600000).toISOString().slice(0,10):null;};
   function errorText(error){
     const value=String(error?.message||error||"");
     const messages={
@@ -55,7 +58,9 @@
     $("clockIn").disabled=!ready;$("clockOut").disabled=!ready;
     $("rosterStatus").textContent=state.device?`${state.roster.length}명 / nhân viên`:"";
     $("employeeAvailability").textContent=blocked()?"이전 요청의 저장 결과를 먼저 확인해 주세요. / Kiểm tra kết quả trước khi chấm công tiếp.":state.busy?"처리 중입니다. 잠시 기다려 주세요. / Đang xử lý. Vui lòng chờ.":!state.storageReady?"기기 저장공간을 확인하고 있습니다. / Đang kiểm tra bộ nhớ máy.":!state.device||state.revoked?"관리자 설정에서 기기를 등록해 주세요. / Đăng ký máy trong thiết lập quản trị.":!state.connected?"인터넷 연결을 확인한 뒤 새로고침해 주세요. / Kiểm tra Internet rồi tải lại.":row?"출근 또는 퇴근을 누르고 화면의 숫자를 입력해 주세요. / Chọn Vào ca hoặc Tan ca rồi nhập mã hiển thị.":state.roster.length?"내 이름을 선택해 주세요. / Chọn tên của bạn.":"출퇴근 가능한 재직 직원이 없습니다. / Chưa có nhân viên đang làm việc.";
-    $("employeeState").textContent=row?.last_punch?`${kindText(row.last_punch.punch_type)} · ${timeText(row.last_punch.occurred_at)}`:row?"아직 기록 없음 / Chưa chấm công":"이름을 선택해 주세요 / Chọn tên";
+    const lastDay=punchDay(row?.last_punch?.occurred_at),earlier=Boolean(lastDay&&state.serverDate&&lastDay<state.serverDate);
+    $("employeeState").textContent=row?.last_punch?`${earlier?"이전 날짜 기록 / Lần trước · ":""}${kindText(row.last_punch.punch_type)} · ${timeText(row.last_punch.occurred_at)}`:row?"아직 기록 없음 / Chưa chấm công":"이름을 선택해 주세요 / Chọn tên";
+    if(ready&&earlier&&row.last_punch.punch_type==="in")$("employeeAvailability").textContent="이전 날짜의 출근 기록이 있어도 오늘 새로 출근할 수 있습니다. / Có thể vào ca hôm nay dù lần vào ca trước chưa kết thúc.";
     const receiptNeedsAdmin=Boolean(state.revoked||!state.device||(state.pending&&state.pending.deviceId!==state.device.device_id));
     $("pending").hidden=!state.pending;$("pendingText").textContent=state.pending?`${state.pending.name} · ${kindText(state.pending.kind)}\n${receiptNeedsAdmin?"기기 등록이 변경되었습니다. 관리자 설정에서 저장 여부를 확인해 주세요. / Thiết bị đã thay đổi. Kiểm tra kết quả trong thiết lập quản trị.":"다시 찍지 말고 저장 여부를 확인해 주세요. / Kiểm tra kết quả, không chấm công lại."}`:"";
     $("checkReceipt").disabled=state.busy||!navigator.onLine||receiptNeedsAdmin;
@@ -89,7 +94,7 @@
   async function refresh({quiet=false}={}){
     if(!state.device)return;if(refreshing)return refreshing;
     const device=state.device,epoch=state.deviceEpoch;state.refreshing=true;render();
-    refreshing=(async()=>{try{const result=await rpc(kiosk,"payroll_kiosk_roster",{p_token:device.token});if(epoch!==state.deviceEpoch)return;if(result?.device_id!==device.device_id||!Array.isArray(result.employees))throw new Error("PAYROLL_KIOSK_INVALID_TOKEN");state.roster=result.employees;state.connected=true;state.revoked=false;}catch(error){if(epoch===state.deviceEpoch){state.connected=false;if(/INVALID_TOKEN|DEVICE_NOT_ACTIVE/.test(String(error?.message))){state.revoked=true;state.roster=[];closeChallenge();}if(!quiet||state.revoked)notice(errorText(error),true);}}finally{state.refreshing=false;refreshing=null;render();}})();return refreshing;
+    refreshing=(async()=>{try{const result=await rpc(kiosk,"payroll_kiosk_roster",{p_token:device.token});if(epoch!==state.deviceEpoch)return;if(result?.device_id!==device.device_id||!Array.isArray(result.employees))throw new Error("PAYROLL_KIOSK_INVALID_TOKEN");state.roster=result.employees;state.serverDate=/^\d{4}-\d{2}-\d{2}$/.test(result.server_date||"")?result.server_date:null;state.connected=true;state.revoked=false;}catch(error){if(epoch===state.deviceEpoch){state.connected=false;if(/INVALID_TOKEN|DEVICE_NOT_ACTIVE/.test(String(error?.message))){state.revoked=true;state.roster=[];closeChallenge();}if(!quiet||state.revoked)notice(errorText(error),true);}}finally{state.refreshing=false;refreshing=null;render();}})();return refreshing;
   }
   function closeChallenge(){state.challenge=null;state.digits="";$("challengeCode").textContent="";$("touchDigits").textContent="— — — —";if($("touchDialog").open)$("touchDialog").close();}
   function confirmRequest(request,event,isTouch){if(!event||event.employee_id!==request.employeeId||event.punch_type!==request.kind||!timeText(event.occurred_at)||(isTouch&&event.verification!=="visible_code_confirmation"))throw new Error("TOUCH_RESPONSE");}
@@ -108,7 +113,7 @@
     if(result.employee_id!==draft.employeeId||result.request_id!==draft.requestId||result.punch_type!==draft.kind||!result.challenge_id||!/^\d{4}$/.test(result.code))throw new Error("TOUCH_RESPONSE");
     const lifetime=Date.parse(result.expires_at)-Date.parse(result.server_time);if(!Number.isFinite(lifetime)||lifetime<=0)throw new Error("확인번호가 만료되었습니다. 다시 눌러 주세요. / Mã đã hết hạn. Thử lại.");
     state.challenge={...draft,challengeId:result.challenge_id,deadline:performance.now()+Math.min(lifetime,300000)};state.digits="";
-    $("touchEmployee").textContent=`${row.name} · ${kindText(kind)}`;$("touchInstruction").textContent="화면의 4자리 숫자를 아래 숫자판으로 입력해 주세요. / Nhập 4 số hiển thị bằng bàn phím bên dưới.";
+    $("touchEmployee").textContent=`${row.name} · ${kindText(kind)}`;$("touchInstruction").textContent="화면의 4자리 숫자를 숫자판으로 입력해 주세요. / Nhập 4 số hiển thị bằng bàn phím số.";
     $("challengeCode").textContent=result.code;$("challengePanel").hidden=false;notice("",false,"touchNotice");$("touchDialog").showModal();renderChallenge();
   }
   const rejectionText=code=>({code_mismatch:"숫자가 다릅니다. 표시된 4자리를 다시 눌러 주세요. / Mã chưa đúng. Nhập lại 4 số hiển thị.",expired:"확인번호가 만료되었습니다. 다시 출근·퇴근을 눌러 주세요. / Mã đã hết hạn. Chọn lại Vào ca/Tan ca.",locked:"입력 횟수를 초과했습니다. 다시 출근·퇴근을 눌러 주세요. / Đã quá số lần nhập. Chọn lại Vào ca/Tan ca.",cancelled:"확인 요청이 취소되었습니다. 다시 출근·퇴근을 눌러 주세요. / Yêu cầu đã hủy. Chọn lại Vào ca/Tan ca.",stale_state:"다른 화면에서 출퇴근 상태가 변경되었습니다. 최근 기록을 확인하고 다시 눌러 주세요. / Trạng thái đã đổi trên trang khác. Kiểm tra lần gần nhất rồi thử lại.",record_unavailable:"이전에 저장된 기록을 현재 찾을 수 없습니다. 관리자에게 확인해 주세요. / Không tìm thấy bản ghi đã lưu trước đó. Liên hệ quản trị.",same_direction:errorText("PAYROLL_KIOSK_SAME_DIRECTION"),cooldown:errorText("PAYROLL_KIOSK_COOLDOWN"),check_in_required:errorText("PAYROLL_KIOSK_CHECK_IN_REQUIRED"),employee_not_active:errorText("PAYROLL_KIOSK_EMPLOYEE_NOT_ACTIVE")}[code]||"출퇴근을 저장하지 못했습니다. 새로고침해 주세요. / Chưa lưu được. Tải lại danh sách.");
