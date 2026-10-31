@@ -210,6 +210,8 @@
   }
   function dayDialog(date) {
     const form=$("dayForm"), day=(state.effectiveDays||state.days).find((item)=>item.employee_id===state.selected&&item.work_date===date);
+    if(!state.loaded||!state.selected||!state.employees.some(employee=>employee.id===state.selected))throw new Error("직원을 다시 선택해 주세요. / Chọn lại nhân viên.");
+    form.dataset.employeeId=state.selected;form.dataset.workDate=date;
     form.reset(); field(form,"work_date").value=date; field(form,"day_type").value=day?.day_type||"work";
     field(form,"check_in").value=day?.check_in?.slice(0,16)||""; field(form,"check_out").value=day?.check_out?.slice(0,16)||""; field(form,"reason").value=day?.reason||"";
     const punches=state.records.filter((item)=>item.employee_id===state.selected&&item.occurred_at.startsWith(date));
@@ -347,11 +349,24 @@
   });});
   $("termsDialog").addEventListener("close",()=>{delete $("termsForm").dataset.employeeId;$("termsEmployeeContext").textContent="";});
   $("dayForm").addEventListener("submit",(event)=>{event.preventDefault();task(async()=>{
-    const values=Object.fromEntries(new FormData($("dayForm")));values.employee_id=state.selected;values.reason=values.reason.trim();
+    const form=$("dayForm"),values=Object.fromEntries(new FormData(form));
+    if(!state.loaded||!form.dataset.employeeId||form.dataset.employeeId!==state.selected||!state.employees.some(employee=>employee.id===form.dataset.employeeId)||values.work_date!==form.dataset.workDate)throw new Error("직원과 날짜를 다시 선택한 뒤 근무기록을 열어 주세요. / Chọn lại nhân viên và ngày chấm công.");
+    values.employee_id=form.dataset.employeeId;values.reason=values.reason.trim();
     if(!values.reason)throw new Error("변경 사유를 입력해 주세요. / Nhập lý do.");
-    if(Boolean(values.check_in)!==Boolean(values.check_out))throw new Error("출근과 퇴근을 함께 입력해 주세요. / Nhập cả giờ vào và ra.");
-    values.check_in=values.check_in?values.check_in+":00":null;values.check_out=values.check_out?values.check_out+":00":null;
-    window.DGV_PAYROLL_ADVANCED?.dayValues(values,$("dayForm"));
+    const workStart=Date.parse(values.work_date+"T00:00:00Z"),dayMs=86400000;
+    if(!Number.isFinite(workStart)||new Date(workStart).toISOString().slice(0,10)!==values.work_date)throw new Error("근무 날짜를 확인해 주세요. / Kiểm tra ngày làm.");
+    for(const key of ["check_in","check_out"]){
+      if(!values[key]){values[key]=null;continue;}
+      const parsed=Date.parse(values[key]+":00Z");
+      if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(values[key])||!Number.isFinite(parsed)||new Date(parsed).toISOString().slice(0,16)!==values[key])throw new Error("출퇴근 날짜와 시각을 확인해 주세요. / Kiểm tra ngày giờ vào và ra.");
+      if(parsed<workStart||parsed>=workStart+(key==="check_in"?dayMs:2*dayMs))throw new Error(key==="check_in"?"출근은 선택한 근무일에 입력해 주세요. / Giờ vào phải thuộc ngày làm đã chọn.":"퇴근은 선택한 근무일 또는 다음 날에 입력해 주세요. / Giờ ra phải thuộc ngày làm hoặc ngày kế tiếp.");
+      values[key]+=":00";
+    }
+    if(values.check_in&&values.check_out){
+      const duration=Date.parse(values.check_out+"Z")-Date.parse(values.check_in+"Z");
+      if(duration<=0||duration>dayMs)throw new Error("퇴근은 출근 이후 24시간 이내로 입력해 주세요. / Giờ ra phải sau giờ vào và trong vòng 24 giờ.");
+    }
+    window.DGV_PAYROLL_ADVANCED?.dayValues(values,form);
     await result(db.from("payroll_days").upsert(values,{onConflict:"employee_id,work_date"}));$("dayDialog").close();await load();notice("근무일을 저장했습니다. 원본 기록은 보존됩니다. / Đã lưu, giữ nguyên bản gốc.");
   });});
   $("confirmForm").addEventListener("submit",(event)=>{event.preventDefault();task(async()=>{
