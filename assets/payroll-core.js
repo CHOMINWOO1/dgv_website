@@ -209,7 +209,7 @@
         }
       }
       let invalidRecord = false;
-      const normalized = [];
+      let normalized = [];
       for (const record of records.filter((r) => r.employee_id === id)) {
         const ms = timestampMs(record.occurred_at);
         const type = record.punch_type == null ? null : record.punch_type;
@@ -229,6 +229,52 @@
         normalized.push({ ms, type, date, issues: [] });
       }
       normalized.sort((a, b) => a.ms - b.ms || String(a.type).localeCompare(String(b.type)));
+      // A one-sided edit corrects only that boundary. Re-pair the remaining
+      // events below, so a morning checkout and afternoon re-entry keep their
+      // unpaid gap. The saved raw records themselves are never changed.
+      const partialCorrections = new Set();
+      const originalTypedTimes = new Set(normalized.filter(record => record.type).map(record => record.ms));
+      normalized = normalized.filter(record => record.type || !originalTypedTimes.has(record.ms));
+      const partialDays = employeeDays.filter(day => Boolean(day.check_in) !== Boolean(day.check_out))
+        .slice().sort((a,b)=>Number(!a.check_in)-Number(!b.check_in)||String(a.work_date).localeCompare(String(b.work_date)));
+      // Apply arrivals first, independent of storage order. A missing arrival
+      // can move an otherwise orphaned checkout back onto its own work date.
+      for (const day of partialDays) {
+        const type = day.check_in ? "in" : "out", ms = timestampMs(day.check_in || day.check_out), base = dayMs(day.work_date);
+        if (!String(day.reason || "").trim() || !Number.isFinite(ms) || !Number.isFinite(base) ||
+          (type === "in" ? dateText(ms) !== day.work_date : ms < base || ms >= base + 2 * DAY)) continue;
+        normalized.sort((a,b)=>a.ms-b.ms||String(a.type).localeCompare(String(b.type)));
+        const assignedDate = new Map();let originalPending = null;
+        for (const record of normalized.filter(record => record.type)) {
+          if (record.type === "in") originalPending = record;
+          else if (originalPending && (!record.partialDay || originalPending.date === record.partialDay.work_date)) {
+            if (record.ms > originalPending.ms && record.ms-originalPending.ms <= DAY) assignedDate.set(record, originalPending.date);
+            originalPending = null;
+          }
+        }
+        const belongs = record => (assignedDate.get(record) || record.date) === day.work_date;
+        let candidates = normalized.filter(belongs);
+        // The old Excel importer has no direction. Its existing two-punch
+        // interpretation is safe; a lone or larger untyped set remains review.
+        if (candidates.length === 2 && candidates.every(record => !record.type) && candidates[0].ms < candidates[1].ms) {
+          candidates[0].type = "in"; candidates[1].type = "out";
+        }
+        const directed = candidates.filter(record => record.type).sort((a,b) => a.ms-b.ms);
+        const anchor = (type === "in" ? directed[0]?.type === "in" ? directed[0] : null
+          : directed.at(-1)?.type === "out" ? directed.at(-1) : null) || candidates.find(record => !record.type && record.ms === ms);
+        // A raw checkout on this calendar day can have been provisionally
+        // paired with yesterday's missed checkout. The explicit new arrival
+        // starts today's session and lets the standard restart rule resolve it.
+        if (type === "in" && !anchor) candidates = normalized.filter(record => record.date === day.work_date &&
+          (belongs(record) || record.ms > ms));
+        const opposite = type === "in" ? candidates.filter(record => record.type === "out").sort((a,b)=>a.ms-b.ms)[0]
+          : directed.filter(record => record.type === "in").at(-1);
+        if (opposite && (type === "in" ? opposite.ms <= ms || opposite.ms-ms > DAY : ms <= opposite.ms || ms-opposite.ms > DAY)) continue;
+        if (anchor) normalized = normalized.filter(record => record !== anchor);
+        normalized.push({ms,type,date:day.work_date,issues:[],partialDay:day,rawWeight:anchor ? 1 : 0});
+        partialCorrections.add(day);
+      }
+      normalized.sort((a,b) => a.ms-b.ms || String(a.type).localeCompare(String(b.type)));
       const typed = normalized.filter((record) => record.type), typedTimes = new Set(typed.map((record) => record.ms));
       const pairs = [];
       let pending = null;
@@ -247,7 +293,7 @@
             }
           }
           pending = record;
-        } else if (pending) {
+        } else if (pending && (!record.partialDay || pending.date === record.partialDay.work_date)) {
           // A declared out belongs to its in even after midnight. Legacy
           // punches still require an explicitly overnight schedule below.
           record.date = pending.date;
@@ -262,6 +308,13 @@
         const term = activeTerm(employeeTerms, pending.date);
         pending.open = !pending.ambiguous && (dateText(pending.ms) === today || validSchedule(term) && dateText(shiftBounds(term, pending.date).end) === today);
         pending.issues.push(pending.open ? message.open : message.single);
+      }
+      for (const pair of pairs.filter(pair => pair.first.partialDay || pair.last.partialDay)) {
+        const partial = pair.first.partialDay || pair.last.partialDay;
+        for (const complete of corrections) if (complete.work_date !== partial.work_date &&
+          overlap(pair.first.ms,pair.last.ms,timestampMs(complete.check_in),timestampMs(complete.check_out)) > 0) {
+          overlappingCorrections.add(partial); overlappingCorrections.add(complete);
+        }
       }
       const groupFor = (date) => {
         if (!grouped.has(date)) grouped.set(date, { punches: [], intervals: [], typedIssues: [], typedCount: 0, legacyCount: 0 });
@@ -308,11 +361,12 @@
         const issues = [], warnings = [];
         const hasOverride = Boolean(day && (day.check_in || day.check_out));
         const manual = Boolean(hasOverride && corrections.includes(day));
+        const validOverride = manual || partialCorrections.has(day);
         const typedDay = group.typedCount > 0;
         let a = manual ? timestampMs(day.check_in) : typedDay ? punches.find((record) => record.type === "in")?.ms : punches[0]?.ms;
         let b = manual ? timestampMs(day.check_out) : typedDay ? punches.filter((record) => record.type === "out").at(-1)?.ms : punches[punches.length - 1]?.ms;
         let intervals = manual ? [[a, b]] : typedDay ? group.intervals : punches.length === 2 ? [[a, b]] : [];
-        if (hasOverride && !manual) issues.push(message.correction);
+        if (hasOverride && !validOverride) issues.push(message.correction);
         if (overlappingCorrections.has(day)) issues.push(message.overlap);
         if (manual && day.check_in.slice(0, 10) !== date) issues.push(message.correction);
         if (!manual && typedDay) {
@@ -326,7 +380,7 @@
         if (punches.some(record => dateText(record.ms) > today) || manual && dateText(b) > today) issues.push(message.future);
         // A broken or overlapping correction cannot authorize overlapping time.
         // Other issues concern unresolved records/pay, not the proven intervals.
-        intervals = (hasOverride && !manual || overlappingCorrections.has(day) ? [] : intervals)
+        intervals = (hasOverride && !validOverride || overlappingCorrections.has(day) ? [] : intervals)
           .filter(([from, to]) => Number.isFinite(from) && Number.isFinite(to) && to > from && to - from <= DAY && dateText(to) <= today);
         if (intervals.some(([from, to]) => to - from < 5 * MINUTE)) warnings.push(message.short);
         if (intervals.some(([from, to]) => to - from > 16 * 60 * MINUTE)) warnings.push(message.long);
@@ -396,7 +450,7 @@
           status: attendanceStatus === "in_progress" ? "in_progress" : issues.length ? "review" : manual ? "confirmed" : dayType === "work" ? "ok" : dayType,
           issues: [...new Set(issues)], issueCodes: [...new Set(issues)].map((issue) => Object.keys(message).find((key) => message[key] === issue) || "unknown"),
           warnings: [...new Set(warnings)], warningCodes: [...new Set(warnings)].map((issue) => Object.keys(message).find((key) => message[key] === issue) || "unknown"),
-          rawCount: punches.length, dayType, payType: term && term.pay_type, rate: term ? Number(term.rate) : null });
+          rawCount: punches.filter(record=>record.rawWeight !== 0).length, dayType, payType: term && term.pay_type, rate: term ? Number(term.rate) : null });
       }
       const employmentStart = hireDate && hireDate > start ? hireDate : start;
       const employmentEnd = terminationDate && terminationDate < end ? dateText(dayMs(terminationDate) + DAY) : end;

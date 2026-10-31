@@ -23,6 +23,8 @@
     "test:xlsx:images": "node tests/xlsx-images-regression.mjs",
     "test:payroll:signatures:live": "node tests/payroll-signatures-live.mjs",
     "test:payroll:typed": "node tests/payroll-typed-attendance.mjs",
+    "test:payroll:partial:browser": "node tests/payroll-partial-attendance-browser.mjs",
+    "test:payroll:partial:unit": "node tests/payroll-partial-attendance.mjs",
     "test:payroll:refresh": "node tests/payroll-refresh-browser.mjs",
     "test:attendance:face": "node tests/attendance-face.mjs",
     "test:attendance:models": "node tests/attendance-face-browser.mjs",
