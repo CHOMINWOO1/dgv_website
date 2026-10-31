@@ -241,6 +241,7 @@
     return text(value);
   }
   function buildPayrollPrintHtml(options) {
+    if(options.kind==="ledger")return buildLedgerPrintHtml(options);
     const workbook=buildPayrollWorkbook(options);
     const sections=workbook.sheets.flatMap(sheet=>{
       const raw=sheet.rows.map(row=>row.map(item=>item&&typeof item==="object"&&"value"in item?item.value:item));
@@ -258,6 +259,45 @@
     return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'none'"><title>${htmlEscape(workbook.filename.replace(/\.xlsx$/,""))}</title><style>
       @page{size:A4 landscape;margin:10mm}*{box-sizing:border-box}body{margin:0;color:#171717;background:#eaeaea;font-family:Arial,"Malgun Gothic",sans-serif;font-size:10pt}.report{background:white;max-width:277mm;margin:8mm auto;padding:8mm;border:1px solid #333;break-after:page}.report:last-child{break-after:auto}.brand{font-size:10pt;font-weight:bold;margin:0 0 4mm}h1{font-size:15pt;margin:0 0 5mm;overflow-wrap:anywhere}.note{font-size:9pt;line-height:1.45;margin:2mm 0}table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9pt;margin-top:4mm}table.wide{font-size:8pt}th,td{border:1px solid #555;padding:2mm 1.5mm;text-align:left;vertical-align:top;overflow-wrap:anywhere}th{background:#eee;font-weight:bold}td.number{text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:normal}thead{display:table-header-group}tr{break-inside:avoid}footer{font-size:8pt;margin-top:4mm;line-height:1.5}@media print{body{background:white}.report{max-width:none;margin:0;padding:0;border:0}.report+ .report{break-before:page}th{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
     </style></head><body>${sections}</body></html>`;
+  }
+  // A payment occupies its own row so its date, amount and signature cannot be
+  // confused with another instalment. Monthly values appear only on the first payment row.
+  function buildLedgerPrintHtml(options) {
+    const data=inputs(options),model=summarizePayroll(data);
+    const receipt=root.DGV_PAYROLL_RECEIPTS;
+    if(!receipt)throw new Error("서명 출력 모듈을 다시 불러오세요. / Tai lai trang.");
+    const ids=new Set(model.rows.flatMap(row=>row.payments.map(item=>item.payment.id)));
+    const receipts=receipt.buildModel({...data,payments:data.payments.filter(payment=>ids.has(payment.id)),fromDate:"1900-01-01",toDate:"9999-12-31",signatureImages:options.signatureImages});
+    const byPayment=new Map(receipts.rows.map(row=>[row.paymentId,row]));
+    const money=value=>value==null?"":htmlEscape(printValue(value));
+    const duration=value=>value==null?"":`${Math.floor(number(value,"work minutes")/60)}시간 ${number(value,"work minutes")%60}분`;
+    const hourly=row=>{
+      if(row.snapshot.settlementMode==="monthly_net")return row.snapshot.monthlyExtraHourlyRate==null?"월급제 / Luong thang":money(displayedRate(row.snapshot.monthlyExtraHourlyRate))+"<small>월 정산시급 / Don gia quy doi</small>";
+      const storedRates=list(row.snapshot.hourlyRates);
+      const rates=[...new Set((storedRates.length?storedRates:row.snapshot.hourlyRate!=null?[row.snapshot.hourlyRate]:list(row.snapshot.daily).filter(day=>day.payType==="hourly"&&day.rate!=null).map(day=>day.rate)).map(rate=>number(rate,"hourly rate")))];
+      return rates.length?rates.map(money).join(" / ")+(rates.length>1?"<small>복수 단가 / Nhieu don gia</small>":""):"";
+    };
+    const signature=row=>!row?"":row.signatures.map(file=>{
+      if(file.imageStatus!=="loaded")throw new Error("저장된 서명을 불러오지 못했습니다. 다시 시도하세요. / Khong tai du chu ky.");
+      return `<figure><img src="${file.imageDataUrl}" alt="지급 건 서명 / Chu ky" /><figcaption>${htmlEscape(file.signedName)}<br>${htmlEscape(file.acknowledgedDisplay)}</figcaption></figure>`;
+    }).join("");
+    const rows=model.rows.flatMap(row=>{
+      const active=row.payments.filter(item=>!item.reversed).sort((a,b)=>a.payment.paid_on.localeCompare(b.payment.paid_on)||a.payment.id.localeCompare(b.payment.id));
+      return (active.length?active:[null]).map((item,index)=>{
+        const payment=item?.payment,proof=payment?byPayment.get(payment.id):null;
+        if(payment&&!proof)throw new Error("지급 건의 서명 연결을 확인하세요. / Kiem tra khoan tra.");
+        const paidDate=payment?.paid_on?validateDate(payment.paid_on):null;
+        const dateLabel=paidDate?`${Number(paidDate.slice(5,7))}월 ${Number(paidDate.slice(8,10))}일`:"";
+        const identity=taxIdentity(data,row.employee_id);
+        const notes=[payment?.note,row.snapshot.adjustmentNote, ...row.adjustments.map(adjustment=>adjustment.reason)].filter(Boolean);
+        const minutes=row.snapshot.settlementMode==="monthly_net"?row.snapshot.monthlyActualMinutes??row.snapshot.minutes:row.snapshot.settlementMode==="hourly_actual"?row.snapshot.hourlyActualMinutes??row.snapshot.minutes:row.snapshot.minutes;
+        return `<tr data-payment-id="${htmlEscape(payment?.id||"")}"><td>${htmlEscape(row.name)}</td><td>${htmlEscape(identity?.national_id||"")}</td><td>${htmlEscape(row.employee.phone||"")}</td><td>${dateLabel}${paidDate?`<small>${paidDate}</small>`:""}</td><td>${index===0?duration(minutes):""}</td><td class="number">${index===0?hourly(row):""}</td><td class="number">${index===0?money(row.approved):""}${index===0&&row.approved==null?"<small>미확정 / Chua chot</small>":""}</td><td class="number">${money(item?.net??0)}</td><td class="signature">${signature(proof)}</td><td>${htmlEscape(row.status)}${item?.isAdvance?"<small>선지급 / Tam tra</small>":""}</td><td>${notes.map(htmlEscape).join("<br>")}</td></tr>`;
+      });
+    }).join("");
+    const labels=["직원 이름|Nhan vien","신분증번호|CCCD / CMND","전화번호|Dien thoai","지급일|Ngay tra","근무시간|Gio lam","시간당 금액|VND / gio","월급여|Luong thang","지급액|So tien tra","서명|Chu ky","상태|Trang thai","비고|Ghi chu"];
+    return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"><title>HANA 급여대장 ${htmlEscape(data.month)}</title><style>
+      @page{size:A4 landscape;margin:9mm}*{box-sizing:border-box}body{margin:0;color:#171717;font:9pt Arial,"Malgun Gothic",sans-serif}h1{font-size:17pt;margin:3mm 0}.brand{font-weight:bold}.note{font-size:8pt;line-height:1.5;margin:2mm 0}table{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:4mm}th,td{border:1px solid #666;padding:2mm 1.3mm;text-align:left;vertical-align:middle;overflow-wrap:anywhere;line-height:1.4}th{background:#eee;font-size:9pt}small,figcaption{display:block;font-size:7pt;line-height:1.35;margin-top:1mm}td.number{text-align:right;font-variant-numeric:tabular-nums}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}.signature{height:22mm}figure{margin:0}figure img{display:block;width:100%;height:13mm;object-fit:contain}figcaption{overflow-wrap:anywhere}footer{font-size:8pt;margin-top:4mm}@media print{th{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+      </style></head><body><header><p class="brand">CONG TY TNHH DGV · HANA</p><h1>급여대장 / Bang luong</h1><p class="note">급여 기준월 / Ky luong: ${htmlEscape(data.month)} · 금액 / Don vi: VND</p><p class="note">분할 지급은 지급 건별로 표시합니다. 근무시간·시간당 금액·월급여는 직원의 첫 지급 행에 한 번만 표시합니다.<br>Moi khoan tra mot dong. Gio lam, don gia va luong thang chi hien thi o dong dau cua moi nhan vien. 미확정 월급여와 지급일이 없는 칸은 비워 둡니다.</p></header><table class="ledger-print"><colgroup>${[11,10,9,8,8,8,9,9,12,8,8].map(width=>`<col style="width:${width}%">`).join("")}</colgroup><thead><tr>${labels.map(label=>`<th>${label.split("|")[0]}<small>${label.split("|")[1]}</small></th>`).join("")}</tr></thead><tbody>${rows||'<tr><td colspan="11">해당 자료 없음 / Khong co du lieu</td></tr>'}</tbody></table><footer>직원 ${model.rows.length}명 · 실제 지급 합계 / Tong da tra: ${money(model.totals.paid)} VND · 월급여는 조정 반영 확정급여입니다. 시간당 금액은 저장된 월 환산 시급 또는 실제 시간급 단가이며, 여러 단가는 / 로 구분합니다.</footer></body></html>`;
   }
   root.DGV_PAYROLL_TAX=Object.freeze({KINDS,buildPayrollWorkbook,buildPayrollPrintHtml,summarizePayroll});
 })(typeof globalThis!=="undefined"?globalThis:window);

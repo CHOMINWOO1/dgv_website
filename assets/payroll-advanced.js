@@ -7,7 +7,7 @@
   const plusDay=(date,n)=>{const d=new Date(date+"T00:00:00Z");d.setUTCDate(d.getUTCDate()+n);return isoDate(d);};
   const amount=(input)=>{const n=Number(input);if(!Number.isSafeInteger(n))throw new Error("정수 VND를 입력하세요. / Nhập số tiền nguyên.");return n;};
   const hourlyMoney=(value)=>value==null?"—":Number(value).toLocaleString("ko-KR",{maximumFractionDigits:2});
-  let rangeData=null,actionRequest=null,evidencePayment=null,signatureDrawn=false,taxIdentityPreview=null,taxPreviewGeneration=0,sensitiveGeneration=0;
+  let rangeData=null,actionRequest=null,evidencePayment=null,signatureDrawn=false,taxIdentityPreview=null,taxPreviewGeneration=0,sensitiveGeneration=0,taxPrintWindow=null;
   const employeeFields=["phone","employment_type","hire_date","termination_date","employment_status","payment_method"];
   const initialRules={ot_enabled:false,regular_overtime_multiplier:1.5,rest_overtime_multiplier:2,holiday_overtime_multiplier:3,night_premium_rate:0.3,night_overtime_extra_rate:0.2,night_start:"22:00",night_end:"06:00",monthly_proration:"none",monthly_hour_basis:"schedule",monthly_contract_hours:null,default_weekly_rest_days:[0],monthly_overtime_limit:40,annual_overtime_limit:200,pay_day:5};
   const ruleLabels={regular_overtime_multiplier:"일반일 연장 배율 / Hệ số ngày thường",rest_overtime_multiplier:"휴무일 배율 / Hệ số ngày nghỉ",holiday_overtime_multiplier:"공휴일 배율 / Hệ số ngày lễ",night_premium_rate:"야간 가산율 / Phụ trội ban đêm",night_overtime_extra_rate:"야간 연장 추가율 / Phụ trội làm thêm đêm",monthly_contract_hours:"월 계약시간 / Giờ theo hợp đồng",monthly_overtime_limit:"월 연장 한도(시간) / Giới hạn tháng",annual_overtime_limit:"연 연장 한도(시간) / Giới hạn năm",pay_day:"다음 달 지급일 / Ngày trả tháng sau"};
@@ -100,7 +100,7 @@
     if((values.overtime_approved||values.night_approved)&&!values.approval_reason)throw new Error("승인 근거를 입력하세요. / Nhập lý do duyệt.");
   }
   function requireLoaded(){if(!state.loaded)throw new Error("새로고침 후 다시 확인하세요. / Tải lại dữ liệu trước.");}
-  function clearTaxPreview(){taxIdentityPreview=null;taxPreviewGeneration++;$("taxPreview").hidden=true;$("taxPreview").innerHTML="";}
+  function clearTaxPreview(){taxIdentityPreview=null;taxPreviewGeneration++;taxPrintWindow?.close();taxPrintWindow=null;$("taxPreview").hidden=true;$("taxPreview").innerHTML="";}
   const taxScope=()=>JSON.stringify([$("month").value,$("employeeFilter").value,state.revision]);
   function invalidate(){clearReceiptPreview();sensitiveGeneration++;$("sensitiveForm").reset();clearTaxPreview();rangeData=null;$("rangeExport").disabled=true;$("rangeResult").textContent="";$("taxPreview").hidden=true;$("taxPreview").innerHTML="";$("previewTax").disabled=true;$("rangeSearch").disabled=true;$("payrollAlerts").innerHTML="";$("comparisonResult").textContent="";$("ruleHistory").textContent="";}
   function taxInput(overrides={}) {requireLoaded();return {month:$("month").value,employees:state.employees,terms:state.terms,records:state.records,days:state.effectiveDays||state.days,runs:state.runs,payments:state.payments,adjustments:state.adjustments||[],reversals:state.reversals||[],attachments:state.attachments||[],summaries:state.summaries,previousRuns:state.historyRuns||[],previousPayments:state.historyPayments||[],...overrides};}
@@ -307,6 +307,7 @@
     const model=DGV_PAYROLL_TAX.summarizePayroll(input),missing=kind==="tax"?model.warnings.filter(w=>w.code==="MISSING_NATIONAL_ID"):[];
     $("taxPreview").hidden=false;
     $("taxPreview").innerHTML=`<p><strong>${esc($("month").value)} · ${esc($("exportKind").selectedOptions[0].textContent)}</strong></p><p>직원 / Nhân viên ${model.rows.length} · 확정급여 / Lương ${money(model.totals.approved)} · 지급 / Đã trả ${money(model.totals.paid)} · 미지급 / Còn lại ${money(model.totals.outstanding)} VND</p>${kind==="tax"?`<p class="notice ${missing.length?"error":""}">신분증 번호 / Số định danh: ${model.rows.length-missing.length}/${model.rows.length}명 등록. ${missing.length?"직원 정보에서 미등록 번호를 입력한 뒤 다시 확인하세요. / Bổ sung số định danh trong thông tin nhân viên.":"세무 제출용 파일·인쇄에는 신분증 번호 전체가 포함됩니다. / Tệp và bản in thuế có đầy đủ số định danh."}</p>`:""}${model.warnings.length?`<details open><summary>검토 사항 / Cần kiểm tra (${model.warnings.length})</summary><ul class="issue-list">${model.warnings.map(w=>`<li>${esc(w.name)}: ${esc(w.message)}</li>`).join("")}</ul></details>`:'<p class="muted">기록된 검토 경고 없음 / Không có cảnh báo.</p>'}<label class="check"><input id="taxReviewed" type="checkbox" ${missing.length?"disabled":""} /> 대상 월·직원·검토 사항${kind==="tax"?"과 신분증 번호 포함":""}을 확인했습니다. / Đã kiểm tra kỳ, nhân viên${kind==="tax"?" và việc đưa số định danh vào báo cáo":""}.</label><div class="actions"><button id="downloadTax" disabled>Excel 다운로드 / Tải Excel</button><button id="printTax" class="quiet" disabled>인쇄 · PDF / In · PDF</button><button id="closeTaxPreview" class="quiet">닫기 / Đóng</button></div>`;
+    if(kind==="ledger")$("taxPreview").insertAdjacentHTML("afterbegin",'<p class="notice">급여대장 인쇄에는 신분증번호·전화번호와 해당 지급 건의 저장된 서명이 포함됩니다. Excel 양식은 유지됩니다. / Ban in gom CCCD, dien thoai va chu ky cua tung khoan tra.</p>');
   }
   let receiptPreview=null,receiptGeneration=0,receiptPrintWindow=null;
   const receiptScope=()=>JSON.stringify([$("rangeFrom").value,$("rangeTo").value,$("rangeEmployee").value]);
@@ -321,6 +322,26 @@
     const image=new Image();image.src=dataUrl;await image.decode();
     if(!image.naturalWidth||!image.naturalHeight)throw new Error("Invalid signature image");
     return {paymentId:file.payment_id,storagePath:file.storage_path,dataUrl};
+  }
+  async function ledgerPrintInput() {
+    const scope=taxScope(),generation=taxPreviewGeneration,input=taxInput({kind:"ledger",employeeId:$("employeeFilter").value||undefined});
+    const current=()=>state.loaded&&generation===taxPreviewGeneration&&scope===taxScope()&&$("exportKind").value==="ledger";
+    const revision=async()=>Number((await result(db.from("payroll_revision").select("version").eq("id",1).single())).version);
+    if(await revision()!==state.revision||!current())throw new Error("자료가 변경되었습니다. 다시 조회하세요. / Tra cuu lai.");
+    const rows=DGV_PAYROLL_TAX.summarizePayroll(input).rows,identities=[],signatureImages=Object.create(null);
+    let next=0;
+    await Promise.all(Array.from({length:Math.min(3,rows.length)},async()=>{
+      while(current()&&next<rows.length){const row=rows[next++],privateData=await result(db.rpc("payroll_get_sensitive",{p_employee_id:row.employee_id}));if(!current())return;identities.push({employee_id:row.employee_id,national_id:privateData?.national_id||""});}
+    }));
+    const ids=new Set(rows.flatMap(row=>row.payments.filter(item=>!item.reversed).map(item=>item.payment.id)));
+    const files=input.attachments.filter(file=>file.evidence_type==="signature"&&ids.has(file.payment_id));
+    next=0;let totalBytes=0;
+    await Promise.all(Array.from({length:Math.min(3,files.length)},async()=>{
+      while(current()&&next<files.length){const file=files[next++];totalBytes+=Number(file.byte_size)||0;if(totalBytes>40*1024*1024)throw new Error("서명 용량이 큽니다. 직원을 나누어 출력하세요. / Chon it nhan vien hon.");signatureImages[file.id]=await signatureImage(file);}
+    }));
+    const finalRevision=await revision();
+    if(!current()||finalRevision!==state.revision)throw new Error("자료가 변경되었습니다. 다시 조회하세요. / Tra cuu lai.");
+    return {input:{...input,identities,signatureImages},current};
   }
   async function renderReceiptRange(input) {
     const generation=receiptGeneration,scope=receiptScope(),images=Object.create(null);
@@ -515,8 +536,8 @@
     if(button.id==="closeTaxPreview")clearTaxPreview();
     if(button.id==="downloadTax")task(()=>{if(!$("taxReviewed").checked)throw new Error("자료 확인이 필요합니다. / Xác nhận kiểm tra.");return exportWorkbook($("exportKind").value);});
     if(button.id==="printTax"){
-      if(!$("taxReviewed").checked)return;const popup=window.open("about:blank","_blank");
-      task(async()=>{try{if(!popup)throw new Error("팝업을 허용해 주세요. / Cho phép cửa sổ bật lên.");const html=DGV_PAYROLL_TAX.buildPayrollPrintHtml(await verifiedReportInput($("exportKind").value));popup.document.open();popup.document.write(html);popup.document.close();popup.opener=null;popup.focus();setTimeout(()=>{if(!popup.closed)popup.print();},250);}catch(error){popup?.close();throw error;}});
+      if(!$("taxReviewed").checked)return;const popup=window.open("about:blank","_blank");taxPrintWindow=popup;
+      task(async()=>{try{if(!popup)throw new Error("팝업을 허용해 주세요. / Cho phep cua so bat len.");const kind=$("exportKind").value,scope=taxScope(),generation=taxPreviewGeneration,ledger=kind==="ledger"?await ledgerPrintInput():null;const html=DGV_PAYROLL_TAX.buildPayrollPrintHtml(ledger?.input||await verifiedReportInput(kind));if(!state.loaded||generation!==taxPreviewGeneration||scope!==taxScope()||kind!==$("exportKind").value||ledger&&!ledger.current())throw new Error("조회 상태가 변경되었습니다. 다시 조회하세요. / Tra cuu lai.");popup.document.open();popup.document.write(html);popup.document.close();popup.opener=null;await Promise.all(Array.from(popup.document.images,image=>image.decode()));await popup.document.fonts?.ready;if(!state.loaded||generation!==taxPreviewGeneration||scope!==taxScope()||kind!==$("exportKind").value||ledger&&!ledger.current())throw new Error("조회 상태가 변경되었습니다. 다시 조회하세요. / Tra cuu lai.");if(!popup.closed){popup.focus();popup.print();}}catch(error){popup?.close();throw error;}finally{if(taxPrintWindow===popup)taxPrintWindow=null;}});
     }
     if(button.id==="openBackup"||button.id==="openRestore"){const form=$("archiveForm"),restore=button.id==="openRestore";form.reset();form.dataset.mode=restore?"restore":"backup";$("archiveTitle").textContent=restore?"암호화 백업 복구 / Khôi phục":"암호화 백업 / Sao lưu";$("archiveFileLabel").hidden=!restore;field(form,"archive_file").required=restore;$("archiveInfo").textContent=restore?"빈 급여 DB에만 복구하며 다른 업무자료는 변경하지 않습니다. / Chỉ khôi phục vào dữ liệu lương trống.":"직원·근무·급여·민감정보·증빙을 암호화합니다. 비밀번호 분실 시 복구할 수 없습니다. / Mã hóa nhân viên, lương, thông tin riêng và chứng từ. Không thể mở khi mất mật khẩu.";openDialog("archiveDialog");}
   });

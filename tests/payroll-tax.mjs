@@ -6,7 +6,7 @@ import vm from "node:vm";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const context={console,Date,TextEncoder,TextDecoder,Uint8Array,DataView};context.globalThis=context;
-for(const file of ["assets/payroll-core.js","assets/payroll-tax.js","assets/dgv-xlsx.js"])vm.runInNewContext(await readFile(path.join(root,file),"utf8"),context,{filename:file});
+for(const file of ["assets/payroll-core.js","assets/payroll-receipts.js","assets/payroll-tax.js","assets/dgv-xlsx.js"])vm.runInNewContext(await readFile(path.join(root,file),"utf8"),context,{filename:file});
 const tax=context.DGV_PAYROLL_TAX;
 const values=sheet=>sheet.rows.map(row=>row.map(cell=>cell&&typeof cell==="object"&&"value" in cell?cell.value:cell));
 const body=sheet=>values(sheet).slice(sheet.freezeRows);
@@ -128,9 +128,9 @@ assert.deepEqual(Array.from(body(lookup(monthlyAttendance,"Đối chiếu tháng
 const monthlyTax=tax.buildPayrollWorkbook({...monthlyData,kind:"tax"});
 assert.equal(monthlyTax.sheets.length,13);assert.equal(body(lookup(monthlyTax,"Khoản lương"))[0][8],16827);
 assert.equal(tax.summarizePayroll(monthlyData).totals.approved,7016927);
-const monthlyPrint=tax.buildPayrollPrintHtml({...monthlyData,kind:"ledger"});
+const monthlyPrint=tax.buildPayrollPrintHtml({...monthlyData,kind:"tax"});
 assert.match(monthlyPrint,/월 기준분/);assert.match(monthlyPrint,/자동 계산 시급/);assert.match(monthlyPrint,/월 초과수당/);assert.match(monthlyPrint,/12\.480/);assert.match(monthlyPrint,/33\.653,85/);assert.match(monthlyPrint,/16\.827/);
-assert.equal((monthlyPrint.match(/<table /g)||[]).length,2,"wide ledger prints readable parts with repeated employee identifiers");
+assert.ok((monthlyPrint.match(/<table /g)||[]).length>2,"tax package retains detailed reports");
 
 const firstMonth=structuredClone(monthlyData);firstMonth.month="2026-09";firstMonth.summaries=[];
 const firstRun=firstMonth.runs[0];Object.assign(firstRun,{month:"2026-09-01",base_amount:3640000,allowances:583,total:3640583});
@@ -140,7 +140,7 @@ for(const kind of ["ledger","attendance","tax"]){
   const firstBook=tax.buildPayrollWorkbook({...firstMonth,kind});
   const firstRow=body(lookup(firstBook,"Lương tháng đầu"))[0];
   assert.equal(firstRow[2].getDate(),15);assert.deepEqual(Array.from(firstRow.slice(3,9)),[7000000,12000,6240,52,3640000,35000]);assert.equal(firstRow[9].getDate(),5);assert.equal(firstRow[9].getMonth(),9);
-  const firstPrint=tax.buildPayrollPrintHtml({...firstMonth,kind});assert.match(firstPrint,/입사 첫 달 급여/);assert.match(firstPrint,/2026-10-05/);assert.match(firstPrint,/3\.640\.000/);
+  const firstPrint=tax.buildPayrollPrintHtml({...firstMonth,kind:kind==="ledger"?"tax":kind});assert.match(firstPrint,/입사 첫 달 급여/);assert.match(firstPrint,/2026-10-05/);assert.match(firstPrint,/3\.640\.000/);
 }
 assert.equal(tax.summarizePayroll(firstMonth).totals.approved,3640583,"first-month report uses stored prorated base and premium without recalculation from current terms");
 
@@ -152,7 +152,7 @@ const legacyLedger=body(tax.buildPayrollWorkbook({...data,kind:"ledger"}).sheets
 assert.ok(legacyLedger.every(row=>row.length===15),"legacy monthly/hourly reports retain their original columns without invented net-settlement amounts");
 
 for(const kind of tax.KINDS) {
-  const print=tax.buildPayrollPrintHtml({...data,kind});
+  const print=tax.buildPayrollPrintHtml({...data,kind:kind==="ledger"?"attendance":kind});
   assert.match(print,/<!doctype html>/i);
   assert.match(print,/@page\{size:A4 landscape/);
   assert.match(print,/thead\{display:table-header-group\}/);

@@ -145,7 +145,7 @@ try{
     await page.locator("#taxReviewed").check();const workbook=await download("#downloadTax");assert.match(workbook.name,/\.xlsx$/);assert.doesNotMatch(workbook.text,/SYNTHETIC-PRIVATE-ACCOUNT/);
     if(kind==="tax")assert.match(workbook.text,/SYNTHETIC-PRIVATE-ID/);else assert.doesNotMatch(workbook.text,/SYNTHETIC-PRIVATE-ID/);
     const popupEvent=page.waitForEvent("popup");await page.locator("#printTax").click();const popup=await popupEvent;await popup.waitForFunction(()=>window.__printed===true);
-    assert.equal(await popup.locator("script,img").count(),0);assert.equal(await popup.evaluate(()=>window.__payrollXss),undefined);assert.equal(await popup.locator("table").count()>0,true);assert.match(await popup.locator("body").innerText(),/2026-10/);
+    assert.equal(await popup.locator("script").count(),0);if(kind!=="ledger")assert.equal(await popup.locator("img").count(),0);else assert.equal(await popup.locator('img:not([src^="data:image/png;base64,"])').count(),0);assert.equal(await popup.evaluate(()=>window.__payrollXss),undefined);assert.equal(await popup.locator("table").count()>0,true);assert.match(await popup.locator("body").innerText(),/2026-10/);
     assert.equal(await popup.evaluate(()=>window.opener===null),true);await popup.close();
   }
   assert.equal(await page.evaluate(()=>window.__payrollXss),undefined);
