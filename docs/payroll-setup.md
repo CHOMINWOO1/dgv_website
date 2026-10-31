@@ -726,18 +726,27 @@ payroll/private row counts and the source revision return to their original
 values. The local harness also verifies that applying this migration preserves
 preexisting terms, POS timestamps and finalized salary snapshots.
 
-## Payment-history print layout
+## Payment-history print and signed Excel layout
 
 In **지급·서명·출력**, choose the paid-date range and employee, click **조회**,
-then **서명 포함 인쇄 · PDF**. The A4 landscape payment report uses a navy
+then **서명 포함 인쇄 · PDF** or the adjacent **서명 포함 Excel**. The A4 landscape payment report uses a navy
 table header, report metadata, payment and unique-employee counts, cash/bank
 totals, compact saved signatures and blank preparer/reviewer confirmation boxes.
 Cancelled payments are excluded. Missing stored signature images still block
-printing until they can be loaded; an unsigned payment is explicitly labelled.
+printing and signed Excel download until they can be loaded; an unsigned payment is explicitly labelled.
+
+The signed Excel report embeds the validated PNG signatures in the workbook,
+with numeric VND amounts and payment dates, literal identity/phone text, the same
+paid-date/employee scope and A4 landscape print settings. It verifies the current
+payroll revision and active administrator view before downloading. Filtering,
+reloading or logging out invalidates both report actions. The existing general
+Excel exports retain their own contents.
 
 Each row is an actual payment, with its paid date and salary month kept separate.
 Payments have no allocation to specific worked days, hours or wage components,
 so this report does not invent those allocations. Monthly calculations remain
-in the separate monthly ledger. This is a print-only change and needs no database
-migration. Run `test:payroll:receipts`, `test:payroll:receipts:print` and
-`test:payroll:signatures` to verify totals, page layout and private-data guards.
+in the separate monthly ledger. The reports need no database migration. Run
+`test:payroll:receipts`, `test:payroll:receipts:print`,
+`test:payroll:receipts:xlsx`, `test:payroll:receipts:xlsx:browser`,
+`test:xlsx:images` and `test:payroll:signatures` to verify totals, page layout,
+embedded images and private-data guards.
