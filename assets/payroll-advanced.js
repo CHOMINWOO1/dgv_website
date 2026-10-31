@@ -19,7 +19,7 @@
   const actions='<div class="actions"><button type="button" data-close>취소 / Hủy</button><button type="submit">저장 / Lưu</button></div>';
   $("workspaceAlerts").insertAdjacentHTML("afterbegin",'<div id="payrollAlerts" role="status" aria-live="polite"></div>');
   $("workspace").insertAdjacentHTML("beforeend",`
-    <section class="panel" id="rangePanel"><h2>기간별 근무·지급 조회 / Tra cứu theo ngày</h2><p class="muted">선택기간의 근무와 실제 지급일 기준 조회입니다. 월별 확정급여는 변경되지 않습니다. / Tra cứu chấm công và ngày thực trả; không thay đổi lương tháng.</p><div class="toolbar range-toolbar"><label>시작일 / Từ ngày<input id="rangeFrom" type="date" /></label><label>종료일 / Đến ngày<input id="rangeTo" type="date" /></label><label>직원 / Nhân viên<select id="rangeEmployee"><option value="">전체 / Tất cả</option></select></label><button id="rangeSearch">조회 / Xem</button><button id="rangeExport" class="quiet" disabled>Excel</button></div><div id="rangeReceipts" aria-live="polite"></div><div class="actions"><button id="rangeReceiptPrint" class="quiet" disabled>서명 포함 인쇄 · PDF / In kèm chữ ký</button></div><div id="rangeResult"></div></section>
+    <section class="panel" id="rangePanel"><h2>기간별 근무·지급 조회 / Tra cứu theo ngày</h2><p class="muted">선택기간의 근무와 실제 지급일 기준 조회입니다. 월별 확정급여는 변경되지 않습니다. / Tra cứu chấm công và ngày thực trả; không thay đổi lương tháng.</p><div class="toolbar range-toolbar"><label>시작일 / Từ ngày<input id="rangeFrom" type="date" /></label><label>종료일 / Đến ngày<input id="rangeTo" type="date" /></label><label>직원 / Nhân viên<select id="rangeEmployee"><option value="">전체 / Tất cả</option></select></label><button id="rangeSearch">조회 / Xem</button><button id="rangeExport" class="quiet" disabled>Excel</button></div><div id="rangeReceipts" aria-live="polite"></div><div class="actions"><button id="rangeReceiptPrint" class="quiet" disabled>서명 포함 인쇄 · PDF / In kèm chữ ký</button><button id="rangeReceiptExcel" class="quiet" disabled>서명 포함 Excel / Excel kèm chữ ký</button></div><div id="rangeResult"></div></section>
     <section class="panel" id="taxCenter"><div class="section-head"><div><h2>세무자료 / Hồ sơ kế toán &amp; thuế</h2><p class="muted">베트남어 항목명·한국어 설명 / Tiếng Việt kèm tiếng Hàn · 세무 검토 후 제출 / Kế toán kiểm tra trước khi nộp</p></div></div><div class="toolbar"><label>자료 선택 / Chọn báo cáo<select id="exportKind"><option value="ledger">① 월별 급여대장 / Bảng lương</option><option value="attendance">② 직원별 출퇴근 / Chấm công</option><option value="parttime">③ 파트타임 지급 / Bán thời gian</option><option value="cash">④ 현금 지급 / Tiền mặt</option><option value="bank">⑤ 이체 지급 / Chuyển khoản</option><option value="outstanding">⑥ 미지급 현황 / Chưa trả</option><option value="tax">⑦ 세무대리인 제출용 / Hồ sơ kế toán</option></select></label><button id="previewTax">자료 확인 / Kiểm tra</button></div><div id="taxPreview" hidden></div></section>
     <section class="panel" id="comparisonPanel"><h2>월별 급여 비교 / So sánh lương tháng</h2><div id="comparisonResult"></div></section>
     <section class="panel" id="rulesPanel"><div class="section-head"><h2>급여 계산 설정 / Quy tắc tính lương</h2><button id="newRule" class="quiet">새 적용일 설정 / Thêm phiên bản</button></div><p class="muted">법정 수당은 승인된 실제 근무구간만 계산합니다. 계약·근무표를 확인하고 활성화하세요. 지각시간은 벌금성 공제로 전환하지 않습니다.<br />Chỉ tính phụ cấp cho giờ đã duyệt. Kiểm tra hợp đồng và lịch làm trước khi bật. Không phạt lương do đi muộn.</p><div id="ruleHistory"></div></section>
@@ -311,7 +311,7 @@
   }
   let receiptPreview=null,receiptGeneration=0,receiptPrintWindow=null;
   const receiptScope=()=>JSON.stringify([$("rangeFrom").value,$("rangeTo").value,$("rangeEmployee").value]);
-  function clearReceiptPreview(){receiptPreview=null;receiptGeneration++;receiptPrintWindow?.close();receiptPrintWindow=null;$("rangeReceiptPrint").disabled=true;$("rangeReceipts").replaceChildren();}
+  function clearReceiptPreview(){receiptPreview=null;receiptGeneration++;receiptPrintWindow?.close();receiptPrintWindow=null;$("rangeReceiptPrint").disabled=true;$("rangeReceiptExcel").disabled=true;$("rangeReceipts").replaceChildren();}
   async function signatureImage(file) {
     if(file.mime_type!=="image/png"||file.storage_path.split("/")[0]!==file.payment_id)throw new Error("Invalid signature reference");
     const blob=await result(db.storage.from("payroll-evidence").download(file.storage_path));
@@ -390,7 +390,20 @@
     const missing=finalModel.rows.some(row=>row.signatures.some(signature=>signature.imageStatus!=="loaded"));
     if(missing)$("rangeReceipts").insertAdjacentHTML("afterbegin",'<p class="notice error">저장된 서명을 일부 불러오지 못했습니다. 연결을 확인하고 다시 조회하거나 기간을 줄여 주세요. 서명이 누락된 상태에서는 출력할 수 없습니다. / Không tải đủ chữ ký. Kiểm tra kết nối, tra cứu lại hoặc chọn kỳ ngắn hơn trước khi in.</p>');
     $("rangeReceiptPrint").disabled=missing||!finalModel.rows.length;
+    $("rangeReceiptExcel").disabled=missing||!finalModel.rows.length;
   }
+  $("rangeReceiptExcel").addEventListener("click",()=>{
+    if(state.busy||!receiptPreview||$("rangeReceiptExcel").disabled)return;
+    const captured=receiptPreview;
+    task(async()=>{
+      const current=Number((await result(db.from("payroll_revision").select("version").eq("id",1).single())).version);
+      if(!state.loaded||$("payrollApp").hidden||captured!==receiptPreview||captured.scope!==receiptScope()||current!==captured.revision){
+        clearReceiptPreview();
+        throw new Error("지급내역이 변경되었습니다. 기간 조회를 다시 해 주세요. / Thanh toán đã đổi; tra cứu lại trước khi tải Excel.");
+      }
+      DGV_XLSX.downloadWorkbook(DGV_PAYROLL_RECEIPTS_XLSX.buildWorkbook(captured.model));
+    });
+  });
   $("rangeReceiptPrint").addEventListener("click",()=>{
     if(state.busy||!receiptPreview)return;
     const captured=receiptPreview,popup=window.open("about:blank","_blank");
