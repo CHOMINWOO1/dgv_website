@@ -725,3 +725,19 @@ a rollback, never disables triggers or changes existing rows, and asserts all
 payroll/private row counts and the source revision return to their original
 values. The local harness also verifies that applying this migration preserves
 preexisting terms, POS timestamps and finalized salary snapshots.
+
+## Payment-history print layout
+
+In **지급·서명·출력**, choose the paid-date range and employee, click **조회**,
+then **서명 포함 인쇄 · PDF**. The A4 landscape payment report uses a navy
+table header, report metadata, payment and unique-employee counts, cash/bank
+totals, compact saved signatures and blank preparer/reviewer confirmation boxes.
+Cancelled payments are excluded. Missing stored signature images still block
+printing until they can be loaded; an unsigned payment is explicitly labelled.
+
+Each row is an actual payment, with its paid date and salary month kept separate.
+Payments have no allocation to specific worked days, hours or wage components,
+so this report does not invent those allocations. Monthly calculations remain
+in the separate monthly ledger. This is a print-only change and needs no database
+migration. Run `test:payroll:receipts`, `test:payroll:receipts:print` and
+`test:payroll:signatures` to verify totals, page layout and private-data guards.

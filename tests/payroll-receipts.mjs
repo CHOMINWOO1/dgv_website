@@ -76,7 +76,7 @@ const byteMismatch=receipts.buildModel({...input,attachments:input.attachments.m
 const badTime=receipts.buildModel({...input,attachments:input.attachments.map(row=>row.id==="a1"?{...row,acknowledged_at:"2026-02-30T00:00:00Z"}:row)});assert.equal(badTime.rows[0].signatures[0].acknowledgedAt,null);
 const mapModel=receipts.buildModel({...input,signatureImages:new Map(Object.entries(input.signatureImages))});assert.equal(mapModel.rows[0].signatures[0].imageDataUrl,imageA);
 const table=receipts.buildTableHtml(model),print=receipts.buildPrintHtml(input),printModel=receipts.buildPrintHtml(model);
-assert.equal(print,printModel);assert.ok(print.includes(table));assert.match(print,/@page\{size:A4 landscape/);assert.match(print,/thead\{display:table-header-group/);
+assert.equal(print,printModel);assert.match(print,/class="receipt-table/);assert.match(print,/@page\{size:A4 landscape/);assert.match(print,/thead\{display:table-header-group/);
 assert.doesNotMatch(table+print,/data-payment-id="p4"|receipt-cancelled|cancelledCount|cancelledTotal|취소|Đã hủy|đã hủy|순지급/);assert.equal((print.match(/<tr data-payment-id=/g)||[]).length,4);
 assert.equal((print.match(/<img data-attachment-id=/g)||[]).length,3);assert.match(print,/img-src data:/);assert.doesNotMatch(print,/<script|https:\/\/bad|NATIONAL-MUST|BANK-MUST|SNAPSHOT-PRIVATE|PRIVATE-REFERENCE/);
 assert.doesNotMatch(JSON.stringify(model),/NATIONAL-MUST|BANK-MUST|SNAPSHOT-PRIVATE|SNAPSHOT-PHONE|PRIVATE-REFERENCE|cancelledCount|cancelledTotal|Cancelled later/);
@@ -167,4 +167,22 @@ assert.throws(()=>receipts.buildModel({...advanceInput,payments:[{...advancePaym
 assert.throws(()=>receipts.buildModel({...advanceInput,runs:[input.runs[0],{...input.runs[0],id:"duplicate-period"}]}),/중복/);
 const hostileAdvance={...advanceInput,employees:input.employees.map(employee=>({...employee,name:'<script>advanceAttack()</script>'}))};
 assert.doesNotMatch(receipts.buildPrintHtml(hostileAdvance),/<script>/);assert.match(receipts.buildPrintHtml(hostileAdvance),/&lt;script&gt;advanceAttack/);
-console.log("Payroll receipts passed: legacy and runless payments, finalization continuity, paid-date/year boundaries, split payouts, historical names, cancelled-payment exclusion, exact employee identity and phone binding, exact PNG/payment binding, private-field exclusion, safe A4 table/print escaping.");
+// The print summary counts people by immutable employee ID, not identical names
+// or device codes, and reconciles all payment methods without inventing a wage
+// allocation for individual instalments.
+const summaryInput={...identityInput,employees:input.employees,identities:[],payments:[...input.payments,{id:"other-method",run_id:"previous",paid_on:"2026-01-06",amount:75,method:"other"}]};
+const summaryPrint=receipts.buildPrintHtml(summaryInput);
+const totalText=(html,key)=>html.match(new RegExp(`data-receipt-total="${key}"[^>]*>([\\s\\S]*?)<\\/[^>]+>`))?.[1].replace(/<[^>]*>/g,"");
+assert.match(totalText(summaryPrint,"activeCount"),/5/);
+assert.match(totalText(summaryPrint,"employeeCount"),/3/,"split payments do not duplicate the employee count");
+assert.match(totalText(summaryPrint,"activeTotal"),/925/);
+assert.match(totalText(summaryPrint,"cashTotal"),/700/);
+assert.match(totalText(summaryPrint,"bankTotal"),/150/);
+assert.match(totalText(summaryPrint,"otherTotal"),/75/,"unrecognized methods still reconcile with actual paid total");
+assert.match(totalText(summaryPrint,"unsignedCount"),/2/);
+assert.match(totalText(summaryPrint,"unavailableCount"),/1/);
+assert.doesNotMatch(summaryPrint,/<th[^>]*>[^<]*(근무일|실근무|시급|기본급|수당|공제)/,"unallocated payment rows must not claim specific wage components or worked hours");
+assert.doesNotMatch(receipts.buildPrintHtml(onlyCancelled),/data-payment-id=/);
+context.Date=class extends Date{static now(){return Date.parse("2026-12-31T17:01:00Z");}};
+assert.match(receipts.buildPrintHtml(onlyCancelled),/data-receipt-generated-on="2027-01-01"/,"statement issue date follows Vietnam across the UTC year boundary");
+console.log("Payroll receipts passed: legacy and runless payments, finalization continuity, paid-date/year boundaries, split payouts, historical names, cancelled-payment exclusion, exact employee identity and phone binding, exact PNG/payment binding, private-field exclusion, safe A4 print escaping, unique employee counts and cash/bank/unknown-method reconciliation.");
