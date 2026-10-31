@@ -766,3 +766,21 @@ need no database migration. Run
 `test:payroll:receipts:xlsx`, `test:payroll:receipts:xlsx:browser`,
 `test:xlsx:images` and `test:payroll:signatures` to verify totals, page layout,
 embedded images and private-data guards.
+
+
+### Independent attendance corrections
+
+The administrator day editor accepts check-in or check-out independently. A blank
+endpoint uses an eligible original punch; clearing both uses the original records.
+One-sided edits replace the corresponding outer boundary while preserving separate
+work sessions. Unmatched records remain incomplete and do not invent paid time.
+Complete manual bounds retain the existing whole-day override behavior. Original
+punches and finalized payroll snapshots remain unchanged. Each save retains its
+reason, audit trail and payroll revision update.
+
+The partial-day-times migration relaxes only the paired-time constraint. Check-in
+must be on the work date; checkout may be on that date or the next. Complete pairs
+must be positive and at most 24 hours; original counterparts are also checked by
+the calculation engine. Existing administrator RLS and triggers stay in force.
+Run `test:payroll:partial:unit`, `test:payroll:partial:browser` and the rollback-only
+`supabase/tests/payroll-partial-day-times.sql` integration test.
