@@ -265,7 +265,8 @@
         // A raw checkout on this calendar day can have been provisionally
         // paired with yesterday's missed checkout. The explicit new arrival
         // starts today's session and lets the standard restart rule resolve it.
-        if (type === "in" && !anchor) candidates = normalized.filter(record => record.date === day.work_date);
+        if (type === "in" && !anchor) candidates = normalized.filter(record => record.date === day.work_date &&
+          (belongs(record) || record.ms > ms));
         const opposite = type === "in" ? candidates.filter(record => record.type === "out").sort((a,b)=>a.ms-b.ms)[0]
           : directed.filter(record => record.type === "in").at(-1);
         if (opposite && (type === "in" ? opposite.ms <= ms || opposite.ms-ms > DAY : ms <= opposite.ms || ms-opposite.ms > DAY)) continue;

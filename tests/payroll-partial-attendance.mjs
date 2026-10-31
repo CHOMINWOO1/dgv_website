@@ -60,6 +60,18 @@ report=calculate({records:[punch('08:00','in'),punch('20:00','out','2026-06-02')
 assert.equal(report.daily[0].minutes,0);assert.equal(report.daily[0].attendanceStatus,'missing');assert.equal(report.daily[1].minutes,480);assert.equal(report.daily[1].attendanceStatus,'recognized');
 report=calculate({records:[punch('08:00','in')],days:[edit(null,'20:00','2026-06-02')]});
 assert.equal(report.minutes,0);assert.equal(report.daily[0].checkOut,null);assert.equal(report.daily[1].checkIn,null,'out-only edit cannot claim a prior work date');
+const previousOvernight=[punch('22:00','in'),punch('02:00','out','2026-06-02')];
+for(const currentCheckout of [true,false]){
+  report=calculate({records:[...previousOvernight,...(currentCheckout?[punch('20:00','out','2026-06-02')]:[])],days:[edit('10:00',null,'2026-06-02')]});
+  assert.equal(report.daily[0].minutes,240,'a previous overnight checkout stays with its original arrival');
+  assert.equal(report.daily[1].checkIn,at('10:00','2026-06-02'));
+  assert.equal(report.daily[1].minutes,currentCheckout?480:0);
+  assert.equal(report.daily[1].attendanceStatus,currentCheckout?'recognized':'missing');
+  assert.equal(report.daily[1].issueCodes.includes('correction'),false,'an earlier checkout owned by yesterday cannot invalidate today’s new arrival');
+}
+report=calculate({records:[...previousOvernight,punch('09:00','out','2026-06-02')],days:[edit('10:00',null,'2026-06-02')]});
+assert.equal(report.daily[0].minutes,240);assert.equal(report.daily[1].minutes,0);
+assert.ok(report.daily[1].issueCodes.includes('correction'),'an orphan checkout belonging to today still rejects a later arrival');
 for(const outTime of ['08:00','20:00'])for(const reverse of [false,true]){
   const corrections=[edit(null,'20:00'),edit('06:00',null,'2026-06-02')];if(reverse)corrections.reverse();
   report=calculate({records:[punch('10:00','in'),punch(outTime,'out','2026-06-02')],days:corrections});
