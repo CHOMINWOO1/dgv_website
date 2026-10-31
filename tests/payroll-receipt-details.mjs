@@ -58,6 +58,9 @@ assert.ok(html.indexOf('data-employment-type="full_time"')<html.indexOf('data-em
 assert.equal((html.match(/<tr data-payment-id=/g)||[]).length,5);
 assert.equal(cell(rowHtml("part-first"),"base-amount"),"220,000");
 assert.equal(cell(rowHtml("part-first"),"work-minutes"),"5h 30m");
+assert.deepEqual([...cell(rowHtml("part-first"),"worked-days").matchAll(/data-work-date="([^"]+)">([^<]+)/g)].map(match=>[match[1],match[2]]),[["2026-10-01","10/01"],["2026-10-31","10/31"]]);
+assert.match(cell(rowHtml("part-first"),"worked-days"),/2일 \/ ngày/);
+assert.match(cell(rowHtml("full-pay"),"worked-days"),/26일[\s\S]*일자 자료 없음/,"legacy snapshots without actual dates do not invent them");
 for(const field of ["worked-days","work-minutes","hourly-rates","base-amount","allowances","deductions"])assert.equal(cell(rowHtml("part-second"),field),"",`monthly ${field} must appear once`);
 assert.equal(cell(rowHtml("part-first"),"paid-amount"),"125,000");assert.equal(cell(rowHtml("part-second"),"paid-amount"),"75,000");
 assert.match(rowHtml("part-second"),/2026-11-06/);assert.match(rowHtml("part-first"),/CCCD \/ CMND: 000001/);assert.match(rowHtml("part-first"),/TEL: 00123/);

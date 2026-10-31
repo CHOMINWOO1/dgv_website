@@ -746,6 +746,9 @@ The print and signed Excel share the reference's 11 columns: sequence, employee,
 worked dates, actual hours, hourly rate, base pay, allowances, deductions, actual
 payment, payment method and receipt signature. Part-time payments come first,
 then full-time payments; unknown employment types remain a separate final group.
+The worked-date cell lists every recorded date as MM/DD, followed by the day
+count. Long lists wrap without replacing individual dates with ranges or omitting
+them. Legacy snapshots with only a day count explicitly indicate missing dates.
 Identity and phone remain below the employee name, and each payment retains its
 own amount, paid date and signatures. No qualifying payment is collapsed or omitted.
 

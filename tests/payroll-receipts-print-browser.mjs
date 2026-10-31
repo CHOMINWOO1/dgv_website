@@ -74,6 +74,12 @@ async function query(from='2026-10-01',to='2026-10-31',employee=''){
   assert.equal(await page.locator('#rangeReceiptPrint').isDisabled(),false);
 }
 async function popup(){const pending=page.waitForEvent('popup');await page.locator('#rangeReceiptPrint').click();const result=await pending;result.on('pageerror',error=>errors.push(error.message));await result.waitForFunction(()=>window.__printed===true);return result;}
+async function assertWorkDates(row,dates){
+  const cell=row.locator('[data-receipt-field="worked-days"]');
+  assert.deepEqual(await cell.locator('.receipt-work-date').evaluateAll(spans=>spans.map(span=>[span.dataset.workDate,span.textContent.trim()])),dates.map(date=>[date,date.slice(5).replace('-','/')]),'every worked date is separately printed in full MM/DD form');
+  assert.match(await cell.locator('small').innerText(),new RegExp(`${dates.length}일`),'the date list retains its total day count');
+  assert.equal(await cell.evaluate(element=>{const box=element.getBoundingClientRect();return element.scrollHeight<=element.clientHeight+1&&[...element.querySelectorAll('.receipt-work-date')].every(span=>{const date=span.getBoundingClientRect();return date.height>0&&date.width>0&&date.top>=box.top-1&&date.bottom<=box.bottom+1&&date.left>=box.left-1&&date.right<=box.right+1&&getComputedStyle(span).visibility!=='hidden';});}),true,'all dates are visible inside the cell without clipped overflow');
+}
 async function assertFits(result){
   assert.deepEqual(await result.evaluate(()=>[...document.querySelectorAll('.receipt-table th,.receipt-table td')].filter(cell=>cell.scrollWidth>cell.clientWidth+1).map(cell=>({text:cell.innerText,field:cell.dataset.receiptField,width:cell.clientWidth,overflow:cell.scrollWidth}))),[],'all printed table content fits its cells');
   assert.equal(await result.locator('.receipt-table').evaluate(table=>getComputedStyle(table.querySelector('thead')).display),'table-header-group','long reports repeat their column headings');
@@ -126,7 +132,8 @@ try{
     }
   }
   const first=report.locator('[data-payment-id="synthetic-pay-000"]'),continuation=report.locator('[data-payment-id="synthetic-pay-003"]');
-  for(const [field,value] of [['worked-days','2'],['work-minutes','5h 30m'],['hourly-rates','40,000'],['base-amount','220,000'],['allowances','—'],['deductions','—']])assert.equal(await first.locator(`[data-receipt-field="${field}"]`).innerText(),value,'full September calculation '+field);
+  await assertWorkDates(first,['2026-09-28','2026-09-29']);
+  for(const [field,value] of [['work-minutes','5h 30m'],['hourly-rates','40,000'],['base-amount','220,000'],['allowances','—'],['deductions','—']])assert.equal(await first.locator(`[data-receipt-field="${field}"]`).innerText(),value,'full September calculation '+field);
   for(const field of ['worked-days','work-minutes','hourly-rates','base-amount','allowances','deductions'])assert.equal(await continuation.locator(`[data-receipt-field="${field}"]`).innerText(),'','monthly values are not repeated or allocated across instalments');
   const finalized=report.locator('[data-payment-id="synthetic-pay-002"]');for(const [field,value] of [['work-minutes','16h 0m'],['base-amount','7,000,000'],['allowances','120,000'],['deductions','30,000']])assert.equal(await finalized.locator(`[data-receipt-field="${field}"]`).innerText(),value,'saved monthly component '+field);
   assert.equal(await report.locator('[data-payment-id="synthetic-pay-005"] [data-receipt-field="base-amount"]').innerText(),'—','unknown salary conditions never become zero salary');
@@ -141,8 +148,20 @@ try{
   assert.equal(await nextMonth.locator('[data-payment-id]').count(),2);
   assert.equal(await nextMonth.locator('[data-payment-id="synthetic-pay-000"] [data-receipt-field="work-minutes"]').innerText(),'6h 30m');
   assert.equal(await nextMonth.locator('[data-payment-id="synthetic-pay-000"] [data-receipt-field="base-amount"]').innerText(),'260,000','November payments include all October work, including Oct 25');
+  await assertWorkDates(nextMonth.locator('[data-payment-id="synthetic-pay-000"]'),['2026-10-01','2026-10-25']);
   assert.equal(await nextMonth.locator('[data-payment-id="synthetic-pay-003"] [data-receipt-field="base-amount"]').innerText(),'');
   await capture(nextMonth,'cross-month-instalments',1);await nextMonth.close();
+  await seed();await page.evaluate(()=>{
+    const state=__payrollTest,id='synthetic-employee-0',payment=state.db.payroll_payments.find(item=>item.id==='synthetic-pay-000');
+    state.db.payroll_attendance_raw=Array.from({length:31},(_,index)=>{const date=`2026-10-${String(index+1).padStart(2,'0')}`;return [['10:00:00','in'],['20:00:00','out']].map(([time,punch_type])=>({id:`all-dates-${index}-${punch_type}`,employee_id:id,occurred_at:`${date}T${time}`,punch_type,source:'kiosk',device_id:'SYNTHETIC-TABLET'}));}).flat();
+    state.db.payroll_payments=[{...payment,paid_on:'2026-10-31',payroll_month:'2026-10-01',amount:12400000}];
+    state.db.payroll_attachments=state.db.payroll_attachments.filter(item=>item.payment_id===payment.id);state.db.payroll_attachments[0].acknowledged_at='2026-10-31T13:02:03Z';state.db.payroll_revision[0].version++;
+  });
+  await page.locator('#refresh').click();await idle();await query('2026-10-31','2026-10-31','synthetic-employee-0');const datesStoredBefore=await page.evaluate(()=>JSON.stringify(__payrollTest.db)),allDates=await popup(),allDatesRow=allDates.locator('[data-payment-id="synthetic-pay-000"]');
+  assert.equal(await allDates.locator('[data-payment-id]').count(),1);await assertWorkDates(allDatesRow,Array.from({length:31},(_,index)=>`2026-10-${String(index+1).padStart(2,'0')}`));
+  assert.equal(await allDatesRow.locator('[data-receipt-field="work-minutes"]').innerText(),'310h 0m');assert.equal(await allDatesRow.locator('[data-receipt-field="paid-amount"]').innerText(),'12,400,000');assert.equal(await allDatesRow.locator('img').count(),1);
+  const allDatesPages=await capture(allDates,'all-31-work-dates',1);assert.equal(allDatesPages,1,'all 31 individual work dates fit one A4 landscape page');
+  await assertWorkDates(allDatesRow,Array.from({length:31},(_,index)=>`2026-10-${String(index+1).padStart(2,'0')}`));assert.equal(await page.evaluate(()=>JSON.stringify(__payrollTest.db)),datesStoredBefore,'printing all work dates remains read-only');await allDates.close();
   await seed(35);await query();const long=await popup();
   assert.equal(await long.locator('.receipt-table tbody tr[data-payment-id]').count(),35);
   assert.deepEqual((await long.locator('[data-payment-id]').evaluateAll(rows=>rows.map(row=>row.dataset.paymentId))).sort(),Array.from({length:35},(_,index)=>`synthetic-pay-${String(index).padStart(3,'0')}`),'all qualifying payments survive grouping and pagination');
@@ -157,5 +176,5 @@ try{
   assert.equal(await page.evaluate(()=>__payrollTest.storageReads.some(read=>read.path?.startsWith('cancelled'))),false);
   assert.deepEqual(errors,[]);
   assert.equal(samplePages,1,'six payments fit one A4 landscape page');
-  console.log(JSON.stringify({result:'passed',samplePayments:6,uniqueEmployees:5,paid:1350000,cash:1100000,bank:250000,samplePages,longPayments:35,longPages,phoneWidth:390,syntheticOnly:true,folder}));
+  console.log(JSON.stringify({result:'passed',samplePayments:6,uniqueEmployees:5,paid:1350000,cash:1100000,bank:250000,samplePages,allWorkDates:31,allDatesPages,longPayments:35,longPages,phoneWidth:390,syntheticOnly:true,folder}));
 }finally{await context.close();await browser.close();}

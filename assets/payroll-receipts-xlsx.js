@@ -50,13 +50,11 @@
   }
   function workDates(detail){
     const dates=Array.isArray(detail.workDates)?[...new Set(detail.workDates.map(date))].sort():[];
-    const days=detail.workedDays==null?null:number(detail.workedDays),ranges=[];
-    for(let index=0;index<dates.length;index++){
-      const first=dates[index];let last=first;
-      while(index+1<dates.length&&Date.parse(dates[index+1])-Date.parse(last)===86400000)last=dates[++index];
-      ranges.push(first.slice(5).replace("-","/")+(last!==first?"–"+last.slice(5).replace("-","/"):""));
-    }
-    const display=ranges.length>3?`${dates[0].slice(5)} ~ ${dates.at(-1).slice(5)}\n근무일 상세는 급여대장 / Chi tiết tại bảng lương`:ranges.join(", ");
+    const days=detail.workedDays==null?null:number(detail.workedDays),lines=[];
+    // Keep every actual date visible. Explicit two-date lines let the row-height
+    // calculation reserve enough space even for all 31 days in the month.
+    for(let index=0;index<dates.length;index+=2)lines.push(dates.slice(index,index+2).map(day=>day.slice(5).replace("-","/")).join(", "));
+    const display=lines.join("\n");
     return display+(days==null?"":`${display?"\n":""}${days}일 / ngày`)+(dates.length||days===null?"":"\n일자 자료 없음 / Chưa có ngày chi tiết")||"—";
   }
   function workTime(value){
