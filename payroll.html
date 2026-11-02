@@ -6,7 +6,7 @@
   <title>HANA · 직원·급여관리</title>
   <link rel="stylesheet" href="assets/qr-staff.css" />
   <link rel="stylesheet" href="assets/payroll.css?v=20261029-10" />
-  <link rel="stylesheet" href="assets/payroll-workspace.css?v=20261029-10" />
+  <link rel="stylesheet" href="assets/payroll-workspace.css?v=20261102-1" />
   <link rel="stylesheet" href="assets/payroll-receipts.css?v=20261029-10" />
 </head>
 <body>
@@ -53,7 +53,7 @@
             <details id="advancedSettings" class="panel"><summary>추가 설정 · 계산 규칙·백업 / Cài đặt &amp; sao lưu</summary><div id="settingsMount"></div></details>
           </section>
           <section id="view-attendance" role="tabpanel" aria-labelledby="tab-attendance" hidden>
-            <section class="panel team-calendar-panel"><div class="section-head"><div><h2>전체 직원 근무 달력 / Lịch toàn bộ nhân viên</h2><p class="muted">날짜를 누르면 그날 근무한 모든 직원의 출퇴근을 볼 수 있습니다. / Chọn ngày để xem tất cả nhân viên.</p></div><span id="teamMonthSummary" class="badge neutral"></span></div><div id="teamCalendar" class="team-calendar" aria-label="전체 직원 월간 근무 달력"></div>
+            <section class="panel team-calendar-panel"><div class="section-head"><div><h2>전체 직원 근무 달력 / Lịch toàn bộ nhân viên</h2><p class="muted">날짜를 누르면 그날 근무한 모든 직원의 출퇴근을 볼 수 있습니다. / Chọn ngày để xem tất cả nhân viên.</p></div><span id="teamMonthSummary" class="badge neutral"></span></div><div id="teamCalendarMonthNavigation" class="calendar-month-navigation" role="group" aria-label="전체 직원 달력 월 선택 / Chọn tháng"></div><div id="teamCalendar" class="team-calendar" aria-label="전체 직원 월간 근무 달력"></div>
               <section id="teamDayDetail" class="team-day-detail" aria-live="polite"><h3 id="teamDayTitle"></h3><div class="table-scroll"><table><thead><tr><th>직원 / Nhân viên</th><th>출퇴근 구간 / Vào · Ra</th><th>근무 / Giờ làm</th><th>상태 / Trạng thái</th><th>상세 / Chi tiết</th></tr></thead><tbody id="teamDayRows"></tbody></table></div></section>
             </section>
             <section class="panel import-panel" aria-labelledby="importTitle"><div><h2 id="importTitle">출퇴근 엑셀 가져오기 / Nhập chấm công</h2><p class="muted">N308 .xlsx · 최대 5 MB · 기존 기록은 중복 저장하지 않습니다. / Bỏ qua bản ghi trùng.</p></div><div class="import-controls"><label class="sr-only" for="importFile">N308 엑셀 파일</label><input id="importFile" type="file" accept=".xlsx" /><button id="previewImport">내용 확인 / Xem trước</button></div><div id="importPreview" hidden></div></section>
@@ -70,7 +70,7 @@
             <div id="employeeActionBar"></div>
             <section data-detail-views="ledger"><h3>월 급여 계산 / Tính lương tháng</h3><div id="detailSummary"></div><h3>급여 정산 / Chốt lương</h3><div id="reviewArea"></div></section>
             <section data-detail-views="employees"><div class="section-head"><h3>월급·근무조건 / Lương &amp; lịch làm</h3><button id="addTerms">월급·근무조건 변경 / Đổi điều kiện lương</button></div><p class="muted">새 적용일부터 변경하며 이전 급여조건은 보존합니다. / Áp dụng từ ngày mới, giữ lịch sử.</p><div id="termsList"></div></section>
-            <section data-detail-views="attendance"><div id="attendanceSummarySlot"></div><h3>선택 직원 근무표 / Lịch nhân viên đã chọn</h3><p class="muted">날짜를 눌러 휴무나 잘못된 출퇴근을 수정하세요. / Chọn ngày để sửa lịch hoặc chấm công.</p><div id="calendar" class="calendar"></div><details open><summary>일별 출퇴근 / Chấm công hằng ngày</summary><div class="table-scroll"><table><thead><tr><th>날짜 / Ngày</th><th>출근 / Vào</th><th>퇴근 / Ra</th><th>근무 / Làm</th><th>지각 / Muộn</th><th>조퇴 / Về sớm</th><th>추가 / Thêm</th><th>자동 반영 상태 / Trạng thái</th></tr></thead><tbody id="dailyBody"></tbody></table></div></details></section>
+            <section data-detail-views="attendance"><div id="attendanceSummarySlot"></div><h3>선택 직원 근무표 / Lịch nhân viên đã chọn</h3><p class="muted">날짜를 눌러 휴무나 잘못된 출퇴근을 수정하세요. / Chọn ngày để sửa lịch hoặc chấm công.</p><div id="employeeCalendarMonthNavigation" class="calendar-month-navigation" role="group" aria-label="선택 직원 달력 월 선택 / Chọn tháng nhân viên"></div><div id="calendar" class="calendar"></div><details open><summary>일별 출퇴근 / Chấm công hằng ngày</summary><div class="table-scroll"><table><thead><tr><th>날짜 / Ngày</th><th>출근 / Vào</th><th>퇴근 / Ra</th><th>근무 / Làm</th><th>지각 / Muộn</th><th>조퇴 / Về sớm</th><th>추가 / Thêm</th><th>자동 반영 상태 / Trạng thái</th></tr></thead><tbody id="dailyBody"></tbody></table></div></details></section>
             <section data-detail-views="payments"><h3>지급내역과 수령 서명 / Thanh toán &amp; chữ ký</h3><div id="paymentArea"></div></section>
           </section>
         </div>
@@ -97,7 +97,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
   <script src="assets/supabase-config.js"></script><script src="assets/dgv-data.js"></script><script src="assets/supabase-client.js"></script><script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js?v=20261031-5"></script><script src="assets/payroll-core.js?v=20261031-7"></script><script src="assets/payroll-rules.js?v=20261029-10"></script><script src="assets/payroll-tax.js?v=20261031-1"></script><script src="assets/payroll-archive.js?v=20261029-3"></script><script src="assets/payroll.js?v=20261031-7"></script><script src="assets/payroll-receipts.js?v=20261031-6"></script><script src="assets/payroll-receipts-xlsx.js?v=20261031-6"></script><script src="assets/payroll-advanced.js?v=20261031-5"></script>
-  <script src="assets/payroll-workspace.js?v=20261029-10"></script>
+  <script src="assets/payroll-workspace.js?v=20261102-1"></script>
   <script src="assets/payroll-services.js?v=20261029-10"></script>
 </body>
 </html>

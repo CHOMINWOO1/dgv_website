@@ -10,6 +10,37 @@
   };
   const aliases={ledgerTitle:"ledger",employeeDetail:"ledger",importTitle:"attendance",rangePanel:"payments",taxCenter:"payments",comparisonPanel:"ledger",rulesPanel:"employees",archivePanel:"employees"};
   let currentView="ledger",teamDate="",teamMonth="",teamDays=new Map();
+  // All calendars use the same month as payroll queries and saved work dates.
+  const monthNavigations=["teamCalendarMonthNavigation","employeeCalendarMonthNavigation"].map($);
+  for(const navigation of monthNavigations){
+    navigation.innerHTML='<button type="button" class="quiet" data-month-step="-1" aria-label="이전 달 / Tháng trước">← 이전 달<br /><small>Tháng trước</small></button><label>근무 월 / Tháng làm việc<input type="month" data-calendar-month required min="0001-01" max="9999-12" /></label><button type="button" class="quiet" data-month-step="1" aria-label="다음 달 / Tháng sau">다음 달 →<br /><small>Tháng sau</small></button>';
+    navigation.addEventListener("change",event=>{
+      if(event.target.matches("[data-calendar-month]"))changeCalendarMonth(event.target.value);
+    });
+    navigation.addEventListener("click",event=>{
+      const button=event.target.closest("[data-month-step]");
+      if(!button||state.busy)return;
+      const date=new Date($("month").value+"-01T00:00:00Z");
+      if(!Number.isFinite(date.getTime()))return;
+      date.setUTCMonth(date.getUTCMonth()+Number(button.dataset.monthStep));
+      changeCalendarMonth(date.toISOString().slice(0,7));
+    });
+  }
+  function syncCalendarMonths(){
+    for(const navigation of monthNavigations){
+      navigation.querySelector("[data-calendar-month]").value=$("month").value;
+      navigation.querySelector('[data-month-step="-1"]').disabled=$("month").value==="0001-01";
+      navigation.querySelector('[data-month-step="1"]').disabled=$("month").value==="9999-12";
+    }
+  }
+  function changeCalendarMonth(month){
+    if(state.busy||! /^(?!0000)\d{4}-(0[1-9]|1[0-2])$/.test(month)||month===$("month").value){syncCalendarMonths();return;}
+    $("month").value=month;
+    // Reuse the authenticated load path so attendance, salary and payments agree.
+    $("month").dispatchEvent(new Event("change",{bubbles:true}));
+  }
+  $("month").addEventListener("change",syncCalendarMonths);
+  syncCalendarMonths();
   $("comparisonMount").append($("comparisonPanel"));
   $("settingsMount").append($("rulesPanel"),$("archivePanel"));
   $("paymentReportsMount").append($("rangePanel"),$("taxCenter"));
@@ -144,6 +175,7 @@
   }
   function render(){
     if(!state.loaded)return;
+    syncCalendarMonths();
     const selected=state.selected;
     $("paymentEmployee").innerHTML='<option value="">직원 선택 / Chọn nhân viên</option>'+state.employees.filter(employee=>employee.payee_type!=="service").map(employee=>`<option value="${esc(employee.id)}">${esc(employee.name)} · ID ${esc(employee.device_user_id)}${employee.archived_at?" · 삭제됨 / Đã ẩn":""}</option>`).join("");
     $("paymentEmployee").value=selected;$("startPayment").disabled=!selected||isArchived(selected);
