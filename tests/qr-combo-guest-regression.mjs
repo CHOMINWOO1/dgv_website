@@ -123,7 +123,7 @@ assert.match(functionSource(inboxSource, "renderComboSnapshot"), /서비스[\s\S
 assert.match(functionSource(inboxSource, "renderItem"), /renderComboSnapshot\(item\)/);
 assert.match(functionSource(inboxSource, "renderEditLines"), /renderComboSnapshot\(line\)/);
 assert.match(functionSource(inboxSource, "openEditOrder"), /combo_snapshot:\s*line\.combo_snapshot \|\| null/);
-assert.match(inboxHtml, /assets\/order-inbox\.js\?v=20261005-combo-menu/);
+assert.match(inboxHtml, /assets\/order-inbox\.js\?v=20261105-voice-alert-1/);
 
 const inboxFallbackContext = vm.createContext({ result: null, String });
 vm.runInContext(`
