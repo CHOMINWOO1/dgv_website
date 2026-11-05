@@ -6,6 +6,7 @@
   const DGV = global.DGV;
   let audioContext = null;
   let audioEnabled = false;
+  let alertBusyUntil = 0;
   const SOUND_PREFERENCE_KEY = "dgv-qr-order-sound";
 
   function byId(id) {
@@ -156,7 +157,10 @@
       toast("이 브라우저에서는 알림음을 사용할 수 없습니다.", "error");
       return false;
     }
-    audioContext ||= new AudioCtx();
+    if (!audioContext || audioContext.state === "closed") {
+      audioContext = new AudioCtx();
+      alertBusyUntil = 0;
+    }
     if (audioContext.state === "suspended") await audioContext.resume();
     audioEnabled = audioContext.state === "running";
     if (audioEnabled) {
@@ -179,18 +183,29 @@
     oscillator.frequency.setValueAtTime(frequency, start);
     gain.gain.setValueAtTime(.0001, start);
     gain.gain.exponentialRampToValueAtTime(gainValue, start + .02);
+    // Keep the alert audible instead of fading immediately after the attack.
+    gain.gain.setValueAtTime(gainValue, start + duration - .06);
     gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
     oscillator.connect(gain);
     gain.connect(audioContext.destination);
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      gain.disconnect();
+    };
     oscillator.start(start);
     oscillator.stop(start + duration + .03);
   }
 
   function playAlert(options = {}) {
-    if (!audioEnabled || !audioContext) return false;
+    if (!audioEnabled || !audioContext || audioContext.state !== "running") return false;
     const now = audioContext.currentTime + .02;
-    playTone(659.25, now, .18, .14);
-    playTone(880, now + .19, .27, .16);
+    // Coalesce simultaneous order events so loud alerts cannot stack and clip.
+    if (now < alertBusyUntil) return false;
+    alertBusyUntil = now + 1.8;
+    for (const offset of [0, .95]) {
+      playTone(659.25, now + offset, .30, .8);
+      playTone(880, now + offset + .38, .42, .8);
+    }
     if (!options.preview && global.navigator?.vibrate) global.navigator.vibrate([180, 80, 180]);
     return true;
   }
