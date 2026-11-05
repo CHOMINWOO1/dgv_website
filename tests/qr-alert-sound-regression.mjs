@@ -27,40 +27,33 @@ function fixture({ supported = true, deniedStorage = false, initialState = "susp
     createElement() { const value = node(); elements.push(value); return value; },
     body: node()
   };
-  const param = () => ({
-    events: [],
-    setValueAtTime(value, time) { this.events.push({ type: "set", value, time }); },
-    exponentialRampToValueAtTime(value, time) { this.events.push({ type: "ramp", value, time }); }
-  });
   class AudioContext {
     constructor() {
       this.state = initialState;
       this.currentTime = 0;
       this.destination = {};
-      this.oscillators = [];
-      this.gains = [];
+      this.sampleRate = 48000;
+      this.buffers = [];
+      this.players = [];
       this.resumeCount = 0;
       contexts.push(this);
     }
     async resume() { this.resumeCount += 1; if (canResume) this.state = "running"; }
-    createOscillator() {
+    createBuffer(channels, length, sampleRate) {
+      const samples = Array.from({ length: channels }, () => new Float32Array(length));
+      const value = { length, sampleRate, duration: length / sampleRate, numberOfChannels: channels, getChannelData(channel) { return samples[channel]; } };
+      this.buffers.push(value);
+      return value;
+    }
+    createBufferSource() {
       const value = {
-        frequency: param(), disconnected: false,
+        disconnected: false,
         connect(target) { this.target = target; },
         disconnect() { this.disconnected = true; },
         start(time) { this.startTime = time; },
         stop(time) { this.stopTime = time; this.stopCalls = (this.stopCalls || 0) + 1; }
       };
-      this.oscillators.push(value);
-      return value;
-    }
-    createGain() {
-      const value = {
-        gain: param(), disconnected: false,
-        connect(target) { this.target = target; },
-        disconnect() { this.disconnected = true; }
-      };
-      this.gains.push(value);
+      this.players.push(value);
       return value;
     }
   }
@@ -117,65 +110,68 @@ assert.equal(test.storage.get("dgv-qr-order-sound"), "enabled");
 assert.equal(test.contexts.length, 1);
 const audio = test.contexts[0];
 assert.equal(audio.resumeCount, 1);
-assert.equal(audio.oscillators.length, 4, "preview uses same four-note alert as real orders");
+assert.equal(audio.players.length, 1, "preview uses one cached telephone-ring buffer");
 assert.equal(test.vibrations.length, 0, "preview must not vibrate");
 
-for (const [index, tone] of audio.oscillators.entries()) {
-  const gain = audio.gains[index];
-  const envelope = gain.gain.events;
-  assert.equal(tone.type, "sine");
-  assert.equal(tone.target, gain);
-  assert.equal(gain.target, audio.destination);
-  assert.equal(envelope.length, 4);
-  assert.equal(envelope[0].value, .0001);
-  assert.equal(envelope[1].value, .95, "higher but below clipping-level peak");
-  assert.equal(envelope[2].value, .95, "sustain instead of immediately fading");
-  assert.ok(envelope[2].time - envelope[1].time >= .2);
-  assert.equal(envelope[3].value, .0001);
-  assert.ok(Math.abs(envelope[3].time - envelope[2].time - .06) < 1e-9);
-  assert.ok(envelope.every(event => event.value > 0 && event.value < 1));
-  if (index) assert.ok(tone.startTime > audio.oscillators[index - 1].stopTime, "notes must not overlap");
-  tone.onended();
-  assert.equal(tone.disconnected, true);
-  assert.equal(gain.disconnected, true);
-}
-assert.ok(audio.oscillators.at(-1).stopTime >= 1.7);
-assert.ok(audio.oscillators.at(-1).stopTime < 2);
+const ring = audio.buffers[0];
+assert.equal(audio.buffers.length, 1);
+assert.equal(ring.numberOfChannels, 1);
+assert.equal(ring.duration, 1.78);
+assert.equal(audio.players[0].buffer, ring);
+assert.equal(audio.players[0].target, audio.destination);
+const samples = ring.getChannelData(0);
+assert.ok(samples.every(sample => Number.isFinite(sample) && Math.abs(sample) <= .950001), "finite samples with headroom below clipping");
+const slice = (from, to) => samples.slice(Math.ceil(from * ring.sampleRate), Math.floor(to * ring.sampleRate));
+const rms = (values) => Math.sqrt(values.reduce((sum, value) => sum + value * value, 0) / values.length);
+assert.ok(rms(slice(.05, .65)) > .4, "first ringing burst has sustained energy");
+assert.ok(rms(slice(1, 1.6)) > .4, "second ringing burst has sustained energy");
+assert.ok(slice(.73, .94).every(sample => sample === 0), "clear gap between rings");
+assert.ok(slice(1.68, 1.78).every(sample => sample === 0), "silence before speech starts");
+assert.equal(samples[0], 0, "fade starts at silence");
+assert.ok(rms(slice(0, .004)) < rms(slice(.04, .06)), "smooth attack");
+assert.ok(rms(slice(.71, .72)) < rms(slice(.6, .61)), "smooth release");
+assert.ok(audio.players[0].stopTime >= 1.7 && audio.players[0].stopTime < 1.85);
+audio.players[0].onended();
+assert.equal(audio.players[0].disconnected, true);
 
 assert.equal(test.api.playAlert(), false, "bursty Realtime/attention calls cannot stack loud sounds");
 assert.equal(await test.api.enableSound(), true, "a double click still leaves sound enabled");
-assert.equal(audio.oscillators.length, 4, "double-click preview cannot stack");
+assert.equal(audio.players.length, 1, "double-click preview cannot stack");
 test.advance(2000);
 assert.equal(test.api.playAlert(), true);
-assert.equal(audio.oscillators.length, 8);
+assert.equal(audio.players.length, 2);
+assert.equal(audio.buffers.length, 1, "repeated alerts reuse the generated audio buffer");
+assert.equal(audio.players[1].buffer, ring);
 assert.deepEqual(test.vibrations, [[180, 80, 180]]);
 test.advance(2000);
 audio.state = "suspended";
 assert.equal(test.api.playAlert(), false);
-assert.equal(audio.oscillators.length, 8, "suspended context schedules nothing");
+assert.equal(audio.players.length, 2, "suspended context schedules nothing");
 audio.state = "running";
 assert.equal(test.api.playAlert(), true, "suspended call does not consume a future alert window");
-assert.equal(audio.oscillators.length, 12);
+assert.equal(audio.players.length, 3);
 audio.state = "closed";
 assert.equal(test.api.playAlert(), false);
 assert.equal(await test.api.enableSound(), true, "closed context can be recreated by user gesture");
 assert.equal(test.contexts.length, 2);
-assert.equal(test.contexts[1].oscillators.length, 4, "recreated context resets busy window");
+assert.equal(test.contexts[1].players.length, 1, "recreated context resets busy window");
+assert.equal(test.contexts[1].buffers.length, 1);
+assert.notEqual(test.contexts[1].buffers[0], ring, "new audio context gets its own cached buffer");
 
 const denied = fixture({ deniedStorage: true, webkit: true });
 assert.equal(denied.api.soundPreferred(), false);
 assert.equal(await denied.api.enableSound(), true, "storage denial and webkit fallback remain supported");
-assert.equal(denied.contexts[0].oscillators.length, 4);
+assert.equal(denied.contexts[0].players.length, 1);
 const unsupported = fixture({ supported: false });
 assert.equal(await unsupported.api.enableSound(), false);
 assert.match(unsupported.stack.children[0].textContent, /이 브라우저에서는 알림음을 사용할 수 없습니다/);
 const blocked = fixture({ canResume: false });
 assert.equal(await blocked.api.enableSound(), false);
-assert.equal(blocked.contexts[0].oscillators.length, 0);
+assert.equal(blocked.contexts[0].players.length, 0);
 assert.equal(blocked.api.soundPreferred(), false);
 
 // Vietnamese speech follows the tone, at maximum supported speech volume.
-const spoken = fixture({ hasSpeech: true, voices: [{ lang: "en-US", name: "English" }, { lang: "vi-VN", name: "Vietnamese" }] });
+const spoken = fixture({ hasSpeech: true, voices: [{ lang: "ko-KR", name: "Korean" }, { lang: "en-US", name: "English" }, { lang: "vi-VN", name: "Vietnamese" }] });
 assert.equal(await spoken.api.enableSound(), true);
 assert.equal(spoken.speech.utterances.length, 0);
 spoken.advance(1849);
@@ -184,7 +180,7 @@ spoken.advance(1);
 assert.equal(spoken.speech.utterances.length, 1);
 const firstVoice = spoken.speech.utterances[0];
 assert.equal(firstVoice.text, "Có đơn hàng mới. Vui lòng xác nhận.");
-assert.equal(firstVoice.voice.name, "Vietnamese");
+assert.equal(firstVoice.voice.name, "Vietnamese", "Vietnamese takes priority even when Korean is listed first");
 assert.equal(firstVoice.lang, "vi-VN");
 assert.equal(firstVoice.volume, 1);
 assert.equal(firstVoice.rate, 1);
@@ -214,7 +210,7 @@ preview.advance(1850);
 assert.equal(preview.speech.utterances.length, 2);
 preview.api.stopAlert();
 assert.equal(preview.speech.cancelCount, 2, "acknowledgement cancels active real-order voice");
-assert.ok(preview.contexts[0].oscillators.every(tone => tone.stopCalls >= 2), "stop also stops scheduled tones");
+assert.ok(preview.contexts[0].players.every(tone => tone.stopCalls >= 2), "stop also stops scheduled telephone rings");
 preview.advance(9000);
 assert.equal(preview.speech.utterances.length, 2, "no stale timers speak after cancellation");
 
@@ -228,11 +224,28 @@ const noVi = fixture({ hasSpeech: true, voices: [{ lang: "en-US", name: "English
 await noVi.api.enableSound();
 noVi.advance(1850);
 assert.equal(noVi.speech.utterances.length, 0, "must not use a wrong-language voice");
-assert.match(noVi.stack.children[0].textContent, /베트남어 음성을 사용할 수 없어/);
+assert.match(noVi.stack.children[0].textContent, /베트남어·한국어 음성을 사용할 수 없어 전화벨/);
 noVi.speech.voices = [{ lang: "vi", name: "Newly installed Vietnamese" }];
 assert.equal(noVi.api.playAlert(), true);
 noVi.advance(1850);
 assert.equal(noVi.speech.utterances.length, 1, "later alerts can use newly available voices");
+
+for (const lang of ["ko-KR", "ko_KR", "KO", "ko"]) {
+  const korean = fixture({ hasSpeech: true, voices: [{ lang: "en-US", name: "English" }, { lang, name: "Korean fallback" }] });
+  await korean.api.enableSound();
+  korean.advance(1850);
+  const voice = korean.speech.utterances[0];
+  assert.equal(voice.voice.name, "Korean fallback");
+  assert.equal(voice.text, "새 주문이 들어왔습니다. 확인해 주세요.");
+  assert.equal(voice.lang, "ko-KR");
+  assert.equal(voice.volume, 1);
+  assert.equal(korean.stack.children.length, 0, "successful Korean fallback needs no unsupported-voice warning");
+}
+const noVoices = fixture({ hasSpeech: true, voices: [] });
+await noVoices.api.enableSound();
+noVoices.advance(1850);
+assert.equal(noVoices.speech.utterances.length, 0);
+assert.equal(noVoices.contexts[0].players.length, 1, "no supported voices still plays telephone ring");
 
 // Speech failure never disables tones, and a stuck utterance times out before 9s.
 const stuck = fixture({ hasSpeech: true });
@@ -246,7 +259,7 @@ const failing = fixture({ hasSpeech: true });
 failing.speech.throwSpeak = true;
 await failing.api.enableSound();
 failing.advance(1850);
-assert.equal(failing.contexts[0].oscillators.length, 4);
+assert.equal(failing.contexts[0].players.length, 1);
 assert.equal(failing.api.playAlert(), true, "synchronous speech exception does not lock future tones");
 failing.speech.throwSpeak = false;
 failing.advance(1850);
@@ -294,10 +307,10 @@ renderContext.orders = [{ status: "accepted" }, { status: "submitted" }];
 vm.runInContext("renderOrders();", renderContext);
 assert.equal(normalStops, 1, "acknowledgement of one of multiple orders does not stop alerts");
 
-assert.match(html, /assets\/qr-staff\.js\?v=20261105-voice-alert-1/);
+assert.match(html, /assets\/qr-staff\.js\?v=20261105-phone-ring-1/);
 assert.match(html, /assets\/order-inbox\.js\?v=20261105-voice-alert-1/);
 assert.match(inbox, /function renderOrders\(\) \{\s*if \(!orders\.some\(\(order\) => order\.status === "submitted"\)\) ui\.stopAlert\?\.\(\)/);
 assert.match(inbox, /addEventListener\("beforeunload", \(\) => \{\s*ui\.stopAlert\?\.\(\{ force: true \}\)/);
 assert.match(inbox, /setInterval\(\(\) => \{\s*if \(document\.visibilityState === "visible" && orders\.some\(\(order\) => order\.status === "submitted"\)\) \{\s*ui\.playAlert\(\);\s*\}\s*\}, 9000\)/);
 assert.match(inbox, /soundBtn[\s\S]*?ui\.enableSound\(\)/);
-console.log("QR louder Vietnamese voice alert regression checks passed.");
+console.log("QR telephone ring and Vietnamese/Korean voice alert regression checks passed.");
