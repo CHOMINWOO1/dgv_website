@@ -694,6 +694,7 @@
   }
 
   function renderOrders() {
+    if (!orders.some((order) => order.status === "submitted")) ui.stopAlert?.();
     const grid = ui.byId("ordersGrid");
     const rows = collapseFinalizedSales(filteredOrders());
     const currentRows = rows.filter((order) => !isHistoricalOrder(order));
@@ -1498,6 +1499,7 @@
       ui.connectionBadge("offline", "오프라인");
     });
     global.addEventListener("beforeunload", () => {
+      ui.stopAlert?.({ force: true });
       const closingChannel = realtimeChannel;
       realtimeChannel = null;
       if (closingChannel) sb.removeChannel(closingChannel);
