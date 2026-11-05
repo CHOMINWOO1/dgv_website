@@ -5,6 +5,7 @@
 
   const DGV = global.DGV;
   let audioContext = null;
+  let ringBuffer = null;
   let audioEnabled = false;
   let alertBusyUntil = 0;
   let alertIsPreview = false;
@@ -15,6 +16,7 @@
   const alertTones = new Set();
   const SOUND_PREFERENCE_KEY = "dgv-qr-order-sound";
   const ORDER_VOICE_TEXT = "Có đơn hàng mới. Vui lòng xác nhận.";
+  const ORDER_VOICE_TEXT_KO = "새 주문이 들어왔습니다. 확인해 주세요.";
 
   function byId(id) {
     return document.getElementById(id);
@@ -168,6 +170,7 @@
     if (!audioContext || audioContext.state === "closed") {
       stopAlert({ force: true });
       audioContext = new AudioCtx();
+      ringBuffer = null;
       alertBusyUntil = 0;
     }
     if (audioContext.state === "suspended") await audioContext.resume();
@@ -186,27 +189,36 @@
     catch (_) { return false; }
   }
 
-  function playTone(frequency, start, duration, gainValue) {
+  function playTelephoneRing(start) {
     if (!audioContext || audioContext.state !== "running") return;
-    const oscillator = audioContext.createOscillator();
-    const gain = audioContext.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(frequency, start);
-    gain.gain.setValueAtTime(.0001, start);
-    gain.gain.exponentialRampToValueAtTime(gainValue, start + .02);
-    // Keep the alert audible instead of fading immediately after the attack.
-    gain.gain.setValueAtTime(gainValue, start + duration - .06);
-    gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
-    oscillator.connect(gain);
-    gain.connect(audioContext.destination);
-    oscillator.onended = () => {
-      alertTones.delete(oscillator);
-      oscillator.disconnect();
-      gain.disconnect();
+    if (!ringBuffer) {
+      const rate = audioContext.sampleRate;
+      ringBuffer = audioContext.createBuffer(1, Math.ceil(rate * 1.78), rate);
+      const samples = ringBuffer.getChannelData(0);
+      for (let index = 0; index < samples.length; index += 1) {
+        const time = index / rate;
+        const local = time >= .95 ? time - .95 : time;
+        if (local >= .72) continue;
+        // Inharmonic bell partials and rapid strikes give a telephone-ring timbre.
+        const bell = .62 * Math.sin(2 * Math.PI * 1100 * local)
+          + .25 * Math.sin(2 * Math.PI * 1497 * local)
+          + .13 * Math.sin(2 * Math.PI * 2131 * local);
+        const strikes = .72 + .28 * Math.cos(2 * Math.PI * 25 * local);
+        const fade = Math.min(1, local / .008, (.72 - local) / .045);
+        // Smooth saturation keeps the ring prominent without hard clipping.
+        samples[index] = .95 * Math.tanh(4 * bell) * strikes * fade;
+      }
+    }
+    const player = audioContext.createBufferSource();
+    player.buffer = ringBuffer;
+    player.connect(audioContext.destination);
+    player.onended = () => {
+      alertTones.delete(player);
+      player.disconnect();
     };
-    alertTones.add(oscillator);
-    oscillator.start(start);
-    oscillator.stop(start + duration + .03);
+    alertTones.add(player);
+    player.start(start);
+    player.stop(start + ringBuffer.duration);
   }
 
   function stopAlert(options = {}) {
@@ -233,17 +245,20 @@
     if (!audioEnabled || audioContext?.state !== "running") return;
     const speech = global.speechSynthesis;
     const fallback = () => {
-      if (preview) toast("베트남어 음성을 사용할 수 없어 알림음만 재생합니다. 기기의 베트남어 음성 설정을 확인해 주세요.", "info", 6500);
+      if (preview) toast("베트남어·한국어 음성을 사용할 수 없어 전화벨 알림음만 재생합니다. 기기의 음성 설정을 확인해 주세요.", "info", 6500);
     };
     if (!speech || !global.SpeechSynthesisUtterance) { fallback(); return; }
     try {
-      const voice = speech.getVoices().find((item) => /^vi(?:[-_]|$)/i.test(item.lang));
+      const voices = speech.getVoices();
+      const voice = voices.find((item) => /^vi(?:[-_]|$)/i.test(item.lang))
+        || voices.find((item) => /^ko(?:[-_]|$)/i.test(item.lang));
       if (!voice) { fallback(); return; }
       // Do not add announcements to another speech queue or use a wrong-language voice.
       if (speech.speaking || speech.pending) return;
-      const utterance = new global.SpeechSynthesisUtterance(ORDER_VOICE_TEXT);
+      const vietnamese = /^vi(?:[-_]|$)/i.test(voice.lang);
+      const utterance = new global.SpeechSynthesisUtterance(vietnamese ? ORDER_VOICE_TEXT : ORDER_VOICE_TEXT_KO);
       utterance.voice = voice;
-      utterance.lang = "vi-VN";
+      utterance.lang = vietnamese ? "vi-VN" : "ko-KR";
       utterance.volume = 1;
       utterance.rate = 1;
       utterance.pitch = 1;
@@ -283,10 +298,7 @@
     const generation = ++alertGeneration;
     alertIsPreview = Boolean(options.preview);
     alertBusyUntil = now + 1.8;
-    for (const offset of [0, .95]) {
-      playTone(659.25, now + offset, .30, .95);
-      playTone(880, now + offset + .38, .42, .95);
-    }
+    playTelephoneRing(now);
     voiceTimer = global.setTimeout(() => speakOrderAlert(Boolean(options.preview), generation), 1850);
     if (!options.preview && global.navigator?.vibrate) global.navigator.vibrate([180, 80, 180]);
     return true;
