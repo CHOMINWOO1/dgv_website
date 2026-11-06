@@ -70,6 +70,30 @@ assert.match(html, /hotel-legacy/);
 assert.equal((html.match(/class="reservation"/g) || []).length, 2);
 assert.match(html, /A4 portrait/);
 
+const graded = { ...modern, room_items: [
+  { ...modern.room_items[0], name: 'SINGLE', grade_id: 'superior', room_kind: 'SINGLE', room_grade: '수페리어 / Superior' },
+  { ...modern.room_items[1], name: 'DOUBLE', grade_id: 'garden', room_kind: 'DOUBLE', room_grade: '정원 전망 / Hướng vườn' },
+  { ...modern.room_items[1], name: 'TRIPLE', grade_id: 'named-standard', room_kind: 'TRIPLE', room_grade: 'STANDARD' },
+] };
+const gradedBefore = JSON.stringify(graded);
+const gradedHtml = report.renderHtml([graded]);
+const gradedWorkbook = report.workbookOptions([graded]);
+assert.equal(JSON.stringify(graded), gradedBefore);
+for (const value of ['싱글 / Phòng đơn', '더블 / Phòng đôi', '트리플 / Phòng ba', '수페리어 / Superior', '정원 전망 / Hướng vườn']) {
+  assert.ok(gradedHtml.includes(value), `PDF must display saved custom grade and fixed kind: ${value}`);
+  assert.ok(gradedWorkbook.sheets[0].rows[4][7].value.includes(value), `Excel summary must display ${value}`);
+}
+assert.equal(gradedWorkbook.sheets[1].rows[4][3].value, '싱글 / Phòng đơn');
+assert.equal(gradedWorkbook.sheets[1].rows[4][4].value, '수페리어 / Superior');
+assert.equal(gradedWorkbook.sheets[1].rows[5][3].value, '더블 / Phòng đôi');
+assert.equal(gradedWorkbook.sheets[1].rows[6][3].value, '트리플 / Phòng ba');
+assert.equal(gradedWorkbook.sheets[1].rows[6][4].value, 'STANDARD', 'custom grade names must remain literal, even if they match a legacy grade token');
+assert.equal(gradedWorkbook.sheets[0].rows[4][17].value, modern.sale_amount, 'exports never recompute historical totals');
+assert.equal(gradedWorkbook.sheets[1].rows[4][8].value, modern.room_items[0].rate_snapshot.weekday_purchase);
+assert.equal(details.rows[4][3].value, '트윈 / Twin', 'legacy room type names must remain unchanged');
+assert.equal(details.rows[4][4].value, '일반 / Tiêu chuẩn', 'legacy STANDARD labels remain compatible');
+assert.match(report.renderHtml([{ ...graded, room_items: [{ ...graded.room_items[0], room_grade: '<img src=x onerror=alert(1)>' }] }]), /&lt;img/);
+
 for (const [deposit, balance, expected] of [[0, 0, 0], [null, 12, 12], [34, null, 34], [null, null, null], ["45", "55", 100]]) {
   const options = report.workbookOptions([{ ...modern, deposit_amount: deposit, balance_amount: balance }]);
   assert.equal(options.sheets[0].rows[4][20].value, expected, "received totals must distinguish zero, partial and absent payments");
@@ -110,6 +134,9 @@ assert.match(xml, /<c r="V5" s="7" t="inlineStr">/);
 assert.doesNotMatch(xml, /<f>/, "strings beginning with = must remain literal text, never executable formulas");
 assert.match(xml, /HYPERLINK/);
 assert.match(xml, /NGUYỄN THỊ HỒNG/);
+const gradedBytes = Buffer.from(context.DGV_XLSX.buildWorkbookBytes(gradedWorkbook));
+assert.ok(gradedBytes.includes(Buffer.from('정원 전망 / Hướng vườn')), 'actual workbook XML must preserve Vietnamese/custom grade text');
+assert.ok(gradedBytes.includes(Buffer.from('트리플 / Phòng ba')), 'actual workbook XML must include the fixed room kind');
 assert.equal(report.workbookOptions([]).sheets[0].rows.length, 4);
 assert.match(report.renderHtml([]), /등록된 예약이 없습니다/);
 assert.match(report.renderHtml(null), /등록된 예약이 없습니다/);
