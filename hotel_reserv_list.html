@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>HANA 호텔 예약 현황</title>
+  <link rel="stylesheet" href="assets/qr-staff.css" />
+  <style>
+    .hotel-table-wrap{overflow:auto;margin-top:12px}
+    .hotel-table{width:100%;border-collapse:collapse}
+    .hotel-table th,.hotel-table td{padding:10px;border-bottom:1px solid var(--qr-line);text-align:left}
+    .hotel-table th{background:#f7ead0;white-space:nowrap}
+    .hotel-guests{white-space:pre-line;min-width:140px;overflow-wrap:anywhere}
+    .hotel-actions{white-space:nowrap}
+    .hotel-dialog{width:min(650px,calc(100% - 24px));max-height:90vh;border:1px solid var(--qr-line);border-radius:12px}
+    .hotel-dialog::backdrop{background:#0008}
+    .hotel-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
+    .hotel-fields label{display:grid;gap:4px}
+    .hotel-fields textarea{resize:vertical}
+    .hotel-wide{grid-column:1/-1}
+    @media(max-width:540px){.hotel-fields{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <main class="qr-shell" id="hotelApp" hidden>
+    <header class="qr-header">
+      <div><h1 class="qr-brand-title">호텔 예약 현황</h1><p class="qr-brand-subtitle">Tình hình đặt phòng khách sạn</p></div>
+      <div class="qr-header-actions">
+        <a class="qr-btn" href="golf_reserv_list.html">골프 예약 / Đặt sân golf</a>
+        <button class="qr-btn" id="reloadButton" type="button">새로고침 / Làm mới</button>
+      </div>
+    </header>
+    <section class="qr-card qr-card-pad" aria-labelledby="listTitle">
+      <div class="qr-section-head">
+        <h2 class="qr-section-title" id="listTitle">전체 예약 / Tất cả đặt phòng</h2>
+        <button class="qr-btn qr-btn-primary" id="addButton" type="button">+ 예약 추가 / Thêm đặt phòng</button>
+      </div>
+      <p id="listStatus" role="status"></p>
+      <div class="hotel-table-wrap" tabindex="0" aria-label="호텔 예약 목록">
+        <table class="hotel-table">
+          <thead><tr><th scope="col">호텔명 / Khách sạn</th><th scope="col">체크인 / Nhận phòng</th><th scope="col">체크아웃 / Trả phòng</th><th scope="col">투숙객 인원 / Số khách</th><th scope="col">투숙객 명단 / Danh sách khách</th><th scope="col">매입 금액 / Tiền trả khách sạn (VND)</th><th scope="col">매출 금액 / Tiền thu khách (VND)</th><th scope="col">관리 / Quản lý</th></tr></thead>
+          <tbody id="hotelRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <p id="startupError" role="alert" hidden></p>
+  <dialog class="hotel-dialog" id="hotelDialog" aria-labelledby="dialogTitle">
+    <form id="hotelForm">
+      <h2 id="dialogTitle"></h2>
+      <div class="hotel-fields">
+        <label class="hotel-wide"><span class="qr-label">호텔명 / Khách sạn</span><input class="qr-input" name="hotel_name" type="text" maxlength="200" required /></label>
+        <label><span class="qr-label">체크인 / Nhận phòng</span><input class="qr-input" name="check_in" type="date"  required /></label>
+        <label><span class="qr-label">체크아웃 / Trả phòng</span><input class="qr-input" name="check_out" type="date"  required /></label>
+        <label><span class="qr-label">투숙객 인원 / Số khách</span><input class="qr-input" name="guest_count" type="number" min="1" max="2147483647" step="1" required /></label>
+        <label class="hotel-wide"><span class="qr-label">투숙객 명단 / Danh sách khách</span><textarea class="qr-input" name="guest_names" rows="4" placeholder="한 줄에 한 명 / Mỗi dòng một người" required></textarea></label>
+        <label><span class="qr-label">매입 금액 / Tiền trả khách sạn (VND)</span><input class="qr-input" name="purchase_amount" type="number" min="0" max="999999999999" step="1" required /></label>
+        <label><span class="qr-label">매출 금액 / Tiền thu khách (VND)</span><input class="qr-input" name="sale_amount" type="number" min="0" max="999999999999" step="1" required /></label>
+      </div>
+      <p id="formError" role="alert" hidden></p>
+      <div class="qr-button-row">
+        <button class="qr-btn" id="cancelButton" type="button">취소 / Hủy</button>
+        <button class="qr-btn qr-btn-primary" id="saveButton" type="submit">저장 / Lưu</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="qr-modal-back" id="loginModal" hidden>
+    <form class="qr-modal" id="loginForm" role="dialog" aria-modal="true" aria-labelledby="loginTitle" aria-describedby="loginDescription">
+      <h2 id="loginTitle">매니저·관리자 로그인</h2>
+      <p id="loginDescription">매니저 또는 관리자 비밀번호를 입력해 주세요.<br />Vui lòng nhập mật khẩu quản lý hoặc quản trị viên.</p>
+      <label class="qr-label" for="loginPassword">비밀번호 / Mật khẩu</label>
+      <input class="qr-input" id="loginPassword" type="password" autocomplete="current-password" required />
+      <div class="qr-button-row" style="margin-top:12px;justify-content:flex-end"><button class="qr-btn qr-btn-primary" id="loginConfirm" type="submit">입장 / Đăng nhập</button></div>
+    </form>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script src="assets/supabase-config.js"></script>
+  <script src="assets/dgv-data.js"></script>
+  <script src="assets/supabase-client.js"></script>
+  <script src="assets/qr-staff.js"></script>
+  <script src="assets/hotel-reserv-list.js"></script>
+</body>
+</html>
