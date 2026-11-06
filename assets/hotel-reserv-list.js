@@ -4,12 +4,20 @@
   const form = byId("hotelForm");
   const propertyForm = byId("propertyForm");
   const roomTypeForm = byId("roomTypeForm");
+  const gradeForm = byId("gradeForm");
   const pricing = HotelPricing;
   const amount = new Intl.NumberFormat("vi-VN");
   const weekdays = ["일/CN","월/T2","화/T3","수/T4","목/T5","금/T6","토/T7"];
+  const roomKinds = ["SINGLE", "DOUBLE", "TRIPLE"];
+  const rateKeys = ["weekday_purchase", "weekday_sale", "weekend_purchase", "weekend_sale"];
+  const roomKindLabel = kind => ({ SINGLE: "싱글 / Phòng đơn", DOUBLE: "더블 / Phòng đôi", TRIPLE: "트리플 / Phòng ba" })[kind] || kind;
   let hotels = [];
   let reservations = [];
   let roomTypes = [];
+  let roomGrades = [];
+  let gradeDraft = [];
+  let editingGrade = null;
+  let gradeId;
   let roomItems = [];
   let useRoomTypes = true;
   let managedHotel = null;
@@ -27,8 +35,11 @@
   const moneyText = (value) => amount.format(value) + " VND";
   const optionalMoney = value => value == null ? "—" : moneyText(value);
   const roomTypeName = item => item.name || roomTypes.find(type => type.id === item.room_type_id)?.name || "룸타입 / Loại phòng";
+  const roomLineLabel = item => item.grade_id && item.room_kind
+    ? (item.room_grade || item.grade_name || "등급 / Hạng") + " · " + roomKindLabel(item.room_kind)
+    : roomTypeName(item) + " · " + (item.room_grade || "STANDARD") + " (기존 / cũ)";
   const roomDescription = record => Array.isArray(record.room_items) && record.room_items.length
-    ? record.room_items.map(item => roomTypeName(item) + " · " + (item.room_grade || "STANDARD") + " × " + item.room_count).join("\n")
+    ? record.room_items.map(item => roomLineLabel(item) + " × " + item.room_count).join("\n")
     : "기존 요금 / Giá đã lưu";
 
   function errorText(error) {
@@ -51,6 +62,7 @@
     byId("propertyFields").disabled = value;
     byId("reservationFields").disabled = value;
     byId("roomTypeFields").disabled = value;
+    byId("gradeFields").disabled = value;
   }
 
   function action(label, handler) {
@@ -78,12 +90,12 @@
     for (const hotel of hotels) {
       const row = properties.insertRow();
       const types = roomTypes.filter(type => type.hotel_id === hotel.id);
-      const values = [hotel.name, types.filter(type => type.is_active !== false).length + "개 사용 / đang dùng · 전체 / Tổng " + types.length,
+      const values = [hotel.name, roomGrades.filter(grade => grade.hotel_id === hotel.id).length + "등급 / hạng · " + types.filter(type => type.is_active !== false).length + "타입 사용 / loại đang dùng",
         hotel.weekend_days.map(day => weekdays[day]).join(", ") || "없음 / Không có"];
       for (const value of values) row.insertCell().textContent = value;
       const controls = row.insertCell();
       controls.className = "hotel-actions";
-      controls.append(action("룸타입 관리 / Loại phòng", () => openRoomTypes(hotel)), " ", action("수정 / Sửa", () => openHotel(hotel)), " ", action("삭제 / Xóa", () => remove("hotel_properties", hotel)));
+      controls.append(action("등급·룸타입 / Hạng·loại phòng", () => openRoomTypes(hotel)), " ", action("수정 / Sửa", () => openHotel(hotel)), " ", action("삭제 / Xóa", () => remove("hotel_properties", hotel)));
     }
     byId("hotelCount").textContent = hotels.length + "개 / khách sạn";
     const body = renderRows("hotelRows", reservations, "등록된 예약이 없습니다. / Chưa có đặt phòng.", 16);
@@ -176,7 +188,7 @@
       const room = document.createElement("div");
       room.className = "hotel-detail-room";
       rooms.append(room);
-      detail(room, "룸타입 / Loại phòng", item.name || roomTypeName(item));
+      detail(room, "룸타입 / Loại phòng", item.grade_id && item.room_kind ? roomKindLabel(item.room_kind) : item.name || roomTypeName(item));
       if (item.room_grade) detail(room, "등급 / Hạng phòng", item.room_grade);
       detail(room, "객실 수 / Số phòng", item.room_count);
       detail(room, "주중·주말 숙박 / Đêm thường·cuối tuần", (item.weekday_nights ?? "—") + " / " + (item.weekend_nights ?? "—"));
@@ -219,9 +231,12 @@
         DGV.collectSupabasePages(() => table("hotel_reservations").select("*"),
           { order: [{ column: "check_in", ascending: false }, { column: "id" }] }),
         DGV.collectSupabasePages(() => table("hotel_room_types").select("*"),
+          { order: [{ column: "hotel_id" }, { column: "name" }, { column: "id" }] }),
+        DGV.collectSupabasePages(() => table("hotel_room_grades").select("*"),
           { order: [{ column: "hotel_id" }, { column: "name" }, { column: "id" }] })
       ]);
-      [hotels, reservations, roomTypes] = result;
+      [hotels, reservations, roomTypes, roomGrades] = result;
+      roomTypes = roomTypes.map(type => ({ ...type, grade_name: type.grade_id ? roomGrades.find(grade => grade.id === type.grade_id)?.name || "" : null }));
       ready = true;
       render();
       message("pageStatus", "");
@@ -246,14 +261,141 @@
     byId("propertyDialog").showModal();
   }
 
+  function resetGrade(grade) {
+    editingGrade = grade || null;
+    gradeId = grade?.id || crypto.randomUUID();
+    gradeForm.reset();
+    gradeForm.elements.namedItem("name").value = grade?.name || "";
+    gradeDraft = roomKinds.map(kind => {
+      const existing = grade && roomTypes.find(type => type.grade_id === grade.id && type.room_kind === kind);
+      const draft = { room_kind: kind, is_active: existing ? existing.is_active !== false : kind === "SINGLE", version: existing?.version ?? null };
+      for (const key of rateKeys) draft[key] = String(existing?.[key] ?? 0);
+      draft.sameWeekend = draft.weekday_purchase === draft.weekend_purchase && draft.weekday_sale === draft.weekend_sale;
+      return draft;
+    });
+    byId("gradeFormTitle").textContent = grade ? "객실 등급 수정 / Sửa hạng phòng" : "객실 등급 추가 / Thêm hạng phòng";
+    gradeForm.hidden = false;
+    roomTypeForm.hidden = true;
+    message("gradeError", "");
+    renderGradeTypes();
+  }
+
+  function renderGradeTypes() {
+    const container = byId("gradeTypeRows");
+    container.replaceChildren();
+    gradeDraft.forEach(draft => {
+      const section = document.createElement("div");
+      section.className = "hotel-grade-type" + (draft.is_active ? "" : " is-disabled");
+      section.dataset.roomKind = draft.room_kind;
+      const head = document.createElement("div");
+      head.className = "hotel-grade-type-head";
+      const enabledLabel = document.createElement("label");
+      enabledLabel.className = "hotel-toggle";
+      const enabled = document.createElement("input");
+      enabled.type = "checkbox";
+      enabled.checked = draft.is_active;
+      enabled.setAttribute("aria-label", roomKindLabel(draft.room_kind) + " 사용 / Dùng");
+      enabled.dataset.enabled = draft.room_kind;
+      enabled.addEventListener("change", () => { draft.is_active = enabled.checked; renderGradeTypes(); });
+      enabledLabel.append(enabled, document.createTextNode(roomKindLabel(draft.room_kind) + " · " + draft.room_kind));
+      head.append(enabledLabel);
+      const copy = document.createElement("div");
+      copy.className = "hotel-grade-copy";
+      const source = document.createElement("select");
+      source.className = "qr-select";
+      source.setAttribute("aria-label", "가격 복사할 타입 / Loại phòng để sao chép giá");
+      source.add(new Option("가격 복사 / Sao chép giá", ""));
+      for (const other of gradeDraft.filter(item => item.room_kind !== draft.room_kind && item.is_active)) source.add(new Option(roomKindLabel(other.room_kind), other.room_kind));
+      const copyButton = action("복사 / Chép", () => {
+        if (busy || !draft.is_active) return;
+        const previous = gradeDraft.find(item => item.room_kind === source.value && item.is_active);
+        if (!previous) return message("gradeError", "가격을 복사할 사용 중인 타입을 선택해 주세요. / Chọn loại phòng đang dùng để sao chép giá.");
+        for (const key of rateKeys) draft[key] = previous[key];
+        draft.sameWeekend = previous.sameWeekend;
+        message("gradeError", "");
+        renderGradeTypes();
+      });
+      source.disabled = !draft.is_active;
+      copyButton.disabled = !draft.is_active;
+      copy.append(source, copyButton);
+      head.append(copy);
+      const fields = document.createElement("div");
+      fields.className = "hotel-fields";
+      const inputs = {};
+      for (const [key, title] of [["weekday_purchase", "주중 매입 / Mua ngày thường"], ["weekday_sale", "주중 매출 / Bán ngày thường"], ["weekend_purchase", "주말 매입 / Mua cuối tuần"], ["weekend_sale", "주말 매출 / Bán cuối tuần"]]) {
+        const label = document.createElement("label");
+        const caption = document.createElement("span");
+        caption.className = "qr-label";
+        caption.textContent = title + " (VND)";
+        const input = document.createElement("input");
+        input.className = "qr-input";
+        input.type = "number";
+        input.min = "0";
+        input.max = "999999999999";
+        input.step = "1";
+        input.value = draft[key];
+        input.dataset.rate = key;
+        input.required = draft.is_active;
+        input.disabled = !draft.is_active || (draft.sameWeekend && key.startsWith("weekend_"));
+        input.addEventListener("input", () => {
+          draft[key] = input.value;
+          if (draft.sameWeekend && key.startsWith("weekday_")) {
+            const weekend = key.replace("weekday_", "weekend_");
+            draft[weekend] = input.value;
+            inputs[weekend].value = input.value;
+          }
+        });
+        inputs[key] = input;
+        label.append(caption, input);
+        fields.append(label);
+      }
+      const sameLabel = document.createElement("label");
+      sameLabel.className = "hotel-toggle";
+      const same = document.createElement("input");
+      same.type = "checkbox";
+      same.checked = draft.sameWeekend;
+      same.disabled = !draft.is_active;
+      same.dataset.sameWeekend = draft.room_kind;
+      same.addEventListener("change", () => {
+        draft.sameWeekend = same.checked;
+        if (same.checked) {
+          draft.weekend_purchase = draft.weekday_purchase;
+          draft.weekend_sale = draft.weekday_sale;
+        }
+        renderGradeTypes();
+      });
+      sameLabel.append(same, document.createTextNode("주말 요금도 주중과 동일 / Giá cuối tuần giống ngày thường"));
+      section.append(head, fields, sameLabel);
+      container.append(section);
+    });
+  }
+
+  function gradePayload() {
+    const name = gradeForm.elements.namedItem("name").value.trim();
+    if (!name) throw new Error("객실 등급명을 입력해 주세요. / Nhập tên hạng phòng.");
+    if (!editingGrade && !gradeDraft.some(type => type.is_active)) throw new Error("한 가지 이상의 타입을 사용하도록 선택해 주세요. / Chọn ít nhất một loại phòng đang dùng.");
+    return {
+      p_hotel_id: managedHotel.id, p_name: name, p_id: gradeId, p_expected_version: editingGrade?.version ?? null,
+      p_types: gradeDraft.map(draft => {
+        const result = { room_kind: draft.room_kind, is_active: draft.is_active, version: draft.version };
+        for (const key of rateKeys) result[key] = pricing.money(draft[key] === "" && !draft.is_active ? 0 : draft[key]);
+        return result;
+      })
+    };
+  }
+
   function resetRoomType(type) {
+    if (!type) { resetGrade(); return; }
+    if (type.grade_id) { resetGrade(roomGrades.find(grade => grade.id === type.grade_id)); return; }
     editingRoomType = type || null;
     roomTypeId = type?.id || crypto.randomUUID();
     roomTypeForm.reset();
     if (type) {
       for (const key of ["name", "weekday_purchase", "weekday_sale", "weekend_purchase", "weekend_sale"]) roomTypeForm.elements.namedItem(key).value = type[key];
     }
-    byId("roomTypeFormTitle").textContent = type ? "룸타입 수정 / Sửa loại phòng" : "룸타입 추가 / Thêm loại phòng";
+    byId("roomTypeFormTitle").textContent = "기존 룸타입 수정 / Sửa loại phòng cũ";
+    roomTypeForm.hidden = false;
+    gradeForm.hidden = true;
     message("roomTypeError", "");
   }
 
@@ -261,8 +403,35 @@
     const container = byId("roomTypeRows");
     container.replaceChildren();
     const types = roomTypes.filter(type => type.hotel_id === managedHotel.id);
-    if (!types.length) container.textContent = "등록된 룸타입이 없습니다. 아래에서 추가해 주세요. / Chưa có loại phòng. Hãy thêm bên dưới.";
-    for (const type of types) {
+    const grades = roomGrades.filter(grade => grade.hotel_id === managedHotel.id);
+    if (!types.length && !grades.length) container.textContent = "등록된 객실 등급이 없습니다. 아래에서 추가해 주세요. / Chưa có hạng phòng. Hãy thêm bên dưới.";
+    for (const grade of grades) {
+      const card = document.createElement("div");
+      const members = types.filter(type => type.grade_id === grade.id);
+      card.className = "hotel-room-type" + (members.some(type => type.is_active !== false) ? "" : " is-paused");
+      const title = document.createElement("div");
+      title.className = "hotel-room-title";
+      title.textContent = grade.name;
+      card.append(title);
+      for (const kind of roomKinds) {
+        const type = members.find(type => type.room_kind === kind);
+        const line = document.createElement("p");
+        line.className = "hotel-hint";
+        line.textContent = roomKindLabel(kind) + (type?.is_active !== false && type
+          ? " — 주중 / Thường " + moneyText(type.weekday_purchase) + " / " + moneyText(type.weekday_sale) + " · 주말 / Cuối tuần " + moneyText(type.weekend_purchase) + " / " + moneyText(type.weekend_sale) + " (매입 / 매출 · Mua / Bán)"
+          : " — 사용 안 함 / Không dùng");
+        card.append(line);
+      }
+      card.append(action("등급·요금 수정 / Sửa hạng·giá", () => { if (!busy) resetGrade(grade); }));
+      container.append(card);
+    }
+    const legacyTypes = types.filter(type => !type.grade_id);
+    if (legacyTypes.length) {
+      const heading = document.createElement("h3");
+      heading.textContent = "기존 룸타입 / Loại phòng cũ";
+      container.append(heading);
+    }
+    for (const type of legacyTypes) {
       const card = document.createElement("div");
       card.className = "hotel-room-type" + (type.is_active === false ? " is-paused" : "");
       const title = document.createElement("div");
@@ -282,24 +451,26 @@
   function openRoomTypes(hotel) {
     if (busy || !ready) return;
     managedHotel = hotel;
-    byId("roomTypeTitle").textContent = hotel.name + " · 룸타입 관리 / Loại phòng";
-    resetRoomType();
+    byId("roomTypeTitle").textContent = hotel.name + " · 등급·룸타입 / Hạng·loại phòng";
+    resetGrade();
     renderRoomTypes();
     byId("roomTypeDialog").showModal();
   }
 
   async function toggleRoomType(type) {
     if (busy || !ready) return;
+    if (type.grade_id) { resetGrade(roomGrades.find(grade => grade.id === type.grade_id)); return; }
     const active = type.is_active === false;
     if (!confirm(type.name + "\n" + (active ? "다시 사용할까요? / Dùng lại loại phòng này?" : "사용을 중지할까요? 기존 예약은 유지됩니다. / Ngừng dùng? Đặt phòng cũ vẫn được giữ."))) return;
     setBusy(true);
-    message("roomTypeError", "");
+    const errorTarget = roomTypeForm.hidden ? "gradeError" : "roomTypeError";
+    message(errorTarget, "");
     try {
       await persist("hotel_room_types", { is_active: active }, type, type.id);
       await refresh();
       if (editingRoomType?.id === type.id) resetRoomType(roomTypes.find(item => item.id === type.id));
     } catch (error) {
-      message("roomTypeError", errorText(error));
+      message(errorTarget, errorText(error));
     } finally { setBusy(false); }
   }
 
@@ -311,7 +482,9 @@
     container.replaceChildren();
     if (!useRoomTypes) return;
     const hotelId = field("hotel_id").value;
-    const types = roomTypes.filter(type => type.hotel_id === hotelId && type.is_active !== false);
+    const allTypes = roomTypes.filter(type => type.hotel_id === hotelId);
+    const types = allTypes.filter(type => type.is_active !== false);
+    const grades = roomGrades.filter(grade => grade.hotel_id === hotelId && types.some(type => type.grade_id === grade.id));
     roomItems.forEach((item, index) => {
       const line = document.createElement("div");
       line.className = "hotel-room-line";
@@ -323,31 +496,55 @@
         label.append(caption, input);
         line.append(label);
       };
+      const selectedType = allTypes.find(type => type.id === item.room_type_id);
+      const savedType = editing?.room_items?.find(saved => saved.room_type_id === item.room_type_id);
+      const selectedGrade = item.selected_grade_id !== undefined ? item.selected_grade_id : selectedType?.grade_id || item.grade_id || (item.room_type_id ? "legacy" : "");
+      const gradeSelect = document.createElement("select");
+      gradeSelect.className = "qr-select";
+      gradeSelect.required = true;
+      gradeSelect.dataset.roomGrade = String(index);
+      gradeSelect.add(new Option("객실 등급 선택 / Chọn hạng phòng", ""));
+      for (const grade of grades) gradeSelect.add(new Option(grade.name, grade.id));
+      if (types.some(type => !type.grade_id) || (savedType && !savedType.grade_id)) gradeSelect.add(new Option("기존 룸타입 / Loại phòng cũ", "legacy"));
+      if (selectedGrade && selectedGrade !== "legacy" && !grades.some(grade => grade.id === selectedGrade) && savedType) {
+        gradeSelect.add(new Option((savedType.room_grade || roomGrades.find(grade => grade.id === selectedGrade)?.name || "기존 등급 / Hạng cũ") + " (기존·중지 / cũ·ngừng dùng)", selectedGrade));
+      }
+      gradeSelect.value = selectedGrade;
+      gradeSelect.addEventListener("change", () => {
+        item.selected_grade_id = gradeSelect.value;
+        item.room_type_id = "";
+        item.room_type_version = null;
+        item.name = "";
+        item.grade_id = gradeSelect.value === "legacy" ? null : gradeSelect.value;
+        item.room_kind = null;
+        item.room_grade = gradeSelect.value === "legacy" ? "STANDARD" : roomGrades.find(grade => grade.id === gradeSelect.value)?.name || "";
+        renderRoomItems();
+        updatePreview();
+      });
+      addField("객실 등급 / Hạng phòng", gradeSelect);
       const typeSelect = document.createElement("select");
       typeSelect.className = "qr-select";
       typeSelect.required = true;
-      typeSelect.add(new Option(types.length ? "룸타입 선택 / Chọn loại phòng" : "호텔에 룸타입을 등록해 주세요 / Thêm loại phòng", ""));
-      for (const type of types) typeSelect.add(new Option(type.name, type.id));
-      const selectedType = roomTypes.find(type => type.id === item.room_type_id && type.hotel_id === hotelId);
-      const savedType = editing?.room_items?.find(saved => saved.room_type_id === item.room_type_id);
-      if (item.room_type_id && !types.some(type => type.id === item.room_type_id) && savedType) {
-        typeSelect.add(new Option((selectedType?.name || savedType.name) + " (기존·중지 / cũ·ngừng dùng)", item.room_type_id));
+      typeSelect.dataset.roomType = String(index);
+      typeSelect.add(new Option(selectedGrade ? "룸타입 선택 / Chọn loại phòng" : "등급을 먼저 선택해 주세요 / Chọn hạng trước", ""));
+      const availableTypes = types.filter(type => selectedGrade === "legacy" ? !type.grade_id : type.grade_id === selectedGrade)
+        .sort((a, b) => roomKinds.indexOf(a.room_kind) - roomKinds.indexOf(b.room_kind));
+      for (const type of availableTypes) typeSelect.add(new Option(type.grade_id ? roomKindLabel(type.room_kind) : type.name, type.id));
+      if (item.room_type_id && !availableTypes.some(type => type.id === item.room_type_id) && savedType) {
+        typeSelect.add(new Option((savedType.grade_id && savedType.room_kind ? roomKindLabel(savedType.room_kind) : selectedType?.name || savedType.name) + " (기존·중지 / cũ·ngừng dùng)", item.room_type_id));
       }
       typeSelect.value = item.room_type_id || "";
       typeSelect.addEventListener("change", () => {
         item.room_type_id = typeSelect.value;
-        item.room_type_version = roomTypes.find(type => type.id === item.room_type_id)?.version;
-        item.name = roomTypes.find(type => type.id === item.room_type_id)?.name || "";
+        const type = allTypes.find(type => type.id === item.room_type_id);
+        item.room_type_version = type?.version;
+        item.name = type?.name || "";
+        item.grade_id = type?.grade_id || null;
+        item.room_kind = type?.room_kind || null;
+        item.room_grade = type?.grade_id ? type.grade_name : "STANDARD";
         updatePreview();
       });
       addField("룸타입 / Loại phòng", typeSelect);
-      const gradeSelect = document.createElement("select");
-      gradeSelect.className = "qr-select";
-      gradeSelect.add(new Option("STANDARD", "STANDARD"));
-      gradeSelect.add(new Option("VIP", "VIP"));
-      gradeSelect.value = item.room_grade || "STANDARD";
-      gradeSelect.addEventListener("change", () => { item.room_grade = gradeSelect.value; updatePreview(); });
-      addField("등급 / Hạng phòng", gradeSelect);
       const count = document.createElement("input");
       count.className = "qr-input";
       count.type = "number";
@@ -365,6 +562,12 @@
         updatePreview();
       }));
       container.append(line);
+      if (selectedGrade === "legacy" && savedType?.room_grade) {
+        const hint = document.createElement("p");
+        hint.className = "hotel-hint";
+        hint.textContent = "기존 저장 등급 / Hạng đã lưu: " + savedType.room_grade;
+        container.append(hint);
+      }
     });
   }
 
@@ -446,7 +649,7 @@
       const result = preview(data);
       const lines = [result.nights + "박 × " + data.room_count + "룸 / đêm × phòng"];
       if (!manual && result.items?.length) {
-        for (const item of result.items) lines.push(roomTypeName(item) + " · " + (item.room_grade || "STANDARD") + " × " + item.room_count + "룸 — 매입 / Mua " + moneyText(item.room_purchase_amount) + " · 매출 / Bán " + moneyText(item.room_sale_amount));
+        for (const item of result.items) lines.push(roomLineLabel(item) + " × " + item.room_count + "룸 — 매입 / Mua " + moneyText(item.room_purchase_amount) + " · 매출 / Bán " + moneyText(item.room_sale_amount));
       } else if (!manual) {
         lines.push("주중 / Ngày thường " + result.weekday + "박 · 주말 / Cuối tuần " + result.weekend + "박");
         lines.push("1룸·1박 매입 / Mua mỗi phòng: " + moneyText(result.rates.weekday_purchase) + " / " + moneyText(result.rates.weekend_purchase));
@@ -519,6 +722,23 @@
       resetRoomType();
     } catch (error) {
       message("roomTypeError", errorText(error));
+    } finally { setBusy(false); }
+  });
+
+  gradeForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (busy || !managedHotel) return;
+    message("gradeError", "");
+    try {
+      const data = gradePayload();
+      setBusy(true);
+      const { error } = await DGV.supabase.rpc("save_hotel_room_grade", data);
+      if (error) throw error;
+      await refresh();
+      if (!ready) throw new Error("저장은 완료되었지만 목록을 불러오지 못했습니다. 새로고침해 주세요. / Đã lưu nhưng chưa tải lại được danh sách.");
+      resetGrade();
+    } catch (error) {
+      message("gradeError", errorText(error));
     } finally { setBusy(false); }
   });
 
@@ -658,6 +878,7 @@
     updatePreview();
   });
   byId("newRoomTypeButton").addEventListener("click", () => { if (!busy) resetRoomType(); });
+  byId("newGradeButton").addEventListener("click", () => { if (!busy) resetGrade(); });
   byId("editHotelDetailButton").addEventListener("click", () => {
     if (busy || !ready) return;
     const latest = reservations.find(record => record.id === detailReservationId);

@@ -32,11 +32,12 @@
     .hotel-room-types{display:grid;gap:8px}.hotel-room-type{border:1px solid var(--qr-line);border-radius:10px;padding:12px}.hotel-room-type p{margin:6px 0}
     .hotel-room-type.is-paused{opacity:.65}.hotel-room-title{font-weight:700}.hotel-optional{font-size:12px;font-weight:normal}
     #roomTypeForm{border-top:1px solid var(--qr-line);margin-top:16px;padding-top:12px}
+    .hotel-grade-editor{border-top:1px solid var(--qr-line);padding-top:14px;margin-top:16px}.hotel-grade-type{border:1px solid var(--qr-line);border-radius:12px;padding:12px;margin:12px 0}.hotel-grade-type.is-disabled{background:#f6f3ee}.hotel-grade-type-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}.hotel-grade-copy{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.hotel-grade-copy select{max-width:170px}.hotel-grade-type .hotel-fields{margin-bottom:0}
     #hotelRows tr[data-reservation-id]{cursor:pointer}#hotelRows tr[data-reservation-id]:hover,#hotelRows tr[data-reservation-id]:focus-visible{background:#fff5dd;outline:2px solid #c79549;outline-offset:-2px}
     .hotel-detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}.hotel-detail-head h2{margin:0 0 8px}
     .hotel-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.hotel-detail-card{border:1px solid var(--qr-line);border-radius:12px;padding:14px;min-width:0}.hotel-detail-card h3{margin:0 0 12px;font-size:16px}
     .hotel-detail-field{margin:10px 0;min-width:0}.hotel-detail-field dt{font-size:12px;color:var(--qr-sub);margin-bottom:3px}.hotel-detail-field dd{margin:0;font-weight:650;white-space:pre-wrap;overflow-wrap:anywhere}.hotel-detail-room{border-top:1px dashed var(--qr-line);padding-top:10px;margin-top:10px}.hotel-detail-room:first-of-type{border-top:0;padding-top:0}
-    @media(max-width:680px){.hotel-room-line{grid-template-columns:1fr 1fr}.hotel-room-line label:first-child{grid-column:1/-1}}
+    @media(max-width:680px){.hotel-room-line{grid-template-columns:1fr 1fr}.hotel-room-line label:first-child,.hotel-room-line label:nth-child(2){grid-column:1/-1}}
     @media(max-width:540px){.hotel-fields,.hotel-detail-grid{grid-template-columns:1fr}.hotel-dialog{padding:16px}}
   </style>
 </head>
@@ -56,10 +57,10 @@
     <p id="pageStatus" role="status"></p>
     <section class="qr-card qr-card-pad hotel-section" aria-labelledby="hotelsTitle">
       <div class="qr-section-head"><h2 class="qr-section-title" id="hotelsTitle">호텔 정보 / Khách sạn</h2><span id="hotelCount"></span></div>
-      <p class="hotel-hint">호텔을 등록한 후 룸타입별로 1룸·1박 단가를 등록해 주세요. 주말 요일은 숙박하는 날 기준입니다. / Thêm khách sạn rồi đặt giá mỗi phòng mỗi đêm theo loại phòng; ngày cuối tuần tính theo đêm lưu trú.</p>
+      <p class="hotel-hint">호텔별 객실 등급을 등록하고 각 등급의 싱글·더블·트리플 요금을 설정해 주세요. 모든 단가는 1룸·1박 기준입니다. / Thêm hạng phòng cho từng khách sạn và đặt giá SINGLE·DOUBLE·TRIPLE theo mỗi phòng mỗi đêm.</p>
       <div class="hotel-table-wrap" tabindex="0" aria-label="호텔 정보 목록">
         <table class="hotel-table"><thead><tr>
-          <th>호텔명 / Khách sạn</th><th>룸타입 / Loại phòng</th><th>주말 적용 요일 / Ngày cuối tuần</th><th>관리 / Quản lý</th>
+          <th>호텔명 / Khách sạn</th><th>객실 등급·타입 / Hạng·loại phòng</th><th>주말 적용 요일 / Ngày cuối tuần</th><th>관리 / Quản lý</th>
         </tr></thead><tbody id="propertyRows"></tbody></table>
       </div>
     </section>
@@ -87,7 +88,7 @@
           <span class="hotel-hint">선택하지 않은 요일에는 주중 요금이 적용됩니다. / Các ngày còn lại dùng giá ngày thường.</span>
         </fieldset>
       </fieldset>
-      <p class="hotel-hint">요금은 호텔 등록 후 룸타입 관리에서 설정합니다. 기존 예약의 저장 금액은 그대로 유지됩니다. / Đặt giá trong mục loại phòng sau khi thêm khách sạn. Giữ nguyên số tiền đã lưu của đặt phòng cũ.</p>
+      <p class="hotel-hint">요금은 호텔 등록 후 등급·룸타입 관리에서 설정합니다. 기존 예약의 저장 금액은 그대로 유지됩니다. / Đặt giá trong mục hạng·loại phòng sau khi thêm khách sạn. Giữ nguyên số tiền đã lưu của đặt phòng cũ.</p>
       <p class="hotel-error" id="propertyError" role="alert" hidden></p>
       <div class="qr-button-row"><button class="qr-btn" type="button" data-close="propertyDialog">취소 / Hủy</button><button class="qr-btn qr-btn-primary" type="submit">저장 / Lưu</button></div>
     </form>
@@ -100,11 +101,21 @@
     <div class="hotel-detail-grid" id="hotelDetailContent"></div>
   </dialog>
   <dialog class="hotel-dialog" id="roomTypeDialog" aria-labelledby="roomTypeTitle">
-    <h2 id="roomTypeTitle">룸타입 관리 / Quản lý loại phòng</h2>
-    <p class="hotel-hint">모든 단가는 1룸·1박 기준 VND입니다. 중지한 룸타입도 기존 예약에는 유지됩니다. / Giá VND mỗi phòng mỗi đêm. Loại phòng ngừng dùng vẫn được giữ trong đặt phòng cũ.</p>
+    <h2 id="roomTypeTitle">등급·룸타입 관리 / Quản lý hạng·loại phòng</h2>
+    <p class="hotel-hint">등급명은 자유롭게 입력하고 각 등급의 싱글·더블·트리플을 선택해 요금을 등록합니다. 가격 변경·사용 중지는 기존 예약 금액을 바꾸지 않습니다. / Tự đặt tên hạng phòng và chọn SINGLE·DOUBLE·TRIPLE. Đổi giá hoặc ngừng dùng không thay đổi giá đã lưu của đặt phòng cũ.</p>
     <div id="roomTypeRows" class="hotel-room-types"></div>
+    <form id="gradeForm" class="hotel-grade-editor">
+      <h3 id="gradeFormTitle">객실 등급 추가 / Thêm hạng phòng</h3>
+      <fieldset id="gradeFields" class="hotel-fields">
+        <label class="hotel-wide"><span class="qr-label">객실 등급명 / Tên hạng phòng</span><input class="qr-input" name="name" type="text" maxlength="200" placeholder="예: Standard, Deluxe, Suite" required /></label>
+        <div class="hotel-wide" id="gradeTypeRows"></div>
+      </fieldset>
+      <p class="hotel-hint">사용하지 않는 타입은 체크를 해제합니다. 주말 요일은 호텔 설정을 따릅니다. / Bỏ chọn loại không dùng. Ngày cuối tuần theo cài đặt khách sạn.</p>
+      <p class="hotel-error" id="gradeError" role="alert" hidden></p>
+      <div class="qr-button-row"><button class="qr-btn" id="newGradeButton" type="button">새 등급 / Hạng mới</button><button class="qr-btn qr-btn-primary" type="submit">등급·요금 저장 / Lưu hạng và giá</button><button class="qr-btn" type="button" data-close="roomTypeDialog">닫기 / Đóng</button></div>
+    </form>
     <form id="roomTypeForm">
-      <h3 id="roomTypeFormTitle">룸타입 추가 / Thêm loại phòng</h3>
+      <h3 id="roomTypeFormTitle">기존 룸타입 수정 / Sửa loại phòng cũ</h3>
       <fieldset class="hotel-fields" id="roomTypeFields">
         <label class="hotel-wide"><span class="qr-label">룸타입명 / Tên loại phòng</span><input class="qr-input" name="name" type="text" maxlength="200" required /></label>
         <label><span class="qr-label">주중 매입 / Mua ngày thường (VND)</span><input class="qr-input" name="weekday_purchase" type="number" min="0" max="999999999999" step="1" value="0" required /></label>
@@ -113,7 +124,8 @@
         <label><span class="qr-label">주말 매출 / Bán cuối tuần (VND)</span><input class="qr-input" name="weekend_sale" type="number" min="0" max="999999999999" step="1" value="0" required /></label>
       </fieldset>
       <p class="hotel-error" id="roomTypeError" role="alert" hidden></p>
-      <div class="qr-button-row"><button class="qr-btn" id="newRoomTypeButton" type="button">새 룸타입 / Loại phòng mới</button><button class="qr-btn qr-btn-primary" type="submit">저장 / Lưu</button><button class="qr-btn" type="button" data-close="roomTypeDialog">닫기 / Đóng</button></div>
+      <p class="hotel-hint">기존 룸타입의 이름과 금액만 수정합니다. 새 등급으로 자동 변환되지 않습니다. / Chỉ sửa tên và giá loại phòng cũ, không tự chuyển sang hạng mới.</p>
+      <div class="qr-button-row"><button class="qr-btn" id="newRoomTypeButton" type="button">등급 등록으로 돌아가기 / Quay lại thêm hạng</button><button class="qr-btn qr-btn-primary" type="submit">저장 / Lưu</button><button class="qr-btn" type="button" data-close="roomTypeDialog">닫기 / Đóng</button></div>
     </form>
   </dialog>
   <dialog class="hotel-dialog" id="hotelDialog" aria-labelledby="dialogTitle">
@@ -126,7 +138,7 @@
         <label><span class="qr-label">투숙객 인원 / Số khách</span><input class="qr-input" name="guest_count" type="number" min="1" max="2147483647" step="1" value="2" required /></label>
         <label><span class="qr-label">객실 수 합계 / Tổng số phòng</span><input class="qr-input" name="room_count" type="number" min="1" max="10000" step="1" value="1" readonly required /></label>
         <div class="hotel-wide" id="legacyRoomNotice" hidden><p class="hotel-hint">기존 요금 유지 / Giữ giá đã lưu. 룸타입을 지정하지 않으면 기존 객실·금액을 유지합니다. / Chưa chọn loại phòng mới thì giữ dữ liệu phòng và giá cũ.</p><button class="qr-btn" id="enableRoomTypesButton" type="button">룸타입 선택으로 변경 / Chuyển sang chọn loại phòng</button></div>
-        <div class="hotel-wide" id="roomItemsFields"><div id="roomItemRows"></div><button class="qr-btn" id="addRoomItemButton" type="button">+ 룸타입 추가 / Thêm loại phòng</button><p class="hotel-hint">한 예약에 여러 룸타입과 VIP·STANDARD를 함께 선택할 수 있습니다. 등급은 표시용이며 추가요금은 요금 방식에서 입력합니다. / Có thể chọn nhiều loại phòng và VIP·STANDARD. Hạng phòng chỉ để ghi chú; nhập phụ thu trong loại giá.</p></div>
+        <div class="hotel-wide" id="roomItemsFields"><div id="roomItemRows"></div><button class="qr-btn" id="addRoomItemButton" type="button">+ 객실 추가 / Thêm phòng</button><p class="hotel-hint">등급을 선택한 후 싱글·더블·트리플과 객실 수를 선택해 주세요. 한 예약에 여러 등급·타입을 섞을 수 있습니다. 기존 룸타입은 별도로 표시됩니다. / Chọn hạng, SINGLE·DOUBLE·TRIPLE và số phòng. Có thể kết hợp nhiều hạng·loại; loại phòng cũ được hiển thị riêng.</p></div>
         <label class="hotel-wide"><span class="qr-label">투숙객 명단 / Danh sách khách</span><textarea class="qr-input" name="guest_names" rows="3" placeholder="한 줄에 한 명 / Mỗi dòng một người" required></textarea></label>
         <label class="hotel-wide"><span class="qr-label">요금 방식 / Loại giá</span><select class="qr-select" name="pricing_mode" id="pricingMode">
           <option value="standard">일반 · 호텔 단가 자동 계산 / Giá thường · tự động</option>
@@ -170,8 +182,8 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
-  <script src="assets/hotel-report.js?v=20261107-roomtypes-1"></script>
-  <script src="assets/hotel-pricing.js?v=20261107-roomtypes-1"></script>
-  <script src="assets/hotel-reserv-list.js?v=20261107-roomtypes-1"></script>
+  <script src="assets/hotel-report.js?v=20261107-grades-1"></script>
+  <script src="assets/hotel-pricing.js?v=20261107-grades-1"></script>
+  <script src="assets/hotel-reserv-list.js?v=20261107-grades-1"></script>
 </body>
 </html>

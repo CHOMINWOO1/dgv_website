@@ -19,6 +19,7 @@
     standard: "일반 / Thường", surcharge: "서차지 / Phụ thu", legacy: "기존 직접입력 / Giá cũ"
   };
   const gradeLabels = { STANDARD: "일반 / Tiêu chuẩn", VIP: "VIP" };
+  const roomKindLabels = { SINGLE: "싱글 / Phòng đơn", DOUBLE: "더블 / Phòng đôi", TRIPLE: "트리플 / Phòng ba" };
   const mode = value => pricingLabels[value] || display(value);
   const grade = value => gradeLabels[value] || display(value);
   const rates = value => value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -29,7 +30,8 @@
     const balance = number(row.balance_amount);
     return deposit === null && balance === null ? null : (deposit ?? 0) + (balance ?? 0);
   };
-  const roomName = item => text(item.name) || text(rates(item.rate_snapshot).name) || "룸타입명 없음 / Chưa có tên loại phòng";
+  const roomName = item => roomKindLabels[item.room_kind] || text(item.name) || text(rates(item.rate_snapshot).name) || "룸타입명 없음 / Chưa có tên loại phòng";
+  const roomGrade = item => item.grade_id ? display(item.room_grade) : grade(item.room_grade);
   const rowsOf = values => Array.isArray(values) ? values.filter(value => value && typeof value === "object") : [];
   function dateCell(value) {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text(value));
@@ -40,7 +42,7 @@
   }
   function roomDescription(row) {
     const items = roomItems(row);
-    return items.length ? items.map(item => `${roomName(item)} / ${grade(item.room_grade)} / ${money(number(item.room_count))} 객실·phòng`).join("\n")
+    return items.length ? items.map(item => `${roomName(item)} / ${roomGrade(item)} / ${money(number(item.room_count))} 객실·phòng`).join("\n")
       : "기존 요금 / Giá đã lưu";
   }
 
@@ -56,7 +58,7 @@
       <thead><tr><th>룸타입<br>Loại phòng</th><th>등급<br>Hạng</th><th>객실<br>Phòng</th><th>주중·주말 박수<br>Đêm thường·cuối tuần</th><th>주중 매입·매출 단가<br>Giá mua·bán ngày thường</th><th>주말 매입·매출 단가<br>Giá mua·bán cuối tuần</th><th>객실 매입<br>Mua phòng</th><th>객실 매출<br>Bán phòng</th></tr></thead>
       <tbody>${items.map(item => {
         const saved = rates(item.rate_snapshot);
-        return `<tr><td>${escape(roomName(item))}</td><td>${escape(grade(item.room_grade))}</td><td class="number">${money(number(item.room_count))}</td>
+        return `<tr><td>${escape(roomName(item))}</td><td>${escape(roomGrade(item))}</td><td class="number">${money(number(item.room_count))}</td>
           <td class="number">${money(number(item.weekday_nights))} / ${money(number(item.weekend_nights))}</td>
           <td class="number">${money(number(saved.weekday_purchase))}<br>${money(number(saved.weekday_sale))}</td>
           <td class="number">${money(number(saved.weekend_purchase))}<br>${money(number(saved.weekend_sale))}</td>
@@ -107,7 +109,7 @@
       const items = savedItems.length ? savedItems : [{ ...row, name: "기존 요금 / Giá đã lưu", room_type_id: null, room_grade: null }];
       return items.map(item => {
         const saved = rates(item.rate_snapshot);
-        return [textCell(row.id), textCell(row.hotel_name), textCell(item.room_type_id), textCell(roomName(item)), textCell(item.room_grade ? grade(item.room_grade) : ""), numericCell(item.room_count), numericCell(item.weekday_nights), numericCell(item.weekend_nights),
+        return [textCell(row.id), textCell(row.hotel_name), textCell(item.room_type_id), textCell(roomName(item)), textCell(item.room_grade ? roomGrade(item) : ""), numericCell(item.room_count), numericCell(item.weekday_nights), numericCell(item.weekend_nights),
           ...["weekday_purchase", "weekday_sale", "weekend_purchase", "weekend_sale"].map(key => numericCell(saved[key])), numericCell(item.room_purchase_amount), numericCell(item.room_sale_amount)];
       });
     });
