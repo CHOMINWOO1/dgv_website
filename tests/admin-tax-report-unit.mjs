@@ -126,3 +126,26 @@ assert.equal(oddAllocation.food8 + oddAllocation.drink10, 5, "proportional alloc
 console.log("admin tax report unit regression passed");
 
 
+
+const split = tax.buildReport({
+  orders: [
+    {id:"cash-split",status:"paid",payment_method:"cash",total_vnd:3000000},
+    {id:"card-split",status:"paid",payment_method:"card",total_vnd:1000000},
+    {id:"bank-split",status:"paid",payment_method:"bank",total_vnd:400000},
+    {id:"unknown-split",status:"paid",payment_method:null,total_vnd:200000}
+  ],
+  lines: [ ["cash-split",15],["card-split",5],["bank-split",2],["unknown-split",1] ].map(([order_id,qty]) =>
+    ({order_id,ko_name:"무한삼겹",vi_name:"Buffet",qty,unit_vnd:200000,line_vnd:qty*200000,kind:"food"}))
+});
+const splitRows = split.groups[0].rows;
+assert.equal(splitRows.length,4);
+assert.equal(splitRows.find(row=>row.paymentMethod==="cash").qty,15);
+assert.equal(splitRows.find(row=>row.paymentMethod==="card").qty,5);
+assert.equal(splitRows.find(row=>row.paymentMethod==="bank").qty,2);
+assert.equal(splitRows.find(row=>row.paymentMethod==="unknown").qty,1);
+assert.equal(split.reconciliationDifference,0);
+assert.equal(splitRows.reduce((sum,row)=>sum+row.grossAmount,0),4600000);
+assert.ok(split.warnings.some(warning=>warning.includes("unknown-split")));
+assert.equal(explicitFoodFee.paymentMethod,"card");
+assert.equal(explicitDrinkFee.paymentMethod,"card");
+console.log("Payment split, fees, unknown methods and total reconciliation passed.");

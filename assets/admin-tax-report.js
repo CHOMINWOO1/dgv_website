@@ -30,6 +30,15 @@
       .trim();
   }
 
+  function paymentMethod(value) {
+    const normalized = normalizeText(value);
+    return ["cash", "card", "bank"].includes(normalized) ? normalized : "unknown";
+  }
+
+  function paymentLabel(value) {
+    return { cash: "현금 / Tiền mặt", card: "카드 / Thẻ", bank: "은행 / Chuyển khoản", unknown: "미확인 / Chưa rõ" }[value] || "미확인 / Chưa rõ";
+  }
+
   function finiteNumber(value, fallback) {
     const number = Number(value);
     return Number.isFinite(number) ? number : fallback;
@@ -221,7 +230,7 @@
     return lines.filter((line) => String(line && line.order_id) === key);
   }
 
-  function makeEntry(line, classification, grossAmount, warnings) {
+  function makeEntry(line, classification, grossAmount, warnings, payment) {
     let qty = lineQuantity(line);
     if (!qty) {
       qty = 1;
@@ -232,6 +241,8 @@
       ? integerVnd(suppliedUnit)
       : integerVnd(grossAmount / qty);
     return {
+      paymentMethod: payment,
+      paymentLabel: paymentLabel(payment),
       rate: classification.rate,
       groupKey: classification.groupKey,
       koName: cleanText(line && line.ko_name) || cleanText(line && line.vi_name) || "메뉴명 없음",
@@ -249,6 +260,8 @@
   function makeAdjustmentEntry(groupKey, amount, options) {
     const definition = GROUP_DEFINITIONS.find((item) => item.key === groupKey) || GROUP_DEFINITIONS[0];
     return {
+      paymentMethod: options.paymentMethod || "unknown",
+      paymentLabel: paymentLabel(options.paymentMethod),
       rate: definition.rate,
       groupKey: definition.key,
       koName: options.koName,
@@ -267,8 +280,10 @@
     const maps = new Map(GROUP_DEFINITIONS.map((definition) => [definition.key, new Map()]));
     entries.forEach((entry) => {
       const map = maps.get(entry.groupKey) || maps.get("food8");
-      const key = JSON.stringify([entry.koName, entry.viName, entry.rate, entry.grossUnit, entry.unitVi]);
+      const key = JSON.stringify([entry.koName, entry.viName, entry.rate, entry.grossUnit, entry.unitVi, entry.paymentMethod]);
       const current = map.get(key) || {
+        paymentMethod: entry.paymentMethod,
+        paymentLabel: entry.paymentLabel,
         koName: entry.koName,
         viName: entry.viName,
         unitVi: entry.unitVi,
@@ -303,7 +318,7 @@
             vatAmount: row.grossAmount - netAmount
           };
         })
-        .sort((a, b) => a.koName.localeCompare(b.koName, "ko") || a.grossUnit - b.grossUnit);
+        .sort((a, b) => a.koName.localeCompare(b.koName, "ko") || a.grossUnit - b.grossUnit || a.paymentMethod.localeCompare(b.paymentMethod));
       return {
         ...definition,
         rows,
@@ -332,6 +347,8 @@
 
     paidOrders.forEach((order) => {
       const orderId = cleanText(order && order.id) || "ID 없음";
+      const payment = paymentMethod(order && order.payment_method);
+      if (payment === "unknown") warnings.add(`주문 ${orderId}: 결제 방법을 확인해 주세요.`);
       const orderGross = integerVnd(order && order.total_vnd);
       paidOrderGross += orderGross;
       const lines = sourceLinesForOrder(source, order && order.id);
@@ -348,7 +365,7 @@
           surchargeGross += gross;
           return;
         }
-        const entry = makeEntry(line, classification, gross, warnings);
+        const entry = makeEntry(line, classification, gross, warnings, payment);
         baseEntries.push(entry);
         weights[entry.groupKey] += Math.abs(gross);
       });
@@ -361,6 +378,7 @@
         Object.entries(allocations).forEach(([groupKey, amount]) => {
           if (!amount) return;
           entries.push(makeAdjustmentEntry(groupKey, amount, {
+            paymentMethod: payment,
             koName: "카드 결제 수수료",
             viName: "Phụ phí thanh toán thẻ",
             reviewNeeded: noBase,
@@ -380,6 +398,7 @@
         Object.entries(allocations).forEach(([groupKey, amount]) => {
           if (!amount) return;
           entries.push(makeAdjustmentEntry(groupKey, amount, {
+            paymentMethod: payment,
             koName: isLegacyCardSurcharge ? "카드 결제 수수료" : "상세 조정액",
             viName: isLegacyCardSurcharge ? "Phụ phí thanh toán thẻ" : "Điều chỉnh doanh thu",
             reviewNeeded: !isLegacyCardSurcharge || noBase,

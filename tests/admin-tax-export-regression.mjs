@@ -109,7 +109,7 @@ const model = {
       key: "food8", rate: 8, labelKo: "식당", labelVi: "Món ăn",
       netAmount: 4_444_440, vatAmount: 355_560, grossAmount: 4_800_000,
       rows: [{
-        koName: "<무한삼겹>", viName: "Thịt nướng buffet", unitVi: "Phần",
+        paymentLabel: "현금 / Tiền mặt", koName: "<무한삼겹>", viName: "Thịt nướng buffet", unitVi: "Phần",
         qty: 24, netUnit: 185_185, netAmount: 4_444_440,
         vatAmount: 355_560, grossAmount: 4_800_000,
         reviewNeeded: false, reviewReason: "",
@@ -120,13 +120,13 @@ const model = {
       netAmount: 845_448, vatAmount: 84_552, grossAmount: 930_000,
       rows: [
         {
-          koName: "맥주", viName: "Bia", unitVi: "Lon",
+          paymentLabel: "카드 / Thẻ", koName: "맥주", viName: "Bia", unitVi: "Lon",
           qty: 13, netUnit: 45_454, netAmount: 590_902,
           vatAmount: 59_098, grossAmount: 650_000,
           reviewNeeded: false, reviewReason: "",
         },
         {
-          koName: "임시", viName: "Món tạm", unitVi: "Chai",
+          paymentLabel: "은행 / Chuyển khoản", koName: "임시", viName: "Món tạm", unitVi: "Chai",
           qty: 1, netUnit: 227_273, netAmount: 227_273,
           vatAmount: 22_727, grossAmount: 250_000,
           reviewNeeded: true, reviewReason: "확인 필요",
@@ -176,3 +176,12 @@ assert.equal(workbookBytes[1], 0x4b, "tax workbook must be a valid ZIP-based XLS
 console.log("Admin tax print and Excel integration regression passed.");
 
 
+
+assert.match(printHtml,/현금 \/ Tiền mặt/);
+assert.match(printHtml,/카드 \/ Thẻ/);
+assert.match(printHtml,/은행 \/ Chuyển khoản/);
+assert.doesNotMatch(printHtml,/TM\/CK/);
+assert.equal(workbook.sheets[1].rows[4][10].value,"현금 / Tiền mặt");
+assert.equal(workbook.sheets[2].rows[4][10].value,"카드 / Thẻ");
+assert.equal(workbook.sheets[2].rows[5][10].value,"은행 / Chuyển khoản");
+assert.equal(workbook.sheets[1].autoFilterRange,"A4:K5");
