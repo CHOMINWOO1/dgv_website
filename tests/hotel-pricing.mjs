@@ -1,0 +1,35 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import vm from "node:vm";
+const context = {};
+vm.runInNewContext(await readFile(new URL("../assets/hotel-pricing.js", import.meta.url), "utf8"), context);
+const pricing = context.HotelPricing;
+const hotel = { weekday_purchase:100, weekday_sale:150, weekend_purchase:200, weekend_sale:300, weekend_days:[5,6] };
+const booking = { hotel_id:"hotel", check_in:"2026-11-05", check_out:"2026-11-09", room_count:4,
+  pricing_mode:"standard", room_purchase_amount:0, room_sale_amount:0,
+  includes_meals:true, meal_purchase_amount:80, meal_sale_amount:120 };
+let price = pricing.price(booking, hotel);
+assert.equal(price.weekday,2);
+assert.equal(price.weekend,2);
+assert.equal(price.purchase,2480);
+assert.equal(price.sale,3720);
+assert.equal(pricing.price({...booking,includes_meals:false},hotel).purchase,2400);
+price = pricing.price({...booking,pricing_mode:"surcharge",room_purchase_amount:500,room_sale_amount:900},hotel);
+assert.equal(price.purchase,580);
+assert.equal(price.sale,1020);
+assert.equal(pricing.stay("2028-02-28","2028-03-01",[]).nights,2);
+assert.equal(pricing.stay("2026-11-06","2026-11-07",[6]).weekend,0);
+assert.equal(pricing.stay("2026-12-31","2027-01-02",[5]).weekend,1);
+assert.equal(pricing.stay("2026-11-05","2026-11-09",[]).weekend,0);
+assert.equal(pricing.stay("2026-11-05","2026-11-09",[0,1,2,3,4,5,6]).weekend,4);
+assert.throws(()=>pricing.stay("2026-11-05","2026-11-05",[]));
+assert.throws(()=>pricing.price({...booking,room_count:0},hotel));
+assert.throws(()=>pricing.price({...booking,room_count:1.5},hotel));
+assert.throws(()=>pricing.money(-1));
+assert.throws(()=>pricing.money(1.5));
+assert.throws(()=>pricing.money(1000000000000));
+const previous = {...booking, rate_snapshot:hotel};
+const newRates = {...hotel,weekday_purchase:1000};
+assert.equal(pricing.price(booking,newRates,previous).purchase,2480);
+assert.equal(pricing.price({...booking,room_count:2},newRates,previous).purchase,4880);
+console.log("Hotel room pricing, manual totals, meals, dates and saved rates passed.");

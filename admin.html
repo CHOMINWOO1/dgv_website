@@ -1213,13 +1213,14 @@
               <tr${row.reviewNeeded ? ' class="needsReview"' : ""}>
                 <td class="center">${index + 1}</td>
                 <td><b>${esc(row.koName)}</b><br><span>${esc(row.viName)}</span>${row.reviewNeeded ? '<em>확인 필요</em>' : ""}</td>
+                <td class="center">${esc(row.paymentLabel || "미확인 / Chưa rõ")}</td>
                 <td class="center">${esc(row.unitVi)}</td>
                 <td class="number">${fmtInt(row.qty)}</td>
                 <td class="number">${fmtInt(row.netUnit)}</td>
                 <td class="number">${fmtInt(row.netAmount)}</td>
               </tr>
             `).join("")
-          : '<tr><td colspan="6" class="empty">해당 세율의 매출이 없습니다. / Không có doanh thu.</td></tr>';
+          : '<tr><td colspan="7" class="empty">해당 세율의 매출이 없습니다. / Không có doanh thu.</td></tr>';
 
         return `
           <section class="taxPage">
@@ -1240,17 +1241,18 @@
               <div><b>Địa chỉ (Address):</b> 135 - 145 Phan Đình Phùng, Phường Xuân Hương - Đà Lạt, Tỉnh Lâm Đồng, Việt Nam</div>
               <div><b>Điện thoại (Tel):</b> 0333708553</div>
               <div><b>Khách hàng (Customer):</b> Bán cho người tiêu dùng</div>
-              <div><b>Hình thức thanh toán (Payment method):</b> TM/CK</div>
+              <div><b>Hình thức thanh toán (Payment method):</b> ${esc([...new Set(group.rows.map(row => row.paymentLabel || "미확인 / Chưa rõ"))].join(", ") || "—")}</div>
               <div><b>분류 / Phân loại:</b> ${esc(group.labelKo)} / ${esc(group.labelVi)}</div>
             </div>
             <table>
               <colgroup>
-                <col class="noCol"><col><col class="unitCol"><col class="qtyCol"><col class="priceCol"><col class="amountCol">
+                <col class="noCol"><col><col class="paymentCol"><col class="unitCol"><col class="qtyCol"><col class="priceCol"><col class="amountCol">
               </colgroup>
               <thead>
                 <tr>
                   <th>STT<br><i>(No.)</i></th>
                   <th>Tên hàng hóa, dịch vụ<br><i>메뉴명 / Description</i></th>
+                  <th>Thanh toán<br><i>결제 방법</i></th>
                   <th>Đơn vị tính<br><i>(Unit)</i></th>
                   <th>Số lượng<br><i>(Quantity)</i></th>
                   <th>Đơn giá<br><i>(Unit price)</i></th>
@@ -1259,9 +1261,9 @@
               </thead>
               <tbody>${rowsHtml}</tbody>
               <tfoot>
-                <tr><th colspan="5">Cộng tiền hàng (공급가액 / Total amount)</th><td class="number">${fmtInt(group.netAmount)}</td></tr>
-                <tr><th colspan="3">Thuế suất GTGT (VAT rate): ${group.rate}%</th><th colspan="2">Tiền thuế GTGT (부가세 / VAT amount)</th><td class="number">${fmtInt(group.vatAmount)}</td></tr>
-                <tr class="grand"><th colspan="5">TỔNG CỘNG TIỀN THANH TOÁN (결제금액 / Total payment)</th><td class="number">${fmtInt(group.grossAmount)}</td></tr>
+                <tr><th colspan="6">Cộng tiền hàng (공급가액 / Total amount)</th><td class="number">${fmtInt(group.netAmount)}</td></tr>
+                <tr><th colspan="4">Thuế suất GTGT (VAT rate): ${group.rate}%</th><th colspan="2">Tiền thuế GTGT (부가세 / VAT amount)</th><td class="number">${fmtInt(group.vatAmount)}</td></tr>
+                <tr class="grand"><th colspan="6">TỔNG CỘNG TIỀN THANH TOÁN (결제금액 / Total payment)</th><td class="number">${fmtInt(group.grossAmount)}</td></tr>
               </tfoot>
             </table>
             <div class="checkLine">
@@ -1303,7 +1305,7 @@
     tbody td span{font-size:9px;color:#333}
     tbody td em{display:inline-block;margin-left:6px;color:#a21b12;font-style:normal;font-weight:800}
     .needsReview{background:#fff5d8}
-    .noCol{width:8%}.unitCol{width:11%}.qtyCol{width:11%}.priceCol{width:16%}.amountCol{width:17%}
+    .noCol{width:5%}.paymentCol{width:14%}.unitCol{width:8%}.qtyCol{width:9%}.priceCol{width:15%}.amountCol{width:17%}
     .center{text-align:center}.number{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
     .empty{text-align:center;padding:14px;color:#555}
     tfoot th{text-align:right;background:#fafafa}
@@ -1418,7 +1420,7 @@
           headerRow([
             "STT (No.)", "메뉴명 (KO)", "Tên hàng hóa, dịch vụ (VI)", "Đơn vị tính (Unit)",
             "Số lượng (Qty)", "Đơn giá chưa VAT", "Thành tiền chưa VAT",
-            "Tiền thuế GTGT", "Tổng thanh toán", "검토 / Kiểm tra"
+            "Tiền thuế GTGT", "Tổng thanh toán", "검토 / Kiểm tra", "결제 방법 / Thanh toán"
           ])
         ];
         group.rows.forEach((row, index)=>{
@@ -1432,7 +1434,8 @@
             numberCell(row.netAmount),
             numberCell(row.vatAmount),
             numberCell(row.grossAmount),
-            textCell(row.reviewNeeded ? (row.reviewReason || "확인 필요") : "", "wrapped")
+            textCell(row.reviewNeeded ? (row.reviewReason || "확인 필요") : "", "wrapped"),
+            textCell(row.paymentLabel || "미확인 / Chưa rõ", "wrapped")
           ]);
         });
         rows.push(
@@ -1453,10 +1456,10 @@
         return {
           name:`${group.labelKo} ${group.rate}%`,
           rows,
-          columnWidths:[10,26,31,16,13,18,20,18,20,34],
-          merges:["A1:J1"],
+          columnWidths:[10,26,31,16,13,18,20,18,20,34,26],
+          merges:["A1:K1"],
           freezeRows:4,
-          autoFilterRange:`A4:J${Math.max(4, group.rows.length + 4)}`
+          autoFilterRange:`A4:K${Math.max(4, group.rows.length + 4)}`
         };
       });
 
