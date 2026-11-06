@@ -1218,9 +1218,10 @@
                 <td class="number">${fmtInt(row.qty)}</td>
                 <td class="number">${fmtInt(row.netUnit)}</td>
                 <td class="number">${fmtInt(row.netAmount)}</td>
+                <td class="number">${fmtInt(row.grossAmount)}</td>
               </tr>
             `).join("")
-          : '<tr><td colspan="7" class="empty">해당 세율의 매출이 없습니다. / Không có doanh thu.</td></tr>';
+          : '<tr><td colspan="8" class="empty">해당 세율의 매출이 없습니다. / Không có doanh thu.</td></tr>';
 
         return `
           <section class="taxPage">
@@ -1246,7 +1247,7 @@
             </div>
             <table>
               <colgroup>
-                <col class="noCol"><col><col class="paymentCol"><col class="unitCol"><col class="qtyCol"><col class="priceCol"><col class="amountCol">
+                <col class="noCol"><col class="menuCol"><col class="paymentCol"><col class="unitCol"><col class="qtyCol"><col class="priceCol"><col class="amountCol"><col class="grossCol">
               </colgroup>
               <thead>
                 <tr>
@@ -1257,13 +1258,14 @@
                   <th>Số lượng<br><i>(Quantity)</i></th>
                   <th>Đơn giá<br><i>(Unit price)</i></th>
                   <th>Thành tiền<br><i>(Amount)</i></th>
+                  <th>VAT 포함 금액<br><i>Thành tiền có VAT</i></th>
                 </tr>
               </thead>
               <tbody>${rowsHtml}</tbody>
               <tfoot>
-                <tr><th colspan="6">Cộng tiền hàng (공급가액 / Total amount)</th><td class="number">${fmtInt(group.netAmount)}</td></tr>
-                <tr><th colspan="4">Thuế suất GTGT (VAT rate): ${group.rate}%</th><th colspan="2">Tiền thuế GTGT (부가세 / VAT amount)</th><td class="number">${fmtInt(group.vatAmount)}</td></tr>
-                <tr class="grand"><th colspan="6">TỔNG CỘNG TIỀN THANH TOÁN (결제금액 / Total payment)</th><td class="number">${fmtInt(group.grossAmount)}</td></tr>
+                <tr><th colspan="6">Cộng tiền hàng (공급가액 / Total amount)</th><td class="number">${fmtInt(group.netAmount)}</td><td></td></tr>
+                <tr><th colspan="4">Thuế suất GTGT (VAT rate): ${group.rate}%</th><th colspan="2">Tiền thuế GTGT (부가세 / VAT amount)</th><td class="number">${fmtInt(group.vatAmount)}</td><td></td></tr>
+                <tr class="grand"><th colspan="7">TỔNG CỘNG TIỀN THANH TOÁN (결제금액 / Total payment)</th><td class="number">${fmtInt(group.grossAmount)}</td></tr>
               </tfoot>
             </table>
             <div class="checkLine">
@@ -1305,7 +1307,7 @@
     tbody td span{font-size:9px;color:#333}
     tbody td em{display:inline-block;margin-left:6px;color:#a21b12;font-style:normal;font-weight:800}
     .needsReview{background:#fff5d8}
-    .noCol{width:5%}.paymentCol{width:14%}.unitCol{width:8%}.qtyCol{width:9%}.priceCol{width:15%}.amountCol{width:17%}
+    .noCol{width:4%}.menuCol{width:21%}.paymentCol{width:13%}.unitCol{width:7%}.qtyCol{width:7%}.priceCol{width:14%}.amountCol{width:16%}.grossCol{width:18%}
     .center{text-align:center}.number{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
     .empty{text-align:center;padding:14px;color:#555}
     tfoot th{text-align:right;background:#fafafa}
