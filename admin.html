@@ -347,6 +347,7 @@
               <button class="btn" id="excelRangeBtn">엑셀 출력</button>
               <button class="btn" id="taxPrintRangeBtn">세무서 출력</button>
               <button class="btn" id="taxExcelRangeBtn">세무서 엑셀 출력</button>
+              <button class="btn" id="bankPrintRangeBtn" title="은행은 주문별로, 카드·현금은 합쳐서 한 번에 인쇄합니다.">결제별 출력 (은행 개별)</button>
             </div>
           </div>
         </div>
@@ -452,6 +453,7 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
   <script src="assets/admin-tax-report.js"></script>
+<script src="assets/admin-bank-report.js?v=20261107-1"></script>
   <script src="assets/supabase-client.js"></script>
   <script>
     /*************************************************
@@ -1374,6 +1376,71 @@
       }
     }
 
+    // 기존 주문을 읽기만 하며 은행 주문별 + 카드·현금 묶음을 한 문서로 인쇄합니다.
+    async function printBankOrders(){
+      const button = document.getElementById("bankPrintRangeBtn");
+      if (button.disabled) return;
+      const from = document.getElementById("fromDate").value;
+      const to = document.getElementById("toDate").value;
+      const isValidDate = (value)=>{
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        const date = new Date(`${value}T00:00:00Z`);
+        return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+      };
+      if (!isValidDate(from) || !isValidDate(to) || from > to){
+        alert("시작일과 종료일을 올바르게 선택해 주세요. / Vui lòng chọn khoảng ngày hợp lệ.");
+        return;
+      }
+      // 비동기 조회 전에 창을 열어 브라우저 팝업 차단을 방지합니다.
+      const printWindow = window.open("", "_blank", "width=980,height=760");
+      if (!printWindow){
+        alert("팝업이 차단되었습니다. 브라우저 팝업 설정을 확인해 주세요.");
+        return;
+      }
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = "생성 중…";
+      try{
+        printWindow.document.open();
+        printWindow.document.write('<!doctype html><meta charset="utf-8"><title>결제별 출력 준비</title><p style="font-family:sans-serif;padding:24px">주문 내역을 불러오는 중입니다… / Đang tải đơn hàng…</p>');
+        printWindow.document.close();
+        // 날짜 입력값을 즉시 캡처하는 기존 베트남 현지 날짜 조회를 재사용합니다.
+        const report = await loadTaxRangeReportData();
+        if (printWindow.closed) return;
+        if (!window.DGV_BANK_REPORT?.buildReport || !window.DGV_BANK_REPORT?.renderHtml){
+          throw new Error("Payment report builder is unavailable");
+        }
+        const model = window.DGV_BANK_REPORT.buildReport(report);
+        if (!model.orderCount){
+          printWindow.close();
+          alert("선택한 기간에 은행·카드·현금으로 결제 완료된 주문이 없습니다.");
+          return;
+        }
+        printWindow.document.open();
+        printWindow.document.write(window.DGV_BANK_REPORT.renderHtml(model));
+        printWindow.document.close();
+        let printed = false;
+        const triggerPrint = ()=>{
+          if (printed || printWindow.closed) return;
+          printed = true;
+          printWindow.focus();
+          printWindow.print();
+        };
+        // 한 문서의 레이아웃 준비 후 정확히 한 번만 인쇄합니다.
+        if (printWindow.document.fonts?.ready){
+          printWindow.document.fonts.ready.then(()=>setTimeout(triggerPrint, 150));
+        }
+        setTimeout(triggerPrint, 800);
+      }catch(error){
+        console.error(error);
+        if (!printWindow.closed) printWindow.close();
+        alert("결제별 출력 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      }finally{
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+
     function taxWorkbookOptions(report, model){
       const numberCell = (value, style="integer") => ({ value:Number(value || 0), style });
       const textCell = (value, style="normal") => ({ value:String(value ?? ""), style });
@@ -2017,6 +2084,7 @@
     document.getElementById("excelRangeBtn").addEventListener("click", exportRangeExcel);
     document.getElementById("taxPrintRangeBtn").addEventListener("click", printTaxOfficeReport);
     document.getElementById("taxExcelRangeBtn").addEventListener("click", exportTaxOfficeExcel);
+    document.getElementById("bankPrintRangeBtn").addEventListener("click", printBankOrders);
 
     // Gate 이벤트
     document.getElementById("gateConfirmBtn").addEventListener("click", enterAdmin);
