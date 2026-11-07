@@ -89,8 +89,8 @@
     const properties = renderRows("propertyRows", hotels, "호텔을 먼저 등록해 주세요. / Thêm khách sạn trước.", 4);
     for (const hotel of hotels) {
       const row = properties.insertRow();
-      const types = roomTypes.filter(type => type.hotel_id === hotel.id);
-      const values = [hotel.name, roomGrades.filter(grade => grade.hotel_id === hotel.id).length + "등급 / hạng · " + types.filter(type => type.is_active !== false).length + "타입 사용 / loại đang dùng",
+      const types = roomTypes.filter(type => type.hotel_id === hotel.id && !type.archived_at && !roomGrades.some(grade => grade.id === type.grade_id && grade.archived_at));
+      const values = [hotel.name, roomGrades.filter(grade => grade.hotel_id === hotel.id && !grade.archived_at).length + "등급 / hạng · " + types.filter(type => type.is_active !== false).length + "타입 사용 / loại đang dùng",
         hotel.weekend_days.map(day => weekdays[day]).join(", ") || "없음 / Không có"];
       for (const value of values) row.insertCell().textContent = value;
       const controls = row.insertCell();
@@ -262,13 +262,14 @@
   }
 
   function resetGrade(grade) {
+    if (grade?.archived_at) { resetGrade(); return; }
     editingGrade = grade || null;
     gradeId = grade?.id || crypto.randomUUID();
     gradeForm.reset();
     gradeForm.elements.namedItem("name").value = grade?.name || "";
     gradeDraft = roomKinds.map(kind => {
       const existing = grade && roomTypes.find(type => type.grade_id === grade.id && type.room_kind === kind);
-      const draft = { room_kind: kind, is_active: existing ? existing.is_active !== false : kind === "SINGLE", version: existing?.version ?? null };
+      const draft = { room_kind: kind, is_active: existing ? !existing.archived_at && existing.is_active !== false : kind === "SINGLE", version: existing?.version ?? null, archived_at: existing?.archived_at || null };
       for (const key of rateKeys) draft[key] = String(existing?.[key] ?? 0);
       draft.sameWeekend = draft.weekday_purchase === draft.weekend_purchase && draft.weekday_sale === draft.weekend_sale;
       return draft;
@@ -283,7 +284,11 @@
   function renderGradeTypes() {
     const container = byId("gradeTypeRows");
     container.replaceChildren();
+    if (gradeDraft.every(draft => draft.archived_at)) {
+      container.textContent = "이 등급의 룸타입이 모두 삭제되었습니다. 등급을 삭제한 뒤 새로 등록할 수 있습니다. / Tất cả loại phòng của hạng này đã bị xóa. Có thể xóa hạng rồi tạo lại.";
+    }
     gradeDraft.forEach(draft => {
+      if (draft.archived_at) return;
       const section = document.createElement("div");
       section.className = "hotel-grade-type" + (draft.is_active ? "" : " is-disabled");
       section.dataset.roomKind = draft.room_kind;
@@ -305,10 +310,10 @@
       source.className = "qr-select";
       source.setAttribute("aria-label", "가격 복사할 타입 / Loại phòng để sao chép giá");
       source.add(new Option("가격 복사 / Sao chép giá", ""));
-      for (const other of gradeDraft.filter(item => item.room_kind !== draft.room_kind && item.is_active)) source.add(new Option(roomKindLabel(other.room_kind), other.room_kind));
+      for (const other of gradeDraft.filter(item => item.room_kind !== draft.room_kind && item.is_active && !item.archived_at)) source.add(new Option(roomKindLabel(other.room_kind), other.room_kind));
       const copyButton = action("복사 / Chép", () => {
         if (busy || !draft.is_active) return;
-        const previous = gradeDraft.find(item => item.room_kind === source.value && item.is_active);
+        const previous = gradeDraft.find(item => item.room_kind === source.value && item.is_active && !item.archived_at);
         if (!previous) return message("gradeError", "가격을 복사할 사용 중인 타입을 선택해 주세요. / Chọn loại phòng đang dùng để sao chép giá.");
         for (const key of rateKeys) draft[key] = previous[key];
         draft.sameWeekend = previous.sameWeekend;
@@ -377,7 +382,7 @@
     return {
       p_hotel_id: managedHotel.id, p_name: name, p_id: gradeId, p_expected_version: editingGrade?.version ?? null,
       p_types: gradeDraft.map(draft => {
-        const result = { room_kind: draft.room_kind, is_active: draft.is_active, version: draft.version };
+        const result = { room_kind: draft.room_kind, is_active: !draft.archived_at && draft.is_active, version: draft.version };
         for (const key of rateKeys) result[key] = pricing.money(draft[key] === "" && !draft.is_active ? 0 : draft[key]);
         return result;
       })
@@ -386,6 +391,7 @@
 
   function resetRoomType(type) {
     if (!type) { resetGrade(); return; }
+    if (type.archived_at) { resetGrade(); return; }
     if (type.grade_id) { resetGrade(roomGrades.find(grade => grade.id === type.grade_id)); return; }
     editingRoomType = type || null;
     roomTypeId = type?.id || crypto.randomUUID();
@@ -402,8 +408,8 @@
   function renderRoomTypes() {
     const container = byId("roomTypeRows");
     container.replaceChildren();
-    const types = roomTypes.filter(type => type.hotel_id === managedHotel.id);
-    const grades = roomGrades.filter(grade => grade.hotel_id === managedHotel.id);
+    const types = roomTypes.filter(type => type.hotel_id === managedHotel.id && !type.archived_at && !roomGrades.some(grade => grade.id === type.grade_id && grade.archived_at));
+    const grades = roomGrades.filter(grade => grade.hotel_id === managedHotel.id && !grade.archived_at);
     if (!types.length && !grades.length) container.textContent = "등록된 객실 등급이 없습니다. 아래에서 추가해 주세요. / Chưa có hạng phòng. Hãy thêm bên dưới.";
     for (const grade of grades) {
       const card = document.createElement("div");
@@ -415,14 +421,21 @@
       card.append(title);
       for (const kind of roomKinds) {
         const type = members.find(type => type.room_kind === kind);
+        if (!type) continue;
+        const typeRow = document.createElement("div");
+        typeRow.className = "hotel-catalog-type";
+        typeRow.dataset.catalogTypeId = type.id;
         const line = document.createElement("p");
         line.className = "hotel-hint";
         line.textContent = roomKindLabel(kind) + (type?.is_active !== false && type
           ? " — 주중 / Thường " + moneyText(type.weekday_purchase) + " / " + moneyText(type.weekday_sale) + " · 주말 / Cuối tuần " + moneyText(type.weekend_purchase) + " / " + moneyText(type.weekend_sale) + " (매입 / 매출 · Mua / Bán)"
           : " — 사용 안 함 / Không dùng");
-        card.append(line);
+        typeRow.append(line, action("타입 삭제 / Xóa loại", () => archiveRoomType(type)));
+        card.append(typeRow);
       }
-      card.append(action("등급·요금 수정 / Sửa hạng·giá", () => { if (!busy) resetGrade(grade); }));
+      card.dataset.catalogGradeId = grade.id;
+      card.append(action("등급·요금 수정 / Sửa hạng·giá", () => { if (!busy) resetGrade(grade); }), " ",
+        action("등급 삭제 / Xóa hạng", () => archiveRoomGrade(grade)));
       container.append(card);
     }
     const legacyTypes = types.filter(type => !type.grade_id);
@@ -434,6 +447,7 @@
     for (const type of legacyTypes) {
       const card = document.createElement("div");
       card.className = "hotel-room-type" + (type.is_active === false ? " is-paused" : "");
+      card.dataset.catalogTypeId = type.id;
       const title = document.createElement("div");
       title.className = "hotel-room-title";
       title.textContent = type.name + (type.is_active === false ? " · 사용 중지 / Ngừng dùng" : "");
@@ -443,7 +457,8 @@
         + "\n주말 / Cuối tuần — 매입 / Mua " + moneyText(type.weekend_purchase) + " · 매출 / Bán " + moneyText(type.weekend_sale);
       rates.style.whiteSpace = "pre-line";
       card.append(title, rates, action("수정 / Sửa", () => { if (!busy) resetRoomType(type); }), " ",
-        action(type.is_active === false ? "다시 사용 / Dùng lại" : "사용 중지 / Ngừng dùng", () => toggleRoomType(type)));
+        action(type.is_active === false ? "다시 사용 / Dùng lại" : "사용 중지 / Ngừng dùng", () => toggleRoomType(type)), " ",
+        action("삭제 / Xóa", () => archiveRoomType(type)));
       container.append(card);
     }
   }
@@ -451,6 +466,7 @@
   function openRoomTypes(hotel) {
     if (busy || !ready) return;
     managedHotel = hotel;
+    message("catalogError", "");
     byId("roomTypeTitle").textContent = hotel.name + " · 등급·룸타입 / Hạng·loại phòng";
     resetGrade();
     renderRoomTypes();
@@ -458,7 +474,7 @@
   }
 
   async function toggleRoomType(type) {
-    if (busy || !ready) return;
+    if (busy || !ready || type.archived_at) return;
     if (type.grade_id) { resetGrade(roomGrades.find(grade => grade.id === type.grade_id)); return; }
     const active = type.is_active === false;
     if (!confirm(type.name + "\n" + (active ? "다시 사용할까요? / Dùng lại loại phòng này?" : "사용을 중지할까요? 기존 예약은 유지됩니다. / Ngừng dùng? Đặt phòng cũ vẫn được giữ."))) return;
@@ -474,6 +490,50 @@
     } finally { setBusy(false); }
   }
 
+  async function archiveRoomType(type) {
+    if (busy || !ready) return;
+    const current = roomTypes.find(item => item.id === type.id);
+    if (!current || current.archived_at) return;
+    const affectsGrade = current.grade_id && !gradeForm.hidden && editingGrade?.id === current.grade_id;
+    const affectsLegacy = !roomTypeForm.hidden && editingRoomType?.id === current.id;
+    const label = current.grade_id ? (current.grade_name || "") + " · " + roomKindLabel(current.room_kind) : current.name;
+    const resetNotice = affectsGrade || affectsLegacy ? "\n현재 수정 중인 이 항목의 미저장 입력은 초기화됩니다. / Các thay đổi chưa lưu của mục này sẽ được đặt lại." : "";
+    if (!confirm(label + "\n이 룸타입을 삭제할까요? 새 예약에서는 선택할 수 없지만 기존 예약의 이름·금액·내역은 그대로 유지됩니다.\nXóa loại phòng này? Không thể chọn cho đặt phòng mới; tên, số tiền và chi tiết đặt phòng cũ vẫn được giữ nguyên." + resetNotice)) return;
+    setBusy(true);
+    message("catalogError", "");
+    try {
+      const result = await DGV.supabase.rpc("archive_hotel_room_type", { p_id: current.id, p_expected_version: current.version });
+      if (result.error) throw result.error;
+      await refresh();
+      if (!ready) throw new Error("삭제 후 목록을 불러오지 못했습니다. 새로고침해 주세요. / Đã xóa nhưng không tải lại được danh sách. Vui lòng tải lại.");
+      if (affectsGrade) resetGrade(roomGrades.find(grade => grade.id === current.grade_id));
+      else if (affectsLegacy) resetGrade();
+    } catch (error) {
+      message("catalogError", errorText(error));
+    } finally { setBusy(false); }
+  }
+
+  async function archiveRoomGrade(grade) {
+    if (busy || !ready) return;
+    const current = roomGrades.find(item => item.id === grade.id);
+    if (!current || current.archived_at) return;
+    const affectsEditor = !gradeForm.hidden && editingGrade?.id === current.id;
+    const resetNotice = affectsEditor ? "\n현재 수정 중인 이 등급의 미저장 입력은 초기화됩니다. / Các thay đổi chưa lưu của hạng này sẽ được đặt lại." : "";
+    if (!confirm(current.name + "\n이 등급과 포함된 모든 룸타입을 삭제할까요? 기존 예약의 이름·금액·내역은 그대로 유지됩니다.\nXóa hạng này cùng tất cả loại phòng thuộc hạng? Tên, số tiền và chi tiết đặt phòng cũ vẫn được giữ nguyên." + resetNotice)) return;
+    const versions = roomTypes.filter(type => type.grade_id === current.id).map(type => ({ id: type.id, version: type.version }));
+    setBusy(true);
+    message("catalogError", "");
+    try {
+      const result = await DGV.supabase.rpc("archive_hotel_room_grade", { p_id: current.id, p_expected_version: current.version, p_type_versions: versions });
+      if (result.error) throw result.error;
+      await refresh();
+      if (!ready) throw new Error("삭제 후 목록을 불러오지 못했습니다. 새로고침해 주세요. / Đã xóa nhưng không tải lại được danh sách. Vui lòng tải lại.");
+      if (affectsEditor) resetGrade();
+    } catch (error) {
+      message("catalogError", errorText(error));
+    } finally { setBusy(false); }
+  }
+
   function renderRoomItems() {
     byId("legacyRoomNotice").hidden = useRoomTypes;
     byId("roomItemsFields").hidden = !useRoomTypes;
@@ -483,8 +543,8 @@
     if (!useRoomTypes) return;
     const hotelId = field("hotel_id").value;
     const allTypes = roomTypes.filter(type => type.hotel_id === hotelId);
-    const types = allTypes.filter(type => type.is_active !== false);
-    const grades = roomGrades.filter(grade => grade.hotel_id === hotelId && types.some(type => type.grade_id === grade.id));
+    const types = allTypes.filter(type => type.is_active !== false && !type.archived_at && !roomGrades.some(grade => grade.id === type.grade_id && grade.archived_at));
+    const grades = roomGrades.filter(grade => grade.hotel_id === hotelId && !grade.archived_at && types.some(type => type.grade_id === grade.id));
     roomItems.forEach((item, index) => {
       const line = document.createElement("div");
       line.className = "hotel-room-line";
@@ -507,7 +567,8 @@
       for (const grade of grades) gradeSelect.add(new Option(grade.name, grade.id));
       if (types.some(type => !type.grade_id) || (savedType && !savedType.grade_id)) gradeSelect.add(new Option("기존 룸타입 / Loại phòng cũ", "legacy"));
       if (selectedGrade && selectedGrade !== "legacy" && !grades.some(grade => grade.id === selectedGrade) && savedType) {
-        gradeSelect.add(new Option((savedType.room_grade || roomGrades.find(grade => grade.id === selectedGrade)?.name || "기존 등급 / Hạng cũ") + " (기존·중지 / cũ·ngừng dùng)", selectedGrade));
+        const archived = roomGrades.find(grade => grade.id === selectedGrade)?.archived_at;
+        gradeSelect.add(new Option((savedType.room_grade || roomGrades.find(grade => grade.id === selectedGrade)?.name || "기존 등급 / Hạng cũ") + (archived ? " (기존·삭제됨 / cũ·đã xóa)" : " (기존·중지 / cũ·ngừng dùng)"), selectedGrade));
       }
       gradeSelect.value = selectedGrade;
       gradeSelect.addEventListener("change", () => {
@@ -531,7 +592,8 @@
         .sort((a, b) => roomKinds.indexOf(a.room_kind) - roomKinds.indexOf(b.room_kind));
       for (const type of availableTypes) typeSelect.add(new Option(type.grade_id ? roomKindLabel(type.room_kind) : type.name, type.id));
       if (item.room_type_id && !availableTypes.some(type => type.id === item.room_type_id) && savedType) {
-        typeSelect.add(new Option((savedType.grade_id && savedType.room_kind ? roomKindLabel(savedType.room_kind) : selectedType?.name || savedType.name) + " (기존·중지 / cũ·ngừng dùng)", item.room_type_id));
+        const archived = selectedType?.archived_at || roomGrades.find(grade => grade.id === selectedType?.grade_id)?.archived_at;
+        typeSelect.add(new Option((savedType.grade_id && savedType.room_kind ? roomKindLabel(savedType.room_kind) : savedType.name || selectedType?.name) + (archived ? " (기존·삭제됨 / cũ·đã xóa)" : " (기존·중지 / cũ·ngừng dùng)"), item.room_type_id));
       }
       typeSelect.value = item.room_type_id || "";
       typeSelect.addEventListener("change", () => {
