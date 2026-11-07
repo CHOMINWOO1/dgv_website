@@ -140,4 +140,45 @@ assert.ok(gradedBytes.includes(Buffer.from('트리플 / Phòng ba')), 'actual wo
 assert.equal(report.workbookOptions([]).sheets[0].rows.length, 4);
 assert.match(report.renderHtml([]), /등록된 예약이 없습니다/);
 assert.match(report.renderHtml(null), /등록된 예약이 없습니다/);
-console.log("Hotel read-only PDF/Excel model, room snapshots and safe workbook regression passed.");
+
+// A check-in range must describe and select the same reservation IDs in both exports.
+const period = { fromDate: "2026-11-06", toDate: "2026-11-08" };
+const periodRows = [
+  { ...legacy, id: "outside-before", check_in: "2026-11-05", check_out: "2026-11-12" },
+  { ...modern, id: "inclusive-start", check_in: "2026-11-06", check_out: "2026-11-09" },
+  { ...graded, id: "inclusive-end", check_in: "2026-11-08", check_out: "2026-11-10", deposit_amount: 0, balance_amount: null },
+  { ...modern, id: "outside-after", check_in: "2026-11-09", check_out: "2026-11-11" },
+];
+const periodBefore = JSON.stringify(periodRows);
+const filteredHtml = report.renderHtml(periodRows, period);
+const filteredBook = report.workbookOptions(periodRows, period);
+assert.equal(JSON.stringify(periodRows), periodBefore);
+assert.match(filteredHtml, /체크인 기준 \/ Theo ngày nhận phòng: 2026-11-06 ~ 2026-11-08/);
+assert.equal((filteredHtml.match(/class="reservation"/g) || []).length, 2);
+assert.match(filteredHtml, /inclusive-start/);
+assert.match(filteredHtml, /inclusive-end/);
+assert.doesNotMatch(filteredHtml, /outside-before|outside-after/);
+assert.equal(filteredBook.filename, "hotel-reservations_2026-11-06_2026-11-08.xlsx");
+assert.deepEqual(Array.from(filteredBook.sheets[0].rows.slice(4), row => row[0].value), ["inclusive-start", "inclusive-end"]);
+assert.deepEqual(Array.from(new Set(Array.from(filteredBook.sheets[1].rows.slice(4), row => row[0].value))), ["inclusive-start", "inclusive-end"]);
+for (const sheet of filteredBook.sheets) assert.match(sheet.rows[1][0].value, /2026-11-06 ~ 2026-11-08/);
+assert.equal(filteredBook.sheets[0].rows[5][18].value, 0);
+assert.equal(filteredBook.sheets[0].rows[5][19].value, null);
+assert.equal(filteredBook.sheets[0].rows[5][20].value, 0);
+assert.equal(filteredBook.sheets[0].rows[4][17].value, modern.sale_amount);
+assert.equal(filteredBook.sheets[1].rows[4][8].value, modern.room_items[0].rate_snapshot.weekday_purchase);
+const filteredBytes = Buffer.from(context.DGV_XLSX.buildWorkbookBytes(filteredBook));
+for (const expected of ["inclusive-start", "inclusive-end", "2026-11-06 ~ 2026-11-08", "정원 전망 / Hướng vườn"]) {
+  assert.ok(filteredBytes.includes(Buffer.from(expected)), "actual workbook must contain " + expected);
+}
+assert.equal(filteredBytes.includes(Buffer.from("outside-before")), false);
+assert.equal(filteredBytes.includes(Buffer.from("outside-after")), false);
+const noMatches = { fromDate: "2027-01-01", toDate: "2027-01-31" };
+assert.match(report.renderHtml(periodRows, noMatches), /등록된 예약이 없습니다/);
+assert.match(report.renderHtml(periodRows, noMatches), /2027-01-01 ~ 2027-01-31/);
+assert.equal(report.workbookOptions(periodRows, noMatches).sheets[0].rows.length, 4);
+assert.equal(report.workbookOptions(periodRows, noMatches).sheets[1].rows.length, 4);
+assert.equal(report.workbookOptions(periodRows).filename, "hotel-reservations.xlsx");
+assert.equal(report.workbookOptions(periodRows).sheets[0].rows.length, 8, "omitting the new period keeps the established all-records API");
+assert.match(report.renderHtml(periodRows), /전체 기간 \/ Toàn bộ/);
+console.log("Hotel read-only PDF/Excel model, room snapshots, inclusive period metadata and safe workbook regression passed.");

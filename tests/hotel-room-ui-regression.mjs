@@ -88,15 +88,20 @@ const preserved = previewContext.run({ ...mixed, note: "changed only note" });
 assert.equal(preserved.roomPurchase, 2500, "unrelated edits must keep saved room snapshots after catalog price changes");
 assert.equal(preserved.roomSale, 2800);
 
-function printContext({ empty = false, failed = false, blocked = false } = {}) {
+function printContext({ empty = false, failed = false, blocked = false, invalidPeriod = false } = {}) {
   const events = [];
+  const period = { fromDate: "2026-11-08", toDate: "2026-11-09" };
   const popup = { closed: false, document: { write: text => events.push(["write", text]), close: () => {}, open: () => {}, fonts: { ready: Promise.resolve() } }, close() { this.closed = true; events.push("close"); }, focus: () => {}, print: () => events.push("print") };
   const context = {
-    busy: false, ready: true, reservations: [], Promise, Error,
+    busy: false, ready: true, reservations: [], appliedPeriod: period, Promise, Error,
+    applyPeriodDraft: () => { events.push("period"); return !invalidPeriod; },
     window: { open: () => { events.push("open"); return blocked ? null : popup; } },
     setBusy: value => { context.busy = value; },
     refresh: async () => { events.push("refresh"); context.ready = !failed; context.reservations = empty ? [] : [{ id: "latest-row" }]; },
-    HotelReport: { renderHtml: rows => { assert.equal(rows[0].id, "latest-row"); events.push("render"); return "<html>latest</html>"; } },
+    HotelReport: {
+      filterRows: (rows, selectedPeriod) => { assert.equal(JSON.stringify(selectedPeriod), JSON.stringify(period)); events.push("filter"); return rows; },
+      renderHtml: (rows, selectedPeriod) => { assert.equal(rows[0].id, "latest-row"); assert.equal(JSON.stringify(selectedPeriod), JSON.stringify(period)); events.push("render"); return "<html>latest</html>"; }
+    },
     errorText: error => error.message, message: (_id, value) => events.push(["message", value]), alert: value => events.push(["alert", value]),
     setTimeout: callback => { callback(); return 1; }
   };
@@ -105,8 +110,10 @@ function printContext({ empty = false, failed = false, blocked = false } = {}) {
 }
 const printed = printContext();
 await printed.context.run();
+assert.ok(printed.events.indexOf("period") < printed.events.indexOf("open"));
 assert.ok(printed.events.indexOf("open") < printed.events.indexOf("refresh"));
-assert.ok(printed.events.indexOf("refresh") < printed.events.indexOf("render"));
+assert.ok(printed.events.indexOf("refresh") < printed.events.indexOf("filter"));
+assert.ok(printed.events.indexOf("filter") < printed.events.indexOf("render"));
 assert.equal(printed.events.filter(event => event === "print").length, 1);
 assert.equal(printed.context.busy, false);
 for (const options of [{ empty: true }, { failed: true }]) {
@@ -120,6 +127,9 @@ const blocked = printContext({ blocked: true });
 await blocked.context.run();
 assert.equal(blocked.events.includes("refresh"), false);
 assert.ok(blocked.events.some(event => Array.isArray(event) && event[0] === "alert"));
+const invalidPeriod = printContext({ invalidPeriod: true });
+await invalidPeriod.context.run();
+assert.deepEqual(invalidPeriod.events, ["period"], "invalid period must not open a popup or fetch data");
 
 class Node {
   constructor(tag = "div") { this.tag = tag; this.children = []; this.textContent = ""; }
