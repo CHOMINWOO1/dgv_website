@@ -9,11 +9,13 @@ const source = await readFile(path.join(root, "assets/admin-bank-report.js"), "u
 const admin = (await readFile(path.join(root, "admin.html"), "utf8")).replace(/\r\n/g, "\n");
 new vm.Script(source, { filename: "assets/admin-bank-report.js" });
 assert.doesNotMatch(source, /\b(?:fetch|XMLHttpRequest)\s*\(|\.(?:insert|update|upsert|delete|rpc)\s*\(/, "bank report generation must not perform network calls or DB writes");
-const scope = { Date, Intl, Map, Set, Object, Array, Number, String, Boolean, Math, JSON };
+const scope = { Date, Intl, Map, Set, Object, Array, Number, String, Boolean, Math, JSON, TextEncoder, Uint8Array, Uint32Array, DataView };
 vm.runInNewContext(source, scope);
+vm.runInNewContext(await readFile(path.join(root, "assets/dgv-xlsx.js"), "utf8"), scope);
 const api = scope.DGV_BANK_REPORT;
 assert.equal(typeof api?.buildReport, "function");
 assert.equal(typeof api?.renderHtml, "function");
+assert.equal(typeof api?.workbookOptions, "function");
 
 function fixture() {
   const order = (id, payment_method = "bank", status = "paid", total_vnd = 240_000) => ({
@@ -336,4 +338,166 @@ for (const options of [{ fromDate: "" }, { fromDate: "2026-11-07", toDate: "2026
   assert.ok(!invalid.events.includes("query"));
 }
 
-console.log("Payment-group print model and UI regression passed.");
+// Exercise the production XLSX writer entirely in memory; never create files or contact a service.
+const cellValue = cell => cell && typeof cell === "object" && "value" in cell ? cell.value : cell;
+const valuesOf = sheet => Array.from(sheet.rows, row => Array.from(row, cellValue));
+const sheetText = sheet => JSON.stringify(valuesOf(sheet));
+const totalCell = (sheet, label) => sheet.rows.find(row => cellValue(row[0]) === label)?.[6];
+const detailRows = sheet => {
+  const rows = valuesOf(sheet), start = rows.findIndex(row => row[0] === "STT / No.") + 1;
+  const selected = [];
+  for (let index = start; index < rows.length && typeof rows[index][0] === "number"; index++) selected.push(rows[index]);
+  return selected;
+};
+const workbook = api.workbookOptions(model);
+assert.equal(serialize(model), modelBefore, "Excel generation must leave print model and original order snapshots unchanged");
+assert.equal(workbook.sheets.length, 7);
+assert.equal(new Set(Array.from(workbook.sheets, sheet => sheet.name.toLowerCase())).size, 7);
+assert.deepEqual(Array.from(workbook.sheets.slice(-2), sheet => sheet.name), ["현금 Tiền mặt", "카드 Thẻ"]);
+assert.match(workbook.filename, /^HANA_Payments_2026-11-06_2026-11-06\.xlsx$/);
+for (const [index, order] of model.orders.entries()) {
+  const sheet = workbook.sheets[index];
+  assert.equal(sheet.name, `은행 ${String(index + 1).padStart(3, "0")}`);
+  assert.ok(sheetText(sheet).includes(order.id));
+  assert.equal(totalCell(sheet, "결제 총액 (VAT 포함) / Tổng thanh toán (có VAT)").value, order.grossAmount);
+  assert.equal(totalCell(sheet, "주문-메뉴 차액 / Chênh lệch đơn hàng-chi tiết").value, order.difference);
+  assert.equal(detailRows(sheet).length, order.lines.length);
+  order.lines.forEach((line, lineIndex) => {
+    const values = detailRows(sheet)[lineIndex];
+    assert.equal(values[1], line.koName);
+    assert.equal(values[2], line.viName);
+    assert.equal(values[4], line.qty);
+    assert.equal(values[5], line.unitAmount);
+    assert.equal(values[6], line.grossAmount);
+  });
+}
+for (const sheet of workbook.sheets) {
+  assert.ok(sheet.name.length <= 31);
+  assert.doesNotMatch(sheet.name, /[\\/:?*\[\]]/);
+  assert.ok(sheetText(sheet).includes(input.rangeText));
+  assert.match(sheetText(sheet), /실제 은행 입금 확인|xác nhận tiền thực nhận/);
+  assert.match(sheetText(sheet), /전자세금계산서 원본|hóa đơn điện tử gốc/);
+  for (const row of detailRows(sheet)) for (const index of [0, 4, 5, 6]) {
+    assert.ok(row[index] === null || typeof row[index] === "number", "counts and VND amounts must be numeric cells, not localized strings");
+  }
+}
+const cashSheet = workbook.sheets[5], cardSheet = workbook.sheets[6];
+assert.match(sheetText(cashSheet), /order-cash/);
+assert.doesNotMatch(sheetText(cashSheet), /order-card|카드 메뉴/);
+assert.match(sheetText(cardSheet), /order-card/);
+assert.doesNotMatch(sheetText(cardSheet), /order-cash|현금 메뉴/);
+assert.equal(totalCell(cashSheet, "결제 총액 (VAT 포함) / Tổng thanh toán (có VAT)").value, 240_000);
+assert.equal(totalCell(cardSheet, "결제 총액 (VAT 포함) / Tổng thanh toán (có VAT)").value, 240_000);
+const zeroSheet = workbook.sheets[model.orders.findIndex(order => order.id === "order-zero")];
+assert.equal(detailRows(zeroSheet)[0][6], 0, "explicit zero price remains numeric zero in Excel");
+const unknownWorkbook = api.workbookOptions(unknownModel);
+assert.equal(totalCell(unknownWorkbook.sheets[0], "결제 총액 (VAT 포함) / Tổng thanh toán (có VAT)").value, null, "unknown amounts must stay blank, not become zero");
+assert.match(sheetText(unknownWorkbook.sheets[0]), /확인 필요/);
+const aggregateWorkbook = api.workbookOptions(aggregateModel);
+assert.equal(aggregateWorkbook.sheets.length, 2);
+assert.equal(detailRows(aggregateWorkbook.sheets[0]).length, 2);
+assert.equal(detailRows(aggregateWorkbook.sheets[1]).length, 1);
+assert.deepEqual(detailRows(aggregateWorkbook.sheets[0])[0].slice(4), [3, 50_000, 150_000]);
+assert.deepEqual(detailRows(aggregateWorkbook.sheets[1])[0].slice(4), [3, 50_000, 150_000]);
+assert.equal(totalCell(aggregateWorkbook.sheets[0], "결제 총액 (VAT 포함) / Tổng thanh toán (có VAT)").value, 210_000);
+assert.equal(totalCell(aggregateWorkbook.sheets[1], "결제 총액 (VAT 포함) / Tổng thanh toán (có VAT)").value, 150_000);
+for (const method of ["cash", "card"]) {
+  const selected = api.buildReport({ ...fixture(), visibleOrders: input.visibleOrders.filter(order => order.payment_method === method) });
+  assert.equal(api.workbookOptions(selected).sheets.length, 1);
+}
+assert.equal(api.workbookOptions(bankOnly).sheets.length, 5);
+assert.throws(() => api.workbookOptions(emptyModel), error => error.code === "PAYMENT_XLSX_EMPTY");
+const many = { ...model, orders: Array.from({ length: 255 }, () => mixed), otherOrders: [] };
+assert.equal(api.workbookOptions(many).sheets.length, 255);
+assert.throws(() => api.workbookOptions({ ...many, orders: [...many.orders, mixed] }), error => error.code === "PAYMENT_XLSX_SHEET_LIMIT");
+
+function storedZip(bytes) {
+  const zip = Buffer.from(bytes), entries = new Map();
+  for (let offset = 0; offset + 30 < zip.length && zip.readUInt32LE(offset) === 0x04034b50;) {
+    const size = zip.readUInt32LE(offset + 18), nameLength = zip.readUInt16LE(offset + 26), extraLength = zip.readUInt16LE(offset + 28);
+    assert.equal(zip.readUInt16LE(offset + 8), 0, "use the existing exporter's stored ZIP format");
+    const dataStart = offset + 30 + nameLength + extraLength;
+    entries.set(zip.subarray(offset + 30, offset + 30 + nameLength).toString("utf8"), zip.subarray(dataStart, dataStart + size).toString("utf8"));
+    offset = dataStart + size;
+  }
+  return entries;
+}
+const archive = storedZip(scope.DGV_XLSX.buildWorkbookBytes(workbook));
+assert.equal(Array.from(archive.keys()).filter(name => /^xl\/worksheets\/sheet\d+\.xml$/.test(name)).length, 7);
+assert.equal((archive.get("xl/workbook.xml").match(/<sheet\s/g) || []).length, 7);
+const mixedIndex = model.orders.findIndex(order => order.id === mixed.id);
+const mixedSheet = workbook.sheets[mixedIndex], mixedXml = archive.get(`xl/worksheets/sheet${mixedIndex + 1}.xml`);
+const firstLineNumber = mixedSheet.rows.findIndex(row => cellValue(row[0]) === "STT / No.") + 2;
+assert.match(mixedXml, new RegExp(`<c r="G${firstLineNumber}" s="2"><v>200000<\\/v><\\/c>`));
+assert.match(mixedXml, /Nước ép ổi/);
+assert.match(mixedXml, /00:05/, "Excel uses Vietnam order date/time too");
+const formulaInput = fixture();
+formulaInput.visibleOrders = [{ ...input.visibleOrders[0], id: '=HYPERLINK("https://example.invalid")', total_vnd: 4_000, guide_name: '+SUM(1,2)', team_no: '@A1' }];
+formulaInput.linesByOrder = new Map([[formulaInput.visibleOrders[0].id,
+  ['=1+1', '+SUM(1,2)', '-2+1', '@SUM(A1)'].map(name => ({ ko_name: name, vi_name: '<img onerror="x"> & Tiếng Việt', qty: 1, unit_vnd: 1_000, line_vnd: 1_000 }))]]);
+const formulaModel = api.buildReport(formulaInput), formulaBefore = serialize(formulaModel);
+const formulaArchive = storedZip(scope.DGV_XLSX.buildWorkbookBytes(api.workbookOptions(formulaModel)));
+const formulaXml = formulaArchive.get('xl/worksheets/sheet1.xml');
+assert.equal(serialize(formulaModel), formulaBefore);
+assert.doesNotMatch(formulaXml, /<f\b|<hyperlink\b|<img\b/);
+assert.match(formulaXml, /t="inlineStr"[\s\S]*?=1\+1/);
+assert.match(formulaXml, /HYPERLINK/);
+assert.match(formulaXml, /&lt;img/);
+assert.match(formulaXml, /Tiếng Việt/);
+assert.equal(Array.from(formulaArchive.keys()).some(name => /externalLinks/.test(name)), false);
+
+assert.match(admin, /id="bankExcelRangeBtn"/);
+assert.match(admin, /getElementById\("bankExcelRangeBtn"\)\.addEventListener\("click",\s*exportPaymentExcel\)/);
+assert.match(admin, /getElementById\("excelRangeBtn"\)\.addEventListener\("click",\s*exportRangeExcel\)/, "existing ordinary Excel output stays wired");
+assert.match(admin, /getElementById\("taxExcelRangeBtn"\)\.addEventListener\("click",\s*exportTaxOfficeExcel\)/, "existing tax Excel output stays wired");
+const exportStart = admin.indexOf("async function exportPaymentExcel(");
+assert.ok(exportStart > 0);
+const exportTail = admin.slice(exportStart), exportEnd = exportTail.indexOf("\n    }\n");
+assert.ok(exportEnd > 0);
+const exportSource = exportTail.slice(0, exportEnd + 6);
+assert.doesNotMatch(exportSource, /\.(?:insert|update|upsert|delete|rpc)\s*\(/);
+assert.match(exportSource, /loadTaxRangeReportData\(/);
+function exportContext({ selectedModel = model, readError = null, downloadError = null, buildError = null,
+  missingExporter = false, fromDate = "2026-11-06", toDate = "2026-11-06", disabled = false } = {}) {
+  const events = [], alerts = [], downloads = [];
+  const button = { disabled, textContent: "결제별 엑셀" };
+  const inputs = { fromDate: { value: fromDate }, toDate: { value: toDate } };
+  const context = {
+    Date, String, Number, Error,
+    document: { getElementById: id => id === "bankExcelRangeBtn" ? button : inputs[id] },
+    window: {
+      open: () => assert.fail("Excel must download without opening another window"),
+      DGV_BANK_REPORT: { buildReport: () => selectedModel, workbookOptions: value => { if (buildError) throw buildError; return api.workbookOptions(value); } },
+      DGV_XLSX: missingExporter ? null : { downloadWorkbook: options => { events.push("download"); if (downloadError) throw downloadError; downloads.push(options); } },
+    },
+    loadTaxRangeReportData: async () => { events.push(["query", inputs.fromDate.value, inputs.toDate.value]); if (readError) throw readError; return fixture(); },
+    alert: message => alerts.push(message), console: { error() {} },
+  };
+  vm.runInNewContext(`${exportSource}\nthis.run=exportPaymentExcel;`, context);
+  return { context, events, alerts, downloads, button };
+}
+const exported = exportContext();
+await exported.context.run();
+assert.equal(exported.downloads.length, 1);
+assert.equal(exported.downloads[0].sheets.length, 7);
+assert.deepEqual(exported.events.filter(event => Array.isArray(event)), [["query", "2026-11-06", "2026-11-06"]]);
+assert.equal(exported.alerts.length, 0);
+assert.equal(exported.button.disabled, false);
+assert.equal(exported.button.textContent, "결제별 엑셀");
+for (const options of [{ selectedModel: emptyModel }, { readError: new Error("read failure") }, { downloadError: new Error("download failure") },
+  { missingExporter: true }, { buildError: Object.assign(new Error("limit"), { code: "PAYMENT_XLSX_SHEET_LIMIT" }) }]) {
+  const check = exportContext(options); await check.context.run();
+  assert.equal(check.downloads.length, 0);
+  assert.ok(check.alerts.length > 0);
+  assert.equal(check.button.disabled, false);
+  assert.equal(check.button.textContent, "결제별 엑셀");
+}
+for (const options of [{ fromDate: "" }, { fromDate: "2026-02-30" }, { fromDate: "2026-11-08", toDate: "2026-11-06" }]) {
+  const check = exportContext(options); await check.context.run();
+  assert.equal(check.events.length, 0);
+  assert.ok(check.alerts.length > 0);
+}
+const alreadyExporting = exportContext({ disabled: true }); await alreadyExporting.context.run();
+assert.equal(alreadyExporting.events.length, 0);
+assert.equal(alreadyExporting.downloads.length, 0);
+console.log("Payment-group print/XLSX model, safe numeric workbook and single-download UI regression passed.");

@@ -21,6 +21,7 @@
     .hotel-fields textarea{resize:vertical}
     .hotel-wide{grid-column:1/-1}
     .hotel-hint{font-size:13px;color:var(--qr-sub);line-height:1.6}
+    .hotel-period-fields{display:flex;align-items:end;flex-wrap:wrap;gap:10px;border:0;padding:0;margin:12px 0;min-width:0}.hotel-period-fields label{display:grid;gap:5px;flex:1 1 190px;max-width:260px}.hotel-period-fields input{min-width:0;width:100%}.hotel-period-status{background:#fff5dd;padding:10px 12px;border-radius:10px;font-weight:650;line-height:1.6}
     .hotel-error{color:#a21c24;white-space:pre-line}
     .hotel-checks{display:flex;flex-wrap:wrap;gap:14px;margin:10px 0}
     .hotel-checks label,.hotel-toggle{display:flex!important;align-items:center;gap:6px}
@@ -67,6 +68,15 @@
     </section>
     <section class="qr-card qr-card-pad hotel-section" aria-labelledby="listTitle">
       <div class="qr-section-head"><h2 class="qr-section-title" id="listTitle">예약 정보 / Đặt phòng</h2><span id="listCount"></span></div>
+      <form id="hotelPeriodForm" novalidate>
+        <fieldset class="hotel-period-fields" id="hotelPeriodFields"><legend class="qr-label">체크인 기간 조회 / Tra cứu theo ngày nhận phòng</legend>
+          <label><span class="qr-label">시작일 / Từ ngày</span><input class="qr-input" id="hotelFromDate" type="date" min="1900-01-01" max="9999-12-31" /></label>
+          <label><span class="qr-label">종료일 / Đến ngày</span><input class="qr-input" id="hotelToDate" type="date" min="1900-01-01" max="9999-12-31" /></label>
+          <button class="qr-btn qr-btn-primary" type="submit">조회 / Tra cứu</button><button class="qr-btn" id="allHotelDatesButton" type="button">전체 기간 / Toàn bộ</button>
+        </fieldset>
+        <p class="hotel-error" id="hotelPeriodError" role="alert" hidden></p>
+      </form>
+      <p class="hotel-period-status" id="hotelPeriodStatus" role="status">체크인 기준 / Theo ngày nhận phòng: 전체 기간 / Toàn bộ</p>
       <p class="hotel-hint">예약 행을 누르면 상세 내역을 보고 수정·삭제할 수 있습니다. / Bấm vào dòng đặt phòng để xem chi tiết, sửa hoặc xóa.</p>
       <div class="hotel-table-wrap" tabindex="0" aria-label="호텔 예약 목록">
         <table class="hotel-table"><thead><tr>
@@ -184,8 +194,8 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
-  <script src="assets/hotel-report.js?v=20261107-catalog-delete-1"></script>
+  <script src="assets/hotel-report.js?v=20261107-hotel-period-1"></script>
   <script src="assets/hotel-pricing.js?v=20261107-catalog-delete-1"></script>
-  <script src="assets/hotel-reserv-list.js?v=20261107-catalog-delete-1"></script>
+  <script src="assets/hotel-reserv-list.js?v=20261107-hotel-period-1"></script>
 </body>
 </html>

@@ -175,6 +175,115 @@
       ${warningHtml(warnings)}${footer()}</section>`;
   }
 
+  /** Excel cells remain numbers or literal strings; the existing XLSX writer never creates formulas. */
+  function workbookOptions(model) {
+    const textCell = (value, style = "normal") => ({ value: String(value == null ? "" : value), style });
+    const numberCell = (value, style = "integer") => ({ value: number(value), style });
+    const headerRow = labels => labels.map(label => textCell(label, "header"));
+    const sheets = [];
+    const addSheet = (name, method, orders, lines, title) => {
+      const rows = [];
+      const merges = [];
+      const fullRow = (value, style = "wrapped") => {
+        // Short physical lines stay readable in merged cells without relying on Excel auto-height.
+        const words = String(value).split(/\s+/);
+        let current = "";
+        for (const word of words) {
+          if (current && current.length + word.length + 1 > 120) {
+            rows.push([textCell(current, style)]);
+            merges.push(`A${rows.length}:G${rows.length}`);
+            current = "";
+          }
+          current += (current ? " " : "") + word;
+        }
+        rows.push([textCell(current, style)]);
+        merges.push(`A${rows.length}:G${rows.length}`);
+      };
+      const metadata = (label, value) => {
+        rows.push([textCell(label, "totalLabel"), "", "", "", textCell(value, "wrapped")]);
+        merges.push(`A${rows.length}:D${rows.length}`, `E${rows.length}:G${rows.length}`);
+      };
+      const totalRow = (label, value) => {
+        rows.push([textCell(label, "totalLabel"), "", "", "", "", "", numberCell(value, "totalNumber")]);
+        merges.push(`A${rows.length}:F${rows.length}`);
+      };
+      fullRow("HANA RESTAURANT · " + title, "title");
+      metadata("조회 기간 / Kỳ báo cáo", model.rangeText);
+      metadata("생성 (베트남) / Tạo lúc (Việt Nam)", vietnamTime(model.generatedAt));
+      metadata("결제수단 / Thanh toán", paymentLabel(method));
+      metadata("결제 완료 주문 / Đơn đã thanh toán", orders.length + "건 / đơn");
+      fullRow("주문 일시는 베트남 시간(UTC+07:00)이며 모든 금액은 VND입니다. / Thời điểm đặt theo giờ Việt Nam (UTC+07:00). Đơn vị tiền: VND.");
+      if (method === "bank") {
+        const order = orders[0];
+        metadata("주문번호 / Mã đơn", order.id);
+        metadata("주문 일시 / Thời điểm đặt", vietnamTime(order.createdAt));
+        if (order.guideName) metadata("고객·가이드 / Khách·Hướng dẫn viên", order.guideName);
+        if (order.teamNo) metadata("팀·테이블 / Nhóm·Bàn", order.teamNo);
+      } else {
+        fullRow("같은 결제수단·메뉴·단가별로 합산합니다. / Gộp theo phương thức thanh toán, món ăn và đơn giá.");
+      }
+      rows.push([]);
+      rows.push(headerRow(["STT / No.", "메뉴명 (KO)", "Tên món (VI)", "결제수단 / Thanh toán", "수량 / Số lượng", "VAT 포함 단가 / Đơn giá có VAT", "VAT 포함 금액 / Thành tiền có VAT"]));
+      const headerIndex = rows.length;
+      for (const [index, line] of lines.entries()) {
+        rows.push([numberCell(index + 1), textCell(line.koName, "wrapped"), textCell(line.viName, "wrapped"),
+          textCell(paymentLabel(method), "wrapped"), numberCell(line.qty), numberCell(line.unitAmount), numberCell(line.grossAmount)]);
+      }
+      if (!lines.length) fullRow("상세 내역 없음 / Chưa có chi tiết");
+      const lastDetailRow = rows.length;
+      rows.push([]);
+      const lineTotal = sum(orders.map(order => order.lineTotal));
+      const grossAmount = sum(orders.map(order => order.grossAmount));
+      const difference = grossAmount !== null && lineTotal !== null ? grossAmount - lineTotal : null;
+      totalRow("메뉴 합계 / Tổng chi tiết", lineTotal);
+      totalRow("주문-메뉴 차액 / Chênh lệch đơn hàng-chi tiết", difference);
+      totalRow("결제 총액 (VAT 포함) / Tổng thanh toán (có VAT)", grossAmount);
+      if (method !== "bank") {
+        rows.push([]);
+        fullRow("포함 주문 / Các đơn hàng được tổng hợp", "totalLabel");
+        rows.push(headerRow(["주문번호 / Mã đơn", "주문 일시 / Thời điểm đặt", "고객·가이드 / Khách·Hướng dẫn viên", "팀·테이블 / Nhóm·Bàn", "결제수단 / Thanh toán", "메뉴 합계 / Tổng chi tiết", "VAT 포함 총액 / Tổng có VAT"]));
+        for (const order of orders) {
+          rows.push([textCell(order.id, "wrapped"), textCell(vietnamTime(order.createdAt)), textCell(order.guideName, "wrapped"),
+            textCell(order.teamNo, "wrapped"), textCell(paymentLabel(method), "wrapped"), numberCell(order.lineTotal), numberCell(order.grossAmount)]);
+        }
+      }
+      const warnings = orders.flatMap(order => order.warnings.map(warning => `${order.id}: ${warning}`));
+      if (warnings.length) {
+        rows.push([]);
+        fullRow("확인 필요 / Cần kiểm tra", "totalLabel");
+        warnings.forEach(warning => fullRow(warning));
+      }
+      rows.push([]);
+      fullRow("빈 금액 셀은 미확인 값이며 0은 저장된 0원입니다. / Ô số tiền trống là chưa xác định; số 0 là giá trị đã lưu.");
+      fullRow("저장된 주문 금액 기준입니다. 실제 은행 입금 확인 내역이나 전자세금계산서 원본이 아닙니다.");
+      fullRow("Số tiền theo dữ liệu đơn hàng đã lưu. Đây không phải xác nhận tiền thực nhận vào ngân hàng hoặc hóa đơn điện tử gốc.");
+      if (rows.length > 1048576) {
+        const error = new Error("Selected payment details exceed the Excel row limit");
+        error.code = "PAYMENT_XLSX_ROW_LIMIT";
+        throw error;
+      }
+      sheets.push({ name, rows, merges, columnWidths: [16, 30, 34, 25, 19, 27, 29], freezeRows: headerIndex,
+        autoFilterRange: `A${headerIndex}:G${lastDetailRow}` });
+    };
+    const sectionCount = model.orders.length + (model.otherOrders.some(order => order.paymentMethod === "cash") ? 1 : 0)
+      + (model.otherOrders.some(order => order.paymentMethod === "card") ? 1 : 0);
+    if (!sectionCount || sectionCount > 255) {
+      const error = new Error(sectionCount ? "Selected payment groups exceed the exporter sheet limit" : "No paid orders to export");
+      error.code = sectionCount ? "PAYMENT_XLSX_SHEET_LIMIT" : "PAYMENT_XLSX_EMPTY";
+      throw error;
+    }
+    model.orders.forEach((order, index) => addSheet(`은행 ${String(index + 1).padStart(3, "0")}`, "bank", [order], order.lines,
+      "은행 결제 주문 내역 / CHI TIẾT ĐƠN HÀNG CHUYỂN KHOẢN"));
+    for (const method of ["cash", "card"]) {
+      const orders = model.otherOrders.filter(order => order.paymentMethod === method);
+      if (!orders.length) continue;
+      addSheet(method === "cash" ? "현금 Tiền mặt" : "카드 Thẻ", method, orders, aggregateOtherLines(orders), method === "cash"
+        ? "현금 결제 합산 내역 / TỔNG HỢP THANH TOÁN TIỀN MẶT" : "카드 결제 합산 내역 / TỔNG HỢP THANH TOÁN THẺ");
+    }
+    const dateLabel = text(model.rangeText).replace(/[^0-9-]+/g, "_").replace(/^_+|_+$/g, "") || "export";
+    return { filename: `HANA_Payments_${dateLabel}.xlsx`, sheets };
+  }
+
   function renderHtml(model) {
     const sections = model.orders.map((order, index) => bankSection(order, model, index + 1));
     for (const method of ["cash", "card"]) {
@@ -199,5 +308,5 @@
       </style></head><body>${sections.join("")}</body></html>`;
   }
 
-  return Object.freeze({ buildReport, renderHtml });
+  return Object.freeze({ buildReport, renderHtml, workbookOptions });
 });

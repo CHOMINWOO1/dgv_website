@@ -348,6 +348,7 @@
               <button class="btn" id="taxPrintRangeBtn">세무서 출력</button>
               <button class="btn" id="taxExcelRangeBtn">세무서 엑셀 출력</button>
               <button class="btn" id="bankPrintRangeBtn" title="은행은 주문별로, 현금과 카드는 결제수단별로 나누어 한 번에 인쇄합니다.">결제별 출력 (은행 개별)</button>
+              <button class="btn" id="bankExcelRangeBtn" title="은행은 주문별 시트로, 현금과 카드는 각각 합산 시트로 한 Excel 파일에 저장합니다.">결제별 엑셀</button>
             </div>
           </div>
         </div>
@@ -453,7 +454,7 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
   <script src="assets/admin-tax-report.js"></script>
-<script src="assets/admin-bank-report.js?v=20261107-payment-groups-2"></script>
+<script src="assets/admin-bank-report.js?v=20261107-payment-xlsx-1"></script>
   <script src="assets/supabase-client.js"></script>
   <script>
     /*************************************************
@@ -1441,6 +1442,50 @@
       }
     }
 
+    async function exportPaymentExcel(){
+      const button = document.getElementById("bankExcelRangeBtn");
+      if (button.disabled) return;
+      const from = document.getElementById("fromDate").value;
+      const to = document.getElementById("toDate").value;
+      const isValidDate = (value)=>{
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        const date = new Date(`${value}T00:00:00Z`);
+        return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+      };
+      if (!isValidDate(from) || !isValidDate(to) || from > to){
+        alert("시작일과 종료일을 올바르게 선택해 주세요. / Vui lòng chọn khoảng ngày hợp lệ.");
+        return;
+      }
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = "생성 중…";
+      try{
+        if (!window.DGV_XLSX?.downloadWorkbook || !window.DGV_BANK_REPORT?.buildReport || !window.DGV_BANK_REPORT?.workbookOptions){
+          throw new Error("Payment workbook exporter is unavailable");
+        }
+        // 인쇄와 동일한 베트남 현지 기간 조회와 저장된 주문 모델을 사용합니다.
+        const report = await loadTaxRangeReportData();
+        const model = window.DGV_BANK_REPORT.buildReport(report);
+        if (!model.orderCount){
+          alert("선택한 기간에 은행·카드·현금으로 결제 완료된 주문이 없습니다. / Không có đơn đã thanh toán bằng chuyển khoản, thẻ hoặc tiền mặt trong khoảng ngày đã chọn.");
+          return;
+        }
+        window.DGV_XLSX.downloadWorkbook(window.DGV_BANK_REPORT.workbookOptions(model));
+      }catch(error){
+        console.error(error);
+        if (error.code === "PAYMENT_XLSX_SHEET_LIMIT"){
+          alert("한 번에 최대 255개 묶음까지 내보낼 수 있습니다. 조회 기간을 줄여 주세요. / Có thể xuất tối đa 255 nhóm mỗi lần. Vui lòng chọn khoảng ngày ngắn hơn.");
+        }else if (error.code === "PAYMENT_XLSX_ROW_LIMIT"){
+          alert("내역이 Excel 최대 행 수를 초과했습니다. 조회 기간을 줄여 주세요. / Dữ liệu vượt quá giới hạn số dòng Excel. Vui lòng chọn khoảng ngày ngắn hơn.");
+        }else{
+          alert("결제별 Excel 파일 생성에 실패했습니다. 잠시 후 다시 시도해 주세요. / Không thể tạo tệp Excel theo phương thức thanh toán. Vui lòng thử lại sau.");
+        }
+      }finally{
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    }
+
     function taxWorkbookOptions(report, model){
       const numberCell = (value, style="integer") => ({ value:Number(value || 0), style });
       const textCell = (value, style="normal") => ({ value:String(value ?? ""), style });
@@ -2085,6 +2130,7 @@
     document.getElementById("taxPrintRangeBtn").addEventListener("click", printTaxOfficeReport);
     document.getElementById("taxExcelRangeBtn").addEventListener("click", exportTaxOfficeExcel);
     document.getElementById("bankPrintRangeBtn").addEventListener("click", printBankOrders);
+    document.getElementById("bankExcelRangeBtn").addEventListener("click", exportPaymentExcel);
 
     // Gate 이벤트
     document.getElementById("gateConfirmBtn").addEventListener("click", enterAdmin);

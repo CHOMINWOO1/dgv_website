@@ -13,6 +13,7 @@
   const roomKindLabel = kind => ({ SINGLE: "싱글 / Phòng đơn", DOUBLE: "더블 / Phòng đôi", TRIPLE: "트리플 / Phòng ba" })[kind] || kind;
   let hotels = [];
   let reservations = [];
+  let appliedPeriod = { fromDate: "", toDate: "" };
   let roomTypes = [];
   let roomGrades = [];
   let gradeDraft = [];
@@ -63,6 +64,33 @@
     byId("reservationFields").disabled = value;
     byId("roomTypeFields").disabled = value;
     byId("gradeFields").disabled = value;
+    byId("hotelPeriodFields").disabled = value;
+  }
+
+  function periodDraft() {
+    return { fromDate: byId("hotelFromDate").value, toDate: byId("hotelToDate").value };
+  }
+
+  function updatePeriodStatus() {
+    const draft = periodDraft();
+    const changed = draft.fromDate !== appliedPeriod.fromDate || draft.toDate !== appliedPeriod.toDate;
+    byId("hotelPeriodStatus").textContent = HotelReport.periodLabel(appliedPeriod)
+      + (changed ? " · 변경한 기간은 조회·출력 시 적용됩니다. / Khoảng ngày mới được áp dụng khi tra cứu, in hoặc xuất Excel." : "");
+  }
+
+  function applyPeriodDraft() {
+    try {
+      if (["hotelFromDate", "hotelToDate"].some(id => byId(id).validity && !byId(id).validity.valid)) {
+        throw new Error("시작일과 종료일을 올바르게 선택해 주세요. / Vui lòng chọn ngày bắt đầu và ngày kết thúc hợp lệ.");
+      }
+      appliedPeriod = HotelReport.normalizePeriod(periodDraft());
+      message("hotelPeriodError", "");
+      render();
+      return true;
+    } catch (error) {
+      message("hotelPeriodError", errorText(error));
+      return false;
+    }
   }
 
   function action(label, handler) {
@@ -98,8 +126,9 @@
       controls.append(action("등급·룸타입 / Hạng·loại phòng", () => openRoomTypes(hotel)), " ", action("수정 / Sửa", () => openHotel(hotel)), " ", action("삭제 / Xóa", () => remove("hotel_properties", hotel)));
     }
     byId("hotelCount").textContent = hotels.length + "개 / khách sạn";
-    const body = renderRows("hotelRows", reservations, "등록된 예약이 없습니다. / Chưa có đặt phòng.", 16);
-    for (const reservation of reservations) {
+    const visibleReservations = HotelReport.filterRows(reservations, appliedPeriod);
+    const body = renderRows("hotelRows", visibleReservations, "조회 기간에 해당하는 예약이 없습니다. / Không có đặt phòng trong khoảng ngày đã chọn.", 16);
+    for (const reservation of visibleReservations) {
       const row = body.insertRow();
       const mode = reservation.pricing_mode === "standard"
         ? "일반 / Thường (" + reservation.weekday_nights + " 주중 + " + reservation.weekend_nights + " 주말)"
@@ -131,7 +160,8 @@
         openReservationDetail(reservation.id);
       });
     }
-    byId("listCount").textContent = reservations.length + "건 / đặt phòng";
+    byId("listCount").textContent = visibleReservations.length + "건 / đặt phòng";
+    updatePeriodStatus();
     if (managedHotel && byId("roomTypeDialog").open) renderRoomTypes();
     if (detailReservationId && byId("hotelDetailDialog").open) {
       const latest = reservations.find(record => record.id === detailReservationId);
@@ -861,6 +891,8 @@
 
   async function printHotelList() {
     if (busy || !ready) return;
+    if (!applyPeriodDraft()) return;
+    const period = { ...appliedPeriod };
     const popup = window.open("", "_blank");
     if (!popup) {
       alert("인쇄 창을 열 수 없습니다. 팝업을 허용해 주세요. / Cho phép cửa sổ bật lên để in.");
@@ -872,10 +904,11 @@
     try {
       await refresh();
       if (!ready) throw new Error("최신 내역을 불러오지 못했습니다. / Không thể tải dữ liệu mới nhất.");
-      if (!reservations.length) throw new Error("출력할 예약이 없습니다. / Chưa có đặt phòng để in.");
+      const rows = HotelReport.filterRows(reservations, period);
+      if (!rows.length) throw new Error("조회 기간에 출력할 예약이 없습니다. / Chưa có đặt phòng để in trong khoảng ngày đã chọn.");
       if (popup.closed) return;
       popup.document.open();
-      popup.document.write(HotelReport.renderHtml(reservations));
+      popup.document.write(HotelReport.renderHtml(rows, period));
       popup.document.close();
       if (popup.document.fonts?.ready) await popup.document.fonts.ready;
       await new Promise(resolve => setTimeout(resolve, 150));
@@ -888,12 +921,15 @@
 
   async function exportHotelList() {
     if (busy || !ready) return;
+    if (!applyPeriodDraft()) return;
+    const period = { ...appliedPeriod };
     setBusy(true);
     try {
       await refresh();
       if (!ready) throw new Error("최신 내역을 불러오지 못했습니다. / Không thể tải dữ liệu mới nhất.");
-      if (!reservations.length) throw new Error("내보낼 예약이 없습니다. / Chưa có đặt phòng để xuất.");
-      DGV_XLSX.downloadWorkbook(HotelReport.workbookOptions(reservations));
+      const rows = HotelReport.filterRows(reservations, period);
+      if (!rows.length) throw new Error("조회 기간에 내보낼 예약이 없습니다. / Chưa có đặt phòng để xuất trong khoảng ngày đã chọn.");
+      DGV_XLSX.downloadWorkbook(HotelReport.workbookOptions(rows, period));
     } catch (error) {
       message("pageStatus", errorText(error));
     } finally { setBusy(false); }
@@ -958,6 +994,19 @@
       detailReservationId = null;
     }
   });
+  byId("hotelPeriodForm").addEventListener("submit", event => {
+    event.preventDefault();
+    if (!busy && ready) applyPeriodDraft();
+  });
+  byId("allHotelDatesButton").addEventListener("click", () => {
+    if (busy || !ready) return;
+    byId("hotelFromDate").value = "";
+    byId("hotelToDate").value = "";
+    applyPeriodDraft();
+  });
+  for (const id of ["hotelFromDate", "hotelToDate"]) {
+    byId(id).addEventListener("input", () => { message("hotelPeriodError", ""); updatePeriodStatus(); });
+  }
   byId("printHotelListButton").addEventListener("click", printHotelList);
   byId("excelHotelListButton").addEventListener("click", exportHotelList);
   byId("addHotelButton").addEventListener("click", () => openHotel());
