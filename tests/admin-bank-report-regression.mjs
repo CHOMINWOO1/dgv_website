@@ -50,13 +50,15 @@ function fixture() {
 }
 
 const serialize = value => JSON.stringify(value, (_key, item) => item instanceof Map ? Array.from(item.entries()) : item);
+const sections = (html, className) => Array.from(html.matchAll(/<section\b[^>]*class="([^"]*)"[^>]*>[\s\S]*?<\/section>/g))
+  .filter(match => match[1].split(/\s+/).includes(className)).map(match => match[0]);
 const input = fixture();
 const before = serialize(input);
 const model = api.buildReport(input);
 assert.equal(serialize(input), before, "building the print model must not mutate orders or item snapshots");
 assert.equal(model.orderCount, 7, "all paid, non-excluded bank/cash/card orders belong in the report");
 assert.equal(model.bankOrderCount, 5);
-assert.equal(model.sectionCount, 6, "five bank orders plus the combined cash/card group need six sections");
+assert.equal(model.sectionCount, 7, "five bank orders plus separate cash and card groups need seven sections");
 assert.deepEqual(Array.from(model.orders, item => item.id).sort(), ["order-bank-extra", "order-custom", "order-mixed", "order-no-lines", "order-zero"]);
 assert.deepEqual(Array.from(model.otherOrders, item => item.id).sort(), ["order-card", "order-cash"]);
 assert.equal(model.bankGrossAmount, 595_000);
@@ -90,14 +92,22 @@ const html = api.renderHtml(model);
 assert.equal(serialize(model), modelBefore, "rendering must be read-only");
 const sectionCount = (html.match(/<section\b(?=[^>]*class="[^"]*\bbankOrder\b)/g) || []).length;
 assert.equal(sectionCount, 5, "each bank order needs an independent printable section");
-assert.equal((html.match(/<section\b(?=[^>]*class="[^"]*\botherOrders\b)/g) || []).length, 1, "cash and card orders must share one printable group");
-const otherSection = html.match(/<section\b(?=[^>]*class="[^"]*\botherOrders\b)[\s\S]*?<\/section>/)?.[0];
-assert.ok(otherSection, "the combined non-bank report must be present");
-assert.match(otherSection, /order-cash/);
-assert.match(otherSection, /order-card/);
-assert.match(otherSection, /현금 메뉴/);
-assert.match(otherSection, /카드 메뉴/);
-assert.match(otherSection, /480,000/);
+assert.equal(sections(html, "reportSection").length, 7);
+assert.equal(sections(html, "otherOrders").length, 2, "cash and card need separate printable aggregate groups");
+assert.equal(sections(html, "cashOrders").length, 1);
+assert.equal(sections(html, "cardOrders").length, 1);
+const cashSection = sections(html, "cashOrders")[0];
+const cardSection = sections(html, "cardOrders")[0];
+assert.match(cashSection, /order-cash/);
+assert.match(cashSection, /현금 메뉴/);
+assert.match(cashSection, /240,000/);
+assert.doesNotMatch(cashSection, /order-card|카드 메뉴|480,000/);
+assert.match(cardSection, /order-card/);
+assert.match(cardSection, /카드 메뉴/);
+assert.match(cardSection, /240,000/);
+assert.doesNotMatch(cardSection, /order-cash|현금 메뉴|480,000/);
+assert.ok(html.indexOf(cashSection) > html.lastIndexOf('class="reportSection bankOrder"'));
+assert.ok(html.indexOf(cardSection) > html.indexOf(cashSection), "print order is bank orders, cash aggregate, then card aggregate");
 assert.match(html, /break-before\s*:\s*page|page-break-before\s*:\s*always/, "orders must start on separate printed pages");
 assert.match(html, /A4/);
 assert.match(html, /VAT 포함|VAT\s*포함/);
@@ -132,8 +142,22 @@ cashCardInput.visibleOrders = cashCardInput.visibleOrders.filter(order => ["cash
 const cashCardOnly = api.buildReport(cashCardInput);
 assert.equal(cashCardOnly.orderCount, 2);
 assert.equal(cashCardOnly.bankOrderCount, 0);
-assert.equal(cashCardOnly.sectionCount, 1);
+assert.equal(cashCardOnly.sectionCount, 2);
 assert.equal(cashCardOnly.grossAmount, 480_000);
+assert.equal(sections(api.renderHtml(cashCardOnly), "reportSection").length, 2);
+for (const method of ["cash", "card"]) {
+  const singleMethodInput = fixture();
+  singleMethodInput.visibleOrders = singleMethodInput.visibleOrders.filter(order => order.payment_method === method);
+  const singleMethod = api.buildReport(singleMethodInput);
+  const singleMethodHtml = api.renderHtml(singleMethod);
+  assert.equal(singleMethod.orderCount, 1);
+  assert.equal(singleMethod.sectionCount, 1, `${method}-only ranges need one aggregate section`);
+  assert.equal(singleMethod.grossAmount, 240_000);
+  assert.equal(sections(singleMethodHtml, "bankOrder").length, 0);
+  assert.equal(sections(singleMethodHtml, "otherOrders").length, 1);
+  assert.equal(sections(singleMethodHtml, method + "Orders").length, 1);
+  assert.equal(sections(singleMethodHtml, (method === "cash" ? "card" : "cash") + "Orders").length, 0);
+}
 const bankOnlyInput = fixture();
 bankOnlyInput.visibleOrders = bankOnlyInput.visibleOrders.filter(order => order.payment_method.trim().toLowerCase() === "bank");
 const bankOnly = api.buildReport(bankOnlyInput);
@@ -149,23 +173,62 @@ aggregateInput.visibleOrders = [
   { ...input.visibleOrders[0], id: "cash-b", payment_method: "cash", total_vnd: 100_000 },
   { ...input.visibleOrders[0], id: "cash-c", payment_method: "cash", total_vnd: 60_000 },
   { ...input.visibleOrders[0], id: "card-a", payment_method: "card", total_vnd: 50_000 },
+  { ...input.visibleOrders[0], id: "card-b", payment_method: " CARD ", total_vnd: 100_000 },
 ];
 aggregateInput.linesByOrder = new Map([
   ["cash-a", [{ ko_name: "반복 메뉴", vi_name: "Cùng món", qty: 1, unit_vnd: 50_000, line_vnd: 50_000 }]],
   ["cash-b", [{ ko_name: "반복 메뉴", vi_name: "Cùng món", qty: 2, unit_vnd: 50_000, line_vnd: 100_000 }]],
   ["cash-c", [{ ko_name: "반복 메뉴", vi_name: "Cùng món", qty: 1, unit_vnd: 60_000, line_vnd: 60_000 }]],
   ["card-a", [{ ko_name: "반복 메뉴", vi_name: "Cùng món", qty: 1, unit_vnd: 50_000, line_vnd: 50_000 }]],
+  ["card-b", [{ ko_name: "반복 메뉴", vi_name: "Cùng món", qty: 2, unit_vnd: 50_000, line_vnd: 100_000 }]],
 ]);
 const aggregateBefore = serialize(aggregateInput);
 const aggregateModel = api.buildReport(aggregateInput);
 const aggregateHtml = api.renderHtml(aggregateModel);
 assert.equal(serialize(aggregateInput), aggregateBefore);
-assert.equal(aggregateModel.grossAmount, 260_000);
-const aggregateBody = aggregateHtml.match(/<table class="items">[\s\S]*?<tbody>([\s\S]*?)<\/tbody>/)?.[1];
-assert.ok(aggregateBody);
-assert.equal((aggregateBody.match(/<tr>/g) || []).length, 3, "same-price cash lines may merge; different prices and card lines must stay separate");
-assert.match(aggregateBody, /<td class="number">3<\/td>\s*<td class="number">50,000<\/td>\s*<td class="number">150,000<\/td>/);
-assert.match(aggregateHtml, /210,000 VND/);
+assert.equal(aggregateModel.grossAmount, 360_000);
+assert.equal(aggregateModel.orderCount, 5);
+assert.equal(aggregateModel.sectionCount, 2, "multiple cash and card orders still produce only two aggregate sections");
+const aggregateCash = sections(aggregateHtml, "cashOrders")[0];
+const aggregateCard = sections(aggregateHtml, "cardOrders")[0];
+const itemBody = section => section.match(/<table class="items">[\s\S]*?<tbody>([\s\S]*?)<\/tbody>/)?.[1];
+const aggregateCashBody = itemBody(aggregateCash);
+const aggregateCardBody = itemBody(aggregateCard);
+assert.ok(aggregateCashBody);
+assert.ok(aggregateCardBody);
+assert.equal((aggregateCashBody.match(/<tr>/g) || []).length, 2, "same-price cash lines merge but historical price differences remain distinct");
+assert.equal((aggregateCardBody.match(/<tr>/g) || []).length, 1, "same-price card lines aggregate independently from matching cash menus");
+for (const body of [aggregateCashBody, aggregateCardBody]) {
+  assert.match(body, /<td class="number">3<\/td>\s*<td class="number">50,000<\/td>\s*<td class="number">150,000<\/td>/);
+  assert.doesNotMatch(body, /<td class="number">6<\/td>/, "identical cash/card menus must never combine across payment methods");
+}
+assert.match(aggregateCash, /210,000 VND/);
+assert.match(aggregateCard, /150,000 VND/);
+assert.doesNotMatch(aggregateCash, /card-a|card-b/);
+assert.doesNotMatch(aggregateCard, /cash-a|cash-b|cash-c|210,000/);
+assert.equal(sections(aggregateHtml, "cashOrders").length, 1);
+assert.equal(sections(aggregateHtml, "cardOrders").length, 1);
+
+const differenceInput = fixture();
+differenceInput.visibleOrders = [
+  { ...input.visibleOrders[0], id: "cash-difference", payment_method: "cash", total_vnd: 90_000 },
+  { ...input.visibleOrders[0], id: "card-difference", payment_method: "card", total_vnd: 210_000 },
+];
+differenceInput.linesByOrder = new Map([
+  ["cash-difference", [{ ko_name: "현금 차액 메뉴", qty: 1, unit_vnd: 100_000, line_vnd: 100_000 }]],
+  ["card-difference", [{ ko_name: "카드 차액 메뉴", qty: 1, unit_vnd: 200_000, line_vnd: 200_000 }]],
+]);
+const differenceBefore = serialize(differenceInput);
+const differenceModel = api.buildReport(differenceInput);
+const differenceHtml = api.renderHtml(differenceModel);
+assert.equal(serialize(differenceInput), differenceBefore);
+assert.equal(differenceModel.grossAmount, 300_000);
+assert.match(sections(differenceHtml, "cashOrders")[0], /-10,000|−10,000/);
+assert.match(sections(differenceHtml, "cardOrders")[0], /10,000/);
+assert.match(sections(differenceHtml, "cashOrders")[0], /90,000 VND/);
+assert.match(sections(differenceHtml, "cardOrders")[0], /210,000 VND/);
+assert.match(sections(differenceHtml, "cashOrders")[0], /확인 필요/);
+assert.match(sections(differenceHtml, "cardOrders")[0], /확인 필요/);
 
 const missingInput = fixture();
 missingInput.visibleOrders = [{ ...input.visibleOrders[0], id: "missing-total", total_vnd: null }];
@@ -180,6 +243,21 @@ assert.equal(unknownModel.orders[0].grossAmount, null, "missing order and detail
 assert.equal(unknownModel.bankGrossAmount, null);
 assert.equal(unknownModel.grossAmount, null);
 assert.match(api.renderHtml(unknownModel), /확인 필요/);
+
+const partialInput = fixture();
+partialInput.visibleOrders = [
+  { ...input.visibleOrders[0], id: "cash-known", payment_method: "cash", total_vnd: 100_000 },
+  { ...input.visibleOrders[0], id: "card-unknown", payment_method: "card", total_vnd: null },
+];
+partialInput.linesByOrder = new Map([["cash-known", [{ ko_name: "확인된 현금", qty: 1, unit_vnd: 100_000, line_vnd: 100_000 }]]]);
+const partialModel = api.buildReport(partialInput);
+const partialHtml = api.renderHtml(partialModel);
+assert.equal(partialModel.grossAmount, null);
+assert.equal(partialModel.otherGrossAmount, null);
+assert.equal(partialModel.sectionCount, 2);
+assert.match(sections(partialHtml, "cashOrders")[0], /100,000 VND/);
+assert.match(sections(partialHtml, "cardOrders")[0], /확인 필요/);
+assert.doesNotMatch(sections(partialHtml, "cardOrders")[0], /100,000/, "unknown card totals must not inherit the cash aggregate amount");
 
 assert.match(admin, /id="bankPrintRangeBtn"/);
 assert.match(admin, /<script src="assets\/admin-bank-report\.js(?:\?[^\"]*)?"><\/script>/);
@@ -226,11 +304,12 @@ assert.equal(success.button.textContent, "결제별 출력 (은행 개별)");
 assert.ok(success.events.some(event => Array.isArray(event) && event[1].includes("bank report fixture")));
 await Promise.resolve();
 assert.equal(success.events.filter(event => event === "open").length, 1, "all payment groups must share one window");
+assert.equal(success.events.filter(event => event === "query").length, 1, "separating payment groups must not re-fetch the same range per group");
 assert.equal(success.events.filter(event => event === "print").length, 1, "font readiness and fallback timers must not open duplicate print dialogs");
 const otherOnlyPrint = printContext({ result: cashCardOnly });
 await otherOnlyPrint.context.run();
 await Promise.resolve();
-assert.equal(otherOnlyPrint.events.filter(event => event === "print").length, 1, "cash/card-only periods must still print the combined group");
+assert.equal(otherOnlyPrint.events.filter(event => event === "print").length, 1, "cash/card-only periods must print both separate groups in one dialog");
 assert.equal(otherOnlyPrint.alerts.length, 0);
 
 for (const options of [{ result: emptyModel }, { readError: new Error("simulated read failure") }]) {
