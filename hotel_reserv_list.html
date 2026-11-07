@@ -31,13 +31,14 @@
     .hotel-room-line label{display:grid;gap:5px;min-width:0}.hotel-room-line button{min-height:42px}
     .hotel-room-types{display:grid;gap:8px}.hotel-room-type{border:1px solid var(--qr-line);border-radius:10px;padding:12px}.hotel-room-type p{margin:6px 0}
     .hotel-room-type.is-paused{opacity:.65}.hotel-room-title{font-weight:700}.hotel-optional{font-size:12px;font-weight:normal}
+    .hotel-catalog-type{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0}.hotel-catalog-type p{flex:1;min-width:0}.hotel-catalog-type button{flex-shrink:0}
     #roomTypeForm{border-top:1px solid var(--qr-line);margin-top:16px;padding-top:12px}
     .hotel-grade-editor{border-top:1px solid var(--qr-line);padding-top:14px;margin-top:16px}.hotel-grade-type{border:1px solid var(--qr-line);border-radius:12px;padding:12px;margin:12px 0}.hotel-grade-type.is-disabled{background:#f6f3ee}.hotel-grade-type-head{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}.hotel-grade-copy{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.hotel-grade-copy select{max-width:170px}.hotel-grade-type .hotel-fields{margin-bottom:0}
     #hotelRows tr[data-reservation-id]{cursor:pointer}#hotelRows tr[data-reservation-id]:hover,#hotelRows tr[data-reservation-id]:focus-visible{background:#fff5dd;outline:2px solid #c79549;outline-offset:-2px}
     .hotel-detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}.hotel-detail-head h2{margin:0 0 8px}
     .hotel-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}.hotel-detail-card{border:1px solid var(--qr-line);border-radius:12px;padding:14px;min-width:0}.hotel-detail-card h3{margin:0 0 12px;font-size:16px}
     .hotel-detail-field{margin:10px 0;min-width:0}.hotel-detail-field dt{font-size:12px;color:var(--qr-sub);margin-bottom:3px}.hotel-detail-field dd{margin:0;font-weight:650;white-space:pre-wrap;overflow-wrap:anywhere}.hotel-detail-room{border-top:1px dashed var(--qr-line);padding-top:10px;margin-top:10px}.hotel-detail-room:first-of-type{border-top:0;padding-top:0}
-    @media(max-width:680px){.hotel-room-line{grid-template-columns:1fr 1fr}.hotel-room-line label:first-child,.hotel-room-line label:nth-child(2){grid-column:1/-1}}
+    @media(max-width:680px){.hotel-room-line{grid-template-columns:1fr 1fr}.hotel-room-line label:first-child,.hotel-room-line label:nth-child(2){grid-column:1/-1}.hotel-catalog-type{display:block}.hotel-catalog-type button{margin:4px 0}}
     @media(max-width:540px){.hotel-fields,.hotel-detail-grid{grid-template-columns:1fr}.hotel-dialog{padding:16px}}
   </style>
 </head>
@@ -103,6 +104,7 @@
   <dialog class="hotel-dialog" id="roomTypeDialog" aria-labelledby="roomTypeTitle">
     <h2 id="roomTypeTitle">등급·룸타입 관리 / Quản lý hạng·loại phòng</h2>
     <p class="hotel-hint">등급명은 자유롭게 입력하고 각 등급의 싱글·더블·트리플을 선택해 요금을 등록합니다. 가격 변경·사용 중지는 기존 예약 금액을 바꾸지 않습니다. / Tự đặt tên hạng phòng và chọn SINGLE·DOUBLE·TRIPLE. Đổi giá hoặc ngừng dùng không thay đổi giá đã lưu của đặt phòng cũ.</p>
+    <div id="catalogError" class="qr-status error" role="alert" hidden></div>
     <div id="roomTypeRows" class="hotel-room-types"></div>
     <form id="gradeForm" class="hotel-grade-editor">
       <h3 id="gradeFormTitle">객실 등급 추가 / Thêm hạng phòng</h3>
@@ -182,8 +184,8 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
-  <script src="assets/hotel-report.js?v=20261107-grades-1"></script>
-  <script src="assets/hotel-pricing.js?v=20261107-grades-1"></script>
-  <script src="assets/hotel-reserv-list.js?v=20261107-grades-1"></script>
+  <script src="assets/hotel-report.js?v=20261107-catalog-delete-1"></script>
+  <script src="assets/hotel-pricing.js?v=20261107-catalog-delete-1"></script>
+  <script src="assets/hotel-reserv-list.js?v=20261107-catalog-delete-1"></script>
 </body>
 </html>
