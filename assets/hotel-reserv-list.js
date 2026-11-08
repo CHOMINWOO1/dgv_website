@@ -13,7 +13,7 @@
   const roomKindLabel = kind => ({ SINGLE: "싱글 / Phòng đơn", DOUBLE: "더블 / Phòng đôi", TRIPLE: "트리플 / Phòng ba" })[kind] || kind;
   let hotels = [];
   let reservations = [];
-  let appliedPeriod = { fromDate: "", toDate: "" };
+  let appliedPeriod = { fromDate: "", toDate: "", status: "in_progress" };
   let roomTypes = [];
   let roomGrades = [];
   let gradeDraft = [];
@@ -125,6 +125,8 @@
       appliedPeriod = HotelReport.normalizePeriod(periodDraft());
       const query = byId("hotelQuery")?.value?.trim() || "";
       if (query) appliedPeriod.query = query;
+      const status = byId("hotelStatus").value;
+      if (["in_progress", "completed"].includes(status)) appliedPeriod.status = status;
       message("hotelPeriodError", "");
       render();
       return true;
@@ -168,7 +170,7 @@
     }
     byId("hotelCount").textContent = hotels.length + "개 / khách sạn";
     const visibleReservations = HotelReport.filterRows(reservations, appliedPeriod);
-    const body = renderRows("hotelRows", visibleReservations, "조회 기간에 해당하는 예약이 없습니다. / Không có đặt phòng trong khoảng ngày đã chọn.", 17);
+    const body = renderRows("hotelRows", visibleReservations, "조회 조건에 해당하는 예약이 없습니다. / Không có đặt phòng theo điều kiện đã chọn.", 18);
     for (const reservation of visibleReservations) {
       const row = body.insertRow();
       const mode = reservation.pricing_mode === "standard"
@@ -182,7 +184,7 @@
         moneyText(reservation.purchase_amount), moneyText(reservation.sale_amount),
         optionalMoney(reservation.deposit_amount), optionalMoney(reservation.balance_amount),
         reservation.deposit_amount == null && reservation.balance_amount == null ? "—" : moneyText(Number(reservation.deposit_amount || 0) + Number(reservation.balance_amount || 0)),
-        reservation.booking_reference || "—", reservation.note || ""];
+        reservation.booking_reference || "—", reservation.note || "", HotelReport.statusLabel(reservation)];
       for (const value of values) row.insertCell().textContent = value;
       row.cells[4].className = "hotel-guests";
       row.cells[3].className = "hotel-guests";
@@ -237,6 +239,7 @@
     const info = card("예약 정보 / Thông tin đặt phòng");
     detail(info, "호텔 / Khách sạn", record.hotel_name);
     detail(info, "예약번호 / Mã đặt phòng", record.booking_reference);
+    detail(info, "상태 / Trạng thái", HotelReport.statusLabel(record));
     detail(info, "체크인 / Nhận phòng", record.check_in);
     detail(info, "체크아웃 / Trả phòng", record.check_out);
     detail(info, "투숙객 인원 / Số khách", record.guest_count);
@@ -1045,6 +1048,7 @@
     event.preventDefault();
     if (!busy && ready) applyPeriodDraft();
   });
+  byId("hotelStatus").addEventListener("change", () => { if (!busy && ready) applyPeriodDraft(); });
   byId("allHotelDatesButton").addEventListener("click", () => {
     if (busy || !ready) return;
     byId("hotelFromDate").value = "";

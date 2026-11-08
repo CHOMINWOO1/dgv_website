@@ -1,3 +1,4 @@
+-- CLI-created migration version aligned to the hosted migration history.
 -- Add only an optional supplier confirmation number. No backfill or repricing.
 set local lock_timeout = '3s';
 do $$

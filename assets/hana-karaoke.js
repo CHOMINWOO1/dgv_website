@@ -140,6 +140,14 @@
     }
   };
 
+
+  const catalogueText = {
+    ko: {searchModeLabel:'검색 방식',catalogMode:'등록곡 DB (YouTube 검색 한도 미사용)',youtubeMode:'YouTube 검색 (없는 곡 찾기)',categoryLabel:'분류',categoryAll:'전체',categoryKo:'한국',categoryVi:'베트남',categoryPop:'팝송',categoryOther:'새로 등록된 곡',catalogLoading:'등록곡 검색 중…',catalogHint:'등록곡 검색은 YouTube 검색 한도를 쓰지 않습니다. 없는 곡만 YouTube 검색으로 찾아 예약해 주세요.',catalogEmpty:'등록곡에 없습니다. 검색 방식을 YouTube 검색으로 바꿔 찾아보세요.',catalogUnavailable:'등록곡 검색을 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.',catalogSource:'YouTube 영상으로 구성된 등록곡 목록',privacyCatalog:'등록곡 DB 검색어는 Google에 보내지 않습니다. YouTube 검색으로 예약한 영상 ID·제목·채널을 공용 곡 목록에 자동 저장합니다. 영상 메타데이터는 주기적으로 갱신하며, 30일 이상 갱신되지 않은 정보는 삭제합니다.'},
+    vi: {searchModeLabel:'Cách tìm',catalogMode:'Kho bài hát (không dùng lượt tìm YouTube)',youtubeMode:'Tìm trên YouTube (bài chưa có)',categoryLabel:'Thể loại',categoryAll:'Tất cả',categoryKo:'Hàn Quốc',categoryVi:'Việt Nam',categoryPop:'Nhạc quốc tế',categoryOther:'Bài mới lưu',catalogLoading:'Đang tìm trong kho…',catalogHint:'Tìm trong kho không dùng lượt tìm YouTube. Chỉ dùng tìm YouTube khi chưa có bài.',catalogEmpty:'Kho chưa có bài này. Chuyển sang tìm YouTube để tìm và đặt bài.',catalogUnavailable:'Chưa thể tìm trong kho. Vui lòng thử lại sau.',catalogSource:'Kho bài hát gồm các video YouTube',privacyCatalog:'Từ khóa tìm trong kho không được gửi tới Google. ID, tiêu đề và kênh của video đặt từ kết quả tìm YouTube được tự lưu vào kho dùng chung. Thông tin video được cập nhật định kỳ; thông tin không cập nhật trong 30 ngày sẽ bị xóa.'},
+    en: {searchModeLabel:'Search in',catalogMode:'Song catalogue (no YouTube search quota)',youtubeMode:'YouTube (find missing songs)',categoryLabel:'Category',categoryAll:'All',categoryKo:'Korean',categoryVi:'Vietnamese',categoryPop:'Pop',categoryOther:'Newly saved',catalogLoading:'Searching the song catalogue…',catalogHint:'Catalogue search does not use YouTube search quota. Use YouTube search only for missing songs.',catalogEmpty:'Not in the catalogue. Switch to YouTube search to find and reserve it.',catalogUnavailable:'The song catalogue is unavailable. Please retry later.',catalogSource:'Catalogue of YouTube videos',privacyCatalog:'Catalogue queries are not sent to Google. Video IDs, titles and channels reserved from YouTube search are automatically added to the shared catalogue. Video metadata is refreshed regularly and deleted if not refreshed for 30 days.'}
+  };
+  for (const language of Object.keys(catalogueText)) Object.assign(dict[language], catalogueText[language]);
+
   let lang = 'ko';
   try { const saved = localStorage.getItem('hanaLang'); if (Object.hasOwn(dict, saved)) lang = saved; } catch (_) { /* Optional preference. */ }
   const t = (key) => dict[lang][key] || dict.en[key] || key;
@@ -239,10 +247,11 @@
       if (!payload.token) throw new Error('inviteError');
     }
     const signature = JSON.stringify(payload);
-    const readOnly = action === 'state' || action === 'search';
+    const isSearch = action === 'search' || action === 'library';
+    const readOnly = action === 'state' || isSearch;
     payload.requestId = readOnly ? requestId() : uncertainRequests.get(signature) || requestId();
     const expectedGeneration = generation;
-    const maxAttempts = action === 'search' ? 1 : 2;
+    const maxAttempts = isSearch ? 1 : 2;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const controller = new AbortController();
       const abortFromCaller = () => controller.abort();
@@ -258,7 +267,7 @@
         let data;
         try { data = await response.json(); } catch (_) { throw new Error('Uncertain response'); }
         if (!response.ok || data?.error) {
-          if (action === 'search') throw new Error(apiError(data?.code || data?.error?.code || data?.error, response.status));
+          if (isSearch) throw new Error(apiError(data?.code || data?.error?.code || data?.error, response.status));
           if (response.status >= 500) throw new Error('Uncertain response');
           uncertainRequests.delete(signature);
           throw new Error(apiError(data?.code || data?.error?.code || data?.error, response.status));
@@ -270,7 +279,7 @@
         if (!readOnly && expectedGeneration === generation) uncertainRequests.set(signature, payload.requestId);
         // Lost responses retry the same idempotency key, including a later manual retry.
         if (attempt + 1 < maxAttempts && expectedGeneration === generation && !suspended && !externalSignal?.aborted && navigator.onLine !== false) continue;
-        throw new Error(action === 'search' ? 'searchUnavailable' : !readOnly ? 'uncertain' : navigator.onLine === false ? 'offline' : 'error');
+        throw new Error(isSearch ? 'searchUnavailable' : !readOnly ? 'uncertain' : navigator.onLine === false ? 'offline' : 'error');
       } finally {
         clearTimeout(timeout);
         externalSignal?.removeEventListener('abort', abortFromCaller);
@@ -317,7 +326,9 @@
     $('searchSubmit').disabled = busy || searchBusy || !active || !searchConsent;
     $('searchQuery').disabled = searchBusy || !active || !searchConsent;
     $('searchMore').disabled = busy || searchBusy || !active || !searchConsent || !searchData?.nextPageToken;
-    $('searchSubmit').textContent = t(searchBusy ? 'searchLoading' : 'searchSubmit');
+    $('searchMode').disabled = busy || !active;
+    $('catalogCategory').disabled = busy || !active || $('searchMode').value !== 'catalog';
+    $('searchSubmit').textContent = t(searchBusy ? $('searchMode').value === 'catalog' ? 'catalogLoading' : 'searchLoading' : 'searchSubmit');
     $('youtubeSearchForm').setAttribute('aria-busy', String(searchBusy));
     $('searchResults').setAttribute('aria-busy', String(Boolean(pendingResultId)));
     document.querySelectorAll('#searchResults button').forEach((button) => { button.disabled = busy || searchBusy || !active || !searchConsent || button.dataset.added === 'true'; });
@@ -372,6 +383,7 @@
     showPlayback(playbackMessage);
     setConnection(connectionKey);
     $('searchConsent').checked = searchConsent;
+    updateSearchMode();
     showSearchStatus(searchStatusKey, searchStatusError);
     renderSearchResults();
     renderState();
@@ -383,6 +395,13 @@
     $('searchStatus').textContent = key ? t(key) : '';
     $('searchStatus').hidden = !key;
     $('searchStatus').classList.toggle('error', isError);
+  }
+
+  function updateSearchMode() {
+    const catalog = $('searchMode').value === 'catalog';
+    $('catalogCategoryField').hidden = !catalog;
+    document.querySelector('[data-i="searchQuotaHint"]').textContent = t(catalog ? 'catalogHint' : 'searchQuotaHint');
+    document.querySelector('[data-i="searchSource"]').textContent = t(catalog ? 'catalogSource' : 'searchSource');
   }
 
   function resetSearch() {
@@ -448,27 +467,29 @@
     if (!query || Array.from(query).length > 100) { showSearchStatus('searchQueryError', true); return; }
     const pageToken = nextPage ? searchData?.nextPageToken : null;
     if (nextPage && !pageToken) return;
+    const catalog = $('searchMode').value === 'catalog';
+    const category = $('catalogCategory').value;
     const expectedGeneration = generation, expectedLanguage = lang;
     const expectedEpoch = ++searchEpoch;
     searchAbort?.abort(); searchAbort = new AbortController();
     const controller = searchAbort;
     searchData = null; renderSearchResults();
-    searchBusy = true; showSearchStatus('searchLoading'); updateControls();
+    searchBusy = true; showSearchStatus(catalog ? 'catalogLoading' : 'searchLoading'); updateControls();
     try {
-      const response = await api('search', { query, language: lang, ...(pageToken ? { pageToken } : {}) }, controller.signal);
+      const response = await api(catalog ? 'library' : 'search', { query, ...(catalog ? { category } : { language: lang }), ...(pageToken ? { pageToken } : {}) }, controller.signal);
       if (expectedGeneration !== generation || expectedEpoch !== searchEpoch || expectedLanguage !== lang || !searchConsent || state?.closed) return;
-      if (response.source !== 'youtube' || !Array.isArray(response.items) || response.items.length > 10 ||
+      if (response.source !== (catalog ? 'catalog' : 'youtube') || !Array.isArray(response.items) || response.items.length > 10 ||
           !response.items.every((item) => item && VIDEO_PATTERN.test(item.videoId || '') && typeof item.title === 'string' && item.title.length <= 2000 && typeof item.channelTitle === 'string' && item.channelTitle.length <= 1000 && typeof item.thumbnail === 'string' && item.thumbnail.length <= 2048) ||
           (response.nextPageToken !== null && (typeof response.nextPageToken !== 'string' || response.nextPageToken.length > 512))) throw new Error('searchUnavailable');
       // Edge returns entity-decoded plain text. Decode exactly once on the server;
       // textContent preserves literal entities and never interprets titles as HTML.
       searchData = { query, language: lang, nextPageToken: response.nextPageToken, items: response.items.map((item) => ({ ...item, added: false })) };
-      showSearchStatus(searchData.items.length ? 'searchReady' : 'searchEmpty');
+      showSearchStatus(searchData.items.length ? 'searchReady' : catalog ? 'catalogEmpty' : 'searchEmpty');
       renderSearchResults();
     } catch (error) {
       if (expectedGeneration !== generation || expectedEpoch !== searchEpoch || controller.signal.aborted) return;
-      showSearchStatus(error.message, true);
-      if (['searchNotConfigured', 'searchQuota', 'searchUnavailable'].includes(error.message)) $('manualEntry').open = true;
+      showSearchStatus(catalog && error.message === 'searchUnavailable' ? 'catalogUnavailable' : error.message, true);
+      if (!catalog && ['searchNotConfigured', 'searchQuota', 'searchUnavailable'].includes(error.message)) $('manualEntry').open = true;
       if (error.message === 'closed' || error.message === 'unauthorized') {
         forgetSession(room); disconnectRealtime(); showNotice(error.message, true);
         if (state) { state = { ...state, closed: true, playing: false }; renderState(); }
@@ -849,6 +870,7 @@
   });
   $('youtubeSearchForm').addEventListener('submit', (event) => { event.preventDefault(); searchYouTube(); });
   $('searchMore').addEventListener('click', () => searchYouTube(true));
+  for (const id of ['searchMode', 'catalogCategory']) $(id).addEventListener('change', () => { resetSearch(); updateSearchMode(); updateControls(); });
   $('searchConsent').addEventListener('change', async () => {
     searchConsent = $('searchConsent').checked;
     try { if (searchConsent) sessionStorage.setItem(CONSENT_KEY, 'accepted'); else sessionStorage.removeItem(CONSENT_KEY); } catch (_) { /* Memory-only consent. */ }
@@ -932,3 +954,4 @@
   }
   boot().catch(() => showNotice('error', true));
 })();
+

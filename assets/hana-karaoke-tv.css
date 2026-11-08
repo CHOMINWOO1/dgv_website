@@ -56,3 +56,9 @@ body.tv-display:not(.tv-controls-visible) #displayControls{display:none}
 .tv-launcher #home #joinForm,.tv-launcher #home>.divider{display:none}
 .tv-focus{outline:4px solid #f1f6fb!important;outline-offset:5px;box-shadow:0 0 0 9px #68e3cb45!important}
 @media(min-width:1000px){.tv-launcher:not(.tv-display) main{max-width:1500px;padding:36px 60px}.tv-launcher:not(.tv-display) .welcome-panel{max-width:1040px;padding:42px}.tv-launcher:not(.tv-display) h1{font-size:56px}.tv-launcher:not(.tv-display) button{font-size:22px;min-height:62px}.tv-launcher:not(.tv-display) .intro{font-size:24px}.tv-launcher:not(.tv-display) .hint,.tv-launcher:not(.tv-display) .check-label{font-size:18px}.tv-launcher .global-consent{padding:20px}.tv-launcher .check-label input[type=checkbox]{width:26px;height:26px}.tv-launcher .policy-links{font-size:15px}.tv-launcher .display-controls p{font-size:18px}.tv-launcher .display-buttons button{font-size:20px;min-height:56px}}
+
+/* Phone catalogue filters; TV fullscreen/player sizing is unchanged. */
+.catalog-filters{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px}
+.catalog-filters label{flex:1 1 180px;min-width:0;display:grid;gap:6px}
+.catalog-filters select{width:100%;min-width:0;font:inherit;padding:12px;border:1px solid var(--line);border-radius:12px;background:#151e30;color:inherit}
+

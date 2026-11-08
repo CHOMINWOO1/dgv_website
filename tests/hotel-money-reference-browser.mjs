@@ -47,6 +47,10 @@ try{
  check(payload.balance_amount===4500000 && typeof payload.balance_amount==='number','formatted input saves the original integer value');
  check(payload.booking_reference==='WH-2026-0099','supplier booking reference is saved as text');
  check(payload.room_purchase_amount===1234567 && payload.room_sale_amount===2345678 && payload.room_items[0].room_grade==='Old Deluxe','receipt and reference edit preserves old room prices and grade snapshot');
+ check(await page.locator('#hotelRows tr[data-reservation-id]').count()===0,'fully paid booking automatically leaves the default in-progress list');
+ await page.locator('#hotelStatus').selectOption('completed');
+ check(await page.locator('#hotelRows tr[data-reservation-id]').count()===1,'completed filter shows the fully paid booking');
+ await page.locator('#hotelStatus').selectOption('all');
  await page.locator('#hotelQuery').fill('WH-2026-0099');await page.locator('#hotelPeriodForm button[type=submit]').click();
  check(await page.locator('#hotelRows tr[data-reservation-id]').count()===1,'reference search finds the saved booking');
  await page.locator('#hotelQuery').fill('not-found');await page.locator('#hotelPeriodForm button[type=submit]').click();

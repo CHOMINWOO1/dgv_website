@@ -43,6 +43,9 @@ async function setup(context) {
     }
     const state = rooms.get(payload.room);
     if (!state) return reply({ code: 'ROOM_NOT_FOUND', error: 'Invalid room' }, 404);
+    if (payload.action === 'library') {
+      return reply({items:payload.query==='not in catalogue'?[]:sample,nextPageToken:payload.pageToken?null:'10',source:'catalog'});
+    }
     if (payload.action === 'search') {
       if (searchArrived) { const arrived = searchArrived; searchArrived = null; arrived(); await new Promise((resolve) => { releaseSearch = resolve; }); }
       if (searchFailure) return reply({ code: searchFailure, error: 'Search unavailable' }, searchFailure === 'SEARCH_RATE_LIMITED' ? 429 : 503);
@@ -81,6 +84,17 @@ try {
   await page.locator('#searchConsent').check(); await page.locator('#create').click(); await page.locator('#session').waitFor({ state: 'visible' });
   await page.waitForFunction(() => document.querySelector('#playerFrame iframe')?.title === 'YouTube karaoke player');
   check(await page.locator('#create').innerText() === '재생 화면 시작하기', 'playback screen label is device-neutral');
+  check(await page.locator('#searchMode').inputValue()==='catalog','song catalogue is the default search mode');
+  await page.locator('#searchQuery').fill('registered song');await page.locator('#searchSubmit').click();
+  await page.locator('.search-result').nth(2).waitFor();
+  check(calls.filter(c=>c.action==='search').length===0 && calls.filter(c=>c.action==='library').length===1,'catalogue search calls no YouTube search action');
+  await page.locator('#searchMore').click();await page.waitForFunction(()=>document.querySelector('#searchMore').hidden);
+  check(calls.filter(c=>c.action==='library').at(-1).pageToken==='10','catalogue pagination stays in the catalogue');
+  await page.locator('#catalogCategory').selectOption('vi');
+  await page.locator('#searchQuery').fill('not in catalogue');await page.locator('#searchSubmit').click();
+  await page.waitForFunction(()=>document.querySelector('#searchStatus').textContent.includes('등록곡에 없습니다'));
+  check(calls.filter(c=>c.action==='library').at(-1).category==='vi' && calls.filter(c=>c.action==='search').length===0,'empty catalogue results never fall back to YouTube automatically');
+  await page.locator('#searchMode').selectOption('youtube');
   await page.locator('#searchQuery').fill('same raw query');
   check(calls.filter((call) => call.action === 'search').length === 0, 'typing does not consume search quota');
   await page.locator('#searchSubmit').click(); await page.locator('.search-result').nth(2).waitFor();
@@ -154,3 +168,4 @@ try {
   await browser?.close();
   if (server) await new Promise((resolve) => server.close(resolve));
 }
+

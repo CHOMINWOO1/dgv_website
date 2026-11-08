@@ -7,11 +7,11 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="description" content="HANA Karaoke — TV와 휴대폰으로 함께 즐기는 노래방">
   <title>HANA Karaoke TV</title>
-  <link rel="stylesheet" href="assets/hana-karaoke-tv.css?v=20261108-finished1">
+  <link rel="stylesheet" href="assets/hana-karaoke-tv.css?v=20261108-catalog1">
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
   <script defer src="assets/supabase-config.js"></script>
   <script defer src="assets/vendor/qrcode.min.js"></script>
-  <script defer src="assets/hana-karaoke-tv.js?v=20261108-finished1"></script>
+  <script defer src="assets/hana-karaoke-tv.js?v=20261108-catalog1"></script>
   <script defer src="assets/hana-karaoke-tv-remote.js?v=20261108-app1"></script>
 </head>
 <body class="tv-launcher">
@@ -110,6 +110,10 @@
           <p class="hint" data-i="inlineSearchHint">노래를 검색하고 결과를 누르면 바로 예약됩니다. 우선예약은 현재 곡이 끝난 뒤 재생됩니다.</p>
           <div class="youtube-attribution"><a href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">YouTube</a><span data-i="searchSource">YouTube에서 제공하는 검색 결과</span></div>
           <form id="youtubeSearchForm" class="youtube-search-form">
+            <div class="catalog-filters">
+              <label><span data-i="searchModeLabel">검색 방식</span><select id="searchMode"><option value="catalog" data-i="catalogMode">등록곡 DB (YouTube 검색 한도 미사용)</option><option value="youtube" data-i="youtubeMode">YouTube 검색 (없는 곡 찾기)</option></select></label>
+              <label id="catalogCategoryField"><span data-i="categoryLabel">분류</span><select id="catalogCategory"><option value="all" data-i="categoryAll">전체</option><option value="ko" data-i="categoryKo">한국</option><option value="vi" data-i="categoryVi">베트남</option><option value="pop" data-i="categoryPop">팝송</option><option value="other" data-i="categoryOther">새로 등록된 곡</option></select></label>
+            </div>
             <label for="searchQuery" data-i="searchQueryLabel">노래 제목 또는 가수</label>
             <div class="search-input-row"><input id="searchQuery" type="search" required maxlength="100" autocomplete="off" data-i-placeholder="searchQueryPlaceholder" placeholder="예: 사랑은 늘 도망가 노래방"><button id="searchSubmit" type="submit" data-i="searchSubmit">검색</button></div>
             <p class="hint" data-i="searchQuotaHint">검색 버튼을 누를 때만 YouTube에 검색어가 전송됩니다.</p>
@@ -149,6 +153,7 @@
       <summary data-i="privacyTitle">노래방 이용약관·개인정보 안내</summary>
       <p data-i="privacyScope">이 안내는 HANA Karaoke에만 적용됩니다. YouTube API 서비스를 사용하며, 이용 시 YouTube 이용약관도 적용됩니다.</p>
       <p data-i="privacySearch">검색어와 언어는 서비스 서버를 거쳐 Google/YouTube로 전송됩니다. 검색 결과는 최대 24시간 재사용하고 이후 1시간 이내 삭제합니다. DB에는 원문 검색어 대신 해시를 저장합니다. Google 계정 연결이나 로그인 정보는 요청하지 않습니다.</p>
+      <p data-i="privacyCatalog">등록곡 DB 검색어는 Google에 보내지 않습니다. YouTube 검색으로 예약한 영상은 공용 곡 목록에 자동 저장하고 영상 정보를 주기적으로 갱신합니다.</p>
       <p data-i="privacyQueue">예약한 영상 ID와 제목은 방 참가자에게 표시됩니다. 방은 24시간 후 만료되며, 만료 후 7일이 지나면 1시간 이내 서버 기록을 정리합니다. 예약 삭제 또는 방 종료로 방 이용을 중단할 수 있습니다.</p>
       <p data-i="privacyStorage">sessionStorage에 방 접속 토큰과 이용 동의, localStorage에 언어를 저장합니다. 브라우저 사이트 데이터를 지우면 이 기기의 저장 정보를 삭제할 수 있습니다. 동의를 해제하면 재생·검색·연결을 중단하고 동의 저장을 삭제합니다.</p>
       <p data-i="privacyThirdParty">YouTube 영상·이미지 등 제3자 콘텐츠가 표시되며 광고가 포함될 수 있습니다. Google/YouTube는 자체 정책에 따라 IP 주소, 기기 정보 및 쿠키 등 데이터를 처리할 수 있습니다.</p>
@@ -158,3 +163,5 @@
   </main>
 </body>
 </html>
+
+
