@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';import fs from 'node:fs/promises';import vm from 'node:vm';
+const c={};vm.runInNewContext(await fs.readFile('assets/hotel-pricing.js','utf8'),c);vm.runInNewContext(await fs.readFile('assets/hotel-report.js','utf8'),c);
+const pricing=c.HotelPricing,report=c.HotelReport;
+const hotel={id:'h',version:3,weekend_days:[0,6],extra_bed_purchase:100000,extra_bed_sale:150000};
+const type={id:'d',hotel_id:'h',grade_id:'g',grade_name:'Deluxe',room_kind:'DOUBLE',version:2,is_active:true,weekday_purchase:1000000,weekday_sale:1500000,weekend_purchase:1000000,weekend_sale:1500000};
+const data={hotel_id:'h',check_in:'2026-11-06',check_out:'2026-11-09',pricing_mode:'standard',room_count:2,room_items:[{room_type_id:'d',room_count:2}],includes_meals:false,extra_bed_count:2};
+const result=pricing.price(data,hotel,null,[type]);
+assert.equal(result.roomSale,9000000);assert.equal(result.extraBedSale,900000);assert.equal(result.extraBedPurchase,600000);assert.equal(result.sale,9900000);assert.equal(result.purchase,6600000);
+const previous={...data,room_items:result.items,rate_snapshot:result.rates,room_purchase_amount:result.roomPurchase,room_sale_amount:result.roomSale,extra_bed_rate_snapshot:result.extraBedRates,extra_bed_hotel_version:result.extraBedVersion,extra_bed_purchase_amount:result.extraBedPurchase,extra_bed_sale_amount:result.extraBedSale,purchase_amount:result.purchase,sale_amount:result.sale};
+const changed={...hotel,version:9,extra_bed_purchase:900000,extra_bed_sale:1000000};
+const preserved=pricing.price({...data,note:'new note'},changed,previous,[]);assert.equal(preserved.sale,result.sale);assert.equal(preserved.extraBedVersion,3);
+const added=pricing.price({...data,extra_bed_count:3},changed,previous,[]);assert.equal(added.extraBedSale,1350000);assert.equal(added.roomSale,9000000);
+assert.equal(pricing.price({...data,extra_bed_count:0},changed,previous,[]).sale,9000000);
+assert.equal(pricing.price(data,changed,null,[type]).extraBedSale,6000000);
+for(const quantity of [-1,0.5,10001,'no'])assert.throws(()=>pricing.price({...data,extra_bed_count:quantity},hotel,null,[type]),/침대 수/);
+assert.throws(()=>pricing.price({...data,extra_bed_count:10000},{...hotel,extra_bed_sale:999999999999},null,[type]),/금액/);
+const row={...previous,id:'r',hotel_name:'Test Hotel',guest_count:2,guest_names:'A; B',booking_reference:'H-0001',deposit_amount:null,balance_amount:null};
+const html=report.renderHtml([row]);assert.ok(html.includes('Giường phụ'));assert.ok(html.includes('900,000'));assert.ok(html.includes('150,000'));
+const book=report.workbookOptions([row]);assert.equal(book.sheets[0].rows[4].length,29);assert.equal(book.sheets[0].rows[4][24].value,2);assert.equal(book.sheets[0].rows[4][25].value,100000);assert.equal(book.sheets[0].rows[4][26].value,150000);assert.equal(book.sheets[0].rows[4][27].value,600000);assert.equal(book.sheets[0].rows[4][28].value,900000);
+assert.equal(book.sheets[0].autoFilterRange,'A4:AC5');assert.equal(book.sheets[0].rows[4][17].value,9900000);
+assert.equal(report.status({...row,deposit_amount:0,balance_amount:9900000}),'completed');assert.equal(report.status({...row,deposit_amount:0,balance_amount:9000000}),'in_progress');
+console.log('Hotel extra-bed per-night pricing, saved rates, totals, status and print/Excel contracts passed.');
+

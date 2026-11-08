@@ -41,7 +41,7 @@ assert.equal(JSON.stringify(input), before, "exports must preserve all original 
 assert.equal(workbook.sheets.length, 2);
 const main = workbook.sheets[0];
 const details = workbook.sheets[1];
-assert.equal(main.rows[4].length, 24);
+assert.equal(main.rows[4].length, 29);
 assert.equal(details.rows[4].length, 15);
 assert.equal(main.rows[4][16].value, 4_000_000);
 assert.equal(main.rows[4][17].value, 5_150_000);
@@ -71,21 +71,21 @@ assert.equal((html.match(/class="reservation"/g) || []).length, 2);
 assert.match(html, /A4 portrait/);
 
 const graded = { ...modern, room_items: [
-  { ...modern.room_items[0], name: 'SINGLE', grade_id: 'superior', room_kind: 'SINGLE', room_grade: '수페리어 / Superior' },
-  { ...modern.room_items[1], name: 'DOUBLE', grade_id: 'garden', room_kind: 'DOUBLE', room_grade: '정원 전망 / Hướng vườn' },
+  { ...modern.room_items[0], name: 'DOUBLE', grade_id: 'superior', room_kind: 'DOUBLE', room_grade: '수페리어 / Superior' },
+  { ...modern.room_items[1], name: 'TWIN', grade_id: 'garden', room_kind: 'TWIN', room_grade: '정원 전망 / Hướng vườn' },
   { ...modern.room_items[1], name: 'TRIPLE', grade_id: 'named-standard', room_kind: 'TRIPLE', room_grade: 'STANDARD' },
 ] };
 const gradedBefore = JSON.stringify(graded);
 const gradedHtml = report.renderHtml([graded]);
 const gradedWorkbook = report.workbookOptions([graded]);
 assert.equal(JSON.stringify(graded), gradedBefore);
-for (const value of ['싱글 / Phòng đơn', '더블 / Phòng đôi', '트리플 / Phòng ba', '수페리어 / Superior', '정원 전망 / Hướng vườn']) {
+for (const value of ['더블 / Giường đôi', '트윈 / Hai giường đơn', '트리플 / Phòng ba', '수페리어 / Superior', '정원 전망 / Hướng vườn']) {
   assert.ok(gradedHtml.includes(value), `PDF must display saved custom grade and fixed kind: ${value}`);
   assert.ok(gradedWorkbook.sheets[0].rows[4][7].value.includes(value), `Excel summary must display ${value}`);
 }
-assert.equal(gradedWorkbook.sheets[1].rows[4][3].value, '싱글 / Phòng đơn');
+assert.equal(gradedWorkbook.sheets[1].rows[4][3].value, '더블 / Giường đôi');
 assert.equal(gradedWorkbook.sheets[1].rows[4][4].value, '수페리어 / Superior');
-assert.equal(gradedWorkbook.sheets[1].rows[5][3].value, '더블 / Phòng đôi');
+assert.equal(gradedWorkbook.sheets[1].rows[5][3].value, '트윈 / Hai giường đơn');
 assert.equal(gradedWorkbook.sheets[1].rows[6][3].value, '트리플 / Phòng ba');
 assert.equal(gradedWorkbook.sheets[1].rows[6][4].value, 'STANDARD', 'custom grade names must remain literal, even if they match a legacy grade token');
 assert.equal(gradedWorkbook.sheets[0].rows[4][17].value, modern.sale_amount, 'exports never recompute historical totals');
