@@ -26,7 +26,8 @@ function fn(name, next) {
   assert.ok(start >= 0 && end > start);
   return source.slice(start, end);
 }
-const roomKinds = ["SINGLE", "DOUBLE", "TRIPLE"];
+const roomKinds = ["DOUBLE", "TWIN", "TRIPLE"];
+assert.match(source,/const roomKinds = \["DOUBLE", "TWIN", "TRIPLE"\]/);
 const rateKeys = ["weekday_purchase", "weekday_sale", "weekend_purchase", "weekend_sale"];
 const draft = roomKinds.map((room_kind, index) => ({ room_kind, is_active: index < 2, version: index + 2, weekday_purchase: "100", weekday_sale: "200", weekend_purchase: "300", weekend_sale: "400", sameWeekend: false }));
 const payloadContext = {
@@ -66,16 +67,16 @@ const nodes = { legacyRoomNotice: new Node(), roomItemsFields: new Node(), roomI
 const fields = { room_count: new Node(), hotel_id: { value: "hotel-1" } };
 const grades = [{ id: "g1", hotel_id: "hotel-1", name: "Deluxe" }, { id: "g2", hotel_id: "hotel-1", name: "Suite" }];
 const types = [
-  { id: "single", hotel_id: "hotel-1", grade_id: "g1", grade_name: "Deluxe", room_kind: "SINGLE", name: "Single", version: 3, is_active: true },
-  { id: "double", hotel_id: "hotel-1", grade_id: "g1", grade_name: "Deluxe", room_kind: "DOUBLE", name: "Double", version: 4, is_active: true },
+  { id: "single", hotel_id: "hotel-1", grade_id: "g1", grade_name: "Deluxe", room_kind: "DOUBLE", name: "Double", version: 3, is_active: true },
+  { id: "double", hotel_id: "hotel-1", grade_id: "g1", grade_name: "Deluxe", room_kind: "TWIN", name: "Twin", version: 4, is_active: true },
   { id: "triple", hotel_id: "hotel-1", grade_id: "g1", grade_name: "Deluxe", room_kind: "TRIPLE", name: "Triple", version: 5, is_active: false },
   { id: "suite", hotel_id: "hotel-1", grade_id: "g2", grade_name: "Suite", room_kind: "DOUBLE", name: "Double", version: 6, is_active: true },
   { id: "legacy", hotel_id: "hotel-1", grade_id: null, room_kind: null, name: "Doble", version: 1, is_active: true }
 ];
 const rowContext = {
   byId: id => nodes[id], field: name => fields[name], useRoomTypes: true, roomTypes: types, roomGrades: grades, roomKinds,
-  roomItems: [{ room_type_id: "double", room_count: 2, room_grade: "Old Deluxe", grade_id: "g1", room_kind: "DOUBLE" }],
-  editing: { room_items: [{ room_type_id: "double", room_count: 2, room_grade: "Old Deluxe", grade_id: "g1", room_kind: "DOUBLE" }] },
+  roomItems: [{ room_type_id: "double", room_count: 2, room_grade: "Old Deluxe", grade_id: "g1", room_kind: "TWIN" }],
+  editing: { room_items: [{ room_type_id: "double", room_count: 2, room_grade: "Old Deluxe", grade_id: "g1", room_kind: "TWIN" }] },
   roomKindLabel: value => value, document: { createElement: tag => new Node(tag) }, Option: class { constructor(text, value) { this.text = text; this.value = value; } },
   action: (label, handler) => { const button = new Node("button"); button.textContent = label; button.events.click = handler; return button; }, updatePreview: () => {}, busy: false
 };
@@ -104,3 +105,4 @@ assert.equal(selectFor(line, 1).options[1].text, "Doble");
 assert.equal(rowContext.roomItems[0].room_grade, "VIP", "legacy grades must never be invented or reclassified");
 
 console.log("Hotel grade UI, atomic payload, fixed-type selection and legacy preservation regression passed.");
+

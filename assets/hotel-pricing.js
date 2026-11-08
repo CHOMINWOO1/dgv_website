@@ -2,7 +2,7 @@
   "use strict";
   const MAX_AMOUNT = 999999999999;
   const DAY = 86400000;
-  const ROOM_KINDS = ["SINGLE", "DOUBLE", "TRIPLE"];
+  const ROOM_KINDS = ["DOUBLE", "TWIN", "TRIPLE"];
   function money(value) {
     const number = Number(value);
     if (value === "" || !Number.isSafeInteger(number) || number < 0 || number > MAX_AMOUNT) {
@@ -49,7 +49,27 @@
   function optionalMoney(value) {
     return value === null || value === undefined || value === "" ? null : money(value);
   }
+  function extraBedNeedsRates(previous, data) {
+    return !previous || Number(previous.extra_bed_count || 0) === 0 || !previous.extra_bed_rate_snapshot
+      || ["hotel_id", "check_in", "check_out"].some(key => String(previous[key]) !== String(data[key]));
+  }
   function price(data, hotel, previous, roomTypes = []) {
+    const result = basePrice(data, hotel, previous, roomTypes);
+    const count = Number(data.extra_bed_count ?? 0);
+    if (!Number.isInteger(count) || count < 0 || count > 10000) throw new Error("추가 침대 수는 0~10,000개로 입력해 주세요. / Số giường phụ phải từ 0 đến 10.000.");
+    let bedRates = null, bedVersion = null;
+    if (count) {
+      if (!hotel || data.pricing_mode === "legacy") throw new Error("엑스트라베드를 추가하려면 등록된 호텔을 선택해 주세요. / Chọn khách sạn để thêm giường phụ.");
+      const fresh = extraBedNeedsRates(previous, data);
+      bedRates = fresh ? {purchase: money(hotel.extra_bed_purchase ?? 0), sale: money(hotel.extra_bed_sale ?? 0), basis:"per_bed_per_night"} : {...previous.extra_bed_rate_snapshot};
+      bedVersion = fresh ? hotel.version : previous.extra_bed_hotel_version;
+    }
+    const extraBedPurchase = money(count * result.nights * (bedRates?.purchase || 0));
+    const extraBedSale = money(count * result.nights * (bedRates?.sale || 0));
+    return {...result, extraBedCount:count, extraBedRates:bedRates, extraBedVersion:bedVersion, extraBedPurchase, extraBedSale,
+      purchase:money(result.purchase+extraBedPurchase),sale:money(result.sale+extraBedSale)};
+  }
+  function basePrice(data, hotel, previous, roomTypes = []) {
     if (data.room_items != null) return mixedPrice(data, hotel, previous, roomTypes);
     const roomCount = Number(data.room_count);
     if (!Number.isInteger(roomCount) || roomCount < 1 || roomCount > 10000) {
@@ -115,5 +135,6 @@
     return {...days, items, roomCount, rates:preserve ? previous.rate_snapshot : {weekend_days:hotel.weekend_days || []},
       roomPurchase,roomSale,mealPurchase,mealSale,purchase:money(roomPurchase+mealPurchase),sale:money(roomSale+mealSale)};
   }
-  global.HotelPricing = Object.freeze({ money, optionalMoney, stay, needsRates, selectionKey, price });
+  global.HotelPricing = Object.freeze({ money, optionalMoney, stay, needsRates, selectionKey, extraBedNeedsRates, price });
 })(typeof window === "object" ? window : globalThis);
+

@@ -51,7 +51,7 @@ assert.equal(JSON.stringify(saved), before, 'archive-related rendering must neve
 assert.equal(report.renderHtml([saved]), beforeHtml);
 assert.equal(JSON.stringify(report.workbookOptions([saved])), beforeWorkbook);
 assert.ok(beforeHtml.includes('정원 전망 / Hướng vườn'));
-assert.ok(beforeHtml.includes('더블 / Phòng đôi'));
+assert.ok(beforeHtml.includes('더블 / Giường đôi'));
 assert.ok(beforeHtml.includes('기존 트윈 / Twin cũ'));
 assert.ok(beforeHtml.includes('VIP'));
 
@@ -81,3 +81,4 @@ assert.equal(manual.roomPurchase, 1_234_567);
 assert.equal(manual.roomSale, 2_345_678);
 assert.equal(JSON.stringify(manual.items), JSON.stringify(manualSaved.room_items));
 console.log('Hotel catalog archival: historical pricing, snapshots, legacy types and exports preserved; new/repriced selections rejected.');
+

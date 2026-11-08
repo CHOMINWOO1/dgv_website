@@ -5,12 +5,13 @@
   const propertyForm = byId("propertyForm");
   const roomTypeForm = byId("roomTypeForm");
   const gradeForm = byId("gradeForm");
+  const extraBedForm = byId("extraBedForm");
   const pricing = HotelPricing;
   const amount = new Intl.NumberFormat("en-US");
   const weekdays = ["일/CN","월/T2","화/T3","수/T4","목/T5","금/T6","토/T7"];
-  const roomKinds = ["SINGLE", "DOUBLE", "TRIPLE"];
+  const roomKinds = ["DOUBLE", "TWIN", "TRIPLE"];
   const rateKeys = ["weekday_purchase", "weekday_sale", "weekend_purchase", "weekend_sale"];
-  const roomKindLabel = kind => ({ SINGLE: "싱글 / Phòng đơn", DOUBLE: "더블 / Phòng đôi", TRIPLE: "트리플 / Phòng ba" })[kind] || kind;
+  const roomKindLabel = kind => ({ DOUBLE: "더블 / Giường đôi", TWIN: "트윈 / Hai giường đơn", TRIPLE: "트리플 / Phòng ba" })[kind] || kind;
   let hotels = [];
   let reservations = [];
   let appliedPeriod = { fromDate: "", toDate: "", status: "in_progress" };
@@ -22,6 +23,7 @@
   let roomItems = [];
   let useRoomTypes = true;
   let managedHotel = null;
+  let editingExtraBedHotel = null;
   let editingRoomType = null;
   let roomTypeId;
   let detailReservationId = null;
@@ -69,7 +71,7 @@
   function formatMoneyFields(container) {
     container.querySelectorAll('input[data-hotel-money], input[type="number"][max="999999999999"]').forEach(enableMoneyInput);
   }
-  for (const moneyForm of [form, roomTypeForm]) {
+  for (const moneyForm of [form, roomTypeForm, extraBedForm]) {
     moneyForm.addEventListener("formdata", event => {
       moneyForm.querySelectorAll('input[data-hotel-money][name]:not(:disabled)').forEach(input => event.formData.set(input.name, rawMoneyInput(input.value)));
     });
@@ -78,9 +80,9 @@
   const roomLineLabel = item => item.grade_id && item.room_kind
     ? (item.room_grade || item.grade_name || "등급 / Hạng") + " · " + roomKindLabel(item.room_kind)
     : roomTypeName(item) + " · " + (item.room_grade || "STANDARD") + " (기존 / cũ)";
-  const roomDescription = record => Array.isArray(record.room_items) && record.room_items.length
+  const roomDescription = record => (Array.isArray(record.room_items) && record.room_items.length
     ? record.room_items.map(item => roomLineLabel(item) + " × " + item.room_count).join("\n")
-    : "기존 요금 / Giá đã lưu";
+    : "기존 요금 / Giá đã lưu") + (record.extra_bed_count ? "\n추가 침대 / Giường phụ × " + record.extra_bed_count : "");
 
   function errorText(error) {
     if (error.code === "23503") return "예약에 사용 중인 호텔·룸타입은 삭제할 수 없습니다. / Không thể xóa khách sạn hoặc loại phòng đang có đặt phòng.";
@@ -103,6 +105,7 @@
     byId("reservationFields").disabled = value;
     byId("roomTypeFields").disabled = value;
     byId("gradeFields").disabled = value;
+    byId("extraBedFields").disabled = value;
     byId("hotelPeriodFields").disabled = value;
   }
 
@@ -170,7 +173,7 @@
     }
     byId("hotelCount").textContent = hotels.length + "개 / khách sạn";
     const visibleReservations = HotelReport.filterRows(reservations, appliedPeriod);
-    const body = renderRows("hotelRows", visibleReservations, "조회 조건에 해당하는 예약이 없습니다. / Không có đặt phòng theo điều kiện đã chọn.", 18);
+    const body = renderRows("hotelRows", visibleReservations, "조회 조건에 해당하는 예약이 없습니다. / Không có đặt phòng theo điều kiện đã chọn.", 20);
     for (const reservation of visibleReservations) {
       const row = body.insertRow();
       const mode = reservation.pricing_mode === "standard"
@@ -181,6 +184,7 @@
         moneyText(reservation.room_purchase_amount), moneyText(reservation.room_sale_amount),
         reservation.includes_meals ? moneyText(reservation.meal_purchase_amount) : "—",
         reservation.includes_meals ? moneyText(reservation.meal_sale_amount) : "—",
+        moneyText(reservation.extra_bed_purchase_amount || 0), moneyText(reservation.extra_bed_sale_amount || 0),
         moneyText(reservation.purchase_amount), moneyText(reservation.sale_amount),
         optionalMoney(reservation.deposit_amount), optionalMoney(reservation.balance_amount),
         reservation.deposit_amount == null && reservation.balance_amount == null ? "—" : moneyText(Number(reservation.deposit_amount || 0) + Number(reservation.balance_amount || 0)),
@@ -188,8 +192,8 @@
       for (const value of values) row.insertCell().textContent = value;
       row.cells[4].className = "hotel-guests";
       row.cells[3].className = "hotel-guests";
-      row.cells[15].className = "hotel-guests";
-      row.cells[16].className = "hotel-guests";
+      row.cells[17].className = "hotel-guests";
+      row.cells[18].className = "hotel-guests";
       row.dataset.reservationId = reservation.id;
       row.tabIndex = 0;
       row.setAttribute("aria-haspopup", "dialog");
@@ -244,15 +248,18 @@
     detail(info, "체크아웃 / Trả phòng", record.check_out);
     detail(info, "투숙객 인원 / Số khách", record.guest_count);
     detail(info, "객실 수 / Số phòng", record.room_count);
+    detail(info, "추가 침대 수 / Số giường phụ", record.extra_bed_count || 0);
     detail(info, "전체 투숙객 명단 / Danh sách khách", record.guest_names);
     detail(info, "요금 방식 / Loại giá", record.pricing_mode === "standard" ? "일반 · 자동 계산 / Giá thường · tự động" : record.pricing_mode === "surcharge" ? "서차지 · 전체 직접입력 / Phụ thu · nhập tổng tiền" : "기존 직접입력 / Giá cũ");
     const totals = card("금액 및 입금 / Số tiền và khoản thu");
     for (const [label, key] of [
       ["객실 매입 / Tổng mua phòng", "room_purchase_amount"], ["객실 매출 / Tổng bán phòng", "room_sale_amount"],
       ["식사 매입 / Tổng mua bữa ăn", "meal_purchase_amount"], ["식사 매출 / Tổng bán bữa ăn", "meal_sale_amount"],
+      ["추가 침대 매입 / Tổng mua giường phụ", "extra_bed_purchase_amount"], ["추가 침대 매출 / Tổng bán giường phụ", "extra_bed_sale_amount"],
       ["총 매입 / Tổng mua", "purchase_amount"], ["총 매출 / Tổng bán", "sale_amount"],
       ["계약금 / Tiền cọc", "deposit_amount"], ["잔금 입금액 / Tiền còn lại đã thu", "balance_amount"]
     ]) detail(totals, label, optionalMoney(record[key]));
+    if (record.extra_bed_count) detail(totals, "추가 침대 1개·1박 매입 / 판매 · Giá mua / bán mỗi giường mỗi đêm", moneyText(record.extra_bed_rate_snapshot?.purchase || 0) + " / " + moneyText(record.extra_bed_rate_snapshot?.sale || 0));
     detail(totals, "입금 합계 / Tổng đã thu", record.deposit_amount == null && record.balance_amount == null ? "—" : moneyText(Number(record.deposit_amount || 0) + Number(record.balance_amount || 0)));
     const rooms = card("객실 상세 / Chi tiết phòng");
     const items = Array.isArray(record.room_items) && record.room_items.length ? record.room_items : [{
@@ -345,7 +352,7 @@
     gradeForm.elements.namedItem("name").value = grade?.name || "";
     gradeDraft = roomKinds.map(kind => {
       const existing = grade && roomTypes.find(type => type.grade_id === grade.id && type.room_kind === kind);
-      const draft = { room_kind: kind, is_active: existing ? !existing.archived_at && existing.is_active !== false : kind === "SINGLE", version: existing?.version ?? null, archived_at: existing?.archived_at || null };
+      const draft = { room_kind: kind, is_active: existing ? !existing.archived_at && existing.is_active !== false : kind === "DOUBLE", version: existing?.version ?? null, archived_at: existing?.archived_at || null };
       for (const key of rateKeys) draft[key] = String(existing?.[key] ?? 0);
       draft.sameWeekend = draft.weekday_purchase === draft.weekend_purchase && draft.weekday_sale === draft.weekend_sale;
       return draft;
@@ -544,11 +551,19 @@
   function openRoomTypes(hotel) {
     if (busy || !ready) return;
     managedHotel = hotel;
+    resetExtraBedPrices(hotel);
     message("catalogError", "");
     byId("roomTypeTitle").textContent = hotel.name + " · 등급·룸타입 / Hạng·loại phòng";
     resetGrade();
     renderRoomTypes();
     byId("roomTypeDialog").showModal();
+  }
+
+  function resetExtraBedPrices(hotel) {
+    editingExtraBedHotel = {...hotel};
+    for (const key of ["extra_bed_purchase", "extra_bed_sale"]) extraBedForm.elements.namedItem(key).value = hotel[key] ?? 0;
+    message("extraBedError", "");
+    formatMoneyFields(extraBedForm);
   }
 
   async function toggleRoomType(type) {
@@ -751,7 +766,7 @@
     data.guest_names = data.guest_names.trim();
     data.booking_reference = String(data.booking_reference ?? "").trim() || null;
     data.includes_meals = field("includes_meals").checked;
-    for (const key of ["room_count","guest_count","room_purchase_amount","room_sale_amount","meal_purchase_amount","meal_sale_amount"]) {
+    for (const key of ["room_count","guest_count","room_purchase_amount","room_sale_amount","meal_purchase_amount","meal_sale_amount","extra_bed_count"]) {
       data[key] = Number(data[key] ?? 0);
     }
     if (useRoomTypes) {
@@ -799,6 +814,8 @@
       }
       lines.push("객실 / Phòng — 매입 " + moneyText(result.roomPurchase) + " · 매출 " + moneyText(result.roomSale));
       lines.push("식사 / Bữa ăn — 매입 " + moneyText(result.mealPurchase) + " · 매출 " + moneyText(result.mealSale));
+      lines.push("추가 침대 / Giường phụ — " + result.extraBedCount + "개 × " + result.nights + "박 · 매입 " + moneyText(result.extraBedPurchase) + " · 매출 " + moneyText(result.extraBedSale));
+      if (result.extraBedCount) lines.push("추가 침대 1개·1박 / Mỗi giường mỗi đêm — 매입 " + moneyText(result.extraBedRates.purchase) + " · 매출 " + moneyText(result.extraBedRates.sale));
       lines.push("총액 / Tổng — 매입 " + moneyText(result.purchase) + " · 매출 " + moneyText(result.sale));
       lines.push("계약금 / Tiền cọc " + optionalMoney(data.deposit_amount) + " · 잔금 / Tiền còn lại đã thu " + optionalMoney(data.balance_amount));
       lines.push("입금 합계 / Tổng đã thu " + (data.deposit_amount == null && data.balance_amount == null ? "—" : moneyText(Number(data.deposit_amount || 0) + Number(data.balance_amount || 0))));
@@ -867,6 +884,23 @@
     } finally { setBusy(false); }
   });
 
+  extraBedForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (busy || !ready || !editingExtraBedHotel) return;
+    message("extraBedError", "");
+    try {
+      const draft = Object.fromEntries(new FormData(extraBedForm));
+      const data = {extra_bed_purchase:pricing.money(draft.extra_bed_purchase),extra_bed_sale:pricing.money(draft.extra_bed_sale)};
+      setBusy(true);
+      const saved = await persist("hotel_properties", data, editingExtraBedHotel, editingExtraBedHotel.id);
+      await refresh();
+      managedHotel = hotels.find(hotel => hotel.id === saved.id) || saved;
+      resetExtraBedPrices(managedHotel);
+      QRStaff.toast("추가 침대 요금이 저장되었습니다. / Đã lưu giá giường phụ.", "success");
+    } catch (error) { message("extraBedError", errorText(error)); }
+    finally { setBusy(false); }
+  });
+
   gradeForm.addEventListener("submit", async event => {
     event.preventDefault();
     if (busy || !managedHotel) return;
@@ -900,6 +934,7 @@
       data.room_sale_amount = result.roomSale;
       data.meal_purchase_amount = result.mealPurchase;
       data.meal_sale_amount = result.mealSale;
+      data.extra_bed_hotel_version = result.extraBedVersion;
       if (data.hotel_id === "legacy") {
         if (data.includes_meals) throw new Error("식사비를 추가하려면 등록된 호텔을 선택해 주세요. / Chọn khách sạn để thêm tiền ăn.");
         data.hotel_id = null;
@@ -1082,6 +1117,7 @@
   }
   formatMoneyFields(form);
   formatMoneyFields(roomTypeForm);
+  formatMoneyFields(extraBedForm);
   start();
 })();
 

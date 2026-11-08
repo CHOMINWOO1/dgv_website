@@ -7,9 +7,9 @@ vm.runInNewContext(await readFile(new URL('../assets/hotel-pricing.js', import.m
 const pricing = context.HotelPricing;
 const hotel = { id: 'hotel', weekend_days: [5, 6], version: 1 };
 const types = [
-  { id: 'superior-single', hotel_id: 'hotel', grade_id: 'superior', grade_name: '수페리어 / Superior', room_kind: 'SINGLE', name: 'SINGLE', version: 1, is_active: true,
+  { id: 'superior-single', hotel_id: 'hotel', grade_id: 'superior', grade_name: '수페리어 / Superior', room_kind: 'DOUBLE', name: 'DOUBLE', version: 1, is_active: true,
     weekday_purchase: 100, weekday_sale: 150, weekend_purchase: 200, weekend_sale: 300 },
-  { id: 'superior-double', hotel_id: 'hotel', grade_id: 'superior', grade_name: '수페리어 / Superior', room_kind: 'DOUBLE', name: 'DOUBLE', version: 1, is_active: true,
+  { id: 'superior-double', hotel_id: 'hotel', grade_id: 'superior', grade_name: '수페리어 / Superior', room_kind: 'TWIN', name: 'TWIN', version: 1, is_active: true,
     weekday_purchase: 250, weekday_sale: 400, weekend_purchase: 350, weekend_sale: 550 },
   { id: 'garden-triple', hotel_id: 'hotel', grade_id: 'garden', grade_name: '정원 전망 / Hướng vườn', room_kind: 'TRIPLE', name: 'TRIPLE', version: 1, is_active: true,
     weekday_purchase: 400, weekday_sale: 600, weekend_purchase: 600, weekend_sale: 900 },
@@ -31,9 +31,9 @@ assert.equal(result.roomSale, 12_700);
 assert.equal(result.purchase, 8_480);
 assert.equal(result.sale, 12_820);
 assert.equal(result.items[0].grade_id, 'superior');
-assert.equal(result.items[0].room_kind, 'SINGLE');
+assert.equal(result.items[0].room_kind, 'DOUBLE');
 assert.equal(result.items[0].room_grade, '수페리어 / Superior');
-assert.equal(result.items[1].room_kind, 'DOUBLE');
+assert.equal(result.items[1].room_kind, 'TWIN');
 assert.equal(result.items[2].room_grade, '정원 전망 / Hướng vườn');
 assert.equal(result.items[2].room_kind, 'TRIPLE');
 assert.equal(result.items[2].rate_snapshot.weekend_sale, 900);
@@ -65,7 +65,7 @@ const changedCount = { ...updatedData, room_items: updatedData.room_items.map((i
 assert.equal(pricing.price(changedCount, hotel, previous, renamed).roomCount, 7);
 assert.equal(pricing.price(changedCount, hotel, previous, renamed).roomSale, 196_000);
 
-for (const patch of [{ grade_name: '' }, { grade_name: '   ' }, { grade_name: null }, { room_kind: 'TWIN' }, { grade_is_active: false }]) {
+for (const patch of [{ grade_name: '' }, { grade_name: '   ' }, { grade_name: null }, { room_kind: 'SINGLE' }, { grade_is_active: false }]) {
   assert.throws(() => pricing.price(data, hotel, null, types.map((type, index) => index ? type : { ...type, ...patch })), /등급|종류/);
 }
 assert.throws(() => pricing.price({ ...data, room_items: [null] }, hotel, null, types));
@@ -89,3 +89,4 @@ assert.equal(manual.roomSale, 23_456);
 assert.equal(manual.items[0].room_sale_amount, null);
 assert.equal(manual.items[2].room_grade, '정원 전망 / Hướng vườn');
 console.log('Hotel custom grades, fixed kinds, mixed rates and historical snapshot preservation passed.');
+

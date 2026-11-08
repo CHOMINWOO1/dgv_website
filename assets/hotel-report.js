@@ -19,7 +19,7 @@
     standard: "일반 / Thường", surcharge: "서차지 / Phụ thu", legacy: "기존 직접입력 / Giá cũ"
   };
   const gradeLabels = { STANDARD: "일반 / Tiêu chuẩn", VIP: "VIP" };
-  const roomKindLabels = { SINGLE: "싱글 / Phòng đơn", DOUBLE: "더블 / Phòng đôi", TRIPLE: "트리플 / Phòng ba" };
+  const roomKindLabels = { DOUBLE: "더블 / Giường đôi", TWIN: "트윈 / Hai giường đơn", TRIPLE: "트리플 / Phòng ba" };
   const mode = value => pricingLabels[value] || display(value);
   const grade = value => gradeLabels[value] || display(value);
   const rates = value => value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -115,10 +115,12 @@
       ${labelValue("요금 방식 / Loại giá", mode(row.pricing_mode))}${labelValue("상태 / Trạng thái", statusLabel(row))}
       ${labelValue("주중·주말 박수 / Đêm thường·cuối tuần", `${money(number(row.weekday_nights))} / ${money(number(row.weekend_nights))}`)}
       ${labelValue("식사 / Bữa ăn", row.includes_meals === true ? "포함 / Có" : row.includes_meals === false ? "미포함 / Không" : "-")}</dl>
+      <p class="hint">추가 침대 / Giường phụ: ${money(number(row.extra_bed_count ?? 0))}개 · 침대 1개·1박 매입 / 판매 · Giá mua / bán mỗi giường mỗi đêm: ${money(number(row.extra_bed_rate_snapshot?.purchase ?? 0))} / ${money(number(row.extra_bed_rate_snapshot?.sale ?? 0))} VND</p>
       <div class="guestBlock"><h3>투숙객 명단 / Danh sách khách</h3><p>${escape(display(guests(row.guest_names)))}</p></div>
       <h3>객실 상세 / Chi tiết phòng (VND)</h3>${roomTable(row)}
       <div class="bookingEnding"><div class="financial"><table><thead><tr><th>금액 / Số tiền (VND)</th><th>매입 / Mua</th><th>매출 / Bán</th></tr></thead><tbody>
       ${amountRow("객실 / Phòng", row.room_purchase_amount, row.room_sale_amount)}${amountRow("식사 / Bữa ăn", row.meal_purchase_amount, row.meal_sale_amount)}
+      ${amountRow("추가 침대 / Giường phụ", row.extra_bed_purchase_amount ?? 0, row.extra_bed_sale_amount ?? 0)}
       ${amountRow("총액 / Tổng cộng", row.purchase_amount, row.sale_amount)}</tbody></table>
       <table><tbody><tr><th>계약금 / Tiền cọc</th><td class="number">${money(number(row.deposit_amount))}</td></tr><tr><th>잔금 / Tiền còn lại đã thu</th><td class="number">${money(number(row.balance_amount))}</td></tr><tr class="received"><th>입금 합계 / Tổng đã thu</th><td class="number">${money(received(row))}</td></tr></tbody></table></div>
       <div class="note"><h3>비고 / Ghi chú</h3><p>${escape(display(row.note))}</p></div></div></section>`).join("");
@@ -145,6 +147,8 @@
     labels[0] = "내부 예약 ID / ID đặt phòng nội bộ";
     labels.push("예약번호 / Mã đặt phòng", "상태 / Trạng thái");
     reservationRows.forEach((row, index) => row.push(textCell(rows[index].booking_reference), textCell(statusLabel(rows[index]))));
+    labels.push("추가 침대 수 / Số giường phụ", "추가 침대 1박 매입 / Giá mua giường mỗi đêm", "추가 침대 1박 판매 / Giá bán giường mỗi đêm", "추가 침대 매입 / Tổng mua giường phụ", "추가 침대 매출 / Tổng bán giường phụ");
+    reservationRows.forEach((row,index) => { const saved=rows[index]; row.push(numericCell(saved.extra_bed_count ?? 0), numericCell(saved.extra_bed_rate_snapshot?.purchase), numericCell(saved.extra_bed_rate_snapshot?.sale), numericCell(saved.extra_bed_purchase_amount ?? 0), numericCell(saved.extra_bed_sale_amount ?? 0)); });
     const roomLabels = ["내부 예약 ID / ID đặt phòng nội bộ", "호텔명 / Khách sạn", "룸타입 ID / Mã loại phòng", "룸타입명 / Tên loại phòng", "등급 / Hạng", "객실 수 / Số phòng", "주중 박수 / Đêm ngày thường", "주말 박수 / Đêm cuối tuần", "주중 매입 단가 / Giá mua ngày thường", "주중 매출 단가 / Giá bán ngày thường", "주말 매입 단가 / Giá mua cuối tuần", "주말 매출 단가 / Giá bán cuối tuần", "객실 매입 / Mua phòng", "객실 매출 / Bán phòng", "예약번호 / Mã đặt phòng"];
     const detailRows = rows.flatMap(row => {
       const savedItems = roomItems(row);
@@ -158,9 +162,9 @@
     return {
       filename: period.fromDate ? `hotel-reservations_${period.fromDate}_${period.toDate}.xlsx` : "hotel-reservations.xlsx",
       sheets: [
-        { name: "호텔 예약", freezeRows: 4, columnWidths: [38, 24, 21, 21, 12, 12, 36, 48, 24, 17, 17, 18, 22, 22, 22, 22, 22, 22, 22, 22, 22, 40, 28, 24],
+        { name: "호텔 예약", freezeRows: 4, columnWidths: [38, 24, 21, 21, 12, 12, 36, 48, 24, 17, 17, 18, 22, 22, 22, 22, 22, 22, 22, 22, 22, 40, 28, 24, 16, 26, 26, 24, 24],
           rows: [[{ value: "호텔 예약 현황 / Danh sách đặt phòng", style: "title" }], [textCell(`${periodLabel(period)} · 전체 ${rows.length}건 / Tổng ${rows.length} đặt phòng · VND`)], [textCell("저장된 예약 금액 기준 / Theo số tiền đã lưu. 빈 금액은 미입력 / Ô trống: chưa nhập.")], header(labels), ...reservationRows],
-          merges: ["A1:X1", "A2:X2", "A3:X3"], autoFilterRange: `A4:X${Math.max(4, reservationRows.length + 4)}` },
+          merges: ["A1:AC1", "A2:AC2", "A3:AC3"], autoFilterRange: `A4:AC${Math.max(4, reservationRows.length + 4)}` },
         { name: "룸타입 저장 요금", freezeRows: 4, columnWidths: [38, 24, 38, 25, 20, 12, 18, 18, 24, 24, 24, 24, 22, 22, 28],
           rows: [[{ value: "룸타입 저장 요금 / Giá loại phòng đã lưu", style: "title" }], [textCell(`${periodLabel(period)} · 단가: VND / 1객실·1박 / Giá VND mỗi phòng mỗi đêm`)], [textCell("예약에 저장된 스냅샷 기준. 현재 호텔 요금으로 다시 계산하지 않습니다. / Theo giá đã lưu, không tính lại theo giá hiện tại.")], header(roomLabels), ...detailRows],
           merges: ["A1:O1", "A2:O2", "A3:O3"], autoFilterRange: `A4:O${Math.max(4, detailRows.length + 4)}` }
