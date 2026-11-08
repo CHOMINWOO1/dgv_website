@@ -449,7 +449,8 @@ assert.equal(Array.from(formulaArchive.keys()).some(name => /externalLinks/.test
 assert.match(admin, /id="bankExcelRangeBtn"/);
 assert.match(admin, /getElementById\("bankExcelRangeBtn"\)\.addEventListener\("click",\s*exportPaymentExcel\)/);
 assert.match(admin, /getElementById\("excelRangeBtn"\)\.addEventListener\("click",\s*exportRangeExcel\)/, "existing ordinary Excel output stays wired");
-assert.match(admin, /getElementById\("taxExcelRangeBtn"\)\.addEventListener\("click",\s*exportTaxOfficeExcel\)/, "existing tax Excel output stays wired");
+assert.doesNotMatch(admin, /id="tax(?:Print|Excel)RangeBtn"/, "only the two tax-office buttons are removed");
+assert.doesNotMatch(admin, /getElementById\("tax(?:Print|Excel)RangeBtn"\)\.addEventListener/, "removed buttons must not leave startup bindings that break the page");
 const exportStart = admin.indexOf("async function exportPaymentExcel(");
 assert.ok(exportStart > 0);
 const exportTail = admin.slice(exportStart), exportEnd = exportTail.indexOf("\n    }\n");
@@ -501,3 +502,4 @@ const alreadyExporting = exportContext({ disabled: true }); await alreadyExporti
 assert.equal(alreadyExporting.events.length, 0);
 assert.equal(alreadyExporting.downloads.length, 0);
 console.log("Payment-group print/XLSX model, safe numeric workbook and single-download UI regression passed.");
+

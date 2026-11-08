@@ -9,12 +9,13 @@ const admin = await readFile(path.join(projectRoot, "admin.html"), "utf8");
 
 assert.match(
   admin,
-  /<button class="btn" id="printRangeBtn">전체 출력<\/button>\s*<button class="btn" id="excelRangeBtn">엑셀 출력<\/button>\s*<button class="btn" id="taxPrintRangeBtn">세무서 출력<\/button>\s*<button class="btn" id="taxExcelRangeBtn">세무서 엑셀 출력<\/button>/,
-  "tax buttons must sit beside the existing range exports",
+  /<button class="btn" id="bankPrintRangeBtn"[^>]*>[\s\S]*?<\/button>\s*<button class="btn" id="bankExcelRangeBtn"[^>]*>/,
+  "payment-group exports remain available in the range toolbar",
 );
 assert.match(admin, /<script src="assets\/admin-tax-report\.js"><\/script>/);
-assert.match(admin, /getElementById\("taxPrintRangeBtn"\)\.addEventListener\("click", printTaxOfficeReport\)/);
-assert.match(admin, /getElementById\("taxExcelRangeBtn"\)\.addEventListener\("click", exportTaxOfficeExcel\)/);
+assert.doesNotMatch(admin, /id="tax(?:Print|Excel)RangeBtn"/);
+assert.doesNotMatch(admin, /getElementById\("tax(?:Print|Excel)RangeBtn"\)\.addEventListener/);
+assert.match(admin, /<button class="btn" id="printRangeBtn">전체 출력<\/button>\s*<button class="btn" id="excelRangeBtn">엑셀 출력<\/button>/, "ordinary print and Excel buttons must remain available");
 assert.match(admin, /menu_items\(ko_name,vi_name,type,qr_category\)/);
 
 const taxBlockStart = admin.indexOf("function buildTaxReportModel");
@@ -274,3 +275,4 @@ assert.equal(workbook.sheets[2].rows[5][10].value,"은행 / Chuyển khoản");
 assert.equal(workbook.sheets[1].autoFilterRange,"A4:K5");
 
 console.log("Admin tax print and Excel integration regression passed.");
+
