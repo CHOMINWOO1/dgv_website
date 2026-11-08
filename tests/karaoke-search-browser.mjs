@@ -130,6 +130,23 @@ try {
   check(!phone.url().includes('#join=') && await phone.locator('#session').isHidden() && phoneApiCalls === 0, 'fresh QR invitation is captured and scrubbed before consent, with no API call');
   await phone.locator('#searchConsent').check(); await phone.locator('#session').waitFor({ state: 'visible' });
   check(await phone.locator('#tvPanel').isHidden(), 'pending QR invitation resumes once as phone remote');
+  check(await page.locator('#phoneControls').isHidden(), 'TV host still hides phone-only playback controls');
+  check(await phone.locator('#phoneControls').evaluate(node => node.parentElement.classList.contains('session-grid')), 'phone controls are independent of the search panel');
+  check(await phone.evaluate(() => {
+    const panels = [...document.querySelector('.session-grid').children];
+    return panels[0].id === 'phoneControls' && panels[1].classList.contains('queue-panel') && panels[2].id === 'phonePanel';
+  }), 'DOM reading and keyboard order is controls, queue, then search');
+  for (const viewport of [{width:320,height:740},{width:390,height:844},{width:844,height:390},{width:1024,height:768}]) {
+    await phone.setViewportSize(viewport);
+    const controls = await phone.locator('#phoneControls').boundingBox();
+    const queue = await phone.locator('.queue-panel').boundingBox();
+    const search = await phone.locator('#phonePanel').boundingBox();
+    check(controls && queue && search && controls.y + controls.height <= queue.y + 1 && queue.y + queue.height <= search.y + 1,
+      `phone layout ${viewport.width}px: controls and queue are above search`);
+    check(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `phone layout ${viewport.width}px has no horizontal overflow`);
+  }
+  await phone.setViewportSize({width:390,height:844});
+  if (process.env.KARAOKE_PHONE_SCREENSHOT) await phone.screenshot({ path: process.env.KARAOKE_PHONE_SCREENSHOT, fullPage:true });
   check(browserErrors.length === 0, 'no browser runtime exceptions');
   console.log(`Karaoke search browser: ${checks} checks passed (all external services mocked).`);
 } finally {
