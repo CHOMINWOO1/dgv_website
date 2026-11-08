@@ -138,7 +138,10 @@ class Node {
   get allText() { return this.textContent + this.children.map(child => child.allText || String(child)).join(" "); }
 }
 const detailNodes = { hotelDetailContent: new Node(), hotelDetailSubtitle: new Node() };
+const reportContext = {};
+vm.runInNewContext(await readFile(path.join(root, "assets/hotel-report.js"), "utf8"), reportContext);
 const detailContext = {
+  HotelReport: reportContext.HotelReport,
   document: { createElement: tag => new Node(tag) }, byId: id => detailNodes[id], Date, Intl, Number, String,
   optionalMoney: value => value == null ? "—" : String(value) + " VND", moneyText: value => String(value) + " VND", roomTypeName: item => item.name
 };
@@ -147,6 +150,7 @@ detailContext.run({ ...previous, id: "detail-1", hotel_name: "Hotel A", guest_co
 const detailText = detailNodes.hotelDetailContent.allText;
 for (const value of ["Double", "Twin", "STANDARD", "VIP", "A\nB\nC", "2500 VND", "2800 VND", "200 VND", "0 VND", "<script>alert(1)</script>"]) assert.ok(detailText.includes(value), `detail missing ${value}`);
 assert.equal(detailNodes.hotelDetailContent.children.length, 4);
+assert.ok(detailText.includes("진행중 / Đang xử lý"), "part-paid detail must show in-progress status");
 
 function deleteContext({ confirmed = true, serverError = null } = {}) {
   const events = [];
@@ -170,3 +174,4 @@ const failedDelete = deleteContext({ serverError: { message: "changed elsewhere"
 assert.equal(await failedDelete.context.run("hotel_reservations", { id: "detail-1", version: 4 }, "hotelDetailError"), false);
 assert.ok(failedDelete.events.some(event => Array.isArray(event) && event[0] === "hotelDetailError"));
 console.log("Hotel room-type UI, snapshot preservation, detail dialog, deletion and print-action regression passed.");
+
