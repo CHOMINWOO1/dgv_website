@@ -7,11 +7,11 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="description" content="HANA Karaoke — TV와 휴대폰으로 함께 즐기는 노래방">
   <title>HANA Karaoke 2.0</title>
-  <link rel="stylesheet" href="assets/hana-karaoke.css">
+  <link rel="stylesheet" href="assets/hana-karaoke.css?v=20261108-search1">
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
   <script defer src="assets/supabase-config.js"></script>
   <script defer src="assets/vendor/qrcode.min.js"></script>
-  <script defer src="assets/hana-karaoke.js"></script>
+  <script defer src="assets/hana-karaoke.js?v=20261108-search1"></script>
 </head>
 <body>
   <main>
@@ -27,12 +27,18 @@
 
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
 
+    <div class="search-consent global-consent">
+      <label class="check-label" for="searchConsent"><input id="searchConsent" type="checkbox"><span data-i="consentLabel">노래방 이용약관·개인정보 안내 및 YouTube 약관에 동의합니다.</span></label>
+      <div class="policy-links"><a href="#karaokePrivacy" id="privacyLink" data-i="privacyTitle">노래방 이용약관·개인정보 안내</a><a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" data-i="youtubeTerms">YouTube 이용약관</a><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" data-i="googlePrivacy">Google 개인정보처리방침</a></div>
+    </div>
+
     <section id="home" class="panel welcome-panel" aria-labelledby="welcome">
       <span class="eyebrow">HANA HOME STAGE</span>
       <h1 id="welcome" data-i="welcome">우리집 노래방</h1>
-      <p class="intro" data-i="intro">TV에서 새 방을 만들고 휴대폰으로 접속하세요.</p>
-      <button id="create" class="primary-button" data-i="create">TV에서 방 만들기</button>
+      <p class="intro" data-i="intro">TV·PC·태블릿에서 재생 화면을 시작하고 휴대폰으로 연결하세요.</p>
+      <button id="create" class="primary-button" data-i="create">재생 화면 시작하기</button>
       <p class="hint" data-i="publicCreate">로그인이나 비밀번호 없이 방을 만들 수 있습니다.</p>
+      <p class="hint room-lifetime" data-i="roomLifetime">재생 화면을 계속 열어 두세요. 방은 24시간 후 만료되는 임시 방이며, TV를 영구 등록하지 않습니다.</p>
       <div class="divider"></div>
       <form id="joinForm">
         <label for="code" data-i="joinLabel">초대 링크 또는 저장된 방 코드</label>
@@ -63,6 +69,7 @@
           </div>
         </div>
         <div class="room-meta"><span id="expires"></span><button id="close" class="text-button danger" data-i="close" hidden>방 종료</button></div>
+        <p class="hint room-lifetime" data-i="roomLifetime">재생 화면을 계속 열어 두세요. 방은 24시간 후 만료되는 임시 방이며, TV를 영구 등록하지 않습니다.</p>
       </div>
 
       <div id="tvPanel" class="panel player-panel" hidden>
@@ -81,15 +88,29 @@
       <div class="session-grid">
         <section id="phonePanel" class="panel song-panel" aria-labelledby="addHeading">
           <h2 id="addHeading" data-i="addSong">노래 예약</h2>
-          <p class="hint" data-i="searchHint">유튜브에서 노래방 영상을 찾아 공유 링크를 복사해 넣으세요.</p>
-          <button id="search" class="secondary search-button" data-i="search">유튜브 노래 검색 ↗</button>
-          <form id="songForm">
-            <label for="songTitle" data-i="titleLabel">노래 제목 (선택)</label>
-            <input id="songTitle" type="text" maxlength="100" data-i-placeholder="titlePlaceholder" placeholder="노래 제목 (선택)">
-            <label for="songUrl" data-i="urlLabel">YouTube 링크 또는 영상 ID</label>
-            <input id="songUrl" type="text" required maxlength="2048" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://youtu.be/…" inputmode="url">
-            <button id="add" type="submit" class="full-width" data-i="add">예약 추가</button>
+          <p class="hint" data-i="inlineSearchHint">노래를 검색하고 결과를 누르면 바로 예약됩니다. 우선예약은 현재 곡이 끝난 뒤 재생됩니다.</p>
+          <div class="youtube-attribution"><a href="https://www.youtube.com/" target="_blank" rel="noopener noreferrer">YouTube</a><span data-i="searchSource">YouTube에서 제공하는 검색 결과</span></div>
+          <form id="youtubeSearchForm" class="youtube-search-form">
+            <label for="searchQuery" data-i="searchQueryLabel">노래 제목 또는 가수</label>
+            <div class="search-input-row"><input id="searchQuery" type="search" required maxlength="100" autocomplete="off" data-i-placeholder="searchQueryPlaceholder" placeholder="예: 사랑은 늘 도망가 노래방"><button id="searchSubmit" type="submit" data-i="searchSubmit">검색</button></div>
+            <p class="hint" data-i="searchQuotaHint">검색 버튼을 누를 때만 YouTube에 검색어가 전송됩니다.</p>
           </form>
+          <p id="searchStatus" class="search-status" role="status" aria-live="polite" hidden></p>
+          <ul id="searchResults" class="search-results" aria-label="YouTube search results"></ul>
+          <button id="searchMore" type="button" class="secondary full-width" data-i="searchMore" hidden>다음 검색 결과</button>
+          <details id="manualEntry" class="manual-entry">
+            <summary data-i="manualEntry">YouTube 링크로 직접 예약</summary>
+            <p class="hint" data-i="searchHint">검색을 사용할 수 없으면 YouTube 공유 링크로 예약할 수 있습니다.</p>
+            <button id="search" type="button" class="secondary search-button" data-i="search">YouTube에서 검색 ↗</button>
+            <form id="songForm">
+              <label for="songTitle" data-i="titleLabel">노래 제목 (선택)</label>
+              <input id="songTitle" type="text" maxlength="100" data-i-placeholder="titlePlaceholder" placeholder="노래 제목 (선택)">
+              <label for="songUrl" data-i="urlLabel">YouTube 링크 또는 영상 ID</label>
+              <input id="songUrl" type="text" required maxlength="2048" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://youtu.be/…" inputmode="url">
+              <label class="check-label manual-priority" for="manualPriority"><input id="manualPriority" type="checkbox"><span data-i="priorityHint">우선예약: 현재 곡이 끝난 뒤 재생</span></label>
+              <button id="add" type="submit" class="full-width" data-i="add">예약 추가</button>
+            </form>
+          </details>
           <div id="phoneControls">
             <div class="divider"></div>
             <p class="hint" data-i="now">현재 재생</p><p id="currentPhone" class="current-title"></p>
@@ -104,6 +125,15 @@
       </div>
     </section>
     <noscript><p class="notice">이 페이지를 사용하려면 JavaScript를 켜 주세요. Please enable JavaScript.</p></noscript>
+    <details id="karaokePrivacy" class="karaoke-privacy">
+      <summary data-i="privacyTitle">노래방 이용약관·개인정보 안내</summary>
+      <p data-i="privacyScope">이 안내는 HANA Karaoke에만 적용됩니다. YouTube API 서비스를 사용하며, 이용 시 YouTube 이용약관도 적용됩니다.</p>
+      <p data-i="privacySearch">검색어와 언어는 서비스 서버를 거쳐 Google/YouTube로 전송됩니다. 검색 결과는 최대 24시간 재사용하고 이후 1시간 이내 삭제합니다. DB에는 원문 검색어 대신 해시를 저장합니다. Google 계정 연결이나 로그인 정보는 요청하지 않습니다.</p>
+      <p data-i="privacyQueue">예약한 영상 ID와 제목은 방 참가자에게 표시됩니다. 방은 24시간 후 만료되며, 만료 후 7일이 지나면 1시간 이내 서버 기록을 정리합니다. 예약 삭제 또는 방 종료로 방 이용을 중단할 수 있습니다.</p>
+      <p data-i="privacyStorage">sessionStorage에 방 접속 토큰과 이용 동의, localStorage에 언어를 저장합니다. 브라우저 사이트 데이터를 지우면 이 기기의 저장 정보를 삭제할 수 있습니다. 동의를 해제하면 재생·검색·연결을 중단하고 동의 저장을 삭제합니다.</p>
+      <p data-i="privacyThirdParty">YouTube 영상·이미지 등 제3자 콘텐츠가 표시되며 광고가 포함될 수 있습니다. Google/YouTube는 자체 정책에 따라 IP 주소, 기기 정보 및 쿠키 등 데이터를 처리할 수 있습니다.</p>
+      <div class="policy-links"><a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" data-i="youtubeTerms">YouTube 이용약관</a><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" data-i="googlePrivacy">Google 개인정보처리방침</a></div>
+    </details>
     <footer>HANA Karaoke · <span data-i="footer">개인용 노래방 · YouTube 이용약관이 적용됩니다.</span></footer>
   </main>
 </body>

@@ -10,10 +10,11 @@
   const FALLBACK_MS = 60000;
   const RECONCILE_MS = 300000;
   const STORAGE_PREFIX = 'hana-karaoke:room:';
+  const CONSENT_KEY = 'hana-karaoke:youtube-consent:v1';
   const dict = {
     ko: {
-      welcome: '우리집 노래방', intro: 'TV에서 새 방을 만들고 휴대폰으로 접속하세요.',
-      tagline: 'TV와 휴대폰으로 즐기는 우리집 노래방', create: 'TV에서 방 만들기', publicCreate: '로그인이나 비밀번호 없이 방을 만들 수 있습니다.',
+      welcome: '우리집 노래방', intro: 'TV·PC·태블릿에서 재생 화면을 시작하고 휴대폰으로 연결하세요.',
+      tagline: 'TV와 휴대폰으로 즐기는 우리집 노래방', create: '재생 화면 시작하기', publicCreate: '로그인이나 비밀번호 없이 방을 만들 수 있습니다.',
       join: '휴대폰 연결', joinLabel: '초대 링크 또는 저장된 방 코드', joinPlaceholder: '초대 링크 또는 저장된 6자리 코드',
       joinHint: '처음 연결하는 휴대폰은 TV의 QR을 스캔하거나 초대 링크를 열어 주세요. 방 코드만으로는 새 기기를 연결할 수 없습니다.',
       leave: '나가기', room: '연결 코드', tv: 'TV 화면', phone: '휴대폰 리모컨', connectPhone: '휴대폰을 리모컨으로',
@@ -21,7 +22,7 @@
       copyInvite: '초대 링크 복사', inviteLink: '초대 링크', copied: '초대 링크를 복사했습니다.', copyManual: '아래 링크를 길게 눌러 복사해 주세요.',
       now: '현재 재생', waiting: '첫 번째 노래를 예약해 주세요.', autoplay: 'TV에서 첫 재생 버튼을 눌러야 할 수 있습니다. 일부 TV 브라우저나 영상은 유튜브 재생을 제한합니다.',
       next: '다음 곡', play: '재생', pause: '일시정지', startTV: 'TV에서 재생 시작', queue: '예약 목록', addSong: '노래 예약',
-      searchHint: '유튜브에서 노래방 영상을 찾아 공유 링크를 복사해 넣으세요.', search: '유튜브 노래 검색 ↗', titleLabel: '노래 제목 (선택)',
+      searchHint: '검색을 사용할 수 없으면 YouTube 공유 링크로 예약할 수 있습니다.', search: 'YouTube에서 검색 ↗', titleLabel: '노래 제목 (선택)',
       titlePlaceholder: '노래 제목 (선택)', urlLabel: 'YouTube 링크 또는 영상 ID', add: '예약 추가', controlHint: 'TV에서 직접 재생을 시작해야 할 수 있습니다.',
       empty: '예약된 곡이 없습니다.', refresh: '새로고침', close: '방 종료', closeConfirm: '이 방을 종료할까요? 모든 휴대폰의 연결과 예약이 종료됩니다.',
       leaveConfirm: 'TV 화면을 나가면 재생이 중단됩니다. 방을 유지한 채 나갈까요?', closed: '종료되었거나 만료된 방입니다. 새 방을 만들어 주세요.',
@@ -37,11 +38,26 @@
       playerError: '이 영상을 재생할 수 없습니다. TV의 인터넷 연결을 확인하거나 다음 곡을 선택하세요.',
       playerUnavailable: 'YouTube 플레이어를 불러오지 못했습니다. 네트워크를 확인하고 페이지를 새로고침해 주세요.',
       storageWarning: '이 브라우저는 세션 저장을 허용하지 않습니다. 새로고침하면 방 연결을 복구하지 못할 수 있습니다.',
-      footer: '개인용 노래방 · YouTube 이용약관이 적용됩니다.'
+      footer: '개인용 노래방 · YouTube 이용약관이 적용됩니다.',
+      roomLifetime: '재생 화면을 계속 열어 두세요. 방은 24시간 후 만료되는 임시 방이며, TV를 영구 등록하지 않습니다.',
+      inlineSearchHint: '노래를 검색하고 결과를 누르면 바로 예약됩니다. 우선예약은 현재 곡이 끝난 뒤 재생됩니다.',
+      searchSource: 'YouTube에서 제공하는 검색 결과', searchQueryLabel: '노래 제목 또는 가수', searchQueryPlaceholder: '예: 사랑은 늘 도망가 노래방', searchSubmit: '검색',
+      searchQuotaHint: '검색 버튼을 누를 때만 YouTube에 검색어가 전송됩니다.', searchMore: '다음 검색 결과', searchLoading: 'YouTube에서 검색 중…',
+      searchReady: '결과를 누르면 예약 목록에 추가됩니다.', searchEmpty: '검색 결과가 없습니다. 다른 검색어를 입력해 주세요.', searchQueryError: '검색어를 1~100자로 입력해 주세요.',
+      searchNotConfigured: 'YouTube 검색을 준비 중입니다. 아래에서 링크로 직접 예약해 주세요.', searchQuota: '오늘의 YouTube 검색 한도에 도달했습니다. 아래에서 링크로 직접 예약해 주세요.',
+      searchRateLimit: '검색 요청이 많습니다. 잠시 후 검색 버튼을 다시 눌러 주세요.', searchUnavailable: 'YouTube 검색을 사용할 수 없습니다. 잠시 후 다시 검색하거나 링크로 예약해 주세요.',
+      searchConsentNeeded: '노래방 이용 전에 위의 이용약관·개인정보 안내에 동의해 주세요.', manualEntry: 'YouTube 링크로 직접 예약', priority: '우선예약',
+      priorityHint: '우선예약: 현재 곡이 끝난 뒤 재생', priorityAdded: '현재 곡 다음 순서로 예약했습니다.', resultAdded: '예약 완료', resultAdding: '예약 중…', reserveResult: '이 곡 예약',
+      consentLabel: '노래방 이용약관·개인정보 안내 및 YouTube 약관에 동의합니다.', privacyTitle: '노래방 이용약관·개인정보 안내', youtubeTerms: 'YouTube 이용약관', googlePrivacy: 'Google 개인정보처리방침',
+      privacyScope: '이 안내는 HANA Karaoke에만 적용됩니다. YouTube API 서비스를 사용하며, 이용 시 YouTube 이용약관도 적용됩니다.',
+      privacySearch: '검색어와 언어는 서비스 서버를 거쳐 Google/YouTube로 전송됩니다. 검색 결과는 최대 24시간 재사용하고 이후 1시간 이내 삭제합니다. DB에는 원문 검색어 대신 해시를 저장합니다. Google 계정 연결이나 로그인 정보는 요청하지 않습니다.',
+      privacyQueue: '예약한 영상 ID와 제목은 방 참가자에게 표시됩니다. 방은 24시간 후 만료되며, 만료 후 7일이 지나면 1시간 이내 서버 기록을 정리합니다. 예약 삭제 또는 방 종료로 방 이용을 중단할 수 있습니다.',
+      privacyStorage: 'sessionStorage에 방 접속 토큰과 이용 동의, localStorage에 언어를 저장합니다. 브라우저 사이트 데이터를 지우면 이 기기의 저장 정보를 삭제할 수 있습니다. 동의를 해제하면 재생·검색·연결을 중단하고 동의 저장을 삭제합니다.',
+      privacyThirdParty: 'YouTube 영상·이미지 등 제3자 콘텐츠가 표시되며 광고가 포함될 수 있습니다. Google/YouTube는 자체 정책에 따라 IP 주소, 기기 정보 및 쿠키 등 데이터를 처리할 수 있습니다.'
     },
     vi: {
-      welcome: 'Karaoke tại nhà', intro: 'Tạo phòng trên TV, sau đó kết nối điện thoại.', tagline: 'Karaoke với TV và điện thoại',
-      create: 'Tạo phòng trên TV', publicCreate: 'Tạo phòng không cần đăng nhập hoặc mật khẩu.', join: 'Kết nối điện thoại',
+      welcome: 'Karaoke tại nhà', intro: 'Mở màn hình phát trên TV, PC hoặc máy tính bảng, rồi kết nối điện thoại.', tagline: 'Karaoke với TV và điện thoại',
+      create: 'Mở màn hình phát', publicCreate: 'Tạo phòng không cần đăng nhập hoặc mật khẩu.', join: 'Kết nối điện thoại',
       joinLabel: 'Liên kết mời hoặc mã phòng đã lưu', joinPlaceholder: 'Liên kết mời hoặc mã 6 số đã lưu',
       joinHint: 'Điện thoại mới cần quét mã QR trên TV hoặc mở liên kết mời. Chỉ mã phòng không đủ để kết nối thiết bị mới.',
       leave: 'Thoát', room: 'Mã phòng', tv: 'Màn hình TV', phone: 'Điều khiển điện thoại', connectPhone: 'Điện thoại là điều khiển',
@@ -49,7 +65,7 @@
       copyInvite: 'Sao chép liên kết mời', inviteLink: 'Liên kết mời', copied: 'Đã sao chép liên kết mời.', copyManual: 'Nhấn giữ liên kết bên dưới để sao chép.',
       now: 'Đang phát', waiting: 'Hãy thêm bài hát đầu tiên.', autoplay: 'Có thể cần nhấn phát trên TV. Một số trình duyệt TV hoặc video hạn chế phát YouTube.',
       next: 'Bài tiếp theo', play: 'Phát', pause: 'Tạm dừng', startTV: 'Bắt đầu phát trên TV', queue: 'Danh sách chờ', addSong: 'Thêm bài hát',
-      searchHint: 'Tìm video karaoke trên YouTube, sao chép liên kết và dán vào đây.', search: 'Tìm trên YouTube ↗', titleLabel: 'Tên bài hát (tùy chọn)',
+      searchHint: 'Nếu không tìm kiếm được, hãy thêm bài bằng liên kết chia sẻ YouTube.', search: 'Tìm trên YouTube ↗', titleLabel: 'Tên bài hát (tùy chọn)',
       titlePlaceholder: 'Tên bài hát (tùy chọn)', urlLabel: 'Liên kết hoặc ID video YouTube', add: 'Thêm vào hàng chờ', controlHint: 'Có thể cần bắt đầu phát trực tiếp trên TV.',
       empty: 'Chưa có bài hát.', refresh: 'Làm mới', close: 'Đóng phòng', closeConfirm: 'Đóng phòng? Mọi điện thoại và danh sách chờ sẽ bị ngắt kết nối.',
       leaveConfirm: 'Thoát màn hình TV sẽ dừng phát. Giữ phòng và thoát?', closed: 'Phòng đã đóng hoặc hết hạn. Hãy tạo phòng mới.',
@@ -64,18 +80,33 @@
       manualStart: 'Nếu tự động phát bị chặn, nhấn “Bắt đầu phát trên TV” hoặc nút phát trong video.',
       playerError: 'Không phát được video này. Kiểm tra mạng trên TV hoặc chọn bài tiếp theo.',
       playerUnavailable: 'Không tải được YouTube. Kiểm tra mạng rồi tải lại trang.', storageWarning: 'Trình duyệt không lưu phiên. Có thể mất kết nối phòng khi tải lại trang.',
-      footer: 'Karaoke cá nhân · Áp dụng điều khoản YouTube.'
+      footer: 'Karaoke cá nhân · Áp dụng điều khoản YouTube.',
+      roomLifetime: 'Giữ màn hình phát mở. Phòng tạm thời hết hạn sau 24 giờ; TV không được đăng ký vĩnh viễn.',
+      inlineSearchHint: 'Tìm bài và nhấn kết quả để thêm ngay vào hàng chờ. Bài ưu tiên phát sau bài hiện tại.',
+      searchSource: 'Kết quả tìm kiếm từ YouTube', searchQueryLabel: 'Tên bài hát hoặc ca sĩ', searchQueryPlaceholder: 'Ví dụ: nhạc trẻ karaoke', searchSubmit: 'Tìm kiếm',
+      searchQuotaHint: 'Từ khóa chỉ được gửi đến YouTube khi bạn nhấn Tìm kiếm.', searchMore: 'Kết quả tiếp theo', searchLoading: 'Đang tìm trên YouTube…',
+      searchReady: 'Nhấn một kết quả để thêm vào hàng chờ.', searchEmpty: 'Không có kết quả. Hãy thử từ khóa khác.', searchQueryError: 'Nhập từ khóa từ 1 đến 100 ký tự.',
+      searchNotConfigured: 'Tìm kiếm YouTube đang được chuẩn bị. Hãy thêm bài bằng liên kết bên dưới.', searchQuota: 'Đã hết hạn mức tìm kiếm YouTube hôm nay. Hãy dùng liên kết bên dưới.',
+      searchRateLimit: 'Có quá nhiều lượt tìm kiếm. Vui lòng nhấn Tìm kiếm lại sau.', searchUnavailable: 'Chưa thể tìm kiếm YouTube. Thử lại sau hoặc thêm bằng liên kết.',
+      searchConsentNeeded: 'Vui lòng đồng ý với điều khoản và quyền riêng tư ở trên trước khi dùng karaoke.', manualEntry: 'Thêm bằng liên kết YouTube', priority: 'Ưu tiên',
+      priorityHint: 'Ưu tiên: phát sau bài hiện tại', priorityAdded: 'Đã xếp ngay sau bài hiện tại.', resultAdded: 'Đã thêm', resultAdding: 'Đang thêm…', reserveResult: 'Thêm bài này',
+      consentLabel: 'Tôi đồng ý với điều khoản, thông báo quyền riêng tư của karaoke và điều khoản YouTube.', privacyTitle: 'Điều khoản và quyền riêng tư của karaoke', youtubeTerms: 'Điều khoản YouTube', googlePrivacy: 'Chính sách quyền riêng tư Google',
+      privacyScope: 'Thông báo này chỉ áp dụng cho HANA Karaoke. Dịch vụ sử dụng API YouTube; việc sử dụng cũng tuân theo Điều khoản YouTube.',
+      privacySearch: 'Từ khóa và ngôn ngữ được gửi qua máy chủ đến Google/YouTube. Kết quả được dùng lại tối đa 24 giờ rồi xóa trong vòng 1 giờ. Cơ sở dữ liệu chỉ lưu mã băm thay vì từ khóa gốc. Không yêu cầu tài khoản Google hoặc thông tin đăng nhập.',
+      privacyQueue: 'ID video và tiêu đề đã đặt được hiển thị cho người trong phòng. Phòng hết hạn sau 24 giờ; bản ghi máy chủ được dọn trong vòng 1 giờ sau 7 ngày kể từ khi hết hạn. Bạn có thể xóa bài hoặc đóng phòng để ngừng sử dụng.',
+      privacyStorage: 'sessionStorage lưu mã truy cập phòng và sự đồng ý; localStorage lưu ngôn ngữ. Xóa dữ liệu trang web để xóa thông tin trên thiết bị. Bỏ chọn đồng ý sẽ dừng phát, tìm kiếm, kết nối và xóa sự đồng ý đã lưu.',
+      privacyThirdParty: 'Nội dung bên thứ ba như video, hình ảnh YouTube có thể gồm quảng cáo. Google/YouTube có thể xử lý địa chỉ IP, thông tin thiết bị và cookie theo chính sách riêng.'
     },
     en: {
-      welcome: 'Karaoke at home', intro: 'Create a room on TV, then connect your phone.', tagline: 'Karaoke with your TV and phone',
-      create: 'Create TV room', publicCreate: 'Create a room without a login or password.', join: 'Connect phone', joinLabel: 'Invitation link or saved room code',
+      welcome: 'Karaoke at home', intro: 'Start a playback screen on a TV, PC or tablet, then connect your phone.', tagline: 'Karaoke with your TV and phone',
+      create: 'Start playback screen', publicCreate: 'Create a room without a login or password.', join: 'Connect phone', joinLabel: 'Invitation link or saved room code',
       joinPlaceholder: 'Invitation link or saved 6-digit code', joinHint: 'A new phone must scan the TV’s QR code or open its invitation link. A room code alone cannot connect a new device.',
       leave: 'Leave', room: 'Room code', tv: 'TV screen', phone: 'Phone remote', connectPhone: 'Your phone is the remote', qrHint: 'Scan the QR code with your phone.',
       invitePrivacy: 'Anyone with the invitation link can add songs and control playback. Share it only with your singing group.',
       copyInvite: 'Copy invitation link', inviteLink: 'Invitation link', copied: 'Invitation link copied.', copyManual: 'Press and hold the link below to copy it.',
       now: 'Now playing', waiting: 'Add your first song to get started.', autoplay: 'You may need to start playback on TV. Some TV browsers or videos restrict YouTube playback.',
       next: 'Next song', play: 'Play', pause: 'Pause', startTV: 'Start playback on TV', queue: 'Queue', addSong: 'Add a song',
-      searchHint: 'Find a karaoke video on YouTube, copy its share link and paste it here.', search: 'Search YouTube ↗', titleLabel: 'Song title (optional)',
+      searchHint: 'If search is unavailable, reserve a song using its YouTube share link.', search: 'Search on YouTube ↗', titleLabel: 'Song title (optional)',
       titlePlaceholder: 'Song title (optional)', urlLabel: 'YouTube link or video ID', add: 'Add to queue', controlHint: 'Playback may need to be started directly on TV.',
       empty: 'No songs queued.', refresh: 'Refresh', close: 'Close room', closeConfirm: 'Close this room? All phones and queued songs will be disconnected.',
       leaveConfirm: 'Leaving the TV screen stops playback. Leave and keep the room open?', closed: 'This room is closed or expired. Please create a new room.',
@@ -90,7 +121,22 @@
       manualStart: 'If autoplay is blocked, press “Start playback on TV” below or the video’s own play button.',
       playerError: 'This video cannot be played. Check the TV’s internet connection or choose the next song.',
       playerUnavailable: 'YouTube could not load. Check your connection and reload this page.', storageWarning: 'This browser cannot save the session. Reloading may lose your room connection.',
-      footer: 'Personal home use · YouTube terms apply.'
+      footer: 'Personal home use · YouTube terms apply.',
+      roomLifetime: 'Keep the playback screen open. Rooms are temporary and expire after 24 hours; this does not permanently register a TV.',
+      inlineSearchHint: 'Search, then tap a result to reserve it. Priority reservations play after the current song.',
+      searchSource: 'Search results from YouTube', searchQueryLabel: 'Song title or artist', searchQueryPlaceholder: 'Example: your favorite song karaoke', searchSubmit: 'Search',
+      searchQuotaHint: 'Your query is sent to YouTube only when you press Search.', searchMore: 'Next search results', searchLoading: 'Searching YouTube…',
+      searchReady: 'Tap a result to add it to the queue.', searchEmpty: 'No results. Try another query.', searchQueryError: 'Enter a search query of 1–100 characters.',
+      searchNotConfigured: 'YouTube search is being set up. Reserve using a link below.', searchQuota: 'Today’s YouTube search quota has been reached. Use a link below.',
+      searchRateLimit: 'Too many searches. Please press Search again shortly.', searchUnavailable: 'YouTube search is unavailable. Try later or reserve using a link.',
+      searchConsentNeeded: 'Agree to the terms and privacy notice above before using karaoke.', manualEntry: 'Reserve using a YouTube link', priority: 'Priority',
+      priorityHint: 'Priority: play after the current song', priorityAdded: 'Reserved immediately after the current song.', resultAdded: 'Reserved', resultAdding: 'Reserving…', reserveResult: 'Reserve this song',
+      consentLabel: 'I agree to the karaoke terms, privacy notice, and YouTube Terms of Service.', privacyTitle: 'Karaoke terms & privacy notice', youtubeTerms: 'YouTube Terms of Service', googlePrivacy: 'Google Privacy Policy',
+      privacyScope: 'This notice applies only to HANA Karaoke. It uses YouTube API Services; by using it, you also agree to the YouTube Terms of Service.',
+      privacySearch: 'Your query and language pass through the service server to Google/YouTube. Results are reused for up to 24 hours and deleted within the next hour. The database stores a hash, not the original query. No Google account connection or login credentials are requested.',
+      privacyQueue: 'Reserved video IDs and titles are visible to room participants. Rooms expire after 24 hours; server records are cleaned within one hour after seven days past expiry. Remove reservations or close the room to stop using it.',
+      privacyStorage: 'sessionStorage stores room access tokens and consent; localStorage stores your language. Clear browser site data to remove saved information on this device. Unchecking consent stops playback, search and connections, and removes saved consent.',
+      privacyThirdParty: 'Third-party content, including YouTube videos and images, may include advertising. Google/YouTube may process IP addresses, device information and cookies under their own policies.'
     }
   };
 
@@ -105,6 +151,10 @@
   let hasPlayedEntry = false, endedEntryId = '', pendingEndedId = '', playbackMessage = '', connectionKey = 'connecting';
   let pendingPlayback = null;
   let noticeKey = '', noticeIsError = false, suspended = false, storageAvailable = true;
+  let searchBusy = false, searchEpoch = 0, searchAbort = null, searchData = null, searchStatusKey = '', searchStatusError = false;
+  let searchConsent = false, pendingResultId = '';
+  let pendingEntry = null;
+  try { searchConsent = sessionStorage.getItem(CONSENT_KEY) === 'accepted'; } catch (_) { /* Consent remains in memory. */ }
   const inFlight = new Set();
   const uncertainRequests = new Map();
 
@@ -168,6 +218,8 @@
 
   function apiError(code, httpStatus) {
     const normalized = String(code || '').toUpperCase();
+    const searchErrors = { SEARCH_NOT_CONFIGURED: 'searchNotConfigured', SEARCH_QUOTA_EXCEEDED: 'searchQuota', SEARCH_RATE_LIMITED: 'searchRateLimit', SEARCH_UNAVAILABLE: 'searchUnavailable' };
+    if (searchErrors[normalized]) return searchErrors[normalized];
     if (normalized.includes('CREATE_REQUIRES_AUTH') || normalized.includes('STAFF_REQUIRED')) return 'staffRequired';
     if (httpStatus === 429 || normalized.includes('RATE_LIMIT')) return 'rateLimit';
     if (normalized.includes('QUEUE_FULL')) return 'queueFull';
@@ -176,7 +228,8 @@
     return 'error';
   }
 
-  async function api(action, extra = {}) {
+  async function api(action, extra = {}, externalSignal = null) {
+    if (!searchConsent) throw new Error('searchConsentNeeded');
     const config = window.DGV_SUPABASE_CONFIG;
     if (!config || !/^https:\/\//.test(config.url || '') || !config.publishableKey) throw new Error('configError');
     const payload = { action, ...extra };
@@ -186,10 +239,15 @@
       if (!payload.token) throw new Error('inviteError');
     }
     const signature = JSON.stringify(payload);
-    payload.requestId = uncertainRequests.get(signature) || requestId();
+    const readOnly = action === 'state' || action === 'search';
+    payload.requestId = readOnly ? requestId() : uncertainRequests.get(signature) || requestId();
     const expectedGeneration = generation;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    const maxAttempts = action === 'search' ? 1 : 2;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const controller = new AbortController();
+      const abortFromCaller = () => controller.abort();
+      if (externalSignal?.aborted) controller.abort();
+      externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
       inFlight.add(controller);
       const timeout = setTimeout(() => controller.abort(), 15000);
       try {
@@ -200,6 +258,7 @@
         let data;
         try { data = await response.json(); } catch (_) { throw new Error('Uncertain response'); }
         if (!response.ok || data?.error) {
+          if (action === 'search') throw new Error(apiError(data?.code || data?.error?.code || data?.error, response.status));
           if (response.status >= 500) throw new Error('Uncertain response');
           uncertainRequests.delete(signature);
           throw new Error(apiError(data?.code || data?.error?.code || data?.error, response.status));
@@ -208,12 +267,13 @@
         return data;
       } catch (error) {
         if (Object.hasOwn(dict.en, error.message)) throw error;
-        if (action !== 'state') uncertainRequests.set(signature, payload.requestId);
+        if (!readOnly && expectedGeneration === generation) uncertainRequests.set(signature, payload.requestId);
         // Lost responses retry the same idempotency key, including a later manual retry.
-        if (attempt === 0 && expectedGeneration === generation && !suspended && navigator.onLine !== false) continue;
-        throw new Error(action !== 'state' ? 'uncertain' : navigator.onLine === false ? 'offline' : 'error');
+        if (attempt + 1 < maxAttempts && expectedGeneration === generation && !suspended && !externalSignal?.aborted && navigator.onLine !== false) continue;
+        throw new Error(action === 'search' ? 'searchUnavailable' : !readOnly ? 'uncertain' : navigator.onLine === false ? 'offline' : 'error');
       } finally {
         clearTimeout(timeout);
+        externalSignal?.removeEventListener('abort', abortFromCaller);
         inFlight.delete(controller);
       }
     }
@@ -236,6 +296,7 @@
     state = incoming;
     renderState();
     if (state.closed) {
+      resetSearch();
       forgetSession(room);
       disconnectRealtime();
       showNotice('closed', true);
@@ -245,13 +306,21 @@
   }
 
   function updateControls() {
-    const active = Boolean(room && state && !state.closed);
-    $('create').disabled = busy;
-    $('join').disabled = busy;
+    const active = Boolean(searchConsent && room && state && !state.closed);
+    $('create').disabled = busy || !searchConsent;
+    $('join').disabled = busy || !searchConsent;
+    $('searchConsent').disabled = busy;
     $('leave').disabled = busy;
     $('refresh').disabled = busy || !room || Boolean(state?.closed);
     $('add').disabled = busy || !active;
     $('close').disabled = busy || !active;
+    $('searchSubmit').disabled = busy || searchBusy || !active || !searchConsent;
+    $('searchQuery').disabled = searchBusy || !active || !searchConsent;
+    $('searchMore').disabled = busy || searchBusy || !active || !searchConsent || !searchData?.nextPageToken;
+    $('searchSubmit').textContent = t(searchBusy ? 'searchLoading' : 'searchSubmit');
+    $('youtubeSearchForm').setAttribute('aria-busy', String(searchBusy));
+    $('searchResults').setAttribute('aria-busy', String(Boolean(pendingResultId)));
+    document.querySelectorAll('#searchResults button').forEach((button) => { button.disabled = busy || searchBusy || !active || !searchConsent || button.dataset.added === 'true'; });
     ['pause', 'pauseTV'].forEach((id) => { $(id).disabled = busy || !active || !state.current; });
     ['play', 'startTV'].forEach((id) => { $(id).disabled = busy || !active || (!state.current && !state.queue.length); });
     ['next', 'nextTV'].forEach((id) => { $(id).disabled = busy || !active || (!state.current && !state.queue.length); });
@@ -270,11 +339,12 @@
       const number = document.createElement('span'); number.className = 'song-number'; number.textContent = String(index + 1).padStart(2, '0'); number.setAttribute('aria-hidden', 'true');
       const name = document.createElement('span'); name.className = 'song-title'; name.textContent = song.title || t('fallbackTitle');
       const controls = document.createElement('div'); controls.className = 'song-tools';
-      [['↑', 'up'], ['↓', 'down'], ['×', 'remove']].forEach(([label, operation]) => {
+      [[t('priority'), 'prioritize'], ['↑', 'up'], ['↓', 'down'], ['×', 'remove']].forEach(([label, operation]) => {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary'; button.textContent = label;
-        button.setAttribute('aria-label', `${t(operation)}: ${song.title}`);
-        button.dataset.edge = String((operation === 'up' && index === 0) || (operation === 'down' && index === state.queue.length - 1));
-        button.addEventListener('click', () => mutate(operation, { itemId: song.id }, 'moved'));
+        button.setAttribute('aria-label', `${t(operation === 'prioritize' ? 'priorityHint' : operation)}: ${song.title}`);
+        if (operation === 'prioritize') button.classList.add('priority-queue');
+        button.dataset.edge = String((['up', 'prioritize'].includes(operation) && index === 0) || (operation === 'down' && index === state.queue.length - 1));
+        button.addEventListener('click', () => mutate(operation, { itemId: song.id }, operation === 'prioritize' ? 'priorityAdded' : 'moved'));
         controls.append(button);
       });
       row.append(number, name, controls); $('queue').append(row);
@@ -301,7 +371,111 @@
     showNotice(noticeKey, noticeIsError);
     showPlayback(playbackMessage);
     setConnection(connectionKey);
+    $('searchConsent').checked = searchConsent;
+    showSearchStatus(searchStatusKey, searchStatusError);
+    renderSearchResults();
     renderState();
+    updateControls();
+  }
+
+  function showSearchStatus(key, isError = false) {
+    searchStatusKey = key; searchStatusError = isError;
+    $('searchStatus').textContent = key ? t(key) : '';
+    $('searchStatus').hidden = !key;
+    $('searchStatus').classList.toggle('error', isError);
+  }
+
+  function resetSearch() {
+    searchEpoch += 1;
+    searchAbort?.abort(); searchAbort = null;
+    searchBusy = false; searchData = null; pendingResultId = '';
+    $('searchResults').replaceChildren(); $('searchMore').hidden = true;
+    showSearchStatus('');
+  }
+
+  function queueTitle(value) {
+    return Array.from(value.trim().replace(/[\u0000-\u001f\u007f-\u009f]/g, '')).slice(0, 100).join('') || t('fallbackTitle');
+  }
+
+  function safeThumbnail(value, videoId) {
+    try {
+      const url = new URL(value);
+      if (url.protocol !== 'https:' || !['i.ytimg.com', 'i1.ytimg.com', 'i2.ytimg.com', 'i3.ytimg.com', 'i4.ytimg.com', 'img.youtube.com'].includes(url.hostname) || url.username || url.password) return '';
+      if (!url.pathname.startsWith(`/vi/${videoId}/`) && !url.pathname.startsWith(`/vi_webp/${videoId}/`)) return '';
+      return url.href;
+    } catch (_) { return ''; }
+  }
+
+  function renderSearchResults() {
+    $('searchResults').replaceChildren();
+    $('searchMore').hidden = !searchData?.nextPageToken;
+    if (!searchData || !searchConsent) return;
+    const expectedGeneration = generation, expectedEpoch = searchEpoch;
+    searchData.items.forEach((item) => {
+      const row = document.createElement('li'); row.className = 'search-result';
+      const reserve = document.createElement('button'); reserve.type = 'button'; reserve.className = 'result-main';
+      reserve.dataset.added = String(Boolean(item.added)); reserve.setAttribute('aria-label', `${t('reserveResult')}: ${item.title}`);
+      const thumbnail = safeThumbnail(item.thumbnail, item.videoId);
+      if (thumbnail) {
+        const image = document.createElement('img'); image.src = thumbnail; image.alt = ''; image.loading = 'lazy'; image.width = 120; image.height = 68; image.referrerPolicy = 'no-referrer'; reserve.append(image);
+      }
+      const copy = document.createElement('span'); copy.className = 'result-copy';
+      const title = document.createElement('span'); title.className = 'result-title'; title.textContent = item.title;
+      const channelName = document.createElement('span'); channelName.className = 'result-channel'; channelName.textContent = item.channelTitle;
+      const label = document.createElement('span'); label.className = 'result-label'; label.textContent = t(pendingResultId === item.videoId ? 'resultAdding' : item.added ? 'resultAdded' : 'reserveResult');
+      copy.append(title, channelName, label); reserve.append(copy);
+      const priority = document.createElement('button'); priority.type = 'button'; priority.className = 'secondary result-priority'; priority.textContent = t('priority'); priority.dataset.added = String(Boolean(item.added)); priority.setAttribute('aria-label', `${t('priorityHint')}: ${item.title}`);
+      const addResult = async (isPriority) => {
+        if (busy || searchBusy || item.added || expectedGeneration !== generation || expectedEpoch !== searchEpoch || !searchConsent) return;
+        pendingResultId = item.videoId; renderSearchResults(); updateControls(); showSearchStatus('resultAdding');
+        const success = await mutate('add', { videoId: item.videoId, title: queueTitle(item.title), ...(isPriority ? { priority: true } : {}) }, isPriority ? 'priorityAdded' : 'added');
+        if (expectedGeneration !== generation || expectedEpoch !== searchEpoch) return;
+        pendingResultId = '';
+        if (success) item.added = true;
+        showSearchStatus(success ? isPriority ? 'priorityAdded' : 'added' : noticeKey || 'error', !success);
+        renderSearchResults(); updateControls();
+      };
+      reserve.addEventListener('click', () => addResult(false));
+      priority.addEventListener('click', () => addResult(true));
+      row.append(reserve, priority); $('searchResults').append(row);
+    });
+  }
+
+  async function searchYouTube(nextPage = false) {
+    if (busy || searchBusy || !room || !state || state.closed) return;
+    if (!searchConsent) { showSearchStatus('searchConsentNeeded', true); return; }
+    const query = nextPage ? searchData?.query : $('searchQuery').value.trim();
+    if (!query || Array.from(query).length > 100) { showSearchStatus('searchQueryError', true); return; }
+    const pageToken = nextPage ? searchData?.nextPageToken : null;
+    if (nextPage && !pageToken) return;
+    const expectedGeneration = generation, expectedLanguage = lang;
+    const expectedEpoch = ++searchEpoch;
+    searchAbort?.abort(); searchAbort = new AbortController();
+    const controller = searchAbort;
+    searchData = null; renderSearchResults();
+    searchBusy = true; showSearchStatus('searchLoading'); updateControls();
+    try {
+      const response = await api('search', { query, language: lang, ...(pageToken ? { pageToken } : {}) }, controller.signal);
+      if (expectedGeneration !== generation || expectedEpoch !== searchEpoch || expectedLanguage !== lang || !searchConsent || state?.closed) return;
+      if (response.source !== 'youtube' || !Array.isArray(response.items) || response.items.length > 10 ||
+          !response.items.every((item) => item && VIDEO_PATTERN.test(item.videoId || '') && typeof item.title === 'string' && item.title.length <= 2000 && typeof item.channelTitle === 'string' && item.channelTitle.length <= 1000 && typeof item.thumbnail === 'string' && item.thumbnail.length <= 2048) ||
+          (response.nextPageToken !== null && (typeof response.nextPageToken !== 'string' || response.nextPageToken.length > 512))) throw new Error('searchUnavailable');
+      // Edge returns entity-decoded plain text. Decode exactly once on the server;
+      // textContent preserves literal entities and never interprets titles as HTML.
+      searchData = { query, language: lang, nextPageToken: response.nextPageToken, items: response.items.map((item) => ({ ...item, added: false })) };
+      showSearchStatus(searchData.items.length ? 'searchReady' : 'searchEmpty');
+      renderSearchResults();
+    } catch (error) {
+      if (expectedGeneration !== generation || expectedEpoch !== searchEpoch || controller.signal.aborted) return;
+      showSearchStatus(error.message, true);
+      if (['searchNotConfigured', 'searchQuota', 'searchUnavailable'].includes(error.message)) $('manualEntry').open = true;
+      if (error.message === 'closed' || error.message === 'unauthorized') {
+        forgetSession(room); disconnectRealtime(); showNotice(error.message, true);
+        if (state) { state = { ...state, closed: true, playing: false }; renderState(); }
+      }
+    } finally {
+      if (expectedGeneration === generation && expectedEpoch === searchEpoch) { searchBusy = false; searchAbort = null; updateControls(); }
+    }
   }
 
   async function refreshState() {
@@ -420,6 +594,8 @@
   }
 
   async function enter(code, desiredMode, saved, initialState) {
+    if (!searchConsent) { pendingEntry = { code, desiredMode, saved }; showNotice('searchConsentNeeded'); return; }
+    pendingEntry = null;
     cleanup();
     room = code; mode = desiredMode; credentials = saved; state = null; suspended = false;
     saveSession(room, { ...credentials, mode });
@@ -439,6 +615,7 @@
 
   function cleanup() {
     generation += 1;
+    resetSearch();
     disconnectRealtime();
     inFlight.forEach((controller) => controller.abort());
     inFlight.clear();
@@ -455,6 +632,7 @@
   function leave() {
     if (mode === 'tv' && state?.current && !state.closed && !window.confirm(t('leaveConfirm'))) return;
     cleanup();
+    pendingEntry = null;
     room = ''; mode = ''; credentials = null; state = null;
     $('home').hidden = false; $('session').hidden = true; $('code').value = '';
     $('share').value = ''; $('qr').replaceChildren();
@@ -559,7 +737,7 @@
   }
 
   async function ensurePlayer() {
-    if (mode !== 'tv' || player || !room) return;
+    if (!searchConsent || mode !== 'tv' || player || !room) return;
     const expectedGeneration = generation;
     if (!window.YT?.Player) {
       if (!playerPromise) {
@@ -625,12 +803,13 @@
   $('lang').addEventListener('change', (event) => {
     if (!Object.hasOwn(dict, event.target.value)) return;
     lang = event.target.value;
+    resetSearch();
     try { localStorage.setItem('hanaLang', lang); } catch (_) { /* Optional preference. */ }
     translate();
   });
 
   $('create').addEventListener('click', async () => {
-    if (busy) return;
+    if (busy || !searchConsent) return;
     busy = true; updateControls(); showNotice('');
     try {
       const response = await api('create');
@@ -641,7 +820,7 @@
   });
 
   $('joinForm').addEventListener('submit', async (event) => {
-    event.preventDefault(); if (busy) return;
+    event.preventDefault(); if (busy || !searchConsent) return;
     const invitation = parseInvitation($('code').value);
     if (!invitation) return showNotice('invalidInvite', true);
     const saved = savedSession(invitation.code) || {};
@@ -657,16 +836,40 @@
     event.preventDefault(); if (busy) return;
     const videoId = parseVideoId($('songUrl').value);
     if (!videoId) return showNotice('urlError', true);
-    const title = Array.from($('songTitle').value.trim().replace(/[\u0000-\u001f\u007f-\u009f]/g, '')).slice(0, 100).join('') || t('fallbackTitle');
-    if (await mutate('add', { videoId, title }, 'added')) {
+    const title = queueTitle($('songTitle').value), priority = $('manualPriority').checked;
+    const expectedGeneration = generation;
+    if (await mutate('add', { videoId, title, ...(priority ? { priority: true } : {}) }, priority ? 'priorityAdded' : 'added') && expectedGeneration === generation) {
       $('songUrl').value = ''; $('songTitle').value = ''; $('songUrl').focus();
     }
   });
 
   $('search').addEventListener('click', () => {
-    const query = ($('songTitle').value.trim() || 'karaoke') + ' karaoke';
+    const query = $('songTitle').value.trim() || $('searchQuery').value.trim() || 'karaoke';
     window.open('https://www.youtube.com/results?search_query=' + encodeURIComponent(query), '_blank', 'noopener,noreferrer');
   });
+  $('youtubeSearchForm').addEventListener('submit', (event) => { event.preventDefault(); searchYouTube(); });
+  $('searchMore').addEventListener('click', () => searchYouTube(true));
+  $('searchConsent').addEventListener('change', async () => {
+    searchConsent = $('searchConsent').checked;
+    try { if (searchConsent) sessionStorage.setItem(CONSENT_KEY, 'accepted'); else sessionStorage.removeItem(CONSENT_KEY); } catch (_) { /* Memory-only consent. */ }
+    if (!searchConsent) {
+      if (room && credentials && !state?.closed) pendingEntry = { code: room, desiredMode: mode, saved: { ...credentials } };
+      cleanup(); busy = false; room = ''; mode = ''; credentials = null; state = null;
+      $('home').hidden = false; $('session').hidden = true; $('share').value = ''; $('qr').replaceChildren();
+      $('songUrl').value = ''; $('songTitle').value = '';
+      document.body.classList.remove('tv-mode'); showNotice('searchConsentNeeded');
+    } else {
+      showNotice('');
+      if (pendingEntry) {
+        const pending = pendingEntry; pendingEntry = null; busy = true; updateControls();
+        try { await enter(pending.code, pending.desiredMode, pending.saved); }
+        catch (error) { showNotice(error.message, true); }
+        finally { busy = false; }
+      }
+    }
+    updateControls();
+  });
+  $('privacyLink').addEventListener('click', () => { $('karaokePrivacy').open = true; });
   $('leave').addEventListener('click', leave);
   $('close').addEventListener('click', () => { if (mode === 'tv' && window.confirm(t('closeConfirm'))) mutate('close'); });
   $('refresh').addEventListener('click', () => { showNotice(''); refreshState().catch(() => {}); });
@@ -692,6 +895,7 @@
   window.addEventListener('offline', () => { healthy = false; if (room) setConnection('offline'); });
   window.addEventListener('pagehide', () => {
     suspended = true; disconnectRealtime();
+    resetSearch();
     inFlight.forEach((controller) => controller.abort());
   });
   window.addEventListener('pageshow', (event) => {
@@ -716,6 +920,10 @@
     const requestedMode = query.has('tv') ? 'tv' : 'phone';
     if (!saved || !(requestedMode === 'tv' ? saved.hostToken : saved.joinToken)) {
       $('code').value = code; showNotice('inviteError', true); return;
+    }
+    if (!searchConsent) {
+      pendingEntry = { code, desiredMode: requestedMode, saved };
+      showNotice('searchConsentNeeded'); return;
     }
     busy = true; updateControls();
     try { await enter(code, requestedMode, saved); }

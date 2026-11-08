@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
-  allowedOrigin, handler, hmac, parseRequest, RequestError, serviceHeaders, sha256,
+  allowedOrigin, handler, hmac, parseRequest, plainYoutubeText, RequestError, serviceHeaders, sha256, youtubeSearchResult,
 } from "../supabase/functions/hana-karaoke/index.ts";
 
 const REQUEST_ID = "2bda52d8-1c07-4a2e-b8cd-1af7915a40cd";
@@ -16,6 +16,11 @@ const ORIGIN = "https://dalatgolfvoucher.com";
 const createBody = () => ({ action: "create", requestId: REQUEST_ID });
 const stateBody = () => ({ action: "state", requestId: REQUEST_ID, room: "123456", token: TOKEN });
 const addBody = () => ({ ...stateBody(), action: "add", videoId: VIDEO_ID, title: "Song title" });
+const searchBody = () => ({ ...stateBody(), action: "search", query: "봄날 karaoke", language: "ko" });
+const youtubeFixture = () => ({ nextPageToken: "NEXT_page-2", items: [{
+  id: { videoId: VIDEO_ID }, snippet: { title: "A &amp; B&#39;s &lt;Live&gt;", channelTitle: "Official &amp; Artist",
+    thumbnails: { medium: { url: `https://i.ytimg.com/vi/${VIDEO_ID}/mqdefault.jpg?test=1` } } },
+}] });
 
 function request(body, headerOverrides = {}) {
   const headers = new Headers({
@@ -49,8 +54,25 @@ function installMocks(t, options = {}) {
   globalThis.Deno = { env: { get: (name) => env[name] } };
   globalThis.fetch = async (url, init) => {
     // Unknown URLs fail closed; the original fetch is never called.
+    if (new URL(url).origin === "https://www.googleapis.com") {
+      assert.equal(new URL(url).pathname, "/youtube/v3/search");
+      calls.push({ url, init });
+      if (options.youtubeThrows) throw new Error("simulated provider timeout with secret details");
+      return Response.json(options.youtubeResponse ?? youtubeFixture(), { status: options.youtubeStatus || 200 });
+    }
     assert.equal(new URL(url).origin, BASE_URL, "unexpected outbound destination");
     calls.push({ url, init });
+    if (url === `${BASE_URL}/rest/v1/rpc/hana_karaoke_search_acquire`) {
+      if (options.searchDbError) return Response.json({ message: options.searchDbError }, { status: 400 });
+      const args = JSON.parse(init.body);
+      return Response.json(options.searchAcquire ?? (args.p_enabled
+        ? { status: "fetch", leaseId: OTHER_ID }
+        : { status: "error", code: "SEARCH_NOT_CONFIGURED" }));
+    }
+    if (url === `${BASE_URL}/rest/v1/rpc/hana_karaoke_search_finish`) {
+      if (options.finishThrows) throw new Error("simulated cache finish failure");
+      return Response.json({ saved: true });
+    }
     if (url === `${BASE_URL}/auth/v1/user`) {
       return Response.json(options.user ?? { id: "verified-user", app_metadata: { role: "staff" } }, {
         status: options.authStatus || 200,
@@ -96,6 +118,9 @@ function installMocks(t, options = {}) {
     rpcCalls: () => calls.filter(({ url }) => url.endsWith("/rest/v1/rpc/hana_karaoke_command")),
     broadcasts: () => calls.filter(({ url }) => url.endsWith("/realtime/v1/api/broadcast")),
     authCalls: () => calls.filter(({ url }) => url.endsWith("/auth/v1/user")),
+    youtubeCalls: () => calls.filter(({ url }) => new URL(url).origin === "https://www.googleapis.com"),
+    searchAcquires: () => calls.filter(({ url }) => url.endsWith("/hana_karaoke_search_acquire")),
+    searchFinishes: () => calls.filter(({ url }) => url.endsWith("/hana_karaoke_search_finish")),
   };
 }
 
@@ -421,5 +446,162 @@ describe("hana-karaoke Edge contract (isolated mocks)", { concurrency: false }, 
     assert.equal(result.headers.get("referrer-policy"), "no-referrer");
     assert.equal(result.headers.get("x-content-type-options"), "nosniff");
     assert.equal(result.headers.get("access-control-allow-origin"), ORIGIN);
+  });
+
+  test("priority false or omitted preserves legacy add fingerprints", () => {
+    {
+      const legacy = parseRequest(addBody()).data;
+      assert.deepEqual(parseRequest({ ...addBody(), priority: false }).data, legacy);
+      assert.equal(Object.hasOwn(legacy, "priority"), false);
+      assert.equal(parseRequest({ ...addBody(), priority: true }).data.priority, true);
+    }
+    for (const priority of ["true", 1, null]) assert.throws(() => parseRequest({ ...addBody(), priority }), RequestError);
+  });
+
+  test("prioritize is a validated item action", async (t) => {
+    const mocks = installMocks(t);
+    assert.throws(() => parseRequest({ ...stateBody(), action: "prioritize", itemId: "bad" }), RequestError);
+    assert.equal((await handler(request({ ...stateBody(), action: "prioritize", itemId: OTHER_ID }))).status, 200);
+    const body = JSON.parse(mocks.rpcCalls()[0].init.body);
+    assert.equal(body.p_action, "prioritize");
+    assert.deepEqual(body.p_data, { itemId: OTHER_ID });
+  });
+
+  test("search validates bounded Unicode query, supported language, and page token", () => {
+    assert.equal(parseRequest({ ...searchBody(), query: "  봄날   karaoke  " }).data.query, "봄날 karaoke");
+    assert.equal(parseRequest({ ...searchBody(), query: "🎵".repeat(100) }).data.query.length, 200);
+    assert.equal(parseRequest({ ...searchBody(), pageToken: "CAUQAA==" }).data.pageToken, "CAUQAA==");
+    for (const changes of [{ query: " " }, { query: "x".repeat(101) }, { query: "bad\u0000query" },
+      { language: "ja" }, { pageToken: "" }, { pageToken: "x".repeat(259) }, { pageToken: "https://evil.com" }, { youtubeKey: "bad" }]) {
+      assert.throws(() => parseRequest({ ...searchBody(), ...changes }), RequestError);
+    }
+  });
+
+  test("unconfigured search still authenticates the room and reserves no external call", async (t) => {
+    const mocks = installMocks(t);
+    await expectError(await handler(request(searchBody())), 503, "SEARCH_NOT_CONFIGURED");
+    assert.equal(mocks.searchAcquires().length, 1);
+    assert.equal(JSON.parse(mocks.searchAcquires()[0].init.body).p_enabled, false);
+    assert.equal(mocks.youtubeCalls().length, 0);
+    assert.equal(mocks.searchFinishes().length, 0);
+  });
+
+  for (const [dbError, status, code] of [["KARAOKE_ROOM_NOT_FOUND", 404, "ROOM_NOT_FOUND"],
+    ["KARAOKE_ROOM_CLOSED", 410, "ROOM_CLOSED"], ["KARAOKE_ROOM_EXPIRED", 410, "ROOM_EXPIRED"],
+    ["KARAOKE_SEARCH_RATE_LIMITED", 429, "SEARCH_RATE_LIMITED"]]) {
+    test(`search makes no YouTube call when room gate returns ${dbError}`, async (t) => {
+      const mocks = installMocks(t, { env: { YOUTUBE_API_KEY: "youtube-unit-secret" }, searchDbError: dbError });
+      await expectError(await handler(request(searchBody())), status, code);
+      assert.equal(mocks.youtubeCalls().length, 0);
+      assert.equal(mocks.searchFinishes().length, 0);
+    });
+  }
+
+  test("search calls only the official API with required filters and secret header", async (t) => {
+    const mocks = installMocks(t, { env: { YOUTUBE_API_KEY: "youtube-unit-secret" } });
+    const result = await handler(request({ ...searchBody(), query: "A&B = love", pageToken: "NEXT_page-2" }));
+    assert.equal(result.status, 200);
+    assert.equal(mocks.youtubeCalls().length, 1);
+    const google = mocks.youtubeCalls()[0];
+    const url = new URL(google.url);
+    assert.equal(url.origin + url.pathname, "https://www.googleapis.com/youtube/v3/search");
+    for (const [name, value] of Object.entries({ part: "snippet", type: "video", videoEmbeddable: "true", videoSyndicated: "true", maxResults: "10", safeSearch: "moderate", q: "A&B = love", relevanceLanguage: "ko", pageToken: "NEXT_page-2" })) {
+      assert.equal(url.searchParams.get(name), value);
+    }
+    assert.equal(url.searchParams.has("key"), false);
+    assert.equal(google.url.includes("youtube-unit-secret"), false);
+    assert.equal(google.init.headers["x-goog-api-key"], "youtube-unit-secret");
+    assert.equal(google.init.headers.apikey, undefined);
+    assert.equal(google.init.headers.authorization, undefined);
+    assert.equal(google.init.redirect, "error");
+    assert.ok(google.init.signal instanceof AbortSignal);
+    const data = await result.json();
+    assert.deepEqual(Object.keys(data).sort(), ["items", "nextPageToken", "source"]);
+    assert.equal(data.source, "youtube");
+    assert.equal(data.items[0].title, "A & B's <Live>");
+    assert.equal(data.items[0].channelTitle, "Official & Artist");
+    assert.equal(data.items[0].thumbnail, `https://i.ytimg.com/vi/${VIDEO_ID}/mqdefault.jpg?test=1`);
+    assert.equal(JSON.stringify(data).includes("youtube-unit-secret"), false);
+    assert.equal(mocks.broadcasts().length, 0);
+  });
+
+  test("search database requests contain only query hash and capability hash", async (t) => {
+    const mocks = installMocks(t, { env: { YOUTUBE_API_KEY: "youtube-unit-secret" } });
+    assert.equal((await handler(request(searchBody()))).status, 200);
+    const acquired = JSON.parse(mocks.searchAcquires()[0].init.body);
+    assert.equal(acquired.p_token_hash, await sha256(TOKEN));
+    assert.match(acquired.p_cache_key, /^[0-9a-f]{64}$/);
+    assert.equal(acquired.p_request_id, REQUEST_ID);
+    assert.equal(mocks.searchAcquires()[0].init.body.includes(searchBody().query), false);
+    assert.equal(mocks.searchAcquires()[0].init.body.includes(TOKEN), false);
+    const finish = JSON.parse(mocks.searchFinishes()[0].init.body);
+    assert.equal(finish.p_cache_key, acquired.p_cache_key);
+    assert.equal(finish.p_lease_id, OTHER_ID);
+    assert.equal(finish.p_error, null);
+    assert.equal(finish.p_result.source, "youtube");
+  });
+
+  test("a cache hit uses no Google quota, completion call, or broadcast", async (t) => {
+    const cached = youtubeSearchResult(youtubeFixture());
+    const mocks = installMocks(t, { env: { YOUTUBE_API_KEY: "youtube-unit-secret" }, searchAcquire: { status: "cached", result: cached } });
+    assert.deepEqual(await (await handler(request(searchBody()))).json(), cached);
+    assert.equal(mocks.youtubeCalls().length, 0);
+    assert.equal(mocks.searchFinishes().length, 0);
+    assert.equal(mocks.broadcasts().length, 0);
+  });
+
+  for (const code of ["SEARCH_QUOTA_EXCEEDED", "SEARCH_RATE_LIMITED"]) {
+    test(`${code} gate spends no upstream call`, async (t) => {
+      const mocks = installMocks(t, { env: { YOUTUBE_API_KEY: "youtube-unit-secret" }, searchAcquire: { status: "error", code } });
+      await expectError(await handler(request(searchBody())), 429, code);
+      assert.equal(mocks.youtubeCalls().length, 0);
+    });
+  }
+
+  test("Google quota failure is recorded without exposing upstream error details", async (t) => {
+    const mocks = installMocks(t, { env: { YOUTUBE_API_KEY: "youtube-unit-secret" }, youtubeStatus: 403,
+      youtubeResponse: { error: { message: "sensitive upstream details", errors: [{ reason: "quotaExceeded" }] } } });
+    const result = await expectError(await handler(request(searchBody())), 429, "SEARCH_QUOTA_EXCEEDED");
+    assert.equal(JSON.stringify(result).includes("sensitive"), false);
+    assert.equal(mocks.youtubeCalls().length, 1);
+    const finish = JSON.parse(mocks.searchFinishes()[0].init.body);
+    assert.equal(finish.p_error, "SEARCH_QUOTA_EXCEEDED");
+    assert.equal(finish.p_result, null);
+  });
+
+  test("upstream network errors are not automatically retried", async (t) => {
+    const mocks = installMocks(t, { env: { YOUTUBE_API_KEY: "youtube-unit-secret" }, youtubeThrows: true });
+    await expectError(await handler(request(searchBody())), 503, "SEARCH_UNAVAILABLE");
+    assert.equal(mocks.youtubeCalls().length, 1);
+    assert.equal(JSON.parse(mocks.searchFinishes()[0].init.body).p_error, "SEARCH_UNAVAILABLE");
+  });
+
+  test("a cache write failure does not retry Google or hide successful results", async (t) => {
+    const mocks = installMocks(t, { env: { YOUTUBE_API_KEY: "youtube-unit-secret" }, finishThrows: true });
+    assert.equal((await handler(request(searchBody()))).status, 200);
+    assert.equal(mocks.youtubeCalls().length, 1);
+    assert.equal(mocks.searchFinishes().length, 1);
+  });
+
+  test("malformed provider payload is a safe error and still spends only one call", async (t) => {
+    const mocks = installMocks(t, { env: { YOUTUBE_API_KEY: "youtube-unit-secret" }, youtubeResponse: { secret: "do not return" } });
+    await expectError(await handler(request(searchBody())), 503, "SEARCH_UNAVAILABLE");
+    assert.equal(mocks.youtubeCalls().length, 1);
+    assert.equal(JSON.parse(mocks.searchFinishes()[0].init.body).p_error, "SEARCH_UNAVAILABLE");
+  });
+
+  test("provider result sanitizer bounds text, video IDs, thumbnails, and result count", () => {
+    assert.equal(plainYoutubeText("&#x1f3b5; &amp; &#39;\u0000"), "🎵 & '");
+    assert.equal([...plainYoutubeText("🎵".repeat(101))].length, 100);
+    const item = youtubeFixture().items[0];
+    const duplicateAndInvalid = youtubeSearchResult({ items: [item, item, { ...item, id: { videoId: "bad" } }] });
+    assert.equal(duplicateAndInvalid.items.length, 1);
+    for (const url of ["http://i.ytimg.com/x.jpg", "https://evil.com/x.jpg", "https://i.ytimg.com.evil.com/x.jpg", "https://user@i.ytimg.com/x.jpg", "https://i.ytimg.com:444/x.jpg"]) {
+      const result = youtubeSearchResult({ items: [{ ...item, snippet: { ...item.snippet, thumbnails: { medium: { url } } } }] });
+      assert.equal(result.items[0].thumbnail, "");
+    }
+    const ten = Array.from({ length: 20 }, (_, i) => ({ ...item, id: { videoId: String(i).padStart(11, "0") } }));
+    assert.equal(youtubeSearchResult({ items: ten }).items.length, 10);
+    assert.equal(youtubeSearchResult({ items: [item], nextPageToken: "bad token" }).nextPageToken, null);
   });
 });
