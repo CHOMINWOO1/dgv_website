@@ -59,7 +59,7 @@
     <p id="pageStatus" role="status"></p>
     <section class="qr-card qr-card-pad hotel-section" aria-labelledby="hotelsTitle">
       <div class="qr-section-head"><h2 class="qr-section-title" id="hotelsTitle">호텔 정보 / Khách sạn</h2><span id="hotelCount"></span></div>
-      <p class="hotel-hint">호텔별 객실 등급을 등록하고 각 등급의 더블·트윈·트리플 요금을 설정해 주세요. 객실 단가는 1룸·1박 기준입니다. / Thêm hạng phòng và đặt giá DOUBLE·TWIN·TRIPLE cho mỗi phòng mỗi đêm.</p>
+      <p class="hotel-hint">호텔별 객실 등급을 등록하고 각 등급의 트윈·더블·트리플 요금을 설정해 주세요. 객실 단가는 1룸·1박 기준입니다. / Thêm hạng phòng và đặt giá TWIN·DOUBLE·TRIPLE cho mỗi phòng mỗi đêm.</p>
       <div class="hotel-table-wrap" tabindex="0" aria-label="호텔 정보 목록">
         <table class="hotel-table"><thead><tr>
           <th>호텔명 / Khách sạn</th><th>객실 등급·타입 / Hạng·loại phòng</th><th>주말 적용 요일 / Ngày cuối tuần</th><th>관리 / Quản lý</th>
@@ -116,7 +116,7 @@
   </dialog>
   <dialog class="hotel-dialog" id="roomTypeDialog" aria-labelledby="roomTypeTitle">
     <h2 id="roomTypeTitle">등급·룸타입 관리 / Quản lý hạng·loại phòng</h2>
-    <p class="hotel-hint">등급명은 자유롭게 입력하고 각 등급의 더블·트윈·트리플을 선택해 요금을 등록합니다. 가격 변경·사용 중지는 기존 예약 금액을 바꾸지 않습니다. / Tự đặt tên hạng phòng và chọn DOUBLE·TWIN·TRIPLE. Đổi giá hoặc ngừng dùng không thay đổi giá đã lưu của đặt phòng cũ.</p>
+    <p class="hotel-hint">등급명은 자유롭게 입력하고 각 등급의 트윈·더블·트리플을 선택해 요금을 등록합니다. 가격 변경·사용 중지는 기존 예약 금액을 바꾸지 않습니다. / Tự đặt tên hạng phòng và chọn TWIN·DOUBLE·TRIPLE. Đổi giá hoặc ngừng dùng không thay đổi giá đã lưu của đặt phòng cũ.</p>
     <form id="extraBedForm" class="hotel-room-type">
       <h3>호텔 공통 엑스트라베드 요금 / Giá giường phụ của khách sạn</h3>
       <fieldset class="hotel-fields" id="extraBedFields">
@@ -165,7 +165,7 @@
         <label><span class="qr-label">객실 수 합계 / Tổng số phòng</span><input class="qr-input" name="room_count" type="number" min="1" max="10000" step="1" value="1" readonly required /></label>
         <label class="hotel-wide"><span class="qr-label">추가 침대 수 / Tổng số giường phụ</span><input class="qr-input" name="extra_bed_count" type="number" min="0" max="10000" step="1" value="0" required /><span class="hotel-hint">예약 전체 수량입니다. 추가 침대 수 × 숙박 박수 × 호텔별 1박 요금으로 계산합니다. / Tổng số giường của đặt phòng × số đêm × giá mỗi giường mỗi đêm.</span></label>
         <div class="hotel-wide" id="legacyRoomNotice" hidden><p class="hotel-hint">기존 요금 유지 / Giữ giá đã lưu. 룸타입을 지정하지 않으면 기존 객실·금액을 유지합니다. / Chưa chọn loại phòng mới thì giữ dữ liệu phòng và giá cũ.</p><button class="qr-btn" id="enableRoomTypesButton" type="button">룸타입 선택으로 변경 / Chuyển sang chọn loại phòng</button></div>
-        <div class="hotel-wide" id="roomItemsFields"><div id="roomItemRows"></div><button class="qr-btn" id="addRoomItemButton" type="button">+ 객실 추가 / Thêm phòng</button><p class="hotel-hint">등급을 선택한 후 더블·트윈·트리플과 객실 수를 선택해 주세요. 한 예약에 여러 등급·타입을 섞을 수 있습니다. 기존 룸타입은 별도로 표시됩니다. / Chọn hạng, DOUBLE·TWIN·TRIPLE và số phòng. Có thể kết hợp nhiều hạng·loại; loại phòng cũ được hiển thị riêng.</p></div>
+        <div class="hotel-wide" id="roomItemsFields"><div id="roomItemRows"></div><button class="qr-btn" id="addRoomItemButton" type="button">+ 객실 추가 / Thêm phòng</button><p class="hotel-hint">등급을 선택한 후 트윈·더블·트리플과 객실 수를 선택해 주세요. 한 예약에 여러 등급·타입을 섞을 수 있습니다. 기존 룸타입은 별도로 표시됩니다. / Chọn hạng, TWIN·DOUBLE·TRIPLE và số phòng. Có thể kết hợp nhiều hạng·loại; loại phòng cũ được hiển thị riêng.</p></div>
         <label class="hotel-wide"><span class="qr-label">투숙객 명단 / Danh sách khách</span><textarea class="qr-input" name="guest_names" rows="3" placeholder="한 줄에 한 명 / Mỗi dòng một người" required></textarea></label>
         <label class="hotel-wide"><span class="qr-label">요금 방식 / Loại giá</span><select class="qr-select" name="pricing_mode" id="pricingMode">
           <option value="standard">일반 · 호텔 단가 자동 계산 / Giá thường · tự động</option>
@@ -211,7 +211,7 @@
   <script src="assets/dgv-xlsx.js"></script>
   <script src="assets/hotel-report.js?v=20261108-extra-bed-1"></script>
   <script src="assets/hotel-pricing.js?v=20261108-extra-bed-1"></script>
-  <script src="assets/hotel-reserv-list.js?v=20261108-extra-bed-1"></script>
+  <script src="assets/hotel-reserv-list.js?v=20261108-room-order-1"></script>
 </body>
 </html>
 

@@ -32,6 +32,8 @@ try{
  await page.addScriptTag({content:await fs.readFile('assets/hotel-reserv-list.js','utf8')});await page.locator('#propertyRows button').first().waitFor();await page.locator('#propertyRows button').first().click();
  check((await page.locator('#roomTypeDialog').innerText()).includes('트윈 / Hai giường đơn'),'new room-kind labels use Double/Twin/Triple in Korean and Vietnamese');
  check(await page.locator('[data-room-kind=SINGLE]').count()===0,'deprecated SINGLE editor is not offered');
+ check((await page.locator('#gradeTypeRows [data-room-kind]').evaluateAll(rows=>rows.map(row=>row.dataset.roomKind).join(',')))==='TWIN,DOUBLE,TRIPLE','new grade form displays Twin, Double, Triple in the requested order');
+ check(await page.evaluate(()=>fixture.writes.length===0),'changing the display order performs no database writes');
  await page.locator('#extraBedForm [name=extra_bed_purchase]').fill('100000');await page.locator('#extraBedForm [name=extra_bed_sale]').fill('150000');
  check(await page.locator('#extraBedForm [name=extra_bed_sale]').inputValue()==='150,000','bed rate formats commas while typing');
  await page.locator('#extraBedForm button[type=submit]').click();await page.waitForFunction(()=>fixture.writes.length===1);
