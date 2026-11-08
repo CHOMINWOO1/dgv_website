@@ -8,6 +8,7 @@
 - API: `supabase/functions/hana-karaoke/index.ts` → `POST /functions/v1/hana-karaoke`
 - 적용된 초기 마이그레이션: `supabase/migrations/20261108044359_hana_karaoke_serverless.sql`
 - 검색·우선예약 추가 마이그레이션: `supabase/migrations/20261108050724_hana_karaoke_search_priority.sql`
+- 방 생성 한도 조정 마이그레이션: `supabase/migrations/20261108051658_hana_karaoke_create_limit_30.sql` — 동일 IP 시간당 10개에서 30개로 변경, 전체 시간당 30개는 유지합니다.
 - 초기 공개: 2026-11-08, GitHub PR #103. 추가 기능 배포 순서는 DB → Edge → 정적 페이지입니다. 아래 설치 설명만으로 추가 기능이 운영에 적용되었다는 뜻은 아닙니다.
 - 검색·우선예약 DB 및 Edge v2 적용: 2026-11-08. 적용 전후 11개 기존 방의 현재 곡·예약·상태·권한 토큰 해시가 일치했습니다. Google 키 설정/실검색 검증은 별도입니다.
 
@@ -68,7 +69,7 @@ LG 75UR8050PSB / webOS 25는 사용자가 알려준 대상 장치이며 실기�
 | 항목 | 제한 |
 | --- | --- |
 | 방 수명 / 활성 방 | 24시간 / 최대 50개 |
-| 새 방 생성 | 해시된 IP별 시간당 10개, 전체 시간당 30개 |
+| 새 방 생성 | 해시된 IP별 시간당 30개, 전체 시간당 30개 (직전 1시간 기준, 종료된 방도 포함) |
 | 예약 목록 / 제목 / 요청 본문 | 최대 50곡 / 100문자 / 16 KiB |
 | 실제 상태 변경 | 방별 10초당 30회 |
 | 상태·재시도 등 성공 가능한 요청 | 방별 분당 600회, 초대 사용자 전체 공유 |
@@ -106,13 +107,16 @@ DB 테스트는 메모리 내 PGlite를 사용합니다. `@electric-sql/pglite`�
 $env:PGLITE_MODULE = 'C:\path\to\pglite\dist\index.js'
 node tests/karaoke-db.mjs
 node tests/karaoke-search-db.mjs
+node tests/karaoke-create-limit-db.mjs
 ```
 
 초기 버전 검증: DB 40개, Edge 45개, 실제 API/Realtime + 모의 YouTube 플레이어 브라우저 30개 검사 통과. 검색·우선예약 추가분은 별도 회귀 테스트를 실행합니다. 통합 테스트의 YouTube 플레이어는 모의 처리하므로 실제 TV·휴대폰의 영상/자동재생 호환 검증은 별도로 수행해야 합니다.
 
 2026-11-08 검색·우선예약 검증: 기존 DB 40개 + 추가 DB 65개, Edge 63개, 모의 서비스 브라우저 23개 통과. Google 검색은 서버 키 등록 후 실제 API로 별도 확인합니다. 모의 브라우저 검사는 다음과 같습니다.
 
-추가 버전의 실서버 브라우저 전체 검증은 방 생성 IP별 시간당 제한(429)에 걸려 완료하지 못했습니다. 운영 제한을 완화하거나 사용 중인 방을 변경하지 않았습니다. 초기 버전의 통합 테스트 성공을 새 버전 실서버 전체 검증으로 간주하지 않습니다.
+추가 버전의 실서버 브라우저 검증은 처음에는 생성 제한(429)으로 보류되었습니다. 이후 소유자가 동일 IP 한도를 시간당 30개로 조정하도록 요청해 적용했고, 배포 주소에서 실제 API/Realtime을 사용하는 **44개 검사**가 통과했습니다. 테스트용 방 1개만 만들고 종료했으며 사용 중인 방은 변경하지 않았습니다. 이 검사의 YouTube 플레이어는 모의 처리입니다. 실제 Google 검색은 키 미등록 안내를 확인했으며, 키 등록 뒤 실검색·실기기 영상 테스트가 필요합니다.
+
+생성 한도 변경은 별도 격리 DB 테스트 **58개**로 확인했습니다. 11~30번째 생성 허용, 31번째 및 전체 한도 초과 차단, 기존 방·권한·우선예약 보존을 포함합니다.
 
 ```powershell
 $env:PLAYWRIGHT_MODULE = 'C:\path\to\playwright\index.mjs'
