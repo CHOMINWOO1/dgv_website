@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const [source, html] = await Promise.all(["assets/hotel-reserv-list.js", "hotel_reserv_list.html"].map(file => readFile(path.join(root, file), "utf8")));
 new vm.Script(source);
 assert.match(html, /id="catalogError"[^>]*role="alert"/);
-assert.match(html, /hotel-reserv-list\.js\?v=20261107-hotel-period-1/);
+assert.match(html, /hotel-reserv-list\.js\?v=20261108-status-1/);
 assert.match(source, /table\("hotel_room_types"\)\.select\("\*"\)/);
 assert.match(source, /table\("hotel_room_grades"\)\.select\("\*"\)/);
 assert.doesNotMatch(source, /table\("hotel_room_(?:types|grades)"\)\.select\("\*"\)\.(?:is|eq)\("archived_at"/);
@@ -28,6 +28,8 @@ class Node {
   add(option) { this.options.push(option); }
   setAttribute(name, value) { this[name] = value; }
   addEventListener(name, handler) { this.events[name] = handler; }
+  setCustomValidity(value) { this.validationMessage = value; }
+  setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; }
 }
 const allNodes = node => [node, ...node.children.filter(item => item instanceof Node).flatMap(allNodes)];
 const roomKinds = ["SINGLE", "DOUBLE", "TRIPLE"];
@@ -50,7 +52,7 @@ const context = {
   editingGrade: null, gradeId: null, gradeDraft: [], pricing: { money: value => Number(value) },
   Option: class { constructor(text, value) { this.text = text; this.value = value; } }
 };
-vm.runInNewContext([fn("renderRoomTypes"), fn("resetGrade"), fn("renderGradeTypes"), fn("gradePayload"), "this.renderCatalog=renderRoomTypes;this.reset=resetGrade;this.payload=gradePayload;"].join("\n"), context);
+vm.runInNewContext([fn("rawMoneyInput"), fn("formatMoneyInput"), fn("enableMoneyInput"), fn("renderRoomTypes"), fn("resetGrade"), fn("renderGradeTypes"), fn("gradePayload"), "this.renderCatalog=renderRoomTypes;this.reset=resetGrade;this.payload=gradePayload;"].join("\n"), context);
 context.renderCatalog();
 let rendered = allNodes(nodes.roomTypeRows);
 assert.deepEqual(rendered.filter(node => node.dataset.catalogGradeId).map(node => node.dataset.catalogGradeId), ["live"]);
@@ -140,3 +142,4 @@ assert.deepEqual(messages.at(-1), ["catalogError", "concurrent update"]);
 assert.equal(handlerContext.busy, false);
 
 console.log("Hotel catalog delete UI: archive RPC/CAS, cancellation, editor isolation, archived selection and historical snapshot regression passed.");
+

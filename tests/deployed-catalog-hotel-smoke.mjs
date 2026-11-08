@@ -14,6 +14,7 @@ const response=await fetch(origin+'/tv?verify=20261108-final');check(response.ok
 const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe'});
 try{
  const context=await browser.newContext({viewport:{width:390,height:844}}), blocked=[],errors=[];
+ context.on('requestfailed',r=>console.log('Network diagnostic:',r.url(),r.failure()?.errorText));
  await context.route(/https:\/\/(?:[^/]*supabase\.co|[^/]*youtube\.com|[^/]*ytimg\.com)\//,r=>{blocked.push(r.request().url());return r.fulfill({status:403,body:'blocked by read-only smoke test'});});
  const tv=await context.newPage();tv.on('pageerror',e=>errors.push(e.message));await tv.goto(origin+'/tv');
  await tv.locator('#create').waitFor();check(await tv.locator('#searchMode').inputValue()==='catalog','live /tv defaults to the shared catalogue');
