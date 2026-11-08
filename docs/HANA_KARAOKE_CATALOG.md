@@ -18,6 +18,8 @@ After a successful ordinary or priority reservation, the Edge function best-effo
 
 A dedicated daily DB-only due check (03:43 UTC) starts a full metadata refresh cycle when 28 days have elapsed. No Google request is sent between cycles. A cycle sends a one-use, 15-minute capability to `hana-karaoke-catalog-refresh` for at most 200 IDs. Each successful batch queues the next, sequentially, until the full catalogue is checked. At 50,000 IDs the complete cycle uses about 1,000 `videos.list` requests, **no `search.list` requests**. Private cycle state prevents overlapping jobs; failed/expired batches are retried by the next daily due check without marking unchecked rows fresh.
 
+The due check also considers the oldest `checked_at`, including newly remembered entries from an unexpired search cache. They cannot miss the next full refresh merely because they were saved after a cycle completed.
+
 Unavailable, private, unembeddable or VN-blocked entries are removed from the catalogue only. A separate hourly job purges metadata from age 29 days 23 hours, keeping the maximum retention within 30 days even during a prolonged provider outage. This is metadata housekeeping, not room termination or deletion of business records. Monitor `cron.job_run_details`, refresh cycle counters/completion, the dedicated function's HTTP status, and the oldest `checked_at`. Google keys remain in Supabase secrets. This 28-day cycle is intentionally not an hourly or daily provider refresh.
 
 ## Verification / rollback
