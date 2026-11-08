@@ -32,6 +32,7 @@ try{
  await db.exec('reset role');await migration('20261108083132_hana_karaoke_shared_catalog.sql');
  await migration('20261108084113_hana_karaoke_catalog_retention_window.sql');
  if(process.env.CATALOG_EXPANSION_MIGRATION) await migration(process.env.CATALOG_EXPANSION_MIGRATION);
+ if(process.env.CATALOG_REFRESH_DUE_MIGRATION) await migration(process.env.CATALOG_REFRESH_DUE_MIGRATION);
  eq((await q('select to_jsonb(r) r from public.hana_karaoke_rooms r'))[0].r,before);
  eq((await q('select amount from public.business_fixture'))[0].amount,8150000);
  for(const role of ['anon','authenticated']){
@@ -81,12 +82,12 @@ try{
  values($1,$2,current_date,now(),now()+interval '24 hours',$3::jsonb)`,[hash('cache'),randomUUID(),JSON.stringify({items:[{videoId:'NEWSOURCE01',title:'Trusted YouTube title',channelTitle:'Official'}]})]);
  eq((await q("select public.hana_karaoke_catalog_remember('NEWSOURCE01') r"))[0].r,{inserted:1});
  eq((await q("select title from public.hana_karaoke_catalog where video_id='NEWSOURCE01'"))[0].title,'Trusted YouTube title');
- await db.exec(`update public.hana_karaoke_catalog set checked_at=now()-interval '31 days' where video_id='J5KM-L-EPrI'`);
- eq((await search('임영웅')).items.length,0);
  if(process.env.CATALOG_EXPANSION_MIGRATION){
   await q('select karaoke_private.enqueue_catalog_refresh_if_due()');
   eq((await q('select count(*)::int n from net.calls'))[0].n,0);
  }
+ await db.exec(`update public.hana_karaoke_catalog set checked_at=now()-interval '31 days' where video_id='J5KM-L-EPrI'`);
+ eq((await search('임영웅')).items.length,0);
  await q('select karaoke_private.enqueue_catalog_refresh()');
  const token=(await q('select body from net.calls'))[0].body.token;
  const claim=(await q('select public.hana_karaoke_catalog_refresh_claim($1) r',[token]))[0].r;
@@ -103,6 +104,15 @@ try{
   const callsBefore=(await q('select count(*)::int n from net.calls'))[0].n;
   await q('select karaoke_private.enqueue_catalog_refresh_if_due()');
   eq((await q('select count(*)::int n from net.calls'))[0].n,callsBefore);
+  if(process.env.CATALOG_REFRESH_DUE_MIGRATION){
+   // A newly remembered entry can be older than the most recently finished cycle.
+   await db.exec("update public.hana_karaoke_catalog set checked_at=now()-interval '29 days' where video_id='NEWSOURCE01'");
+   await q('select karaoke_private.enqueue_catalog_refresh_if_due()');
+   eq((await q('select count(*)::int n from net.calls'))[0].n,callsBefore+1);
+   eq((await q('select count(*)::int n from karaoke_private.catalog_refresh_cycles where completed_at is null'))[0].n,1);
+   // Test fixture cleanup only; no hosted connection exists in this test.
+   await db.exec('delete from karaoke_private.catalog_refresh_jobs;delete from karaoke_private.catalog_refresh_cycles where completed_at is null');
+  }
   // A 401-row cycle requires three sequential batches; never overlapping jobs.
   await db.exec('set role service_role');
   for(let offset=0;offset<401;offset+=250) await put(Array.from({length:Math.min(250,401-offset)},(_,i)=>({videoId:'CYCLE'+String(offset+i).padStart(6,'0'),title:'Cycle fixture',category:'other',checkedAt:new Date().toISOString()})));
