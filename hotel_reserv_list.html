@@ -72,19 +72,21 @@
         <fieldset class="hotel-period-fields" id="hotelPeriodFields"><legend class="qr-label">체크인 기간 조회 / Tra cứu theo ngày nhận phòng</legend>
           <label><span class="qr-label">시작일 / Từ ngày</span><input class="qr-input" id="hotelFromDate" type="date" min="1900-01-01" max="9999-12-31" /></label>
           <label><span class="qr-label">종료일 / Đến ngày</span><input class="qr-input" id="hotelToDate" type="date" min="1900-01-01" max="9999-12-31" /></label>
+          <label><span class="qr-label">예약 상태 / Trạng thái</span><select class="qr-select" id="hotelStatus"><option value="in_progress">진행중 / Đang xử lý</option><option value="completed">완료 / Hoàn tất</option><option value="all">전체 / Tất cả</option></select></label>
           <label class="hotel-wide"><span class="qr-label">예약 검색 / Tìm đặt phòng</span><input class="qr-input" id="hotelQuery" type="search" maxlength="200" placeholder="예약번호·호텔·투숙객 / Mã đặt phòng·khách sạn·khách" /></label>
           <button class="qr-btn qr-btn-primary" type="submit">조회 / Tra cứu</button><button class="qr-btn" id="allHotelDatesButton" type="button">전체 기간 / Toàn bộ</button>
         </fieldset>
         <p class="hotel-error" id="hotelPeriodError" role="alert" hidden></p>
       </form>
       <p class="hotel-period-status" id="hotelPeriodStatus" role="status">체크인 기준 / Theo ngày nhận phòng: 전체 기간 / Toàn bộ</p>
+      <p class="hotel-hint">계약금 + 잔금이 총 매출 이상이면 자동으로 완료됩니다. / Tự động hoàn tất khi tổng tiền cọc và tiền còn lại đã thu đạt hoặc vượt tổng tiền bán.</p>
       <p class="hotel-hint">예약 행을 누르면 상세 내역을 보고 수정·삭제할 수 있습니다. / Bấm vào dòng đặt phòng để xem chi tiết, sửa hoặc xóa.</p>
       <div class="hotel-table-wrap" tabindex="0" aria-label="호텔 예약 목록">
         <table class="hotel-table"><thead><tr>
           <th>호텔명 / Khách sạn</th><th>체크인 / Nhận phòng</th><th>체크아웃 / Trả phòng</th><th>인원·객실 / Khách·phòng</th>
           <th>투숙객 명단 / Danh sách khách</th><th>요금 방식 / Loại giá</th><th>객실 매입 / Mua phòng</th><th>객실 매출 / Bán phòng</th>
           <th>식사 매입 / Mua bữa ăn</th><th>식사 매출 / Bán bữa ăn</th><th>총 매입 / Tổng mua</th><th>총 매출 / Tổng bán</th>
-          <th>계약금 / Tiền cọc</th><th>잔금 / Tiền còn lại đã thu</th><th>입금 합계 / Tổng đã thu</th><th>예약번호 / Mã đặt phòng</th><th>비고 / Ghi chú</th>
+          <th>계약금 / Tiền cọc</th><th>잔금 / Tiền còn lại đã thu</th><th>입금 합계 / Tổng đã thu</th><th>예약번호 / Mã đặt phòng</th><th>비고 / Ghi chú</th><th>상태 / Trạng thái</th>
         </tr></thead><tbody id="hotelRows"></tbody></table>
       </div>
     </section>
@@ -196,9 +198,9 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
-  <script src="assets/hotel-report.js?v=20261108-reference-1"></script>
+  <script src="assets/hotel-report.js?v=20261108-status-1"></script>
   <script src="assets/hotel-pricing.js?v=20261107-catalog-delete-1"></script>
-  <script src="assets/hotel-reserv-list.js?v=20261108-money-reference-1"></script>
+  <script src="assets/hotel-reserv-list.js?v=20261108-status-1"></script>
 </body>
 </html>
 

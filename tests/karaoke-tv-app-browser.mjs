@@ -106,14 +106,14 @@ async function finishSong(tv) {
 try {
   server = createServer(async (request, response) => {
     let name = decodeURIComponent(new URL(request.url, 'http://localhost').pathname).slice(1);
-    if (name === 'hana_karaoke' || name === 'hana_karaoke_tv') name += '.html';
+    if (name === 'hana_karaoke' || name === 'hana_karaoke_tv' || name === 'tv') name += '.html';
     const file = path.resolve(root, name);
-    if (!file.startsWith(root + path.sep) || !/^(hana_karaoke(?:_tv)?\.html|assets\/)/.test(name)) return response.writeHead(404).end();
+    if (!file.startsWith(root + path.sep) || !/^(hana_karaoke(?:_tv)?\.html|tv\.html|assets\/)/.test(name)) return response.writeHead(404).end();
     try { response.setHeader('Content-Type', ({ '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css' })[path.extname(file)] || 'application/octet-stream'); response.end(await readFile(file)); }
     catch { response.writeHead(404).end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const base = `http://127.0.0.1:${server.address().port}/hana_karaoke_tv`;
+  const base = `http://127.0.0.1:${server.address().port}/tv`;
   browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
   const tvContext = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
   const phoneContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -135,6 +135,8 @@ try {
   check(await tv.locator('.session-grid').isHidden() && await tv.locator('.site-header').isHidden(), 'TV display hides search, queue and management panels');
   check(await tv.locator('#playerFrame').isHidden(), 'idle TV does not show an empty video');
   const invite = await tv.locator('#share').inputValue();
+  check(new URL(tv.url()).pathname === '/tv', 'TV receiver uses the short /tv URL');
+  check(new URL(invite).pathname === '/hana_karaoke', 'short TV URL still sends guest QR links to the mobile page');
   check(!invite.includes(hostToken) && invite.includes('#join='), 'QR shares only the guest capability');
   await tv.keyboard.press('ArrowDown');
   await tv.locator('#screenStart').focus(); await tv.keyboard.press('ArrowRight');
@@ -268,3 +270,5 @@ try {
   await browser?.close();
   if (server) await new Promise(resolve => server.close(resolve));
 }
+
+

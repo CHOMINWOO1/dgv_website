@@ -3,7 +3,7 @@
 const MAX_REQUEST_BYTES = 16 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TOKEN = /^[a-f0-9]{64}$/;
-const ACTIONS = new Set(["create", "state", "add", "remove", "up", "down", "prioritize", "next", "play", "pause", "ended", "close", "search"]);
+const ACTIONS = new Set(["create", "state", "add", "remove", "up", "down", "prioritize", "next", "play", "pause", "ended", "close", "search", "library"]);
 const PAGE_TOKEN = /^[A-Za-z0-9_-]{1,256}={0,2}$/;
 type JsonObject = Record<string, unknown>;
 export interface KaraokeRequest {
@@ -110,6 +110,15 @@ export function parseRequest(value: unknown): KaraokeRequest {
     // Omit false to preserve fingerprints for legacy in-flight normal adds.
     if (value.priority === true) data.priority = true;
   }
+  if (action === "library") {
+    keys.push("query", "category", "pageToken");
+    if (typeof value.query !== "string" || !["all", "ko", "vi", "pop", "other"].includes(String(value.category))) throw invalid();
+    const query = value.query.normalize("NFC").trim().replace(/\s+/gu, " ");
+    if ([...query].length < 1 || [...query].length > 100 || /[\u0000-\u001f\u007f-\u009f]/u.test(value.query)) throw invalid();
+    if (value.pageToken !== undefined && (typeof value.pageToken !== "string" || !/^\d{1,5}$/.test(value.pageToken) || Number(value.pageToken) > 20000)) throw invalid();
+    data.query = query; data.category = value.category;
+    data.offset = Number(value.pageToken || 0);
+  }
   if (["remove", "up", "down", "prioritize"].includes(action)) {
     keys.push("itemId");
     if (typeof value.itemId !== "string" || !UUID.test(value.itemId)) throw invalid();
@@ -194,9 +203,9 @@ const DB_ERRORS: Record<string, [number, string, string]> = {
   KARAOKE_RATE_LIMITED: [429, "RATE_LIMITED", "Please wait before trying again."],
   KARAOKE_SEARCH_RATE_LIMITED: [429, "SEARCH_RATE_LIMITED", "Please wait before searching again."],
 };
-async function databaseRpc(url: string, key: string, name: string, body: JsonObject): Promise<JsonObject> {
+async function databaseRpc(url: string, key: string, name: string, body: JsonObject, timeout = 8000): Promise<JsonObject> {
   const result = await fetch(`${url}/rest/v1/rpc/${name}`, {
-    method: "POST", headers: serviceHeaders(key), body: JSON.stringify(body), signal: AbortSignal.timeout(8000),
+    method: "POST", headers: serviceHeaders(key), body: JSON.stringify(body), signal: AbortSignal.timeout(timeout),
   });
   const data: unknown = await result.json();
   if (!result.ok) {
@@ -339,6 +348,10 @@ export async function handler(req: Request): Promise<Response> {
       throw new RequestError(401, "INVALID_API_KEY", "A valid public API key is required.");
     }
     if (parsed.action === "search") return response(req, 200, await searchYoutube(parsed, url, key));
+    if (parsed.action === "library") return response(req, 200, await databaseRpc(url, key, "hana_karaoke_catalog_search", {
+      p_room: parsed.room, p_token_hash: await sha256(parsed.token!), p_request_id: parsed.requestId,
+      p_query: parsed.data.query, p_category: parsed.data.category, p_offset: parsed.data.offset,
+    }));
     let result: JsonObject;
     let hostToken: string | undefined;
     let joinToken: string | undefined;
@@ -371,6 +384,12 @@ export async function handler(req: Request): Promise<Response> {
     }
     const state = result.state as JsonObject;
     if (result.changed === true) await broadcast(url, key, state);
+    if (parsed.action === "add") {
+      // The reservation is already committed. A failed catalogue write must never
+      // turn success into an error or duplicate a reservation on retry.
+      try { await databaseRpc(url, key, "hana_karaoke_catalog_remember", { p_video_id: parsed.data.videoId }, 1000); }
+      catch { /* Best effort; room queue and priority semantics are unchanged. */ }
+    }
     return response(req, 200, parsed.action === "create" ? { room: state.room, hostToken, joinToken, state } : { state });
   } catch (error) {
     if (error instanceof RequestError) return response(req, error.status, { error: error.message, code: error.code });
@@ -379,3 +398,4 @@ export async function handler(req: Request): Promise<Response> {
   }
 }
 if (import.meta.main) Deno.serve(handler);
+

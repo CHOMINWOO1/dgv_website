@@ -8,7 +8,7 @@ try{
  for(const name of ['20261106055039_create_hotel_reservations.sql','20261106061629_hotel_properties_and_reservation_pricing.sql','20261106213812_hotel_room_types_and_mixed_bookings.sql','20261106230956_hotel_grades_and_fixed_room_kinds.sql','20261106232554_hotel_catalog_soft_delete.sql'])await db.exec(await readFile('supabase/migrations/'+name,'utf8'));
  await db.exec(`insert into public.hotel_reservations(hotel_name,check_in,check_out,guest_count,guest_names,purchase_amount,sale_amount) values('Historic hotel','2026-11-08','2026-11-09',2,'Historic Guest',1234567,2345678);`);
  const before=await db.query(`select to_jsonb(r) as record from public.hotel_reservations r`);
- await db.exec('begin;'+await readFile('supabase/migrations/20261108080539_hotel_booking_reference.sql','utf8')+'commit;');
+ await db.exec('begin;'+await readFile('supabase/migrations/20261108081718_hotel_booking_reference.sql','utf8')+'commit;');
  assert.deepEqual((await db.query(`select to_jsonb(r)-'booking_reference' as record from public.hotel_reservations r`)).rows,before.rows);
  assert.equal((await db.query('select booking_reference from public.hotel_reservations')).rows[0].booking_reference,null);
  for(const role of ['manager','admin']){

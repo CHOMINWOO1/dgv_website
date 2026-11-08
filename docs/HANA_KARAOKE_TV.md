@@ -1,6 +1,6 @@
 # HANA Karaoke TV receiver
 
-Dedicated URL: `https://dalatgolfvoucher.com/hana_karaoke_tv`. The LG hosted app opens this URL with `?tvapp=1`. The original `hana_karaoke.html`, its JavaScript/CSS, all business pages, Edge functions and database schemas/data are unchanged by this addition.
+Dedicated URL: `https://dalatgolfvoucher.com/tv`. The former `/hana_karaoke_tv` URL remains compatible, including installed LG hosted apps using `?tvapp=1`. Both entry files use the same TV receiver scripts. Guest QR links still open `/hana_karaoke`. See `HANA_KARAOKE_CATALOG.md` for shared catalogue search and metadata maintenance; business data and existing room queues are unchanged.
 
 ## Behavior
 
@@ -44,3 +44,4 @@ Use LG Developer Mode and an LG Developer account, pair a PC on the same network
 - [LG hosted web app](https://webostv.developer.lge.com/develop/getting-started/web-app-types)
 - [LG Developer Mode](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app)
 - [YouTube IFrame API](https://developers.google.com/youtube/iframe_api_reference)
+

@@ -41,7 +41,7 @@ assert.equal(JSON.stringify(input), before, "exports must preserve all original 
 assert.equal(workbook.sheets.length, 2);
 const main = workbook.sheets[0];
 const details = workbook.sheets[1];
-assert.equal(main.rows[4].length, 23);
+assert.equal(main.rows[4].length, 24);
 assert.equal(details.rows[4].length, 15);
 assert.equal(main.rows[4][16].value, 4_000_000);
 assert.equal(main.rows[4][17].value, 5_150_000);
@@ -182,6 +182,22 @@ assert.equal(report.workbookOptions(periodRows).filename, "hotel-reservations.xl
 assert.equal(report.workbookOptions(periodRows).sheets[0].rows.length, 8, "omitting the new period keeps the established all-records API");
 assert.match(report.renderHtml(periodRows), /전체 기간 \/ Toàn bộ/);
 const referenced = [{ ...modern, booking_reference: '000099-Đà Lạt <VIP>' }, { ...legacy, booking_reference: null }];
+const paymentCases = [
+ { ...modern, id:'partial', sale_amount:1000000, deposit_amount:200000, balance_amount:700000 },
+ { ...modern, id:'exact', sale_amount:1000000, deposit_amount:200000, balance_amount:800000 },
+ { ...modern, id:'over', sale_amount:1000000, deposit_amount:0, balance_amount:1100000 },
+ { ...modern, id:'missing', sale_amount:0, deposit_amount:null, balance_amount:null },
+];
+assert.equal(report.status(paymentCases[0]),'in_progress');
+assert.equal(report.status(paymentCases[1]),'completed');
+assert.equal(report.status(paymentCases[2]),'completed');
+assert.equal(report.status(paymentCases[3]),'in_progress');
+assert.equal(report.status({...paymentCases[1],balance_amount:null}),'in_progress','removing a receipt automatically restores in-progress');
+assert.deepEqual(Array.from(report.filterRows(paymentCases,{status:'completed'}),r=>r.id),['exact','over']);
+assert.deepEqual(Array.from(report.filterRows(paymentCases,{status:'in_progress'}),r=>r.id),['partial','missing']);
+assert.equal(report.workbookOptions(paymentCases,{status:'completed'}).sheets[0].rows.length,6);
+assert.equal(report.workbookOptions(paymentCases,{status:'completed'}).sheets[0].rows[4][23].value,'완료 / Hoàn tất');
+assert.doesNotMatch(report.renderHtml(paymentCases,{status:'completed'}),/내부 예약 ID \/ ID nội bộ: partial/);
 const referenceBefore = JSON.stringify(referenced);
 assert.equal(report.filterRows(referenced, {query:'000099-đà lạt'}).length, 1);
 const referenceHtml = report.renderHtml(referenced, {query:'000099'});
