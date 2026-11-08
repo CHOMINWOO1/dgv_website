@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const [source, html] = await Promise.all(["assets/hotel-reserv-list.js", "hotel_reserv_list.html"].map(file => readFile(path.join(root, file), "utf8")));
 new vm.Script(source);
 assert.match(html, /id="catalogError"[^>]*role="alert"/);
-assert.match(html, /hotel-reserv-list\.js\?v=20261108-extra-bed-1/);
+assert.match(html, /hotel-reserv-list\.js\?v=20261108-room-order-1/);
 assert.match(source, /table\("hotel_room_types"\)\.select\("\*"\)/);
 assert.match(source, /table\("hotel_room_grades"\)\.select\("\*"\)/);
 assert.doesNotMatch(source, /table\("hotel_room_(?:types|grades)"\)\.select\("\*"\)\.(?:is|eq)\("archived_at"/);

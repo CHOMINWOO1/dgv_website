@@ -26,8 +26,8 @@ function fn(name, next) {
   assert.ok(start >= 0 && end > start);
   return source.slice(start, end);
 }
-const roomKinds = ["DOUBLE", "TWIN", "TRIPLE"];
-assert.match(source,/const roomKinds = \["DOUBLE", "TWIN", "TRIPLE"\]/);
+const roomKinds = ["TWIN", "DOUBLE", "TRIPLE"];
+assert.match(source,/const roomKinds = \["TWIN", "DOUBLE", "TRIPLE"\]/);
 const rateKeys = ["weekday_purchase", "weekday_sale", "weekend_purchase", "weekend_sale"];
 const draft = roomKinds.map((room_kind, index) => ({ room_kind, is_active: index < 2, version: index + 2, weekday_purchase: "100", weekday_sale: "200", weekend_purchase: "300", weekend_sale: "400", sameWeekend: false }));
 const payloadContext = {
@@ -85,7 +85,7 @@ rowContext.run();
 const selectFor = (line, index) => line.children[index].children[1];
 let line = nodes.roomItemRows.children[0];
 assert.equal(selectFor(line, 0).value, "g1");
-assert.deepEqual(selectFor(line, 1).options.map(option => option.value), ["", "single", "double"]);
+assert.deepEqual(selectFor(line, 1).options.map(option => option.value), ["", "double", "single"]);
 assert.equal(rowContext.roomItems[0].room_grade, "Old Deluxe", "rendering catalog names must not mutate saved grade snapshots");
 selectFor(line, 0).value = "g2";
 selectFor(line, 0).events.change();

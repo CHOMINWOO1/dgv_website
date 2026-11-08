@@ -9,7 +9,7 @@
   const pricing = HotelPricing;
   const amount = new Intl.NumberFormat("en-US");
   const weekdays = ["일/CN","월/T2","화/T3","수/T4","목/T5","금/T6","토/T7"];
-  const roomKinds = ["DOUBLE", "TWIN", "TRIPLE"];
+  const roomKinds = ["TWIN", "DOUBLE", "TRIPLE"];
   const rateKeys = ["weekday_purchase", "weekday_sale", "weekend_purchase", "weekend_sale"];
   const roomKindLabel = kind => ({ DOUBLE: "더블 / Giường đôi", TWIN: "트윈 / Hai giường đơn", TRIPLE: "트리플 / Phòng ba" })[kind] || kind;
   let hotels = [];
