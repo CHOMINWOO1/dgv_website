@@ -47,6 +47,10 @@ async function setup(context) {
     page.on('request', request => requests.push(request.url()));
     page.on('response', async response => {
       if (response.url() === endpoint && response.request().postDataJSON()?.action === 'create' && response.ok()) created = await response.json();
+      if (response.url() === endpoint && !response.ok()) {
+        const body = await response.json().catch(() => ({}));
+        console.log('API diagnostic', response.request().postDataJSON()?.action, response.status(), body.code || 'UNKNOWN');
+      }
     });
   });
 }
@@ -69,7 +73,13 @@ try {
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await setup(tvContext); await setup(mobileContext);
   const tv = await tvContext.newPage();
-  await tv.goto(base); await tv.locator('#create').click();
+  await tv.goto(base);
+  if (await tv.locator('#searchConsent').count()) {
+    check(await tv.locator('#create').isDisabled(), 'create waits for terms/privacy agreement');
+    check(!requests.some(u => u === endpoint), 'no karaoke API calls before agreement');
+    await tv.locator('#searchConsent').check();
+  }
+  await tv.locator('#create').click();
   await tv.locator('#session').waitFor({ state: 'visible', timeout: 30000 });
   check(Boolean(created?.hostToken), 'public create returns owner capability');
   check(await tv.locator('#qr canvas').count() > 0, 'local QR generated');
@@ -78,6 +88,7 @@ try {
   await waitFor(() => tv.locator('#connection').evaluate(el => el.classList.contains('connected')), 'TV real Realtime subscription');
   const phone = await mobileContext.newPage();
   await phone.goto(invite);
+  if (await phone.locator('#searchConsent').count()) await phone.locator('#searchConsent').check();
   await phone.locator('#session').waitFor({ state: 'visible' });
   check(await phone.locator('#tvPanel').isHidden(), 'phone is remote only');
   check(!phone.url().includes(created.joinToken), 'join capability removed from URL');
@@ -86,6 +97,7 @@ try {
   await phone.locator('#lang').selectOption('vi');
   check(await phone.locator('#add').innerText() !== '예약 추가', 'Vietnamese labels');
   await phone.locator('#lang').selectOption('ko');
+  if (await phone.locator('#manualEntry').count()) await phone.locator('#manualEntry').evaluate(el => { el.open = true; });
   const add = async title => {
     await phone.locator('#songTitle').fill(title); await phone.locator('#songUrl').fill('https://youtu.be/dQw4w9WgXcQ');
     await phone.locator('#add').click(); await waitFor(async () => await phone.locator('#songUrl').inputValue() === '', 'add acknowledged');
@@ -110,11 +122,38 @@ try {
   await waitFor(async () => (await tv.locator('#currentTV').innerText()).includes('두 번째'), 'TV refresh restores room and current song');
   await phone.reload(); await phone.locator('#session').waitFor({ state: 'visible' });
   check(await phone.locator('#tvPanel').isHidden(), 'phone refresh remains remote');
+  if (await phone.locator('#manualPriority').count()) {
+    await phone.locator('#manualEntry').evaluate(el => { el.open = true; });
+    const beforePriority = (await api('state', created.joinToken)).data.state;
+    await add('QA 일반 대기 곡');
+    await phone.locator('#manualPriority').check();
+    await add('QA 우선 대기 곡');
+    await waitFor(async () => (await tv.locator('#queue .song').first().innerText()).includes('우선 대기'), 'priority add becomes next song via Realtime');
+    let afterPriority = (await api('state', created.joinToken)).data.state;
+    check(afterPriority.current.id === beforePriority.current.id && afterPriority.playing === beforePriority.playing, 'priority add never interrupts current playback');
+    await phone.locator('#queue .song').last().locator('.priority-queue').click();
+    await waitFor(async () => (await tv.locator('#queue .song').first().innerText()).includes('일반 대기'), 'existing queued song can be prioritized from phone');
+    afterPriority = (await api('state', created.joinToken)).data.state;
+    check(afterPriority.current.id === beforePriority.current.id && afterPriority.queue.length === 2, 'prioritize keeps current song and queue membership intact');
+    const search = await api('search', created.joinToken, { query: process.env.KARAOKE_SEARCH_QUERY || 'karaoke', language: 'ko' });
+    if (search.status === 200) {
+      check(search.data.source === 'youtube' && Array.isArray(search.data.items), 'official search returns sanitized results');
+    } else {
+      check(search.data.code === 'SEARCH_NOT_CONFIGURED' && !process.env.KARAOKE_SEARCH_QUERY, 'missing search key gives explicit safe configuration error');
+    }
+    const afterSearch = (await api('state', created.joinToken)).data.state;
+    check(afterSearch.revision === afterPriority.revision, 'search does not change queue or playback revision');
+    await phone.locator('#searchConsent').uncheck();
+    check(await phone.locator('#session').isHidden(), 'withdrawal leaves remote session');
+    await phone.locator('#searchConsent').check();
+    await phone.locator('#session').waitFor({ state: 'visible' });
+    check(await phone.locator('#queue .song').count() === 2, 'renewed consent restores same queue without duplication');
+  }
   const wrong = await api('state', 'a'.repeat(64));
   check(wrong.status === 404 && wrong.data.code === 'ROOM_NOT_FOUND', 'invalid capability rejected without revealing room existence');
   const guestClose = await api('close', created.joinToken);
   check(guestClose.status === 403, 'guest cannot close room');
-  for (const table of ['hana_karaoke_rooms', 'hana_karaoke_settings']) {
+  for (const table of ['hana_karaoke_rooms', 'hana_karaoke_settings', 'hana_karaoke_search_quota', 'hana_karaoke_search_cache']) {
     const r = await fetch(`https://fbbecxtxsaplrmanjunw.supabase.co/rest/v1/${table}?select=*`, { headers: { apikey: key } });
     check(r.status === 401 || r.status === 403, 'anonymous direct table access denied: ' + table);
   }
