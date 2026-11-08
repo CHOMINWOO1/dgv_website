@@ -7,7 +7,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="description" content="HANA Karaoke — TV와 휴대폰으로 함께 즐기는 노래방">
   <title>HANA Karaoke 2.0</title>
-  <link rel="stylesheet" href="assets/hana-karaoke.css?v=20261108-search1">
+  <link rel="stylesheet" href="assets/hana-karaoke.css?v=20261108-phone1">
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
   <script defer src="assets/supabase-config.js"></script>
   <script defer src="assets/vendor/qrcode.min.js"></script>
@@ -86,6 +86,15 @@
       </div>
 
       <div class="session-grid">
+        <section id="phoneControls" class="panel phone-controls-panel" aria-labelledby="remoteHeading">
+          <h2 id="remoteHeading" data-i="now">현재 재생</h2><p id="currentPhone" class="current-title"></p>
+          <div class="controls"><button id="play" data-i="play">재생</button><button id="pause" class="secondary" data-i="pause">일시정지</button><button id="next" class="secondary" data-i="next">다음 곡</button></div>
+          <p class="hint" data-i="controlHint">TV에서 직접 재생을 시작해야 할 수 있습니다.</p>
+        </section>
+        <section class="panel queue-panel" aria-labelledby="queueHeading">
+          <div class="section-heading"><h2 id="queueHeading" data-i="queue">예약 목록</h2><span id="queueCount" class="count">0</span></div>
+          <ol id="queue" class="queue"></ol><p id="emptyQueue" class="empty" data-i="empty">예약된 곡이 없습니다.</p>
+        </section>
         <section id="phonePanel" class="panel song-panel" aria-labelledby="addHeading">
           <h2 id="addHeading" data-i="addSong">노래 예약</h2>
           <p class="hint" data-i="inlineSearchHint">노래를 검색하고 결과를 누르면 바로 예약됩니다. 우선예약은 현재 곡이 끝난 뒤 재생됩니다.</p>
@@ -111,16 +120,6 @@
               <button id="add" type="submit" class="full-width" data-i="add">예약 추가</button>
             </form>
           </details>
-          <div id="phoneControls">
-            <div class="divider"></div>
-            <p class="hint" data-i="now">현재 재생</p><p id="currentPhone" class="current-title"></p>
-            <div class="controls"><button id="play" data-i="play">재생</button><button id="pause" class="secondary" data-i="pause">일시정지</button><button id="next" class="secondary" data-i="next">다음 곡</button></div>
-            <p class="hint" data-i="controlHint">TV에서 직접 재생을 시작해야 할 수 있습니다.</p>
-          </div>
-        </section>
-        <section class="panel queue-panel" aria-labelledby="queueHeading">
-          <div class="section-heading"><h2 id="queueHeading" data-i="queue">예약 목록</h2><span id="queueCount" class="count">0</span></div>
-          <ol id="queue" class="queue"></ol><p id="emptyQueue" class="empty" data-i="empty">예약된 곡이 없습니다.</p>
         </section>
       </div>
     </section>
