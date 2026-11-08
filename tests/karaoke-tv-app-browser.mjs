@@ -65,6 +65,7 @@ async function setup(context) {
     window.YT = { PlayerState: { PLAYING: 1, PAUSED: 2, ENDED: 0 }, Player: class {
       constructor(id, options) {
         this.options = options; this.video = ''; this.frame = document.createElement('iframe');
+        this.frame.srcdoc = '<style>html,body{height:100%;margin:0;background:#142030;color:#fff;font:32px system-ui}body{display:grid;place-items:center;text-align:center}</style><main>Mock YouTube player<br>Layout test only</main>';
         document.getElementById(id).replaceWith(this.frame); window.__player = this;
         queueMicrotask(() => options.events.onReady({ target: this }));
       }
@@ -127,6 +128,7 @@ try {
   check(await tv.locator('#playerFrame').isHidden(), 'idle TV does not show an empty video');
   const invite = await tv.locator('#share').inputValue();
   check(!invite.includes(hostToken) && invite.includes('#join='), 'QR shares only the guest capability');
+  await tv.keyboard.press('ArrowDown');
   await tv.locator('#screenStart').focus(); await tv.keyboard.press('ArrowRight');
   check(await tv.evaluate(() => document.activeElement.id === 'screenSettings'), 'remote Right moves to the TV settings button');
   await tv.keyboard.press('ArrowLeft');
@@ -143,6 +145,43 @@ try {
   check(calls.some(call => call.action === 'next' && call.token === hostToken && call.expectedCurrentId === null), 'automatic start uses the atomic idle-only server guard');
   check(await tv.locator('#displayIdle').isHidden() && await tv.locator('#playerFrame').isVisible(), 'QR is replaced by the video');
   await waitFor(() => tv.evaluate(() => !document.body.classList.contains('tv-controls-visible')), 'TV controls disappear after inactivity');
+  check(await tv.evaluate(() => {
+    const frame = document.getElementById('playerFrame').getBoundingClientRect();
+    const iframe = document.querySelector('#playerFrame iframe').getBoundingClientRect();
+    return Math.abs(frame.x) < 1 && Math.abs(frame.y) < 1 &&
+      Math.abs(frame.width - innerWidth) < 1 && Math.abs(frame.height - innerHeight) < 1 &&
+      Math.abs(iframe.width - innerWidth) < 1 && Math.abs(iframe.height - innerHeight) < 1;
+  }), 'fullscreen video fills every viewport pixel with no reserved footer or page margins');
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1914, height: 899 }, { width: 1920, height: 1080 }]) {
+    await tv.setViewportSize(viewport);
+    check(await tv.evaluate(() => {
+      const frame = document.getElementById('playerFrame').getBoundingClientRect();
+      const iframe = document.querySelector('#playerFrame iframe').getBoundingClientRect();
+      return Math.abs(frame.x) < 1 && Math.abs(frame.y) < 1 &&
+        Math.abs(frame.width - innerWidth) < 1 && Math.abs(frame.height - innerHeight) < 1 &&
+        Math.abs(iframe.width - innerWidth) < 1 && Math.abs(iframe.height - innerHeight) < 1 &&
+        getComputedStyle(document.getElementById('displayControls')).display === 'none';
+    }), `video uses the full ${viewport.width}x${viewport.height} screen without a hidden toolbar gap`);
+  }
+  if (process.env.KARAOKE_TV_PLAYBACK_SCREENSHOT) await tv.screenshot({ path: process.env.KARAOKE_TV_PLAYBACK_SCREENSHOT });
+  check(await tv.evaluate(() => window.__player.options.playerVars.controls === 1 &&
+    getComputedStyle(document.querySelector('#playerFrame iframe')).transform === 'none'),
+  'native YouTube controls stay enabled and the video is not zoomed or cropped');
+  await tv.keyboard.press('ArrowDown');
+  check(await tv.locator('#displayControls').isVisible(), 'remote input can reveal fullscreen and settings controls');
+  check(await tv.evaluate(() => {
+    const frame = document.getElementById('playerFrame').getBoundingClientRect();
+    const controls = document.getElementById('displayControls').getBoundingClientRect();
+    return controls.top >= frame.bottom - 1 && controls.bottom <= innerHeight + 1;
+  }), 'temporary HANA controls sit outside the video and never cover YouTube controls');
+  await tv.locator('#screenStart').click();
+  check(await tv.locator('#displayControls').isHidden(), 'fullscreen button immediately removes HANA controls during healthy playback');
+  check(await tv.evaluate(() => {
+    const frame = document.getElementById('playerFrame').getBoundingClientRect();
+    return Math.abs(frame.width - innerWidth) < 1 && Math.abs(frame.height - innerHeight) < 1;
+  }), 'pressing fullscreen restores the full video area immediately');
+  await tv.keyboard.press('ArrowDown');
+  await waitFor(() => tv.locator('#displayControls').isHidden(), 'remote-revealed toolbar disappears again after inactivity');
   await add(phone, '일반 다음 곡'); await add(phone, '우선 곡', true);
   check(state.current.title === '첫 곡' && state.queue[0].title === '우선 곡', 'priority queues after current without interruption');
   await phone.locator('#pause').click();
@@ -179,6 +218,7 @@ try {
   await tv.reload(); await tv.locator('body.tv-display').waitFor();
   check(await tv.locator('#displayIdle').isHidden(), 'receiver reload restores the current song, not a blank QR screen');
   await tv.evaluate(() => { Object.defineProperty(document.documentElement, 'requestFullscreen', { value: undefined }); Object.defineProperty(document.documentElement, 'webkitRequestFullscreen', { value: undefined }); });
+  await tv.keyboard.press('ArrowDown');
   await tv.locator('#screenStart').click();
   check((await tv.locator('#displayMessage').innerText()).includes('전체화면을 허용하지'), 'unsupported fullscreen gives a visible fallback instead of throwing');
   await phone.locator('#next').click(); await tv.locator('body.tv-idle').waitFor();

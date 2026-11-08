@@ -200,6 +200,12 @@
       (state?.closed ? 'closed' : !healthy ? connectionKey : '');
   }
 
+  function hideTVControls() {
+    if (displayTimer) clearTimeout(displayTimer);
+    displayTimer = null;
+    document.body.classList.remove('tv-controls-visible');
+  }
+
   function revealTVControls() {
     if (displayTimer) clearTimeout(displayTimer);
     displayTimer = null;
@@ -227,6 +233,7 @@
     $('displayMessage').textContent = t(displayWarning() || (!screenEngaged ? 'screenStartHint' : hasVideo ? state.playing ? 'playingStatus' : 'pausedStatus' : 'autoWaiting'));
     $('phonePlaybackStatus').textContent = state ? t(state.closed ? 'closed' : state.current ? state.playing ? 'playingStatus' : 'pausedStatus' : 'autoWaiting') : '';
     if (active && (!screenEngaged || displayWarning())) revealTVControls();
+    else if (active && document.body.classList.contains('tv-controls-visible') && !displayTimer) revealTVControls();
   }
 
   function setTVDisplay(enabled, keepFullscreen = false) {
@@ -246,16 +253,23 @@
 
   function requestTVFullscreen() {
     fullscreenMessage = '';
-    if (document.fullscreenElement || document.webkitFullscreenElement) return;
-    const fullscreen = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
     const expectedGeneration = generation;
+    const entered = () => {
+      if (expectedGeneration !== generation || !tvDisplay ||
+          (document.fullscreenElement || document.webkitFullscreenElement) !== document.documentElement) return;
+      screenEngaged = true;
+      renderTVDisplay();
+      if (!displayWarning()) hideTVControls();
+    };
+    if (document.fullscreenElement || document.webkitFullscreenElement) { entered(); return; }
+    const fullscreen = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
     const fail = () => {
       if (expectedGeneration !== generation) return;
       fullscreenMessage = 'fullscreenUnavailable'; renderTVDisplay();
       if (!tvDisplay) showNotice('fullscreenUnavailable');
     };
     if (!fullscreen) { fail(); return; }
-    try { Promise.resolve(fullscreen.call(document.documentElement)).catch(fail); } catch (_) { fail(); }
+    try { Promise.resolve(fullscreen.call(document.documentElement)).then(entered, fail); } catch (_) { fail(); }
   }
 
   function maybeAutoStart() {
@@ -882,7 +896,11 @@
           if (generation !== expectedGeneration || mode !== 'tv' || !state?.current || state.closed || loadedEntryId !== state.current.id) return;
           const videoId = event.target.getVideoData?.().video_id;
           if (videoId !== state.current.videoId) return;
-          if (event.data === window.YT.PlayerState.PLAYING) { hasPlayedEntry = true; screenEngaged = true; showPlayback(''); revealTVControls(); reportPlayback(true); }
+          if (event.data === window.YT.PlayerState.PLAYING) {
+            hasPlayedEntry = true; screenEngaged = true; showPlayback('');
+            if (!displayWarning()) hideTVControls();
+            reportPlayback(true);
+          }
           if (event.data === window.YT.PlayerState.PAUSED && hasPlayedEntry) reportPlayback(false);
           if (event.data === window.YT.PlayerState.ENDED && hasPlayedEntry && endedEntryId !== loadedEntryId) {
             reportEnded(loadedEntryId);
@@ -1009,10 +1027,16 @@
       try { player.playVideo(); } catch (_) { showPlayback('playerError'); }
       if (!busy && !state.playing) mutate('play');
     } else maybeAutoStart();
-    renderTVDisplay(); revealTVControls();
+    renderTVDisplay();
+    if (displayWarning()) revealTVControls(); else hideTVControls();
   });
   ['pointermove', 'pointerdown', 'keydown', 'focusin'].forEach((event) => document.addEventListener(event, revealTVControls));
-  ['fullscreenchange', 'webkitfullscreenchange'].forEach((event) => document.addEventListener(event, () => { renderTVDisplay(); revealTVControls(); }));
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach((event) => document.addEventListener(event, () => {
+    const entered = (document.fullscreenElement || document.webkitFullscreenElement) === document.documentElement;
+    if (entered && tvDisplay) screenEngaged = true;
+    renderTVDisplay();
+    if (entered && screenEngaged && !displayWarning()) hideTVControls(); else revealTVControls();
+  }));
   $('copyInvite').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText($('share').value); showNotice('copied'); }
     catch (_) { $('share').hidden = false; $('share').focus(); $('share').select(); showNotice('copyManual'); }
