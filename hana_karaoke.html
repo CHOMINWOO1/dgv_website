@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101b2d">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="description" content="HANA Karaoke — TV와 휴대폰으로 함께 즐기는 노래방">
+  <title>HANA Karaoke 2.0</title>
+  <link rel="stylesheet" href="assets/hana-karaoke.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
+  <script defer src="assets/supabase-config.js"></script>
+  <script defer src="assets/vendor/qrcode.min.js"></script>
+  <script defer src="assets/hana-karaoke.js"></script>
+</head>
+<body>
+  <main>
+    <header class="site-header">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">♪</div>
+        <div><strong>HANA Karaoke <small>2.0</small></strong><p id="tagline">TV와 휴대폰으로 즐기는 우리집 노래방</p></div>
+      </div>
+      <select id="lang" aria-label="Language / 언어 / Ngôn ngữ">
+        <option value="ko">한국어</option><option value="vi">Tiếng Việt</option><option value="en">English</option>
+      </select>
+    </header>
+
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+    <section id="home" class="panel welcome-panel" aria-labelledby="welcome">
+      <span class="eyebrow">HANA HOME STAGE</span>
+      <h1 id="welcome" data-i="welcome">우리집 노래방</h1>
+      <p class="intro" data-i="intro">TV에서 새 방을 만들고 휴대폰으로 접속하세요.</p>
+      <button id="create" class="primary-button" data-i="create">TV에서 방 만들기</button>
+      <p class="hint" data-i="publicCreate">로그인이나 비밀번호 없이 방을 만들 수 있습니다.</p>
+      <div class="divider"></div>
+      <form id="joinForm">
+        <label for="code" data-i="joinLabel">초대 링크 또는 저장된 방 코드</label>
+        <div class="join">
+          <input id="code" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="2048" data-i-placeholder="joinPlaceholder" placeholder="초대 링크 또는 저장된 6자리 코드">
+          <button id="join" class="secondary" type="submit" data-i="join">휴대폰 연결</button>
+        </div>
+        <p class="hint" data-i="joinHint">처음 연결하는 휴대폰은 TV의 QR을 스캔하거나 초대 링크를 열어 주세요. 방 코드만으로는 새 기기를 연결할 수 없습니다.</p>
+      </form>
+    </section>
+
+    <section id="session" hidden>
+      <div class="panel room-panel">
+        <div class="top">
+          <div><span class="eyebrow" id="mode"></span><h1 class="room-heading"><span data-i="room">연결 코드</span> <b id="roomCode"></b></h1></div>
+          <button id="leave" class="secondary compact" data-i="leave">나가기</button>
+        </div>
+        <div class="connection-row"><span id="connection" class="connection" role="status"></span><button id="refresh" class="text-button" data-i="refresh">새로고침</button></div>
+        <div id="invitePanel" class="invite-panel" hidden>
+          <div id="qrbox"><div id="qr" role="img" aria-label="Invitation QR code"></div></div>
+          <div class="invite-copy">
+            <h2 data-i="connectPhone">휴대폰을 리모컨으로</h2>
+            <p data-i="qrHint">휴대폰 카메라로 QR을 스캔하세요.</p>
+            <p class="hint" data-i="invitePrivacy">초대 링크를 가진 사람은 예약과 재생을 제어할 수 있습니다. 함께 노래할 사람에게만 공유하세요.</p>
+            <button id="copyInvite" class="secondary" data-i="copyInvite">초대 링크 복사</button>
+            <label class="sr-only" for="share" data-i="inviteLink">초대 링크</label>
+            <input id="share" class="share-link" type="text" readonly aria-label="Invitation link" hidden>
+          </div>
+        </div>
+        <div class="room-meta"><span id="expires"></span><button id="close" class="text-button danger" data-i="close" hidden>방 종료</button></div>
+      </div>
+
+      <div id="tvPanel" class="panel player-panel" hidden>
+        <div class="section-heading"><h2 data-i="now">현재 재생</h2><span class="live-label">HANA LIVE</span></div>
+        <div id="playerFrame"><div id="player"></div><p id="playerEmpty" data-i="waiting">첫 번째 노래를 예약해 주세요.</p></div>
+        <h3 id="currentTV" class="current-title"></h3>
+        <div id="playbackNotice" class="playback-notice" role="status" hidden></div>
+        <div class="controls">
+          <button id="startTV" data-i="startTV">TV에서 재생 시작</button>
+          <button id="pauseTV" class="secondary" data-i="pause">일시정지</button>
+          <button id="nextTV" class="secondary" data-i="next">다음 곡</button>
+        </div>
+        <p class="hint" data-i="autoplay">TV에서 첫 재생 버튼을 눌러야 할 수 있습니다. 일부 TV 브라우저나 영상은 유튜브 재생을 제한합니다.</p>
+      </div>
+
+      <div class="session-grid">
+        <section id="phonePanel" class="panel song-panel" aria-labelledby="addHeading">
+          <h2 id="addHeading" data-i="addSong">노래 예약</h2>
+          <p class="hint" data-i="searchHint">유튜브에서 노래방 영상을 찾아 공유 링크를 복사해 넣으세요.</p>
+          <button id="search" class="secondary search-button" data-i="search">유튜브 노래 검색 ↗</button>
+          <form id="songForm">
+            <label for="songTitle" data-i="titleLabel">노래 제목 (선택)</label>
+            <input id="songTitle" type="text" maxlength="100" data-i-placeholder="titlePlaceholder" placeholder="노래 제목 (선택)">
+            <label for="songUrl" data-i="urlLabel">YouTube 링크 또는 영상 ID</label>
+            <input id="songUrl" type="text" required maxlength="2048" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://youtu.be/…" inputmode="url">
+            <button id="add" type="submit" class="full-width" data-i="add">예약 추가</button>
+          </form>
+          <div id="phoneControls">
+            <div class="divider"></div>
+            <p class="hint" data-i="now">현재 재생</p><p id="currentPhone" class="current-title"></p>
+            <div class="controls"><button id="play" data-i="play">재생</button><button id="pause" class="secondary" data-i="pause">일시정지</button><button id="next" class="secondary" data-i="next">다음 곡</button></div>
+            <p class="hint" data-i="controlHint">TV에서 직접 재생을 시작해야 할 수 있습니다.</p>
+          </div>
+        </section>
+        <section class="panel queue-panel" aria-labelledby="queueHeading">
+          <div class="section-heading"><h2 id="queueHeading" data-i="queue">예약 목록</h2><span id="queueCount" class="count">0</span></div>
+          <ol id="queue" class="queue"></ol><p id="emptyQueue" class="empty" data-i="empty">예약된 곡이 없습니다.</p>
+        </section>
+      </div>
+    </section>
+    <noscript><p class="notice">이 페이지를 사용하려면 JavaScript를 켜 주세요. Please enable JavaScript.</p></noscript>
+    <footer>HANA Karaoke · <span data-i="footer">개인용 노래방 · YouTube 이용약관이 적용됩니다.</span></footer>
+  </main>
+</body>
+</html>
