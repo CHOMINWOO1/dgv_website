@@ -96,6 +96,13 @@ async function add(phone, title, priority = false) {
   await phone.locator('#manualPriority').setChecked(priority); await phone.locator('#add').click();
   await waitFor(async () => await phone.locator('#songUrl').inputValue() === '', 'phone reservation acknowledged: ' + title);
 }
+async function finishSong(tv) {
+  const title = states.get('654321')?.current?.title;
+  await waitFor(async () => await tv.locator('#currentTV').innerText() === title, 'TV has loaded the current reservation before its end event');
+  // Real players emit PLAYING before ENDED. Keep the mock ordering explicit,
+  // including when identical video IDs are used for different reservations.
+  await tv.evaluate(() => { window.__player.emit(1); window.__player.emit(0); });
+}
 try {
   server = createServer(async (request, response) => {
     let name = decodeURIComponent(new URL(request.url, 'http://localhost').pathname).slice(1);
@@ -124,6 +131,7 @@ try {
   await tv.locator('body.tv-display.tv-idle').waitFor();
   check(await tv.evaluate(() => document.fullscreenElement === document.documentElement), 'creating a room preserves fullscreen selected on the welcome screen');
   check(await tv.locator('#displayQR canvas').count() === 1, 'idle TV shows local high-resolution invitation QR');
+  check(await tv.locator('#displayFinished').isHidden(), 'new room keeps its initial invitation QR without a finished message');
   check(await tv.locator('.session-grid').isHidden() && await tv.locator('.site-header').isHidden(), 'TV display hides search, queue and management panels');
   check(await tv.locator('#playerFrame').isHidden(), 'idle TV does not show an empty video');
   const invite = await tv.locator('#share').inputValue();
@@ -193,18 +201,34 @@ try {
   await waitFor(() => tv.evaluate(() => window.__plays > 0), 'phone Play resumes TV playback');
   await phone.locator('#next').click();
   await waitFor(() => state.current?.title === '우선 곡' && tv.evaluate(() => window.__loads.length === 2), 'phone Next starts the priority song');
-  await tv.evaluate(() => window.__player.emit(0));
+  await finishSong(tv);
   await waitFor(() => state.current?.title === '일반 다음 곡', 'song ending automatically starts the next reservation');
   check(await tv.evaluate(() => window.__loads.length) === 3, 'repeated video IDs reload once per reservation');
-  await tv.evaluate(() => window.__player.emit(0));
+  await finishSong(tv);
   await waitFor(() => state.current?.title === '일시정지 중 추가 곡', 'remaining queue advances in order');
-  await tv.evaluate(() => window.__player.emit(0));
+  await finishSong(tv);
   await tv.locator('body.tv-display.tv-idle').waitFor();
   check(state.current === null && state.queue.length === 0, 'last song empties the queue');
-  check(await tv.evaluate(() => document.fullscreenElement === document.documentElement), 'fullscreen persists when the QR waiting screen returns');
-  check(await tv.locator('#displayQR').isVisible(), 'QR waiting screen returns after the last song');
+  check(await tv.evaluate(() => document.fullscreenElement === document.documentElement), 'fullscreen persists when the completion message appears');
+  check(await tv.locator('#displayQR').isHidden() && await tv.locator('#displayIdleText').isHidden(), 'completion message replaces the QR and scan instructions after the last song');
+  check(await tv.locator('#displayFinished').isVisible(), 'completed queue shows its continuation message');
+  check((await tv.locator('#displayFinished [lang=ko]').innerText()).includes('휴대폰에서') && (await tv.locator('#displayFinished [lang=vi]').innerText()).includes('trên điện thoại'), 'Korean and Vietnamese instructions appear together');
+  check(state.closed === false, 'queue completion does not close the room');
+  check(await tv.evaluate(() => {
+    const r = document.getElementById('displayFinished').getBoundingClientRect();
+    return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
+  }), 'bilingual message fits inside the TV screen');
   check(calls.filter(call => call.action === 'create').length === 1, 'remote OK creates exactly one room');
   if (process.env.KARAOKE_TV_SCREENSHOT) await tv.screenshot({ path: process.env.KARAOKE_TV_SCREENSHOT });
+  await tv.reload(); await tv.locator('#displayFinished').waitFor();
+  check(await tv.locator('#displayQR').isHidden(), 'same TV tab preserves completion guidance after a reload');
+  await add(phone, '재스캔 없이 이어 부르기');
+  await waitFor(() => state.current?.title === '재스캔 없이 이어 부르기', 'existing phone can reserve again without scanning or creating another room');
+  check(await tv.locator('#displayFinished').isHidden() && await tv.locator('#playerFrame').isVisible(), 'next reservation automatically replaces completion guidance with video');
+  await waitFor(() => tv.evaluate(() => window.__loads.length >= 1), 'reloaded receiver has started the new reservation');
+  await new Promise(resolve => setTimeout(resolve, 50));
+  await finishSong(tv);
+  await tv.locator('#displayFinished').waitFor();
   await tv.evaluate(() => { window.__blockAutoplay = true; });
   await add(phone, '차단된 자동 재생');
   await waitFor(async () => (await tv.locator('#displayMessage').innerText()).includes('자동 재생이 차단'), 'autoplay blocking shows a local TV recovery message');
@@ -244,4 +268,3 @@ try {
   await browser?.close();
   if (server) await new Promise(resolve => server.close(resolve));
 }
-

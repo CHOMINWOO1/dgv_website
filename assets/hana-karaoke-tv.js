@@ -167,7 +167,7 @@
   let searchConsent = false, pendingResultId = '';
   let pendingEntry = null;
   let tvDisplay = false, screenEngaged = false, fullscreenMessage = '', displayTimer = null;
-  let autoStartTimer = null, autoStartKey = '';
+  let autoStartTimer = null, autoStartKey = '', idleCompleted = false;
   try { searchConsent = sessionStorage.getItem(CONSENT_KEY) === 'accepted'; } catch (_) { /* Consent remains in memory. */ }
   const inFlight = new Set();
   const uncertainRequests = new Map();
@@ -222,10 +222,13 @@
   function renderTVDisplay() {
     const active = tvDisplay && mode === 'tv' && searchConsent && Boolean(room);
     const hasVideo = Boolean(state?.current && !state.closed);
+    const finished = Boolean(state && !state.closed && !state.current && !state.queue.length && idleCompleted);
     document.body.classList.toggle('tv-display', active);
     document.body.classList.toggle('tv-idle', active && !hasVideo);
     $('displayIdle').hidden = !active || hasVideo;
-    $('displayQR').hidden = Boolean(state?.closed);
+    $('displayQR').hidden = Boolean(state?.closed) || finished;
+    $('displayIdleText').hidden = finished;
+    $('displayFinished').hidden = !active || !finished;
     $('displayIdleText').textContent = t(state?.closed ? 'closed' : 'qrHint');
     $('displayControls').hidden = !active;
     $('showTVScreen').hidden = mode !== 'tv';
@@ -296,7 +299,8 @@
       return {
         hostToken: TOKEN_PATTERN.test(value.hostToken || '') ? value.hostToken : '',
         joinToken: TOKEN_PATTERN.test(value.joinToken || '') ? value.joinToken : '',
-        mode: value.mode === 'tv' ? 'tv' : 'phone'
+        mode: value.mode === 'tv' ? 'tv' : 'phone',
+        completedIdle: value.completedIdle === true
       };
     } catch (_) { return null; }
   }
@@ -404,6 +408,14 @@
     }
     // Delayed API responses must never roll back the queue or restart an older song.
     if (state && (incoming.revision < state.revision || (state.closed && !incoming.closed))) return;
+    // This presentation flag never changes room/queue data. Keep the initial
+    // invitation QR, but show a bilingual continuation message after playback.
+    if (incoming.current) idleCompleted = false;
+    else if (!incoming.closed && !incoming.queue.length && state?.current) idleCompleted = true;
+    if (mode === 'tv' && credentials && credentials.completedIdle !== idleCompleted) {
+      credentials = { ...credentials, completedIdle: idleCompleted };
+      saveSession(room, { ...credentials, mode });
+    }
     state = incoming;
     renderState();
     if (state.closed) {
@@ -719,6 +731,7 @@
     pendingEntry = null;
     cleanup(desiredMode === 'tv');
     room = code; mode = desiredMode; credentials = saved; state = null; suspended = false;
+    idleCompleted = mode === 'tv' && saved?.completedIdle === true;
     saveSession(room, { ...credentials, mode });
     const address = pageUrl(); address.searchParams.set(mode === 'tv' ? 'tv' : 'room', room);
     history.replaceState(null, '', address.pathname + address.search);
@@ -748,7 +761,7 @@
     uncertainRequests.clear();
     if (player) { try { player.destroy(); } catch (_) { /* Removed iframe. */ } }
     player = null; playerReady = false; loadedEntryId = ''; commandedPlaying = null; hasPlayedEntry = false; endedEntryId = ''; pendingEndedId = '';
-    pendingPlayback = null;
+    pendingPlayback = null; idleCompleted = false;
     const mount = document.createElement('div'); mount.id = 'player';
     const oldMount = $('player'); if (oldMount) oldMount.replaceWith(mount); else $('playerFrame').prepend(mount);
     showPlayback('');
@@ -1086,4 +1099,3 @@
   }
   boot().catch(() => showNotice('error', true));
 })();
-

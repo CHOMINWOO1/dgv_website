@@ -7,11 +7,11 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="description" content="HANA Karaoke — TV와 휴대폰으로 함께 즐기는 노래방">
   <title>HANA Karaoke TV</title>
-  <link rel="stylesheet" href="assets/hana-karaoke-tv.css?v=20261108-fullscreen2">
+  <link rel="stylesheet" href="assets/hana-karaoke-tv.css?v=20261108-finished1">
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.2"></script>
   <script defer src="assets/supabase-config.js"></script>
   <script defer src="assets/vendor/qrcode.min.js"></script>
-  <script defer src="assets/hana-karaoke-tv.js?v=20261108-fullscreen2"></script>
+  <script defer src="assets/hana-karaoke-tv.js?v=20261108-finished1"></script>
   <script defer src="assets/hana-karaoke-tv-remote.js?v=20261108-app1"></script>
 </head>
 <body class="tv-launcher">
@@ -81,6 +81,10 @@
           <span class="display-brand">HANA KARAOKE</span>
           <div id="displayQR" role="img" aria-label="Invitation QR code"></div>
           <p id="displayIdleText" data-i="qrHint">휴대폰 카메라로 QR을 스캔하세요.</p>
+          <div id="displayFinished" class="display-finished" role="status" aria-live="polite" hidden>
+            <p lang="ko"><strong>예약곡 재생이 모두 종료되었습니다.</strong><span>계속 이용하시려면 휴대폰에서<br>다음 곡을 예약해 주세요.</span></p>
+            <p lang="vi"><strong>Đã phát hết các bài hát đã đặt.</strong><span>Để tiếp tục, vui lòng chọn thêm bài hát<br>trên điện thoại.</span></p>
+          </div>
         </div>
         <div id="playerFrame"><div id="player"></div><p id="playerEmpty" data-i="waiting">첫 번째 노래를 예약해 주세요.</p></div>
         <h3 id="currentTV" class="current-title"></h3>
@@ -154,4 +158,3 @@
   </main>
 </body>
 </html>
-
