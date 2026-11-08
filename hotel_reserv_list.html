@@ -72,6 +72,7 @@
         <fieldset class="hotel-period-fields" id="hotelPeriodFields"><legend class="qr-label">체크인 기간 조회 / Tra cứu theo ngày nhận phòng</legend>
           <label><span class="qr-label">시작일 / Từ ngày</span><input class="qr-input" id="hotelFromDate" type="date" min="1900-01-01" max="9999-12-31" /></label>
           <label><span class="qr-label">종료일 / Đến ngày</span><input class="qr-input" id="hotelToDate" type="date" min="1900-01-01" max="9999-12-31" /></label>
+          <label class="hotel-wide"><span class="qr-label">예약 검색 / Tìm đặt phòng</span><input class="qr-input" id="hotelQuery" type="search" maxlength="200" placeholder="예약번호·호텔·투숙객 / Mã đặt phòng·khách sạn·khách" /></label>
           <button class="qr-btn qr-btn-primary" type="submit">조회 / Tra cứu</button><button class="qr-btn" id="allHotelDatesButton" type="button">전체 기간 / Toàn bộ</button>
         </fieldset>
         <p class="hotel-error" id="hotelPeriodError" role="alert" hidden></p>
@@ -83,7 +84,7 @@
           <th>호텔명 / Khách sạn</th><th>체크인 / Nhận phòng</th><th>체크아웃 / Trả phòng</th><th>인원·객실 / Khách·phòng</th>
           <th>투숙객 명단 / Danh sách khách</th><th>요금 방식 / Loại giá</th><th>객실 매입 / Mua phòng</th><th>객실 매출 / Bán phòng</th>
           <th>식사 매입 / Mua bữa ăn</th><th>식사 매출 / Bán bữa ăn</th><th>총 매입 / Tổng mua</th><th>총 매출 / Tổng bán</th>
-          <th>계약금 / Tiền cọc</th><th>잔금 / Tiền còn lại đã thu</th><th>입금 합계 / Tổng đã thu</th><th>비고 / Ghi chú</th>
+          <th>계약금 / Tiền cọc</th><th>잔금 / Tiền còn lại đã thu</th><th>입금 합계 / Tổng đã thu</th><th>예약번호 / Mã đặt phòng</th><th>비고 / Ghi chú</th>
         </tr></thead><tbody id="hotelRows"></tbody></table>
       </div>
     </section>
@@ -144,6 +145,7 @@
     <form id="hotelForm">
       <h2 id="dialogTitle">예약 등록 / Thêm đặt phòng</h2>
       <fieldset class="hotel-fields" id="reservationFields">
+        <label class="hotel-wide"><span class="qr-label">예약번호 / Mã đặt phòng <span class="hotel-optional">선택 / Tùy chọn</span></span><input class="qr-input" name="booking_reference" type="text" maxlength="120" autocomplete="off" placeholder="호텔에서 받은 예약번호 / Mã xác nhận từ khách sạn" /></label>
         <label class="hotel-wide"><span class="qr-label">호텔 / Khách sạn</span><select class="qr-select" name="hotel_id" id="hotelSelect" required></select></label>
         <label><span class="qr-label">체크인 / Nhận phòng</span><input class="qr-input" name="check_in" type="date" min="1900-01-01" max="9999-12-30" required /></label>
         <label><span class="qr-label">체크아웃 / Trả phòng</span><input class="qr-input" name="check_out" type="date" min="1900-01-02" max="9999-12-31" required /></label>
@@ -194,8 +196,9 @@
   <script src="assets/supabase-client.js"></script>
   <script src="assets/qr-staff.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
-  <script src="assets/hotel-report.js?v=20261107-hotel-period-1"></script>
+  <script src="assets/hotel-report.js?v=20261108-reference-1"></script>
   <script src="assets/hotel-pricing.js?v=20261107-catalog-delete-1"></script>
-  <script src="assets/hotel-reserv-list.js?v=20261107-hotel-period-1"></script>
+  <script src="assets/hotel-reserv-list.js?v=20261108-money-reference-1"></script>
 </body>
 </html>
+

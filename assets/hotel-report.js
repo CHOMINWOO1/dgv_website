@@ -51,16 +51,18 @@
   function filterRows(values, value) {
     const period = normalizePeriod(value);
     const rows = rowsOf(values);
-    if (!period.fromDate) return rows;
+    const query = text(value?.query).trim().toLocaleLowerCase();
     return rows.filter(row => {
       const checkIn = text(row.check_in);
-      return /^\d{4}-\d{2}-\d{2}$/.test(checkIn) && checkIn >= period.fromDate && checkIn <= period.toDate;
+      return (!period.fromDate || (/^\d{4}-\d{2}-\d{2}$/.test(checkIn) && checkIn >= period.fromDate && checkIn <= period.toDate))
+        && (!query || [row.booking_reference,row.hotel_name,guests(row.guest_names),row.note].some(item => text(item).toLocaleLowerCase().includes(query)));
     });
   }
   function periodLabel(value) {
     const period = normalizePeriod(value);
     return "체크인 기준 / Theo ngày nhận phòng: " + (period.fromDate
-      ? `${period.fromDate} ~ ${period.toDate}` : "전체 기간 / Toàn bộ");
+      ? `${period.fromDate} ~ ${period.toDate}` : "전체 기간 / Toàn bộ")
+      + (text(value?.query).trim() ? " · 검색 / Tìm: " + text(value.query).trim() : "");
   }
   function dateCell(value) {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text(value));
@@ -100,7 +102,7 @@
     const labelValue = (label, value) => `<div><dt>${label}</dt><dd>${escape(display(value))}</dd></div>`;
     const amountRow = (label, purchase, sale) => `<tr><th>${label}</th><td class="number">${money(number(purchase))}</td><td class="number">${money(number(sale))}</td></tr>`;
     const bookings = rows.map((row, index) => `<section class="reservation">
-      <header class="bookingHeading"><h2>${index + 1}. ${escape(display(row.hotel_name))}</h2><p>예약번호 / Mã đặt phòng: ${escape(display(row.id))}</p></header>
+      <header class="bookingHeading"><h2>${index + 1}. ${escape(display(row.hotel_name))}</h2><p>예약번호 / Mã đặt phòng: ${escape(display(row.booking_reference))}</p><p>내부 예약 ID / ID nội bộ: ${escape(display(row.id))}</p></header>
       <dl class="info">${labelValue("체크인 / Nhận phòng", row.check_in)}${labelValue("체크아웃 / Trả phòng", row.check_out)}
       ${labelValue("인원·객실 / Khách·phòng", `${money(number(row.guest_count))}명 / khách · ${money(number(row.room_count))}객실 / phòng`)}
       ${labelValue("요금 방식 / Loại giá", mode(row.pricing_mode))}
@@ -128,33 +130,37 @@
   }
 
   function workbookOptions(values, value) {
-    const period = normalizePeriod(value);
+    const period = { ...normalizePeriod(value), query: text(value?.query).trim() };
     const rows = filterRows(values, period);
     const labels = ["예약번호 / Mã đặt phòng", "호텔명 / Khách sạn", "체크인 / Nhận phòng", "체크아웃 / Trả phòng", "인원 / Số khách", "객실 수 / Số phòng", "투숙객 명단 / Danh sách khách", "룸타입·등급·객실 / Loại·hạng·số phòng", "요금 방식 / Loại giá", "주중 박수 / Đêm ngày thường", "주말 박수 / Đêm cuối tuần", "식사 포함 / Có bữa ăn", "객실 매입 / Mua phòng", "객실 매출 / Bán phòng", "식사 매입 / Mua bữa ăn", "식사 매출 / Bán bữa ăn", "총 매입 / Tổng mua", "총 매출 / Tổng bán", "계약금 / Tiền cọc", "잔금 / Tiền còn lại đã thu", "입금 합계 / Tổng đã thu", "비고 / Ghi chú"];
     const reservationRows = rows.map(row => [textCell(row.id), textCell(row.hotel_name), dateCell(row.check_in), dateCell(row.check_out), numericCell(row.guest_count), numericCell(row.room_count), textCell(guests(row.guest_names)), textCell(roomDescription(row)), textCell(mode(row.pricing_mode)), numericCell(row.weekday_nights), numericCell(row.weekend_nights), textCell(row.includes_meals === true ? "포함 / Có" : row.includes_meals === false ? "미포함 / Không" : ""),
       ...["room_purchase_amount", "room_sale_amount", "meal_purchase_amount", "meal_sale_amount", "purchase_amount", "sale_amount", "deposit_amount", "balance_amount"].map(key => numericCell(row[key])), numericCell(received(row)), textCell(row.note)]);
-    const roomLabels = ["예약번호 / Mã đặt phòng", "호텔명 / Khách sạn", "룸타입 ID / Mã loại phòng", "룸타입명 / Tên loại phòng", "등급 / Hạng", "객실 수 / Số phòng", "주중 박수 / Đêm ngày thường", "주말 박수 / Đêm cuối tuần", "주중 매입 단가 / Giá mua ngày thường", "주중 매출 단가 / Giá bán ngày thường", "주말 매입 단가 / Giá mua cuối tuần", "주말 매출 단가 / Giá bán cuối tuần", "객실 매입 / Mua phòng", "객실 매출 / Bán phòng"];
+    labels[0] = "내부 예약 ID / ID đặt phòng nội bộ";
+    labels.push("예약번호 / Mã đặt phòng");
+    reservationRows.forEach((row, index) => row.push(textCell(rows[index].booking_reference)));
+    const roomLabels = ["내부 예약 ID / ID đặt phòng nội bộ", "호텔명 / Khách sạn", "룸타입 ID / Mã loại phòng", "룸타입명 / Tên loại phòng", "등급 / Hạng", "객실 수 / Số phòng", "주중 박수 / Đêm ngày thường", "주말 박수 / Đêm cuối tuần", "주중 매입 단가 / Giá mua ngày thường", "주중 매출 단가 / Giá bán ngày thường", "주말 매입 단가 / Giá mua cuối tuần", "주말 매출 단가 / Giá bán cuối tuần", "객실 매입 / Mua phòng", "객실 매출 / Bán phòng", "예약번호 / Mã đặt phòng"];
     const detailRows = rows.flatMap(row => {
       const savedItems = roomItems(row);
       const items = savedItems.length ? savedItems : [{ ...row, name: "기존 요금 / Giá đã lưu", room_type_id: null, room_grade: null }];
       return items.map(item => {
         const saved = rates(item.rate_snapshot);
         return [textCell(row.id), textCell(row.hotel_name), textCell(item.room_type_id), textCell(roomName(item)), textCell(item.room_grade ? roomGrade(item) : ""), numericCell(item.room_count), numericCell(item.weekday_nights), numericCell(item.weekend_nights),
-          ...["weekday_purchase", "weekday_sale", "weekend_purchase", "weekend_sale"].map(key => numericCell(saved[key])), numericCell(item.room_purchase_amount), numericCell(item.room_sale_amount)];
+          ...["weekday_purchase", "weekday_sale", "weekend_purchase", "weekend_sale"].map(key => numericCell(saved[key])), numericCell(item.room_purchase_amount), numericCell(item.room_sale_amount), textCell(row.booking_reference)];
       });
     });
     return {
       filename: period.fromDate ? `hotel-reservations_${period.fromDate}_${period.toDate}.xlsx` : "hotel-reservations.xlsx",
       sheets: [
-        { name: "호텔 예약", freezeRows: 4, columnWidths: [38, 24, 21, 21, 12, 12, 36, 48, 24, 17, 17, 18, 22, 22, 22, 22, 22, 22, 22, 22, 22, 40],
+        { name: "호텔 예약", freezeRows: 4, columnWidths: [38, 24, 21, 21, 12, 12, 36, 48, 24, 17, 17, 18, 22, 22, 22, 22, 22, 22, 22, 22, 22, 40, 28],
           rows: [[{ value: "호텔 예약 현황 / Danh sách đặt phòng", style: "title" }], [textCell(`${periodLabel(period)} · 전체 ${rows.length}건 / Tổng ${rows.length} đặt phòng · VND`)], [textCell("저장된 예약 금액 기준 / Theo số tiền đã lưu. 빈 금액은 미입력 / Ô trống: chưa nhập.")], header(labels), ...reservationRows],
-          merges: ["A1:V1", "A2:V2", "A3:V3"], autoFilterRange: `A4:V${Math.max(4, reservationRows.length + 4)}` },
-        { name: "룸타입 저장 요금", freezeRows: 4, columnWidths: [38, 24, 38, 25, 20, 12, 18, 18, 24, 24, 24, 24, 22, 22],
+          merges: ["A1:W1", "A2:W2", "A3:W3"], autoFilterRange: `A4:W${Math.max(4, reservationRows.length + 4)}` },
+        { name: "룸타입 저장 요금", freezeRows: 4, columnWidths: [38, 24, 38, 25, 20, 12, 18, 18, 24, 24, 24, 24, 22, 22, 28],
           rows: [[{ value: "룸타입 저장 요금 / Giá loại phòng đã lưu", style: "title" }], [textCell(`${periodLabel(period)} · 단가: VND / 1객실·1박 / Giá VND mỗi phòng mỗi đêm`)], [textCell("예약에 저장된 스냅샷 기준. 현재 호텔 요금으로 다시 계산하지 않습니다. / Theo giá đã lưu, không tính lại theo giá hiện tại.")], header(roomLabels), ...detailRows],
-          merges: ["A1:N1", "A2:N2", "A3:N3"], autoFilterRange: `A4:N${Math.max(4, detailRows.length + 4)}` }
+          merges: ["A1:O1", "A2:O2", "A3:O3"], autoFilterRange: `A4:O${Math.max(4, detailRows.length + 4)}` }
       ]
     };
   }
 
   root.HotelReport = Object.freeze({ normalizePeriod, filterRows, periodLabel, renderHtml, workbookOptions });
 })(typeof window === "object" ? window : globalThis);
+

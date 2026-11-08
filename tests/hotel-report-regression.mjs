@@ -41,8 +41,8 @@ assert.equal(JSON.stringify(input), before, "exports must preserve all original 
 assert.equal(workbook.sheets.length, 2);
 const main = workbook.sheets[0];
 const details = workbook.sheets[1];
-assert.equal(main.rows[4].length, 22);
-assert.equal(details.rows[4].length, 14);
+assert.equal(main.rows[4].length, 23);
+assert.equal(details.rows[4].length, 15);
 assert.equal(main.rows[4][16].value, 4_000_000);
 assert.equal(main.rows[4][17].value, 5_150_000);
 assert.equal(main.rows[4][18].value, 1_000_000);
@@ -181,4 +181,18 @@ assert.equal(report.workbookOptions(periodRows, noMatches).sheets[1].rows.length
 assert.equal(report.workbookOptions(periodRows).filename, "hotel-reservations.xlsx");
 assert.equal(report.workbookOptions(periodRows).sheets[0].rows.length, 8, "omitting the new period keeps the established all-records API");
 assert.match(report.renderHtml(periodRows), /전체 기간 \/ Toàn bộ/);
-console.log("Hotel read-only PDF/Excel model, room snapshots, inclusive period metadata and safe workbook regression passed.");
+const referenced = [{ ...modern, booking_reference: '000099-Đà Lạt <VIP>' }, { ...legacy, booking_reference: null }];
+const referenceBefore = JSON.stringify(referenced);
+assert.equal(report.filterRows(referenced, {query:'000099-đà lạt'}).length, 1);
+const referenceHtml = report.renderHtml(referenced, {query:'000099'});
+assert.match(referenceHtml, /000099-Đà Lạt &lt;VIP&gt;/);
+assert.match(referenceHtml, /내부 예약 ID/);
+assert.equal((referenceHtml.match(/class="reservation"/g)||[]).length, 1);
+const referenceBook = report.workbookOptions(referenced, {query:'000099'});
+assert.equal(referenceBook.sheets[0].rows.length, 5);
+assert.equal(referenceBook.sheets[0].rows[4][22].value, '000099-Đà Lạt <VIP>');
+assert.equal(referenceBook.sheets[1].rows[4][14].value, '000099-Đà Lạt <VIP>');
+assert.equal(JSON.stringify(referenced), referenceBefore);
+assert.ok(Buffer.from(context.DGV_XLSX.buildWorkbookBytes(referenceBook)).includes(Buffer.from('000099-Đà Lạt &lt;VIP&gt;')));
+console.log("Hotel read-only PDF/Excel model, room snapshots, period/search metadata, booking references and safe workbook regression passed.");
+
