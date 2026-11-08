@@ -121,6 +121,7 @@ try {
   check(await tv.evaluate(() => document.activeElement.id !== 'searchConsent' && document.activeElement.classList.contains('tv-focus')), 'remote Down moves focus and highlights the selected control');
   await tv.locator('#create').focus(); await tv.keyboard.press('Enter');
   await tv.locator('body.tv-display.tv-idle').waitFor();
+  check(await tv.evaluate(() => document.fullscreenElement === document.documentElement), 'creating a room preserves fullscreen selected on the welcome screen');
   check(await tv.locator('#displayQR canvas').count() === 1, 'idle TV shows local high-resolution invitation QR');
   check(await tv.locator('.session-grid').isHidden() && await tv.locator('.site-header').isHidden(), 'TV display hides search, queue and management panels');
   check(await tv.locator('#playerFrame').isHidden(), 'idle TV does not show an empty video');

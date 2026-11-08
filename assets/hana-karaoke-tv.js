@@ -229,7 +229,7 @@
     if (active && (!screenEngaged || displayWarning())) revealTVControls();
   }
 
-  function setTVDisplay(enabled) {
+  function setTVDisplay(enabled, keepFullscreen = false) {
     tvDisplay = Boolean(enabled && mode === 'tv' && searchConsent);
     renderTVDisplay();
     if (tvDisplay) revealTVControls();
@@ -238,7 +238,7 @@
       displayTimer = null;
       document.body.classList.remove('tv-controls-visible');
       // Only exit the document fullscreen entered by this page.
-      if ((document.fullscreenElement || document.webkitFullscreenElement) === document.documentElement) {
+      if (!keepFullscreen && (document.fullscreenElement || document.webkitFullscreenElement) === document.documentElement) {
         try { Promise.resolve((document.exitFullscreen || document.webkitExitFullscreen)?.call(document)).catch(() => {}); } catch (_) { /* Optional browser feature. */ }
       }
     }
@@ -703,7 +703,7 @@
   async function enter(code, desiredMode, saved, initialState) {
     if (!searchConsent) { pendingEntry = { code, desiredMode, saved }; showNotice('searchConsentNeeded'); return; }
     pendingEntry = null;
-    cleanup();
+    cleanup(desiredMode === 'tv');
     room = code; mode = desiredMode; credentials = saved; state = null; suspended = false;
     saveSession(room, { ...credentials, mode });
     const address = pageUrl(); address.searchParams.set(mode === 'tv' ? 'tv' : 'room', room);
@@ -721,8 +721,8 @@
     if (mode === 'tv') ensurePlayer().catch(() => showPlayback('playerUnavailable'));
   }
 
-  function cleanup() {
-    setTVDisplay(false);
+  function cleanup(keepFullscreen = false) {
+    setTVDisplay(false, keepFullscreen);
     if (autoStartTimer) clearTimeout(autoStartTimer);
     autoStartTimer = null; autoStartKey = ''; screenEngaged = false; fullscreenMessage = '';
     generation += 1;
