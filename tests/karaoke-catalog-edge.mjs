@@ -64,3 +64,10 @@ test('private, blocked and unembeddable videos are omitted on refresh',()=>{
  for(const variant of [{...item,status:{privacyStatus:'private',embeddable:true}},{...item,status:{privacyStatus:'public',embeddable:false}},{...item,contentDetails:{duration:'PT4M',regionRestriction:{blocked:['VN']}}}])assert.deepEqual(metadata({items:[variant]},[vid]).removed,[vid]);
 });
 
+test('refresh retains provider view count and metadata without inventing a score',()=>{
+ const item={id:vid,status:{privacyStatus:'public',embeddable:true},snippet:{title:'Valid song',channelId:'UC'+'x'.repeat(22),publishedAt:'2020-01-01T00:00:00Z'},statistics:{viewCount:'1234567'},contentDetails:{duration:'PT4M'}};
+ const result=metadata({items:[item]},[vid]).items[0];
+ assert.equal(result.views,1234567);assert.equal(result.channelId,item.snippet.channelId);assert.equal(result.publishedAt,item.snippet.publishedAt);
+ assert.equal(metadata({items:[{...item,statistics:{viewCount:'-1'}}]},[vid]).items[0].views,null);
+ assert.equal(metadata({items:[{...item,statistics:{viewCount:'99999999999999999999'}}]},[vid]).items[0].views,null);
+});

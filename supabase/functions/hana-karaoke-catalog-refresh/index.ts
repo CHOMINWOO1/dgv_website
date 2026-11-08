@@ -1,4 +1,4 @@
-// Daily, bounded metadata maintenance. No room/business writes or search.list.
+// 28-day full refresh cycles, in bounded batches. No room/business writes or search.list.
 // verify_jwt=false: one-use 256-bit job capabilities are issued only by pg_cron.
 import { readBodyLimited, serviceHeaders } from "../hana-karaoke/index.ts";
 type Obj = Record<string, unknown>;
@@ -39,7 +39,11 @@ export function metadata(value: unknown, requested: string[]): { items: Obj[]; r
     const seconds = duration ? Number(duration[1] || 0) * 3600 + Number(duration[2] || 0) * 60 + Number(duration[3] || 0) : 0;
     const title = text(v.snippet.title, 500);
     if (!title || seconds < 1 || seconds > 86400) continue;
-    found.set(v.id, { videoId: v.id, title, channelTitle: text(v.snippet.channelTitle, 300), durationSeconds: seconds });
+    const rawViews = object(v.statistics) ? v.statistics.viewCount : null;
+    const views = typeof rawViews === "string" && /^\d+$/.test(rawViews) && Number.isSafeInteger(Number(rawViews)) ? Number(rawViews) : null;
+    const channelId = typeof v.snippet.channelId === "string" && /^UC[A-Za-z0-9_-]{22}$/.test(v.snippet.channelId) ? v.snippet.channelId : null;
+    const publishedAt = typeof v.snippet.publishedAt === "string" && Number.isFinite(Date.parse(v.snippet.publishedAt)) ? v.snippet.publishedAt : null;
+    found.set(v.id, { videoId: v.id, title, channelTitle: text(v.snippet.channelTitle, 300), durationSeconds: seconds, views, channelId, publishedAt });
   }
   return { items: [...found.values()], removed: requested.filter(id => !found.has(id)) };
 }
@@ -59,8 +63,8 @@ export async function handler(req: Request): Promise<Response> {
     for (let offset = 0; offset < job.videoIds.length; offset += 50) {
       const batch = (job.videoIds as string[]).slice(offset, offset + 50);
       const endpoint = new URL("https://www.googleapis.com/youtube/v3/videos");
-      endpoint.search = new URLSearchParams({ part: "snippet,status,contentDetails", id: batch.join(","),
-        fields: "items(id,snippet(title,channelTitle),status(privacyStatus,embeddable),contentDetails(duration,regionRestriction))" }).toString();
+      endpoint.search = new URLSearchParams({ part: "snippet,status,contentDetails,statistics", id: batch.join(","),
+        fields: "items(id,snippet(title,channelTitle,channelId,publishedAt),status(privacyStatus,embeddable),contentDetails(duration,regionRestriction),statistics(viewCount))" }).toString();
       const r = await fetch(endpoint.href, { headers: { "x-goog-api-key": youtube }, signal: AbortSignal.timeout(6000), redirect: "error" });
       if (!r.ok) throw new Error("Provider unavailable");
       const fresh = metadata(await r.json(), batch); items.push(...fresh.items); removed.push(...fresh.removed);
@@ -70,4 +74,3 @@ export async function handler(req: Request): Promise<Response> {
   } catch { return reply(503, { error: "Catalogue maintenance unavailable" }); }
 }
 if (import.meta.main) Deno.serve(handler);
-
