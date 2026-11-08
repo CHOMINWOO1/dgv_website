@@ -6,7 +6,7 @@
   const roomTypeForm = byId("roomTypeForm");
   const gradeForm = byId("gradeForm");
   const pricing = HotelPricing;
-  const amount = new Intl.NumberFormat("vi-VN");
+  const amount = new Intl.NumberFormat("en-US");
   const weekdays = ["일/CN","월/T2","화/T3","수/T4","목/T5","금/T6","토/T7"];
   const roomKinds = ["SINGLE", "DOUBLE", "TRIPLE"];
   const rateKeys = ["weekday_purchase", "weekday_sale", "weekend_purchase", "weekend_sale"];
@@ -35,6 +35,45 @@
   const field = (name) => form.elements.namedItem(name);
   const moneyText = (value) => amount.format(value) + " VND";
   const optionalMoney = value => value == null ? "—" : moneyText(value);
+  function rawMoneyInput(value) {
+    const text = String(value ?? "").trim();
+    if (/^[0-9,]+$/.test(text)) return text.replace(/,/g, "");
+    return /^\d{1,3}(?:\.\d{3})+$/.test(text) ? text.replace(/\./g, "") : text;
+  }
+  function formatMoneyInput(input) {
+    const raw = rawMoneyInput(input.value);
+    const position = input.selectionStart;
+    const trailing = position == null ? 0 : input.value.slice(position).replace(/\D/g, "").length;
+    const valid = /^\d*$/.test(raw) && (!raw || Number(raw) <= 999999999999);
+    input.setCustomValidity(valid ? "" : "금액은 0 이상 999,999,999,999 이하의 정수로 입력해 주세요. / Vui lòng nhập số tiền nguyên từ 0 đến 999,999,999,999 VND.");
+    if (!/^\d*$/.test(raw)) return;
+    input.value = raw.replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    if (position != null && document.activeElement === input) {
+      let caret = input.value.length, remaining = trailing;
+      while (caret > 0 && remaining > 0) { caret--; if (/\d/.test(input.value[caret])) remaining--; }
+    while (caret > 0 && input.value[caret - 1] === ",") caret--;
+    input.setSelectionRange(caret, caret);
+    }
+  }
+  function enableMoneyInput(input) {
+    if (input.dataset.hotelMoney) { formatMoneyInput(input); return; }
+    input.dataset.hotelMoney = "true";
+    input.type = "text";
+    input.inputMode = "numeric";
+    input.autocomplete = "off";
+    input.pattern = "[0-9]+|[0-9]{1,3}(,[0-9]{3})+";
+    input.addEventListener("input", () => formatMoneyInput(input));
+    input.addEventListener("blur", () => formatMoneyInput(input));
+    formatMoneyInput(input);
+  }
+  function formatMoneyFields(container) {
+    container.querySelectorAll('input[data-hotel-money], input[type="number"][max="999999999999"]').forEach(enableMoneyInput);
+  }
+  for (const moneyForm of [form, roomTypeForm]) {
+    moneyForm.addEventListener("formdata", event => {
+      moneyForm.querySelectorAll('input[data-hotel-money][name]:not(:disabled)').forEach(input => event.formData.set(input.name, rawMoneyInput(input.value)));
+    });
+  }
   const roomTypeName = item => item.name || roomTypes.find(type => type.id === item.room_type_id)?.name || "룸타입 / Loại phòng";
   const roomLineLabel = item => item.grade_id && item.room_kind
     ? (item.room_grade || item.grade_name || "등급 / Hạng") + " · " + roomKindLabel(item.room_kind)
@@ -84,6 +123,8 @@
         throw new Error("시작일과 종료일을 올바르게 선택해 주세요. / Vui lòng chọn ngày bắt đầu và ngày kết thúc hợp lệ.");
       }
       appliedPeriod = HotelReport.normalizePeriod(periodDraft());
+      const query = byId("hotelQuery")?.value?.trim() || "";
+      if (query) appliedPeriod.query = query;
       message("hotelPeriodError", "");
       render();
       return true;
@@ -127,7 +168,7 @@
     }
     byId("hotelCount").textContent = hotels.length + "개 / khách sạn";
     const visibleReservations = HotelReport.filterRows(reservations, appliedPeriod);
-    const body = renderRows("hotelRows", visibleReservations, "조회 기간에 해당하는 예약이 없습니다. / Không có đặt phòng trong khoảng ngày đã chọn.", 16);
+    const body = renderRows("hotelRows", visibleReservations, "조회 기간에 해당하는 예약이 없습니다. / Không có đặt phòng trong khoảng ngày đã chọn.", 17);
     for (const reservation of visibleReservations) {
       const row = body.insertRow();
       const mode = reservation.pricing_mode === "standard"
@@ -141,11 +182,12 @@
         moneyText(reservation.purchase_amount), moneyText(reservation.sale_amount),
         optionalMoney(reservation.deposit_amount), optionalMoney(reservation.balance_amount),
         reservation.deposit_amount == null && reservation.balance_amount == null ? "—" : moneyText(Number(reservation.deposit_amount || 0) + Number(reservation.balance_amount || 0)),
-        reservation.note || ""];
+        reservation.booking_reference || "—", reservation.note || ""];
       for (const value of values) row.insertCell().textContent = value;
       row.cells[4].className = "hotel-guests";
       row.cells[3].className = "hotel-guests";
       row.cells[15].className = "hotel-guests";
+      row.cells[16].className = "hotel-guests";
       row.dataset.reservationId = reservation.id;
       row.tabIndex = 0;
       row.setAttribute("aria-haspopup", "dialog");
@@ -194,6 +236,7 @@
     };
     const info = card("예약 정보 / Thông tin đặt phòng");
     detail(info, "호텔 / Khách sạn", record.hotel_name);
+    detail(info, "예약번호 / Mã đặt phòng", record.booking_reference);
     detail(info, "체크인 / Nhận phòng", record.check_in);
     detail(info, "체크아웃 / Trả phòng", record.check_out);
     detail(info, "투숙객 인원 / Số khách", record.guest_count);
@@ -229,7 +272,7 @@
     }
     const notes = card("기타 정보 / Thông tin khác");
     detail(notes, "비고 / Ghi chú", record.note);
-    detail(notes, "예약번호 / Mã đặt phòng", record.id);
+    detail(notes, "내부 예약 ID / ID đặt phòng nội bộ", record.id);
     const timeText = value => {
       if (!value || !Number.isFinite(new Date(value).getTime())) return "—";
       return new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Ho_Chi_Minh", dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -369,14 +412,15 @@
         input.max = "999999999999";
         input.step = "1";
         input.value = draft[key];
+        enableMoneyInput(input);
         input.dataset.rate = key;
         input.required = draft.is_active;
         input.disabled = !draft.is_active || (draft.sameWeekend && key.startsWith("weekend_"));
         input.addEventListener("input", () => {
-          draft[key] = input.value;
+          draft[key] = rawMoneyInput(input.value);
           if (draft.sameWeekend && key.startsWith("weekday_")) {
             const weekend = key.replace("weekday_", "weekend_");
-            draft[weekend] = input.value;
+            draft[weekend] = rawMoneyInput(input.value);
             inputs[weekend].value = input.value;
           }
         });
@@ -433,6 +477,7 @@
     roomTypeForm.hidden = false;
     gradeForm.hidden = true;
     message("roomTypeError", "");
+    formatMoneyFields(roomTypeForm);
   }
 
   function renderRoomTypes() {
@@ -694,12 +739,14 @@
     byId("dialogTitle").textContent = reservation ? "예약 수정 / Sửa đặt phòng" : "예약 등록 / Thêm đặt phòng";
     message("formError", "");
     updatePreview();
+    formatMoneyFields(form);
     byId("hotelDialog").showModal();
   }
 
   function reservationData() {
     const data = Object.fromEntries(new FormData(form));
     data.guest_names = data.guest_names.trim();
+    data.booking_reference = String(data.booking_reference ?? "").trim() || null;
     data.includes_meals = field("includes_meals").checked;
     for (const key of ["room_count","guest_count","room_purchase_amount","room_sale_amount","meal_purchase_amount","meal_sale_amount"]) {
       data[key] = Number(data[key] ?? 0);
@@ -708,7 +755,7 @@
       data.room_items = roomItems.map(item => ({ room_type_id: item.room_type_id, room_count: Number(item.room_count), room_grade: item.room_grade || "STANDARD", room_type_version: item.room_type_version }));
       data.room_count = data.room_items.reduce((total, item) => total + item.room_count, 0);
     }
-    for (const name of ["deposit_amount", "balance_amount"]) data[name] = field(name).value.trim() === "" ? null : pricing.money(field(name).value);
+    for (const name of ["deposit_amount", "balance_amount"]) data[name] = String(data[name] ?? "").trim() === "" ? null : pricing.money(data[name]);
     data.note = field("note").value;
     return data;
   }
@@ -1004,7 +1051,7 @@
     byId("hotelToDate").value = "";
     applyPeriodDraft();
   });
-  for (const id of ["hotelFromDate", "hotelToDate"]) {
+  for (const id of ["hotelFromDate", "hotelToDate", "hotelQuery"]) {
     byId(id).addEventListener("input", () => { message("hotelPeriodError", ""); updatePeriodStatus(); });
   }
   byId("printHotelListButton").addEventListener("click", printHotelList);
@@ -1029,5 +1076,8 @@
       setBusy(false);
     }
   }
+  formatMoneyFields(form);
+  formatMoneyFields(roomTypeForm);
   start();
 })();
+
