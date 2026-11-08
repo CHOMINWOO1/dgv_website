@@ -345,8 +345,6 @@
               <button class="btn btnPrimary" id="applyRange">적용</button>
               <button class="btn" id="printRangeBtn">전체 출력</button>
               <button class="btn" id="excelRangeBtn">엑셀 출력</button>
-              <button class="btn" id="taxPrintRangeBtn">세무서 출력</button>
-              <button class="btn" id="taxExcelRangeBtn">세무서 엑셀 출력</button>
               <button class="btn" id="bankPrintRangeBtn" title="은행은 주문별로, 현금과 카드는 결제수단별로 나누어 한 번에 인쇄합니다.">결제별 출력 (은행 개별)</button>
               <button class="btn" id="bankExcelRangeBtn" title="은행은 주문별 시트로, 현금과 카드는 각각 합산 시트로 한 Excel 파일에 저장합니다.">결제별 엑셀</button>
             </div>
@@ -2127,8 +2125,6 @@
 
     document.getElementById("printRangeBtn").addEventListener("click", printRangeSummary);
     document.getElementById("excelRangeBtn").addEventListener("click", exportRangeExcel);
-    document.getElementById("taxPrintRangeBtn").addEventListener("click", printTaxOfficeReport);
-    document.getElementById("taxExcelRangeBtn").addEventListener("click", exportTaxOfficeExcel);
     document.getElementById("bankPrintRangeBtn").addEventListener("click", printBankOrders);
     document.getElementById("bankExcelRangeBtn").addEventListener("click", exportPaymentExcel);
 
@@ -2187,4 +2183,5 @@
   </script>
 </body>
 </html>
+
 
