@@ -28,7 +28,7 @@
   function refreshNotice(message) {refreshStatus.textContent=message;refreshStatus.hidden=!message;refreshFailed=false;}
   function clearAuthenticatedState() {
     employeeDialogGeneration++;loadGeneration++;reviewDirty=false;state.loaded=false;
-    $("payrollApp").hidden=true;state.records=[];state.payments=[];state.preview=null;refreshNotice("");
+    $("payrollApp").hidden=true;state.records=[];state.payments=[];state.conversions=[];state.preview=null;refreshNotice("");
     window.DGV_PAYROLL_WORKSPACE?.invalidate();window.DGV_PAYROLL_ADVANCED?.invalidate();window.DGV_PAYROLL_SERVICES?.invalidate();$("employeeForm").reset();$("sensitiveForm")?.reset();
     document.querySelectorAll("dialog[open]").forEach((dialog)=>dialog.close());
   }
@@ -66,6 +66,10 @@
   }
   function messageOf(error) {
     const message = error?.message || String(error);
+    if(/PAYROLL_CONVERSION_FINALIZED/.test(message))return '이미 확정한 급여에 영향을 주는 전환은 저장할 수 없습니다. / Không đổi loại lao động trong kỳ lương đã chốt.';
+    if(/PAYROLL_CONVERSION_(?:LATER_CHANGE|LATER_TERMS|TERMS_CONFLICT|STATE_CHANGED|REQUEST_CONFLICT)/.test(message))return '전환일 또는 급여조건이 기존 기록과 충돌합니다. 새로고침 후 확인해 주세요. / Ngày chuyển hoặc điều kiện lương xung đột; tải lại và kiểm tra.';
+    if(/PAYROLL_CONVERSION_NO_PRIOR_PERIOD/.test(message))return '이달 전환 전 근무기간이 없으므로 전환 전 확정급여는 비우거나 0으로 입력해 주세요. / Không có giai đoạn trước chuyển trong tháng; để trống hoặc nhập 0.';
+    if(/PAYROLL_CONVERSION_/.test(message))return '직원 상태·전환일·새 급여조건을 확인해 주세요. / Kiểm tra trạng thái, ngày chuyển và điều kiện lương mới.';
     if(/PAYROLL_SERVICE_PROVIDER_REQUIRED/.test(message))return '외주 작업자를 다시 선택해 주세요. / Chọn lại bên nhận dịch vụ.';
     if(/PAYROLL_SERVICE_DETAILS_INVALID|PAYROLL_SERVICE_DETAILS_CONFLICT/.test(message))return '외주 작업기간·내용을 확인해 주세요. 이미 저장된 건이면 새로 조회하세요. / Kiểm tra công việc, thời gian; tra cứu lại khoản đã lưu.';
     if(/PAYROLL_SERVICE_NOT_EMPLOYEE/.test(message))return '외주 작업자는 직원 근무·급여 계산에 등록할 수 없습니다. 외주·수리비 메뉴를 이용해 주세요. / Dùng mục dịch vụ cho bên nhận ngoài.';
@@ -85,7 +89,7 @@
       if (error.message === "AUTH_REQUIRED") { clearAuthenticatedState(); location.reload(); return; }
       notice(messageOf(error), true);
       const dialog = document.querySelector("dialog[open]");
-      if (dialog) { let alert = dialog.querySelector(".dialog-error"); if (!alert) { alert = document.createElement("p"); alert.className = "dialog-error notice error"; alert.setAttribute("role","alert"); dialog.querySelector("form").prepend(alert); } alert.textContent = messageOf(error); }
+      if (dialog) { let alert = dialog.querySelector(".dialog-error"); if (!alert) { alert = document.createElement("p"); alert.className = "dialog-error notice error"; alert.setAttribute("role","alert"); (dialog.querySelector("form")||dialog).prepend(alert); } alert.textContent = messageOf(error); }
     } finally {
       state.busy = false; $("workspace").disabled = false; $("payrollApp").removeAttribute("aria-busy");
       document.querySelectorAll("dialog button[type=submit]").forEach((button) => button.disabled = false);
@@ -120,13 +124,16 @@
       const paymentGroups=await Promise.all([rows("payroll_payments",q=>q.eq("payroll_month",dates.start)),runs.length?rows("payroll_payments",q=>q.in("run_id",runs.map(run=>run.id))):[]]);
       const payments=Array.from(new Map(paymentGroups.flat().map(payment=>[payment.id,payment])).values());
       const extra = window.DGV_PAYROLL_ADVANCED ? await DGV_PAYROLL_ADVANCED.load({month,dates,employees,runs,payments}) : {};
+      const conversions=window.DGV_PAYROLL_CONVERSIONS?await rows("payroll_employment_conversions"):[];
       const after=await revision();
       if(generation!==loadGeneration||$("payrollApp").hidden)return;
       if (before !== after) continue;
       const effectiveDays=window.DGV_PAYROLL_RULES?.buildEffectiveDays({month,employees,terms,days})||days;
-      Object.assign(state,{employees,terms,records,days,effectiveDays,runs,payments,imports,...extra,revision:before,loaded:true});
-      let summaries = core.summarizeMonth({month,employees,terms,records,days:effectiveDays,today:today()});
-      if(window.DGV_PAYROLL_RULES) summaries=DGV_PAYROLL_RULES.extendSummaries({month,employees,terms,records,days:effectiveDays,rules:state.rules||[],baseSummaries:summaries,yearToDateRuns:state.historyRuns||[],today:today()});
+      Object.assign(state,{employees,terms,records,days,effectiveDays,runs,payments,imports,conversions,...extra,revision:before,loaded:true});
+      const calculationEmployees=window.DGV_PAYROLL_CONVERSIONS?.historicalEmployees(employees,conversions,month)||employees;
+      let summaries = core.summarizeMonth({month,employees:calculationEmployees,terms,records,days:effectiveDays,today:today()});
+      if(window.DGV_PAYROLL_RULES) summaries=DGV_PAYROLL_RULES.extendSummaries({month,employees:calculationEmployees,terms,records,days:effectiveDays,rules:state.rules||[],baseSummaries:summaries,yearToDateRuns:state.historyRuns||[],today:today()});
+      if(window.DGV_PAYROLL_CONVERSIONS)summaries=DGV_PAYROLL_CONVERSIONS.extendSummaries({month,employees,terms,records,days:effectiveDays,conversions,rules:state.rules||[],baseSummaries:summaries,today:today()});
       state.summaries = summaries.map((row) => {
         if(row.active===false && !row.daily.some((day)=>day.checkIn) && !runs.some((run)=>run.employee_id===row.employee_id)) return {...row,baseAmount:null,unresolved:row.unresolved+1,attendanceUnresolved:row.attendanceUnresolved+1,issues:[...row.issues,"비활성 직원입니다. 직원 정보에서 재직 상태를 확인하세요. / Nhân viên ngừng làm việc, kiểm tra trạng thái."]};
         return row;
@@ -194,6 +201,7 @@
     $("paymentArea").innerHTML = run ? `<p>확정 / Đã chốt <strong>${money(run.total)}</strong> · 지급 / Đã trả <strong>${money(paidFor(run))}</strong> · 잔액 / Còn lại <strong>${money(Number(run.total)-paidFor(run))} VND</strong></p><button class="quiet" id="addPayment" ${paidFor(run)>=Number(run.total)?"disabled":""}>+ 지급내역 / Thêm thanh toán</button><div class="table-scroll"><table><thead><tr><th>날짜 / Ngày</th><th>방법 / Cách trả</th><th>금액 / Số tiền</th><th>확인·비고 / Ghi chú</th></tr></thead><tbody>${payments.map((payment)=>`<tr><td>${esc(payment.paid_on)}</td><td>${payment.method==="cash"?"현금 / Tiền mặt":"이체 / Chuyển khoản"}</td><td>${money(payment.amount)}</td><td>${esc(payment.reference||"")}<span class="muted">${esc(payment.note||"")}</span></td></tr>`).join("")||'<tr><td colspan="4">지급내역 없음 / Chưa thanh toán</td></tr>'}</tbody></table></div>` : '<p class="muted">급여를 확정한 다음 지급내역을 기록할 수 있습니다. / Chốt lương trước khi ghi nhận thanh toán.</p>';
     window.DGV_PAYROLL_ADVANCED?.renderDetail(row,run);
     window.DGV_PAYROLL_WORKSPACE?.renderDetail(row,run);
+    window.DGV_PAYROLL_CONVERSIONS?.renderDetail(run?.snapshot?.conversionSegments?{...row,...run.snapshot}:row);
   }
   function openDialog(id) { const dialog = $(id); dialog.querySelector(".dialog-error")?.remove(); dialog.showModal(); }
   function field(form, name) { return form.elements.namedItem(name); }
@@ -329,6 +337,8 @@
     const nationalId=field(form,"national_id").value.trim();
     if(!nationalId||nationalId.length>300||/[\u0000-\u001f\u007f]/.test(nationalId))throw new Error("신분증 번호를 입력해 주세요. / Nhập số định danh.");
     const employeeId=form.dataset.employeeId;
+    const existing=state.employees.find(item=>item.id===employeeId);
+    if(existing&&values.employment_type!==(existing.employment_type||"full_time"))throw new Error("근무형태는 정규직·파트타임 전환 버튼으로 변경해 주세요. 입사일은 바꾸지 마세요. / Dùng nút chuyển loại lao động, không đổi ngày vào làm.");
     await result(db.rpc("payroll_save_employee",{p_employee_id:employeeId,p_employee:values,p_national_id:nationalId,p_expected_revision:Number(form.dataset.revision),p_create:form.dataset.create==="true"}));
     state.selected=employeeId;$("employeeDialog").close();await load();
     if(state.loaded){$("employeeFilter").value=employeeId;render();}

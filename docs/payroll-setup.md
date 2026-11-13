@@ -784,3 +784,35 @@ must be positive and at most 24 hours; original counterparts are also checked by
 the calculation engine. Existing administrator RLS and triggers stay in force.
 Run `test:payroll:partial:unit`, `test:payroll:partial:browser` and the rollback-only
 `supabase/tests/payroll-partial-day-times.sql` integration test.
+
+## Employment conversions (2026-11-13)
+
+Employee cards and payroll details offer **정규직 전환 / Chuyển chính thức**
+for part-time employees and **파트타임 전환 / Chuyển bán thời gian** for
+full-time employees. Enter the effective date and new monthly/hourly terms.
+Original hire dates, attendance, payments, signatures and finalized payroll stay
+intact. Conversions affecting an already finalized salary month are rejected.
+
+The conversion month sums each employment period: actual hourly wages for
+part-time work, and calendar-planned-time proration for monthly work. An optional
+agreed wage can settle the preceding period within that month; this is a wage
+amount, not the amount already paid. Recorded payments are deducted once from
+the whole month's wages. Saving a conversion never transfers money, signs a
+receipt or finalizes payroll. Normal monthly work is due on the following fifth
+(October work → November 5); actual payment dates remain separately recorded.
+
+The administrator-only `payroll_employment_conversions` table is append-only,
+audited and included in backups. Old v2 backups default missing conversion history
+to an empty array. Existing audited part-time → full-time profile edits that also
+changed the hire date can use **기존 전환 정산 보완** in employee payroll details;
+the server verifies the original audit and reuses identical existing terms.
+
+Staff attendance and payment actions open an in-page dialog; the employee ledger
+button opens the existing ledger with only that employee selected.
+
+Run `node tests/payroll-conversions.mjs`, `node tests/payroll-conversions-db.mjs`
+(PGlite module supplied via `PGLITE_MODULE`) and
+`node tests/payroll-conversions-browser.mjs`. Browser tests use only synthetic
+fixtures and block external network access. `PAYROLL_CAPTURE_DOWNLOAD=1` lets
+the monthly browser regression inspect generated XLSX bytes where browser file
+downloads are restricted; normal CI retains its real-download check.

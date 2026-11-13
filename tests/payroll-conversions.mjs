@@ -1,0 +1,20 @@
+import assert from'node:assert/strict';import fs from'node:fs/promises';import vm from'node:vm';
+const c={};for(const file of ['core','rules','conversions'])vm.runInNewContext(await fs.readFile(`assets/payroll-${file}.js`,'utf8'),c);
+const employee={id:'e',name:'Synthetic',device_user_id:'1',hire_date:'2026-11-03',employment_type:'full_time',active:true,employment_status:'active'};
+const hourly={id:'h',employee_id:'e',effective_from:'2026-11-01',pay_type:'hourly',rate:25000,shift_start:'10:00',shift_end:'20:00',break_start:'00:00',break_end:'00:00',weekly_rest_day:0,monthly_settlement:'statutory'};
+const monthly={...hourly,id:'m',effective_from:'2026-11-13',pay_type:'monthly',rate:7000000,monthly_settlement:'monthly_net'};
+const conversion={employee_id:'e',effective_from:'2026-11-13',employment_type:'full_time',prior_employment_type:'part_time',prior_salary_amount:1700000};
+const input={month:'2026-11',today:'2026-12-01',employees:[employee],terms:[hourly,monthly],records:[],days:[],conversions:[conversion]};
+function calculate(i){const data=structuredClone(i),employees=c.DGV_PAYROLL_CONVERSIONS.historicalEmployees(data.employees,data.conversions,data.month);data.days=c.DGV_PAYROLL_RULES.buildEffectiveDays({...data,employees});let rows=c.DGV_PAYROLL_CORE.summarizeMonth({...data,employees});rows=c.DGV_PAYROLL_RULES.extendSummaries({...data,employees,baseSummaries:rows});return c.DGV_PAYROLL_CONVERSIONS.extendSummaries({...data,baseSummaries:rows})[0];}
+const saved=JSON.stringify(input),result=calculate(input);assert.equal(result.baseAmount,5900000);assert.equal(result.baseAmount-1700000,4200000);assert.equal(result.monthlyExtraAmount,0);assert.equal(result.conversionSegments[0].baseAmount,1700000);assert.equal(result.conversionSegments[1].baseAmount,4200000);assert.equal(JSON.stringify(input),saved);
+const reverse={employee_id:'e',effective_from:'2026-11-20',employment_type:'part_time',prior_employment_type:'full_time',prior_salary_amount:null};
+const part={...hourly,id:'p',effective_from:'2026-11-20',rate:30000};
+const backwards={...input,employees:[{...employee,employment_type:'part_time'}],terms:[hourly,monthly,part],conversions:[conversion,reverse],records:[{employee_id:'e',occurred_at:'2026-11-20T10:00:00',punch_type:'in'},{employee_id:'e',occurred_at:'2026-11-20T14:00:00',punch_type:'out'}]};
+const reversed=calculate(backwards);assert.equal(reversed.conversionSegments.length,3);assert.equal(reversed.conversionSegments[2].baseAmount,120000);assert.equal(reversed.conversionSegments[1].baseAmount,1680000);assert.equal(reversed.baseAmount,3500000);
+const auto=calculate({...input,conversions:[{...conversion,prior_salary_amount:null}],records:[{employee_id:'e',occurred_at:'2026-11-03T10:00:00',punch_type:'in'},{employee_id:'e',occurred_at:'2026-11-03T14:00:00',punch_type:'out'}]});assert.equal(auto.conversionSegments[0].baseAmount,100000);assert.equal(auto.baseAmount,4300000);
+const historic=c.DGV_PAYROLL_CONVERSIONS.historicalEmployees([employee],[conversion],'2026-10');assert.equal(historic[0].employment_type,'part_time');assert.equal(employee.employment_type,'full_time');
+const early=calculate({...input,today:'2026-11-13'});assert.equal(early.baseAmount,5900000);assert.ok(early.unresolved>0);assert.equal(early.monthlyPendingDays,15);
+const begin=calculate({...input,employees:[{...employee,hire_date:'2026-11-01'}],terms:[{...monthly,effective_from:'2026-11-01'}],conversions:[{...conversion,effective_from:'2026-11-01',prior_salary_amount:0}]});assert.equal(begin.baseAmount,7000000);assert.equal(begin.conversionSegments.length,1);
+const next=calculate({...input,month:'2026-12',today:'2027-01-01'});assert.equal(next.settlementMode,'monthly_net');assert.equal(next.baseAmount,7000000);
+assert.equal(result.wageBreakdown.filter(r=>r.category==='base').reduce((n,r)=>n+r.amount,0),result.baseAmount);
+console.log('Employment conversion calculation: agreed probation, automatic hourly, both directions, repeated changes, historical type, first-day conversion, future pending, no mutation and period totals passed.');
