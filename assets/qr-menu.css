@@ -140,7 +140,12 @@ main { width: min(100%, 1080px); margin: auto; padding-bottom: 112px; }
   background: rgba(255, 253, 248, .9);
   box-shadow: 0 8px 24px rgba(73, 47, 30, .08);
 }
-.current-orders-heading { margin-bottom: 12px; }
+.current-orders-heading { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.current-orders-heading > div { flex: 1 1 0; min-width: 0; }
+.inquiry-contact { margin: 0; color: var(--brown-800); font-size: 12px; line-height: 1.5; font-weight: 700; overflow-wrap: anywhere; }
+.inquiry-contact > span { display: block; }
+.inquiry-contact strong { font-weight: 900; white-space: nowrap; }
+.current-orders-heading > .inquiry-contact, .cart-title-row > .inquiry-contact { flex: 0 1 145px; text-align: right; }
 .current-orders-heading h2 { margin: 0; font: 700 23px/1.25 Georgia, "Noto Serif KR", serif; }
 .current-orders-heading > div > p:last-child { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
 .current-orders-grand-total {
@@ -199,6 +204,7 @@ main { width: min(100%, 1080px); margin: auto; padding-bottom: 112px; }
 .menu-search input::placeholder { color: #9a887b; }
 .menu-search:focus-within { border-color: var(--brown-700); box-shadow: 0 0 0 3px rgba(201, 155, 72, .2); }
 .menu-search-clear { flex: 0 0 auto; min-height: 39px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--brown-700); font-weight: 800; cursor: pointer; }
+.menu-inquiry-contact { display: flex; flex-wrap: wrap; gap: 0 5px; margin: 5px 16px 0; }
 
 .category-nav {
   padding: 8px 0 2px;
@@ -370,6 +376,8 @@ textarea { width: 100%; resize: vertical; padding: 11px 12px; border: 1px solid 
 .sheet-heading { padding: 5px 18px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); }
 .sheet-heading h2 { margin: 0; font: 700 27px Georgia, "Noto Serif KR", serif; }
 .sheet-heading .eyebrow { margin-bottom: 2px; }
+.cart-heading-copy { flex: 1; min-width: 0; }
+.cart-title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 10px; }
 .cart-sheet { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
 .cart-sheet > .sheet-handle, .cart-sheet > .sheet-heading { flex: 0 0 auto; }
 .cart-body {
