@@ -15,7 +15,7 @@ function seed(){
  Object.assign(b,{name:'DEMO monthly',employment_type:'full_time',employment_status:'active',payee_type:'employee',hire_date:'2026-01-01'});
  Object.assign(s.db.payroll_terms[0],{effective_from:'2026-11-01',rate:25000,monthly_settlement:'statutory',break_start:'00:00',break_end:'00:00',weekly_rest_day:0});
  Object.assign(s.db.payroll_terms[1],{effective_from:'2026-01-01',pay_type:'monthly',rate:7000000,monthly_settlement:'monthly_net',break_start:'00:00',break_end:'00:00',weekly_rest_day:0});
- s.db.payroll_attendance_raw=[];s.db.payroll_employment_conversions=[];
+ s.db.payroll_attendance_raw=['10:00:00','14:00:00'].map((time,i)=>({id:'conversion-punch-'+i,employee_id:a.id,occurred_at:'2026-11-03T'+time,punch_type:i?'out':'in'}));s.db.payroll_employment_conversions=[];
  s.db.payroll_payments=[{id:'preserved-payment',employee_id:a.id,payroll_month:'2026-11-01',run_id:null,amount:1700000,paid_on:'2026-11-13',method:'cash'}];
  const client=window.supabase.createClient(),original=client.rpc;
  client.rpc=async(name,args)=>{
@@ -53,7 +53,9 @@ try{
  assert.match(await action(a,'convert').innerText(),/파트타임 전환/);
  await action(a,'ledger').click();assert.equal(await page.locator('#ledgerBody tr').count(),1);assert.equal(await page.locator('#employeeFilter').inputValue(),a);
  assert.match(await page.locator('#employmentConversionSummary').innerText(),/1\.700\.000.*4\.200\.000/s);
- await page.locator('[data-payroll-tab=employees]').click();
+ await page.locator('[data-payroll-tab=employees]').click();await action(a,'attendance').click();
+ assert.match(await page.locator('#staffDetailDialog [data-testid="auto-attendance-minutes"]').innerText(),/4h 0m/);
+ assert.match(await page.locator('#autoAttendanceSummary').innerText(),/전환 전·후 근무시간/);await page.locator('#staffDetailClose').click();
  await action(b,'convert').click();await page.locator('#employmentConversionDialog').waitFor({state:'visible'});
  assert.match(await page.locator('#employmentConversionTitle').innerText(),/파트타임 전환/);
  assert.equal(await field('break_start').inputValue(),'00:00');assert.equal(await field('break_start').getAttribute('readonly'),'');
