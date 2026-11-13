@@ -10,7 +10,8 @@ try{
  create table public.payroll_runs(id uuid primary key default gen_random_uuid(),employee_id uuid,month date);
  create table public.payroll_payments(id uuid default gen_random_uuid(),employee_id uuid,amount bigint);
  create table public.payroll_audit(id uuid default gen_random_uuid(),table_name text,record_id uuid,action text,before_data jsonb,after_data jsonb,created_by uuid,created_at timestamptz default now());grant all on all tables in schema public to authenticated;`);
- const end=sql.indexOf('CREATE OR REPLACE FUNCTION private.payroll_backup');assert.ok(end>0);stage='feature';await db.exec('create schema private;begin;'+sql+'commit;');stage='cases';
+ const end=sql.indexOf('CREATE OR REPLACE FUNCTION private.payroll_backup');assert.ok(end>0);stage='feature';await db.exec('create schema private;begin;'+sql+'commit;');
+ await db.exec('begin;'+await fs.readFile('supabase/migrations/20261113113647_payroll_conversion_missing_hire_date.sql','utf8')+'commit;');stage='cases';
  await db.exec("set test.role='admin';set role authenticated");
  const employee=crypto.randomUUID();await q("insert into public.payroll_employees(id,name,hire_date,employment_type) values($1,'Synthetic','2026-11-03','part_time')",[employee]);
  await q("insert into public.payroll_terms(employee_id,effective_from,pay_type,rate,monthly_settlement,shift_start,shift_end,break_start,break_end,weekly_rest_day) values($1,'2026-11-01','hourly',25000,'statutory','10:00','20:00','00:00','00:00',0)",[employee]);await q('insert into public.payroll_payments(employee_id,amount) values($1,1700000)',[employee]);
@@ -28,6 +29,15 @@ try{
  await q("insert into public.payroll_terms(employee_id,effective_from,pay_type,rate,monthly_settlement,shift_start,shift_end,break_start,break_end,weekly_rest_day) values($1,'2026-11-13','monthly',7000000,'monthly_net','10:00','20:00','00:00','00:00',0)",[repairEmployee]);
  await convert('full_time',{...terms,effective_from:'2026-11-13'},1700000,crypto.randomUUID(),repairEmployee,true);eq((await q('select hire_date::text from public.payroll_employees where id=$1',[repairEmployee]))[0].hire_date,'2026-11-03');eq((await q('select count(*)::int n from public.payroll_terms where employee_id=$1',[repairEmployee]))[0].n,1);
  await assert.rejects(()=>q('update public.payroll_employment_conversions set prior_salary_amount=0'),/permission denied|IMMUTABLE/);checks++;
+ revision=(await q('select version from public.payroll_revision'))[0].version;
+ const missingHireEmployee=crypto.randomUUID();await q("insert into public.payroll_employees(id,name,hire_date,employment_type) values($1,'Missing hire fixture',null,'part_time')",[missingHireEmployee]);
+ eq((await q('select public.payroll_conversion_candidate($1,false) candidate',[missingHireEmployee]))[0].candidate.original_hire_date,null);
+ await assert.rejects(()=>convert('full_time',terms,null,crypto.randomUUID(),missingHireEmployee),/HIRE_DATE_REQUIRED/);checks++;
+ await assert.rejects(()=>convert('full_time',{...terms,original_hire_date:'2026-11-12'},null,crypto.randomUUID(),missingHireEmployee),/INVALID/);checks++;
+ await convert('full_time',{...terms,original_hire_date:'2026-11-03'},null,crypto.randomUUID(),missingHireEmployee);
+ eq((await q('select hire_date::text from public.payroll_employees where id=$1',[missingHireEmployee]))[0].hire_date,'2026-11-03');
+ revision=(await q('select version from public.payroll_revision'))[0].version;
+ await assert.rejects(()=>convert('part_time',{...terms,effective_from:'2026-11-13',rate:30000,original_hire_date:'2026-11-04'},null,crypto.randomUUID(),missingHireEmployee),/INVALID/);checks++;
  await db.exec("set test.role='manager'");eq((await q('select * from public.payroll_employment_conversions')).length,0);await assert.rejects(()=>convert('full_time',terms,null),/ADMIN_REQUIRED/);checks++;
  await db.exec('reset role;set role anon');await assert.rejects(()=>q('select * from public.payroll_employment_conversions'),/permission denied/);checks++;
  assert.ok(sql.includes("'{tables,payroll_employment_conversions}','[]'"));checks++;
