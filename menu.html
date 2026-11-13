@@ -9,7 +9,7 @@
   <title>HANA Table Order</title>
   <meta name="description" content="HANA Restaurant table order menu">
   <link rel="icon" href="image/logo.png">
-  <link rel="stylesheet" href="assets/qr-menu.css?v=20261017-fixed-checkout">
+  <link rel="stylesheet" href="assets/qr-menu.css?v=20261113-inquiry-extension">
 </head>
 <body>
   <a class="skip-link" href="#menuList">메뉴로 바로 이동</a>
@@ -57,6 +57,10 @@
           <h2 id="currentOrdersTitle" data-copy="currentOrdersTitle">현재 주문 내역</h2>
           <p data-copy="currentOrdersHelp">결제 또는 취소 전 주문이 표시됩니다.</p>
         </div>
+        <p class="inquiry-contact">
+          <span data-copy="inquiryLabel">문의 전화:</span>
+          <span><span data-copy="hotelExtension">호텔 내선번호</span> <strong>1188</strong></span>
+        </p>
       </div>
       <div class="current-orders-grand-total" id="currentOrdersTotal" hidden></div>
       <div class="current-orders-list" id="currentOrdersList" aria-live="polite"></div>
@@ -86,6 +90,10 @@
           </label>
           <button class="menu-search-clear" id="menuSearchClear" type="button" data-copy="clearSearch" hidden>지우기</button>
         </div>
+        <p class="inquiry-contact menu-inquiry-contact">
+          <span data-copy="inquiryLabel">문의 전화:</span>
+          <span><span data-copy="hotelExtension">호텔 내선번호</span> <strong>1188</strong></span>
+        </p>
         <nav class="category-nav" aria-label="Menu categories">
           <div class="category-scroll" id="categoryNav"></div>
         </nav>
@@ -138,9 +146,15 @@
   <section class="bottom-sheet cart-sheet" id="cartSheet" role="dialog" aria-modal="true" aria-labelledby="cartTitle" hidden>
     <div class="sheet-handle" aria-hidden="true"></div>
     <div class="sheet-heading">
-      <div>
+      <div class="cart-heading-copy">
         <p class="eyebrow" data-copy="yourOrder">YOUR ORDER</p>
-        <h2 id="cartTitle" data-copy="cartTitle">주문서</h2>
+        <div class="cart-title-row">
+          <h2 id="cartTitle" data-copy="cartTitle">주문서</h2>
+          <p class="inquiry-contact">
+            <span data-copy="inquiryLabel">문의 전화:</span>
+            <span><span data-copy="hotelExtension">호텔 내선번호</span> <strong>1188</strong></span>
+          </p>
+        </div>
       </div>
       <button class="close-button static-close" id="cartClose" type="button" aria-label="닫기">×</button>
     </div>
@@ -208,6 +222,6 @@
   </noscript>
 
   <script src="assets/supabase-config.js"></script>
-  <script src="assets/qr-menu.js?v=20261005-all-menu"></script>
+  <script src="assets/qr-menu.js?v=20261113-inquiry-extension"></script>
 </body>
 </html>

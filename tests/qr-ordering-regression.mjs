@@ -71,7 +71,7 @@ function functionSource(source, name) {
 assert.match(menuHtml, /name="referrer" content="no-referrer"/i);
 assert.match(menuHtml, /Content-Security-Policy/i);
 assert.match(menuHtml, /connect-src 'self' https:\/\/\*\.supabase\.co/i);
-assert.match(menuHtml, /assets\/qr-menu\.css\?v=20261017-fixed-checkout/i);
+assert.match(menuHtml, /assets\/qr-menu\.css\?v=20261113-inquiry-extension/i);
 assert.match(menuHtml, /<div class="cart-body">[\s\S]*?id="orderNote"[\s\S]*?<\/div>\s*<footer class="cart-checkout">[\s\S]*?id="sheetTotal"[\s\S]*?id="reviewButton"/i);
 assert.match(menuHtml, /class="confirm-dialog order-confirm-dialog"[\s\S]*?id="confirmLines"[\s\S]*?<footer class="confirm-checkout">[\s\S]*?id="confirmTotal"[\s\S]*?id="submitOrder"/i);
 assert.match(menuCss, /\.cart-sheet\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*overflow:\s*hidden;[^}]*padding-bottom:\s*0;/i);
