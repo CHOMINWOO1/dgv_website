@@ -23,7 +23,8 @@
   const paidForEmployee=(employeeId,month=$("month").value)=>paymentsFor(employeeId,month).filter(payment=>!(state.reversals||[]).some(item=>item.payment_id===payment.id)).reduce((sum,payment)=>sum+Number(payment.amount),0);
   const paidFor = (run) => run ? paidForEmployee(run.employee_id,run.month) : 0;
   const totalFor = (run) => run ? Number(run.total)+(state.adjustments||[]).filter((item)=>item.run_id===run.id).reduce((sum,item)=>sum+Number(item.amount),0) : 0;
-  const filtered = () => state.summaries.filter((row) => $("employeeFilter").value ? row.employee_id === $("employeeFilter").value : row.active !== false || row.daily.some((day)=>day.checkIn) || runFor(row.employee_id) || paymentsFor(row.employee_id).length);
+  const hasTerminationWages = row => ['monthly_net','employment_segments'].includes(row.settlementMode)&&row.baseAmount>0&&state.employees.some(employee=>employee.id===row.employee_id&&employee.termination_date?.slice(0,7)===$("month").value);
+  const filtered = () => state.summaries.filter((row) => $("employeeFilter").value ? row.employee_id === $("employeeFilter").value : row.active !== false || row.daily.some((day)=>day.checkIn) || runFor(row.employee_id) || paymentsFor(row.employee_id).length || hasTerminationWages(row));
   function notice(message, error = false) { $("notice").textContent = message; $("notice").className = `notice${error ? " error" : ""}`; $("notice").hidden = !message; }
   function refreshNotice(message) {refreshStatus.textContent=message;refreshStatus.hidden=!message;refreshFailed=false;}
   function clearAuthenticatedState() {
@@ -88,7 +89,7 @@
     catch (error) {
       if (error.message === "AUTH_REQUIRED") { clearAuthenticatedState(); location.reload(); return; }
       notice(messageOf(error), true);
-      const dialog = document.querySelector("dialog[open]");
+      const dialog = document.activeElement?.closest('dialog[open]')||Array.from(document.querySelectorAll('dialog[open]')).at(-1);
       if (dialog) { let alert = dialog.querySelector(".dialog-error"); if (!alert) { alert = document.createElement("p"); alert.className = "dialog-error notice error"; alert.setAttribute("role","alert"); (dialog.querySelector("form")||dialog).prepend(alert); } alert.textContent = messageOf(error); }
     } finally {
       state.busy = false; $("workspace").disabled = false; $("payrollApp").removeAttribute("aria-busy");
@@ -135,7 +136,8 @@
       if(window.DGV_PAYROLL_RULES) summaries=DGV_PAYROLL_RULES.extendSummaries({month,employees:calculationEmployees,terms,records,days:effectiveDays,rules:state.rules||[],baseSummaries:summaries,yearToDateRuns:state.historyRuns||[],today:today()});
       if(window.DGV_PAYROLL_CONVERSIONS)summaries=DGV_PAYROLL_CONVERSIONS.extendSummaries({month,employees,terms,records,days:effectiveDays,conversions,rules:state.rules||[],baseSummaries:summaries,today:today()});
       state.summaries = summaries.map((row) => {
-        if(row.active===false && !row.daily.some((day)=>day.checkIn) && !runs.some((run)=>run.employee_id===row.employee_id)) return {...row,baseAmount:null,unresolved:row.unresolved+1,attendanceUnresolved:row.attendanceUnresolved+1,issues:[...row.issues,"비활성 직원입니다. 직원 정보에서 재직 상태를 확인하세요. / Nhân viên ngừng làm việc, kiểm tra trạng thái."]};
+        const employee=employees.find(e=>e.id===row.employee_id), validExit=employee?.employment_status==='terminated'&&/^\d{4}-\d{2}-\d{2}$/.test(employee.termination_date||'')&&employee.termination_date<dates.end;
+        if(row.active===false && !row.daily.some((day)=>day.checkIn) && !runs.some((run)=>run.employee_id===row.employee_id) && !(validExit&&(['monthly_net','employment_segments','hourly_actual'].includes(row.settlementMode)||row.baseAmount===0))) return {...row,baseAmount:null,unresolved:row.unresolved+1,attendanceUnresolved:row.attendanceUnresolved+1,issues:[...row.issues,"비활성 직원입니다. 직원 정보에서 재직 상태를 확인하세요. / Nhân viên ngừng làm việc, kiểm tra trạng thái."]};
         return row;
       });
       const filter = $("employeeFilter").value;

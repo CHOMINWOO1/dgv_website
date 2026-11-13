@@ -816,3 +816,26 @@ Run `node tests/payroll-conversions.mjs`, `node tests/payroll-conversions-db.mjs
 fixtures and block external network access. `PAYROLL_CAPTURE_DOWNLOAD=1` lets
 the monthly browser regression inspect generated XLSX bytes where browser file
 downloads are restricted; normal CI retains its real-download check.
+
+### Termination-month salary and missing hire dates
+
+Full-time monthly-net wages now use the same calendar-planned-time proration for
+termination months as hiring months. The last employed date is inclusive. A
+same-month hire and departure use their intersection; no hypothetical attendance
+is created. The full-month denominator extends the first/last employed contract
+outside that interval and ignores later post-termination terms. Missing/changed
+salary terms, unfinished/future/invalid attendance and zero work-time bases still
+require review. Finalized payroll snapshots are never recalculated, and unchanged
+payment matching deducts the salary month's active payments exactly once.
+
+Conversion dialogs open immediately, including loading/error feedback inside the
+dialog. If the original hire date was never recorded, the administrator must
+explicitly enter it in the conversion form. Existing hire dates are read-only;
+the authenticated conversion RPC validates and stores a missing date atomically
+with the new terms and history. No guessed hire date or automatic payment is used.
+
+Regression tests: `tests/payroll-termination.mjs`,
+`tests/payroll-termination-browser.mjs`,
+`tests/payroll-conversion-missing-hire-browser.mjs`, and the existing conversion
+SQL/browser, monthly, part-time, advance and navigation suites. All employee
+fixtures are synthetic; no live employee conversion or termination is needed.

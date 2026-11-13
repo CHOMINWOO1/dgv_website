@@ -156,7 +156,7 @@
     const first = dates[0], last = dates.at(-1), dayMap = new Map(days.filter((day) => day.employee_id === employee.id).map((day) => [day.work_date, day]));
     const employedDates = dates.filter((date) => withinEmployment(employee, date));
     const relevantTerms = effectiveMonthTerms(employee, employeeTerms, dates);
-    const ruleIssues = [], warnings = [...(base.warnings || [])], resolvedHireIssues = new Set();
+    const ruleIssues = [], warnings = [...(base.warnings || [])], resolvedProrationIssues = new Set();
     let compensationIssues = [...(base.compensationIssues || [])];
     const issue = (text) => { if (!ruleIssues.includes(text)) ruleIssues.push(text); };
     const warning = (text) => { if (!warnings.includes(text)) warnings.push(text); };
@@ -183,31 +183,34 @@
     const activeTerms = relevantTerms.filter(isMonthlyNet);
     let baseAmount = base.baseAmount, monthlyProration = null;
     const hireInMonth = Number.isFinite(dateMs(employee.hire_date)) && employee.hire_date > first && employee.hire_date <= last;
-    const terminationReview = Number.isFinite(dateMs(employee.termination_date)) && employee.termination_date >= first && employee.termination_date < last;
+    const terminationInMonth = Number.isFinite(dateMs(employee.termination_date)) && employee.termination_date >= first && employee.termination_date < last;
     const salaries = [...new Set(activeTerms.map((term) => Number(term.rate)))];
     const stableSalary = activeTerms.length > 0 && relevantTerms.every(isMonthlyNet) && salaries.length === 1 && Number.isSafeInteger(salaries[0]) && salaries[0] >= 0;
-    if (hireInMonth && !terminationReview && stableSalary) {
-      const hireTerm = latest(employeeTerms, employee.hire_date);
+    if ((hireInMonth || terminationInMonth) && stableSalary && employedDates.length) {
+      const periodStart = employedDates[0], periodEnd = employedDates.at(-1);
+      const firstTerm = latest(employeeTerms, periodStart), lastTerm = latest(employeeTerms, periodEnd);
       let fullPlannedMinutes = 0, completeBasis = true;
       for (const date of dates) {
-        // Before employment began, use the contract effective on the hiring date
-        // as a hypothetical full-month schedule, never as invented attendance.
-        const term = date < employee.hire_date ? hireTerm : latest(employeeTerms, date);
+        // Extend the first/last employed contract only for the hypothetical
+        // full-calendar denominator. Never invent attendance or use terms that
+        // became effective after this employee's termination date.
+        const term = date < periodStart ? firstTerm : date > periodEnd ? lastTerm : latest(employeeTerms, date);
         const schedule = scheduleBounds(term, date), savedDay = dayMap.get(date);
         const restDay = term?.weekly_rest_day == null ? 0 : Number(term.weekly_rest_day);
         const dayType = savedDay?.day_type || (new Date(dateMs(date)).getUTCDay() === restDay ? "rest" : "work");
         if (!term || !schedule || duration(schedule.normal) <= 0 || !Number.isInteger(restDay) || restDay < 0 || restDay > 6 || !["work", "rest", "paid_leave", "unpaid_leave", "holiday"].includes(dayType)) { completeBasis = false; continue; }
         if (dayType !== "rest") fullPlannedMinutes += Math.round(duration(schedule.normal));
       }
-      if (!completeBasis || fullPlannedMinutes <= 0) issue("입사월 일할계산의 전체 달력월 기준시간을 확인하세요 / Kiểm tra giờ chuẩn cả tháng để tính lương tháng vào làm");
+      if (!completeBasis || fullPlannedMinutes <= 0) issue("입·퇴사월 일할계산의 전체 달력월 기준시간을 확인하세요 / Kiểm tra giờ chuẩn cả tháng để tính lương khi vào hoặc nghỉ việc");
       else {
         const fullSalary = salaries[0], ratio = monthlyPlannedMinutes / fullPlannedMinutes, unroundedBase = fullSalary * monthlyPlannedMinutes / fullPlannedMinutes;
         baseAmount = Math.round(unroundedBase);
-        monthlyProration = { applied: true, reason: "hire_date", hireDate: employee.hire_date, fullSalary, fullPlannedMinutes,
+        monthlyProration = { applied: true, reason: hireInMonth && terminationInMonth ? "employment_period" : terminationInMonth ? "termination_date" : "hire_date",
+          hireDate: employee.hire_date || null, terminationDate: employee.termination_date || null, periodStart, periodEnd, fullSalary, fullPlannedMinutes,
           activePlannedMinutes: monthlyPlannedMinutes, ratio, unroundedBase, baseAmount };
-        if ((base.employmentProrationReasons || []).length === 1 && base.employmentProrationReasons[0] === "hire") {
-          for (const [index, code] of (base.summaryIssueCodes || []).entries()) if (code === "employmentProration") resolvedHireIssues.add(base.issues[index]);
-          compensationIssues = compensationIssues.filter((text) => !resolvedHireIssues.has(text));
+        if ((base.employmentProrationReasons || []).every(reason => reason === "hire" || reason === "termination")) {
+          for (const [index, code] of (base.summaryIssueCodes || []).entries()) if (code === "employmentProration") resolvedProrationIssues.add(base.issues[index]);
+          compensationIssues = compensationIssues.filter((text) => !resolvedProrationIssues.has(text));
         }
       }
     }
@@ -268,7 +271,7 @@
       paidLeaveDays, unpaidLeaveDays, holidayDays, restDays, daily: reviewedDaily, ruleVersionIds: [], warnings,
       regularOvertimeMinutes: 0, restWorkMinutes: 0, holidayWorkMinutes: 0, nightMinutes: 0, nightOvertimeMinutes: 0,
       ruleUnresolved: ruleIssues.length, ruleIssues, attendanceUnresolved, compensationUnresolved, compensationIssues,
-      unresolved: attendanceUnresolved + compensationUnresolved, issues: [...base.issues.filter((text) => !resolvedHireIssues.has(text)), ...ruleIssues], calculationVersion: 3,
+      unresolved: attendanceUnresolved + compensationUnresolved, issues: [...base.issues.filter((text) => !resolvedProrationIssues.has(text)), ...ruleIssues], calculationVersion: 3,
       yearToDateOvertimeMinutes: null, annualCoverageComplete: false, sources: [] };
   }
 

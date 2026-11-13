@@ -265,8 +265,10 @@ assert.ok(report.attendanceUnresolved > 0, "zero active scheduled basis remains 
 assert.equal(report.monthlyReadyToFinalize, false);
 const hireAndExit = { ...hired, termination_date: "2026-10-25" };
 report = calculate({ employees: [hireAndExit], terms: hireTerms, records: fullRecords({ employees: [hireAndExit], terms: hireTerms }) });
-assert.equal(report.monthlyProration, null, "termination-month salary still needs review even if it was also the hiring month");
-assert.ok(report.compensationUnresolved > 0);
+assert.equal(report.monthlyProration.reason, "employment_period", "hire and termination dates are prorated together, both inclusive");
+assert.equal(report.monthlyProration.periodEnd, "2026-10-25");
+assert.equal(report.baseAmount, 2333333);
+assert.equal(report.compensationUnresolved, 0);
 assert.equal(report.attendanceUnresolved, 0);
 const hireChangedSalary = [...hireTerms, { ...term, effective_from: "2026-10-22", rate: 8000000 }];
 report = calculate({ employees: [hired], terms: hireChangedSalary, records: fullRecords({ employees: [hired], terms: hireChangedSalary }) });
