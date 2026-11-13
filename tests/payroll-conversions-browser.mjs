@@ -53,7 +53,7 @@ try{
  assert.match(await action(a,'convert').innerText(),/파트타임 전환/);
  await action(a,'ledger').click();assert.equal(await page.locator('#ledgerBody tr').count(),1);assert.equal(await page.locator('#employeeFilter').inputValue(),a);
  assert.match(await page.locator('#employmentConversionSummary').innerText(),/1\.700\.000.*4\.200\.000/s);
- await page.locator('[data-payroll-tab=employees]').click();await action(a,'attendance').click();
+ await page.locator('#staffDetailClose').click();await page.locator('[data-payroll-tab=employees]').click();await action(a,'attendance').click();
  assert.match(await page.locator('#staffDetailDialog [data-testid="auto-attendance-minutes"]').innerText(),/4h 0m/);
  assert.match(await page.locator('#autoAttendanceSummary').innerText(),/전환 전·후 근무시간/);await page.locator('#staffDetailClose').click();
  await action(b,'convert').click();await page.locator('#employmentConversionDialog').waitFor({state:'visible'});

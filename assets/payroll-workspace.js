@@ -71,19 +71,28 @@
   deleteDialog.addEventListener("close",()=>{archiveGeneration++;const form=$("deleteEmployeeForm");form.reset();delete form.dataset.employeeId;delete form.dataset.revision;delete form.dataset.archived;$("deleteEmployeeContext").textContent="";});
 
   const staffDialog=document.createElement("dialog");staffDialog.id="staffDetailDialog";
-  staffDialog.innerHTML='<div class="section-head"><h2 id="staffDetailDialogTitle"></h2><button type="button" id="staffDetailClose" class="quiet">닫기 / Đóng</button></div><div id="staffDetailMount"></div>';
+  staffDialog.innerHTML='<div class="section-head"><h2 id="staffDetailDialogTitle"></h2><div class="staff-detail-actions"><button type="button" id="staffLedgerExport" class="quiet" hidden>급여대장 Excel / Tải Excel</button><button type="button" id="staffDetailClose" class="quiet">닫기 / Đóng</button></div></div><div id="staffLedgerOverview" hidden></div><div id="staffDetailMount"></div>';
   document.body.append(staffDialog);
-  $("staffDetailClose").addEventListener("click",()=>staffDialog.close());
-  staffDialog.addEventListener("close",()=>{popupView="";syncDetail();});
+  const ledgerOverviewNodes=[$("metrics"),$("ledgerTitle").closest("section")];
+  $("staffLedgerExport").addEventListener("click",()=>{if(state.loaded&&!state.busy&&popupView==="ledger")$("export").click();});
+  function closeStaffDialog(){popupView="";staffDialog.close();syncDetail();}
+  $("staffDetailClose").addEventListener("click",closeStaffDialog);
+  staffDialog.addEventListener("close",()=>{if(!staffDialog.open){popupView="";syncDetail();}});
   function syncDetail(){
     const detailView=popupView||currentView;
+    const ledgerPopup=popupView==="ledger";
+    $("staffLedgerOverview").hidden=!ledgerPopup;$("staffLedgerExport").hidden=!ledgerPopup;
+    for(const node of ledgerOverviewNodes){
+      if(ledgerPopup){if(node.parentElement!==$("staffLedgerOverview"))$("staffLedgerOverview").append(node);}
+      else if(node.parentElement!==$("view-ledger"))$("view-ledger").insertBefore(node,document.querySelector('[data-detail-mount="ledger"]'));
+    }
     const mount=popupView?$("staffDetailMount"):document.querySelector(`[data-detail-mount="${currentView}"]`);
     if($("employeeDetail").parentElement!==mount)mount.append($("employeeDetail"));
     document.querySelectorAll("[data-detail-views]").forEach(node=>{node.hidden=!node.dataset.detailViews.split(" ").includes(detailView);});
   }
   function showView(name,{historyMode="replace",focus=false}={}){
     if(!views[name])name="ledger";
-    if(staffDialog.open)staffDialog.close();
+    if(staffDialog.open)closeStaffDialog();
     currentView=name;
     document.querySelectorAll("[data-payroll-tab]").forEach(button=>{
       const selected=button.dataset.payrollTab===name;
@@ -189,7 +198,7 @@
     renderStaff();renderTeam();syncDetail();
   }
   function invalidate(){
-    archiveGeneration++;deleteDialog.close();staffDialog.close();popupView="";
+    archiveGeneration++;deleteDialog.close();closeStaffDialog();
     for(const id of ["staffList","teamCalendar","teamDayRows"])$(id).replaceChildren();
     for(const id of ["staffCount","teamMonthSummary","teamDayTitle"])$(id).textContent="";
     $("paymentEmployee").replaceChildren();$("startPayment").disabled=true;teamDays.clear();
@@ -209,11 +218,10 @@
     if(button.dataset.openView)showView(button.dataset.openView,{historyMode:"push"});
     if(button.dataset.staffAction&&selectEmployee(button.dataset.staffId)){
       const action=button.dataset.staffAction;
-      if(["attendance","pay","history"].includes(action)){
-        popupView=action==="attendance"?"attendance":"payments";syncDetail();
-        $("staffDetailDialogTitle").textContent=state.employees.find(e=>e.id===state.selected).name+" · "+(popupView==="attendance"?"근무 보기 / Chấm công":"지급·서명 / Trả & ký");staffDialog.showModal();
-      }else if(action==="ledger"){
-        showView("ledger",{historyMode:"push"});$("employeeFilter").value=state.selected;app.render();$("employeeDetail").scrollIntoView({behavior:"smooth",block:"start"});
+      if(["attendance","pay","history","ledger"].includes(action)){
+      if(action==="ledger"&&$("employeeFilter").value!==state.selected){$("employeeFilter").value=state.selected;app.renderLedger();}
+        popupView=action==="ledger"?"ledger":action==="attendance"?"attendance":"payments";syncDetail();
+        $("staffDetailDialogTitle").textContent=state.employees.find(e=>e.id===state.selected).name+" · "+(popupView==="ledger"?"급여대장 / Bảng lương":popupView==="attendance"?"근무 보기 / Chấm công":"지급·서명 / Trả & ký");staffDialog.showModal();
       }else if(action==="info")$("editEmployee").click();
       else if(action==="salary")$("addTerms").click();
       else if(action==="convert")void window.DGV_PAYROLL_CONVERSIONS.open(state.selected);

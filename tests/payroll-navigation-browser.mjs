@@ -132,9 +132,12 @@ try{
   await page.locator('#staffDetailDialog #addPayment').click();await page.locator('#paymentDialog').waitFor({state:'visible'});
   assert.match(await page.locator('#paymentContext').innerText(),/Nguyễn An updated/);
   await page.locator('#paymentForm [data-close]').click();await page.locator('#staffDetailClose').click();
-  await action(a,'ledger').click();assert.equal(new URL(page.url()).hash,'#ledger');
+  await action(a,'ledger').click();assert.equal(new URL(page.url()).hash,'#employees');
+  assert.equal(await page.locator('#staffDetailDialog #ledgerBody').isVisible(),true);
   assert.equal(await page.locator('#employeeFilter').inputValue(),a);
   assert.equal(await page.locator('#ledgerBody tr').count(),1);
+  await page.locator('#staffDetailClose').click();
+  assert.equal(await page.locator('#view-ledger #ledgerBody').count(),1);
   await openPayrollView(page,'attendance');await page.locator('[data-team-date="2026-10-01"]').click();
   const teamText=await page.locator("#teamDayRows").innerText();assert.match(teamText,/Nguyễn An updated/);assert.match(teamText,/Trần Bình/);
   assert.match(teamText,/10:00/);assert.match(teamText,/12:00/);assert.match(teamText,/14:00/);assert.match(teamText,/20:00/);
