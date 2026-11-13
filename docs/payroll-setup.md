@@ -807,8 +807,11 @@ to an empty array. Existing audited part-time → full-time profile edits that a
 changed the hire date can use **기존 전환 정산 보완** in employee payroll details;
 the server verifies the original audit and reuses identical existing terms.
 
-Staff attendance and payment actions open an in-page dialog; the employee ledger
-button opens the existing ledger with only that employee selected.
+Staff attendance, payment and employee-ledger actions open an in-page dialog
+without leaving employee management. The ledger dialog reuses the selected
+employee's existing summary, table, calculation/review and Excel export, then
+restores those same DOM nodes on close. Unsaved adjustments remain intact when
+reopening the same employee. Opening/closing a dialog does not write payroll data.
 
 Run `node tests/payroll-conversions.mjs`, `node tests/payroll-conversions-db.mjs`
 (PGlite module supplied via `PGLITE_MODULE`) and

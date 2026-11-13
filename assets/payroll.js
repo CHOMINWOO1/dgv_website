@@ -83,13 +83,14 @@
   }
   async function task(action) {
     if (state.busy) return;
+    const originDialog=document.activeElement?.closest('dialog[open]');
     state.busy = true; $("workspace").disabled = true; $("payrollApp").setAttribute("aria-busy","true");
     document.querySelectorAll("dialog button[type=submit]").forEach((button) => button.disabled = true);
     try { await DGV.requireAuth({roles:["admin"]}); await action(); }
     catch (error) {
       if (error.message === "AUTH_REQUIRED") { clearAuthenticatedState(); location.reload(); return; }
       notice(messageOf(error), true);
-      const dialog = document.activeElement?.closest('dialog[open]')||Array.from(document.querySelectorAll('dialog[open]')).at(-1);
+      const dialog = originDialog?.open?originDialog:document.activeElement?.closest('dialog[open]')||Array.from(document.querySelectorAll('dialog[open]')).at(-1);
       if (dialog) { let alert = dialog.querySelector(".dialog-error"); if (!alert) { alert = document.createElement("p"); alert.className = "dialog-error notice error"; alert.setAttribute("role","alert"); (dialog.querySelector("form")||dialog).prepend(alert); } alert.textContent = messageOf(error); }
     } finally {
       state.busy = false; $("workspace").disabled = false; $("payrollApp").removeAttribute("aria-busy");
@@ -148,7 +149,7 @@
     }
     throw new Error("다른 작업으로 자료가 변경되고 있습니다. 잠시 후 새로고침해 주세요. / Dữ liệu đang thay đổi, vui lòng tải lại.");
   }
-  function render() {
+  function renderLedger() {
     if (!state.loaded) return;
     const visible = filtered();
     const calculatedTotal=row=>{const run=runFor(row.employee_id);return run?totalFor(run):row.baseAmount==null?null:row.baseAmount+(row.statutoryAmount||0)+(row.monthlyExtraAmount||0);};
@@ -168,6 +169,10 @@
       const status = run ? (paid>totalFor(run)?"초과 지급 / Trả dư":paid === totalFor(run) ? "지급 완료 / Đã trả" : paid ? "일부 지급 / Trả một phần" : "급여 확정 / Đã chốt") : paid?"선지급 · 미확정 / Tạm ứng, chưa chốt":review ? (row.monthlyPendingDays>0&&row.unresolved===1?"월 집계 중 / Đang tổng hợp tháng":"정산 확인 필요 / Cần kiểm tra lương") : reviewed?"검토 완료 / Đã duyệt":"계산 완료 / Đã tính";
       return `<tr><td><strong>${esc(row.name)}</strong><span class="muted">ID ${esc(row.device_user_id)}</span></td><td>${timeCell}</td><td>${money(run?totalFor(run):estimatedTotal)}<span class="muted">${run?"확정 / Đã chốt":"계산 급여 / Lương dự kiến"}</span></td><td>${money(paid)}</td><td>${balanceCell}</td><td><span class="badge ${!run&&review?"warn":!run?"neutral":""}">${status}</span></td><td><button class="quiet" data-employee="${esc(row.employee_id)}">급여 상세 / Chi tiết</button><button class="quiet" data-staff-id="${esc(row.employee_id)}" data-staff-action="pay">지급·서명 / Trả &amp; ký</button></td></tr>`;
     }).join("") : '<tr><td colspan="7" class="empty">엑셀을 가져오거나 직원을 등록해 주세요.<br />Nhập tệp Excel hoặc thêm nhân viên để bắt đầu.</td></tr>';
+  }
+  function render() {
+    if (!state.loaded) return;
+    renderLedger();
     $("importHistory").innerHTML = state.imports.length ? state.imports.map((entry) => `<p class="term-row"><strong>${esc(entry.filename)}</strong> · 신규 / Mới ${entry.inserted_count} · 중복 / Trùng ${entry.duplicate_count}<br /><span class="muted">${esc(new Date(entry.created_at).toLocaleString("ko-KR",{timeZone:"Asia/Ho_Chi_Minh"}))} (VN)</span></p>`).join("") : '<p class="muted">가져오기 이력이 없습니다. / Chưa nhập dữ liệu.</p>';
     renderDetail();
     window.DGV_PAYROLL_ADVANCED?.render();
@@ -406,7 +411,7 @@
   setInterval(checkForUpdates,30000);
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)void checkForUpdates();});
   window.addEventListener("focus",()=>void checkForUpdates());
-  window.DGV_PAYROLL_APP={state,db,$,esc,money,hours,today,rows,result,task,load,render,renderDetail,selected,runFor,paidFor,totalFor,openDialog,field,bounds,notice,draft,paymentMatches,paymentsFor,paidForEmployee};
+  window.DGV_PAYROLL_APP={state,db,$,esc,money,hours,today,rows,result,task,load,render,renderLedger,renderDetail,selected,runFor,paidFor,totalFor,openDialog,field,bounds,notice,draft,paymentMatches,paymentsFor,paidForEmployee};
   const startPayroll=async()=>{try{await QRStaff.requireLogin({roles:["admin"],preferredRole:"admin"});await DGV.requireAuth({roles:["admin"]});$("payrollApp").hidden=false;await task(load);}catch(error){$("pageError").textContent=messageOf(error);$("pageError").hidden=false;}};
   // Register advanced UI/report modules before even a cached session can load
   // the ledger; otherwise fast responses can skip their data and rendering.
