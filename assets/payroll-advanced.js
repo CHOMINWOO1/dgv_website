@@ -250,24 +250,26 @@
         rows("payroll_attendance_raw",q=>{q=q.gte("occurred_at",plusDay(fromDate,-1)).lt("occurred_at",plusDay(toDate,2));return employeeId?q.eq("employee_id",employeeId):q;}),
         rows("payroll_days",q=>{q=q.gte("work_date",plusDay(fromDate,-1)).lte("work_date",plusDay(toDate,1));return employeeId?q.eq("employee_id",employeeId):q;}),
         rows("payroll_terms",q=>q.lte("effective_from",plusDay(toDate,1))),rows("payroll_payments",q=>q.gte("paid_on",fromDate).lte("paid_on",toDate)),rows("payroll_runs"),
-        rows("payroll_employees",q=>employeeId?q.eq("id",employeeId):q),rows("payroll_run_adjustments"),rows("payroll_payment_reversals"),rows("payroll_attachments")]);
+        rows("payroll_employees",q=>employeeId?q.eq("id",employeeId):q),rows("payroll_run_adjustments"),rows("payroll_payment_reversals"),rows("payroll_attachments"),window.DGV_PAYROLL_CONVERSIONS?rows("payroll_employment_conversions"):[]]);
       const after=Number((await result(db.from("payroll_revision").select("version").eq("id",1).single())).version);
       if(before===after){consistent=fetched;rangeRevision=before;break;}
     }
     if(!state.loaded||$("payrollApp").hidden||searchGeneration!==receiptGeneration||searchScope!==receiptScope())return;
     if(!consistent)throw new Error("자료가 변경 중입니다. 잠시 후 다시 조회하세요. / Dữ liệu đang thay đổi; thử lại.");
-    const [records,days,terms,payments,runs,employees,adjustments,reversals,attachments]=consistent;
+    const [records,days,terms,payments,runs,employees,adjustments,reversals,attachments,conversions]=consistent;
     const summaries=[];let cursor=fromDate.slice(0,7);
     while(cursor<=toDate.slice(0,7)){
-      const effectiveDays=DGV_PAYROLL_RULES.buildEffectiveDays({month:cursor,employees,terms,days}),base=DGV_PAYROLL_CORE.summarizeMonth({month:cursor,employees,terms,records,days:effectiveDays,today:today()});
-      const checked=DGV_PAYROLL_RULES.extendSummaries({month:cursor,employees,terms,records,days:effectiveDays,baseSummaries:base,rules:[],today:today()});
-      for(const row of base){const enhanced=checked.find(r=>r.employee_id===row.employee_id),net=enhanced?.settlementMode==="monthly_net";row.daily=(net?enhanced.daily:row.daily).filter(d=>d.date>=fromDate&&d.date<=toDate);const displayed=row.daily.reduce((n,d)=>n+d.minutes,0);row.minutes=net?Math.floor(row.daily.reduce((n,d)=>n+Number(d.actualSeconds||0),0)/60):displayed;row.rangeRoundingMinutes=row.minutes-displayed;summaries.push(row);}
+      const historical=window.DGV_PAYROLL_CONVERSIONS?.historicalEmployees(employees,conversions,cursor)||employees;
+      const effectiveDays=DGV_PAYROLL_RULES.buildEffectiveDays({month:cursor,employees:historical,terms,days}),base=DGV_PAYROLL_CORE.summarizeMonth({month:cursor,employees:historical,terms,records,days:effectiveDays,today:today()});
+      let checked=DGV_PAYROLL_RULES.extendSummaries({month:cursor,employees:historical,terms,records,days:effectiveDays,baseSummaries:base,rules:[],today:today()});
+      if(window.DGV_PAYROLL_CONVERSIONS)checked=DGV_PAYROLL_CONVERSIONS.extendSummaries({month:cursor,employees,terms,records,days:effectiveDays,baseSummaries:checked,conversions,today:today()});
+      for(const row of base){const enhanced=checked.find(r=>r.employee_id===row.employee_id),net=["monthly_net","employment_segments"].includes(enhanced?.settlementMode);row.daily=(net?enhanced.daily:row.daily).filter(d=>d.date>=fromDate&&d.date<=toDate);const displayed=row.daily.reduce((n,d)=>n+d.minutes,0);row.minutes=net?Math.floor(row.daily.reduce((n,d)=>n+Number(d.actualSeconds||0),0)/60):displayed;row.rangeRoundingMinutes=row.minutes-displayed;summaries.push(row);}
       cursor=app.bounds(cursor).end.slice(0,7);
     }
     const matchingRuns=new Set(runs.filter(r=>!employeeId||r.employee_id===employeeId).map(r=>r.id));
     const employeeIds=new Set(employees.filter(e=>e.payee_type!=='service').map(e=>e.id));
     const selectedPayments=payments.filter(p=>p.employee_id?(employeeIds.has(p.employee_id)&&(!employeeId||p.employee_id===employeeId)):matchingRuns.has(p.run_id));
-    rangeData={revision:rangeRevision,month:fromDate.slice(0,7),fromDate,toDate,employeeId:employeeId||undefined,employees,terms,records,days,runs,payments:selectedPayments,summaries,adjustments,reversals,attachments};
+    rangeData={revision:rangeRevision,month:fromDate.slice(0,7),fromDate,toDate,employeeId:employeeId||undefined,employees,terms,records,days,runs,payments:selectedPayments,summaries,adjustments,reversals,attachments,conversions};
     const reversed=new Set(reversals.map(r=>r.payment_id)),daily=summaries.flatMap(r=>r.daily.map(d=>({...d,name:r.name})));
     $("rangeResult").innerHTML=`<p class="range-summary">${fromDate} ~ ${toDate} · 근무 / Làm <strong>${hours(summaries.reduce((n,r)=>n+r.minutes,0))}</strong> · 실제 지급 / Thực trả <strong>${money(selectedPayments.filter(p=>!reversed.has(p.id)).reduce((n,p)=>n+Number(p.amount),0))} VND</strong></p><div class="table-scroll"><table><thead><tr><th>직원 / Nhân viên</th><th>근무일 / Ngày</th><th>출근 / Vào</th><th>퇴근 / Ra</th><th>근무 / Giờ</th><th>확인 / Kiểm tra</th></tr></thead><tbody>${daily.map(d=>`<tr><td>${esc(d.name)}</td><td>${esc(d.date)}</td><td>${esc(d.checkIn?.slice(11,16)||"—")}</td><td>${esc(d.checkOut?.slice(5,16)||"—")}</td><td>${hours(d.minutes)}</td><td>${esc(d.issues.join(" · "))}</td></tr>`).join("")||'<tr><td colspan="6">기록 없음 / Không có dữ liệu</td></tr>'}</tbody></table></div>`;
     $("rangeExport").disabled=false;
@@ -364,9 +366,11 @@
           rows("payroll_rule_versions",q=>q.lt("effective_from",dates.after))
         ]);
         if(!current())return;
-        const effectiveDays=DGV_PAYROLL_RULES.buildEffectiveDays({month,employees,terms,days});
-        const baseSummaries=DGV_PAYROLL_CORE.summarizeMonth({month,employees,terms,records,days:effectiveDays,today:today()});
-        const calculated=DGV_PAYROLL_RULES.extendSummaries({month,employees,terms,records,days:effectiveDays,rules,baseSummaries,yearToDateRuns:input.runs,today:today()});
+        const conversions=input.conversions||[],historical=window.DGV_PAYROLL_CONVERSIONS?.historicalEmployees(employees,conversions,month)||employees;
+        const effectiveDays=DGV_PAYROLL_RULES.buildEffectiveDays({month,employees:historical,terms,days});
+        const baseSummaries=DGV_PAYROLL_CORE.summarizeMonth({month,employees:historical,terms,records,days:effectiveDays,today:today()});
+        let calculated=DGV_PAYROLL_RULES.extendSummaries({month,employees:historical,terms,records,days:effectiveDays,rules,baseSummaries,yearToDateRuns:input.runs,today:today()});
+        if(window.DGV_PAYROLL_CONVERSIONS)calculated=DGV_PAYROLL_CONVERSIONS.extendSummaries({month,employees,terms,records,days:effectiveDays,rules,baseSummaries:calculated,conversions,today:today()});
         summaries.push(...calculated.map(row=>({...row,month})));
       }
     }));

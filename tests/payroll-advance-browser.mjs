@@ -124,7 +124,8 @@ try{
   await page.evaluate(id=>{
     __payrollTest.db.payroll_employees.push({id,device_user_id:"EXCESS",name:"DEMO · Overpaid C",active:true,employment_type:"part_time"});
     __payrollTest.db.payroll_terms.push({id:"excess-term",employee_id:id,effective_from:"2026-01-01",pay_type:"hourly",rate:30000,shift_start:"10:00:00",shift_end:"20:00:00",break_start:"12:00:00",break_end:"14:00:00"});
-    for(const time of ["10:00:00","20:00:00"])__payrollTest.db.payroll_attendance_raw.push({id:`excess-${time}`,employee_id:id,occurred_at:`2026-09-01T${time}`,device_id:"1"});
+    // Part-time wages use actual hours, without an automatic lunch deduction.
+    for(const time of ["10:00:00","18:00:00"])__payrollTest.db.payroll_attendance_raw.push({id:`excess-${time}`,employee_id:id,occurred_at:`2026-09-01T${time}`,device_id:"1"});
     __payrollTest.db.payroll_revision[0].version++;
   },excessEmployee);await refresh();await page.locator("#employeeFilter").selectOption(excessEmployee);
   await openPayment(300000,"2026-09-15","DEMO · Previously agreed advance");await submit("paymentForm");await closeSignature();

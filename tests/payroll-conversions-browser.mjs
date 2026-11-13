@@ -1,0 +1,67 @@
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile} from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {chromium} from 'playwright';
+import {installMock} from './helpers/payroll-browser-mock.mjs';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const server=createServer(async(req,res)=>{try{const file=path.resolve(root,decodeURIComponent(new URL(req.url,'http://localhost').pathname).replace(/^\/+/,''));if(!file.startsWith(root+path.sep))throw Error('path');const body=await readFile(file);res.writeHead(200,{'Content-Type':({'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8'})[path.extname(file)]||'application/octet-stream'});res.end(body);}catch{res.writeHead(404);res.end();}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const origin=`http://127.0.0.1:${server.address().port}`,browser=await chromium.launch({headless:true,channel:process.env.PAYROLL_BROWSER_CHANNEL||'chrome'});
+function seed(){
+ const s=window.__payrollTest,[a,b]=s.db.payroll_employees;
+ Object.assign(a,{name:'DEMO probation',employment_type:'part_time',employment_status:'active',payee_type:'employee',hire_date:'2026-11-03'});
+ Object.assign(b,{name:'DEMO monthly',employment_type:'full_time',employment_status:'active',payee_type:'employee',hire_date:'2026-01-01'});
+ Object.assign(s.db.payroll_terms[0],{effective_from:'2026-11-01',rate:25000,monthly_settlement:'statutory',break_start:'00:00',break_end:'00:00',weekly_rest_day:0});
+ Object.assign(s.db.payroll_terms[1],{effective_from:'2026-01-01',pay_type:'monthly',rate:7000000,monthly_settlement:'monthly_net',break_start:'00:00',break_end:'00:00',weekly_rest_day:0});
+ s.db.payroll_attendance_raw=[];s.db.payroll_employment_conversions=[];
+ s.db.payroll_payments=[{id:'preserved-payment',employee_id:a.id,payroll_month:'2026-11-01',run_id:null,amount:1700000,paid_on:'2026-11-13',method:'cash'}];
+ const client=window.supabase.createClient(),original=client.rpc;
+ client.rpc=async(name,args)=>{
+  if(!['payroll_conversion_candidate','payroll_convert_employment'].includes(name))return original(name,args);
+  s.rpcs.push({name,args:structuredClone(args)});
+  const e=s.db.payroll_employees.find(e=>e.id===args.p_employee_id);
+  if(name==='payroll_conversion_candidate')return {data:{name:e.name,original_hire_date:e.hire_date,prior_employment_type:e.employment_type,repair:false,term:s.db.payroll_terms.filter(t=>t.employee_id===e.id).sort((a,b)=>a.effective_from.localeCompare(b.effective_from)).at(-1)},error:null};
+  if(args.p_expected_revision!==s.db.payroll_revision[0].version)return {data:null,error:{message:'PAYROLL_STALE_RELOAD_REQUIRED'}};
+  const term={id:crypto.randomUUID(),employee_id:e.id,...args.p_terms,pay_type:args.p_employment_type==='full_time'?'monthly':'hourly',monthly_settlement:args.p_employment_type==='full_time'?'monthly_net':'statutory'};
+  const row={id:crypto.randomUUID(),employee_id:e.id,original_hire_date:e.hire_date,prior_employment_type:e.employment_type,employment_type:args.p_employment_type,effective_from:term.effective_from,prior_salary_amount:args.p_prior_salary_amount,term_id:term.id};
+  s.db.payroll_terms.push(term);s.db.payroll_employment_conversions.push(row);e.employment_type=row.employment_type;s.db.payroll_revision[0].version++;
+  return {data:row.id,error:null};
+ };
+}
+const context=await browser.newContext({viewport:{width:1440,height:1000}});
+await context.route('**/*',route=>{const url=route.request().url();if(url.startsWith('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@'))return route.fulfill({contentType:'text/javascript',body:`(${installMock.toString()})('admin');(${seed.toString()})();`});return url.startsWith(origin)?route.continue():route.fulfill({body:''});});
+const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+const idle=()=>page.waitForFunction(()=>window.DGV_PAYROLL_APP?.state.loaded&&!DGV_PAYROLL_APP.state.busy);
+const action=(id,kind)=>page.locator(`#staffList [data-staff-action="${kind}"][data-staff-id="${id}"]`);
+const field=name=>page.locator(`#employmentConversionForm [name="${name}"]`);
+try{
+ await page.goto(origin+'/payroll.html#employees');await idle();await page.locator('#month').fill('2026-11');await page.locator('#month').dispatchEvent('change');await idle();
+ const [a,b]=await page.evaluate(()=>__payrollTest.db.payroll_employees.map(e=>e.id));
+ const before=await page.evaluate(()=>structuredClone(__payrollTest.db.payroll_payments));
+ assert.match(await action(a,'convert').innerText(),/정규직 전환/);assert.match(await action(b,'convert').innerText(),/파트타임 전환/);
+ await action(a,'convert').click();await page.locator('#employmentConversionDialog').waitFor({state:'visible'});
+ assert.match(await page.locator('#employmentConversionContext').innerText(),/2026-11-03.*2026-12-05/);
+ assert.equal(await field('prior_salary_amount').inputValue(),'');
+ await field('effective_from').fill('2026-11-13');await field('rate').fill('7000000');await field('prior_salary_amount').fill('1700000');await field('reason').fill('DEMO agreed probation settlement');await field('confirmed').check();
+ await page.locator('#employmentConversionForm button[type=submit]').click();await idle();
+ assert.equal(await page.locator('#employmentConversionDialog').isVisible(),false);
+ const result=await page.evaluate(id=>({e:__payrollTest.db.payroll_employees.find(e=>e.id===id),row:DGV_PAYROLL_APP.state.summaries.find(r=>r.employee_id===id),paid:DGV_PAYROLL_APP.paidForEmployee(id)}),a);
+ assert.equal(result.e.hire_date,'2026-11-03');assert.equal(result.row.baseAmount,5900000);assert.equal(result.row.baseAmount-result.paid,4200000);
+ assert.deepEqual(await page.evaluate(()=>__payrollTest.db.payroll_payments),before);
+ assert.match(await action(a,'convert').innerText(),/파트타임 전환/);
+ await action(a,'ledger').click();assert.equal(await page.locator('#ledgerBody tr').count(),1);assert.equal(await page.locator('#employeeFilter').inputValue(),a);
+ assert.match(await page.locator('#employmentConversionSummary').innerText(),/1\.700\.000.*4\.200\.000/s);
+ await page.locator('[data-payroll-tab=employees]').click();
+ await action(b,'convert').click();await page.locator('#employmentConversionDialog').waitFor({state:'visible'});
+ assert.match(await page.locator('#employmentConversionTitle').innerText(),/파트타임 전환/);
+ assert.equal(await field('break_start').inputValue(),'00:00');assert.equal(await field('break_start').getAttribute('readonly'),'');
+ await field('effective_from').fill('2026-11-13');await field('rate').fill('30000');await field('reason').fill('DEMO reverse conversion');await field('confirmed').check();await page.locator('#employmentConversionForm button[type=submit]').click();await idle();
+ assert.equal(await page.evaluate(id=>__payrollTest.db.payroll_employees.find(e=>e.id===id).employment_type,b),'part_time');
+ const call=await page.evaluate(()=>__payrollTest.rpcs.filter(r=>r.name==='payroll_convert_employment').at(-1));assert.equal(call.args.p_prior_salary_amount,null);assert.equal(call.args.p_employment_type,'part_time');
+ await page.setViewportSize({width:390,height:844});await action(a,'convert').click();await page.locator('#employmentConversionDialog').waitFor({state:'visible'});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+ await page.locator('#employmentConversionForm [data-close]').click();
+ assert.deepEqual(errors,[]);console.log('Employment conversion browser passed: both buttons, agreed/automatic split, original hire/payment preservation, employee ledger filter, next-month fifth pay date, mobile dialog.');
+}finally{await context.close();await browser.close();await new Promise(r=>server.close(r));}

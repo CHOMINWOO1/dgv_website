@@ -78,9 +78,14 @@ try{
   assert.match(await page.locator('[data-testid="month-extra-amount"]').innerText(),/17[.,]500/,"finalized monthly view keeps its saved rate and premium");
   await openPayrollView(page,"payments");
   await page.locator("#exportKind").selectOption("ledger");await page.locator("#previewTax").click();await idle();await page.locator("#taxReviewed").check();
-  const downloadEvent=page.waitForEvent("download");await page.locator("#downloadTax").click();const workbook=await downloadEvent,bytes=await readFile(await workbook.path()),xml=bytes.toString();
+  // Restricted desktop runners can validate the exact generated XLSX without
+  // requesting an OS-managed browser download. Default CI still downloads it.
+  let bytes;
+  if(process.env.PAYROLL_CAPTURE_DOWNLOAD){await page.evaluate(()=>{window.DGV_XLSX={...DGV_XLSX,downloadWorkbook(options){window.__testWorkbookBytes=Array.from(DGV_XLSX.buildWorkbookBytes(options));}};});await page.locator('#downloadTax').click();await idle();bytes=Buffer.from(await page.evaluate(()=>window.__testWorkbookBytes));}
+  else {const downloadEvent=page.waitForEvent("download");await page.locator("#downloadTax").click();const workbook=await downloadEvent;bytes=await readFile(await workbook.path());}
+  const xml=bytes.toString();
   assert.equal(bytes.readUInt32LE(),0x04034b50);assert.match(xml,/월 기준분/);assert.match(xml,/자동 계산 시급/);assert.match(xml,/<v>12000<\/v>/);assert.match(xml,/<v>12030<\/v>/);assert.match(xml,/<v>35000<\/v>/);assert.match(xml,/<v>17500<\/v>/);assert.match(xml,/<v>7017550<\/v>/);
-  const popupEvent=page.waitForEvent("popup");await page.locator("#printTax").click();const popup=await popupEvent;await popup.waitForFunction(()=>window.__printed===true);assert.match(await popup.locator("body").innerText(),/월 초과수당/);assert.equal(await popup.locator("table").count(),2);
+  const popupEvent=page.waitForEvent("popup");await page.locator("#printTax").click();const popup=await popupEvent;await popup.waitForFunction(()=>window.__printed===true);assert.match(await popup.locator("body").innerText(),/월 정산시급/);assert.match(await popup.locator("body").innerText(),/7[.,]017[.,]550/);assert.match(await popup.locator("body").innerText(),/35[.,]000/);assert.equal(await popup.locator("table").count(),1);
   await page.locator("#closeTaxPreview").click();await openPayrollView(page,"ledger");
   if(process.env.PAYROLL_SCREENSHOTS){
     await page.evaluate(id=>{__payrollTest.db.payroll_terms.find(t=>t.employee_id===id&&t.monthly_settlement==="monthly_net").rate=7000000;__payrollTest.db.payroll_revision[0].version++;},employee);await refresh();
@@ -120,7 +125,9 @@ try{
   await openPayrollView(page,"payments");
   await page.locator("#rangeFrom").fill("2026-09-15");await page.locator("#rangeTo").fill("2026-09-17");await page.locator("#rangeEmployee").selectOption(employee);await page.locator("#rangeSearch").click();await idle();
   assert.match(await page.locator("#rangeResult .range-summary").innerText(),/16h 1m/,"range header agrees with the monthly seconds carry");assert.match(await page.locator("#rangeResult").innerText(),/실제 초|giây thực tế/);
-  const rangeDownloadEvent=page.waitForEvent("download");await page.locator("#rangeExport").click();const rangeDownload=await rangeDownloadEvent,rangeXml=(await readFile(await rangeDownload.path())).toString();
+  let rangeXml;
+  if(process.env.PAYROLL_CAPTURE_DOWNLOAD){await page.evaluate(()=>{window.DGV_XLSX={...DGV_XLSX,downloadWorkbook(options){window.__testWorkbookBytes=Array.from(DGV_XLSX.buildWorkbookBytes(options));}};});await page.locator('#rangeExport').click();await idle();rangeXml=Buffer.from(await page.evaluate(()=>window.__testWorkbookBytes)).toString();}
+  else {const rangeDownloadEvent=page.waitForEvent("download");await page.locator("#rangeExport").click();const rangeDownload=await rangeDownloadEvent;rangeXml=(await readFile(await rangeDownload.path())).toString();}
   assert.match(rangeXml,/Chấm công/);assert.doesNotMatch(rangeXml,/Đối chiếu tháng|월 기준분|월 초과수당/,"partial attendance export does not present incomplete data as full-month settlement");
   await page.evaluate(id=>{
     for(let day=15;day<=30;day++){

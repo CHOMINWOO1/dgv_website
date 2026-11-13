@@ -9,7 +9,7 @@
     services:{title:"외주·수리비",eyebrow:"SERVICE PAYMENTS",description:"전기·배관 등 외주 작업의 실제 지급액과 수령 서명을 기록합니다. / Ghi chi phí sửa chữa, dịch vụ và chữ ký nhận tiền."}
   };
   const aliases={ledgerTitle:"ledger",employeeDetail:"ledger",importTitle:"attendance",rangePanel:"payments",taxCenter:"payments",comparisonPanel:"ledger",rulesPanel:"employees",archivePanel:"employees"};
-  let currentView="ledger",teamDate="",teamMonth="",teamDays=new Map();
+  let popupView="",currentView="ledger",teamDate="",teamMonth="",teamDays=new Map();
   // All calendars use the same month as payroll queries and saved work dates.
   const monthNavigations=["teamCalendarMonthNavigation","employeeCalendarMonthNavigation"].map($);
   for(const navigation of monthNavigations){
@@ -70,13 +70,20 @@
   });});
   deleteDialog.addEventListener("close",()=>{archiveGeneration++;const form=$("deleteEmployeeForm");form.reset();delete form.dataset.employeeId;delete form.dataset.revision;delete form.dataset.archived;$("deleteEmployeeContext").textContent="";});
 
+  const staffDialog=document.createElement("dialog");staffDialog.id="staffDetailDialog";
+  staffDialog.innerHTML='<div class="section-head"><h2 id="staffDetailDialogTitle"></h2><button type="button" id="staffDetailClose" class="quiet">닫기 / Đóng</button></div><div id="staffDetailMount"></div>';
+  document.body.append(staffDialog);
+  $("staffDetailClose").addEventListener("click",()=>staffDialog.close());
+  staffDialog.addEventListener("close",()=>{popupView="";syncDetail();});
   function syncDetail(){
-    const mount=document.querySelector(`[data-detail-mount="${currentView}"]`);
+    const detailView=popupView||currentView;
+    const mount=popupView?$("staffDetailMount"):document.querySelector(`[data-detail-mount="${currentView}"]`);
     if($("employeeDetail").parentElement!==mount)mount.append($("employeeDetail"));
-    document.querySelectorAll("[data-detail-views]").forEach(node=>{node.hidden=!node.dataset.detailViews.split(" ").includes(currentView);});
+    document.querySelectorAll("[data-detail-views]").forEach(node=>{node.hidden=!node.dataset.detailViews.split(" ").includes(detailView);});
   }
   function showView(name,{historyMode="replace",focus=false}={}){
     if(!views[name])name="ledger";
+    if(staffDialog.open)staffDialog.close();
     currentView=name;
     document.querySelectorAll("[data-payroll-tab]").forEach(button=>{
       const selected=button.dataset.payrollTab===name;
@@ -120,7 +127,7 @@
       const salaryAction=hourly?(term?"시급·조건 변경 / Đổi lương giờ":"시급 설정 / Đơn giá giờ"):(term?"월급·조건 변경 / Đổi lương":"급여 설정 / Thiết lập lương");
       const employment=employee.employment_status||(employee.active===false?"terminated":"active");
       const statusText=employee.archived_at?"삭제됨 · 이력 보존 / Đã ẩn":{active:"재직 / Đang làm",leave:"휴직 / Tạm nghỉ",terminated:"퇴사 / Đã nghỉ"}[employment]||employment;
-      return `<article class="staff-card" data-staff-id="${esc(employee.id)}"><div class="staff-identity"><span class="staff-avatar" aria-hidden="true">${esc(employee.name.slice(0,1))}</span><div><h3>${esc(employee.name)}</h3><p class="muted">ID ${esc(employee.device_user_id)} · ${employee.employment_type==="part_time"?"파트타임 / Bán thời gian":"정규직 / Toàn thời gian"}${employee.hire_date?" · 입사 "+esc(employee.hire_date):""}</p></div><span class="badge ${employment==="active"?"":"neutral"}">${esc(statusText)}</span></div><div class="staff-salary">${term?`<span>${payType}</span><strong>${money(Number(term.rate))} <small>VND</small></strong><p class="muted">${esc(term.effective_from)}부터 적용 / Từ ngày</p>`:'<span class="badge warn">급여조건 미등록 / Chưa có điều kiện lương</span><p class="muted">월급이나 시급을 등록해 주세요.</p>'}</div><div class="staff-actions">${employee.archived_at?`<button data-staff-action="restore" data-staff-id="${esc(employee.id)}">직원 복원 / Khôi phục</button><button class="quiet" data-staff-action="attendance" data-staff-id="${esc(employee.id)}">근무 이력 / Lịch sử công</button><button class="quiet" data-staff-action="history" data-staff-id="${esc(employee.id)}">지급 이력 / Lịch sử trả</button>`:`<button class="quiet" data-staff-action="info" data-staff-id="${esc(employee.id)}">정보 수정 / Thông tin</button><button data-staff-action="salary" data-staff-id="${esc(employee.id)}">${salaryAction}</button><button class="quiet" data-staff-action="attendance" data-staff-id="${esc(employee.id)}">근무 보기 / Chấm công</button><button class="quiet" data-staff-action="pay" data-staff-id="${esc(employee.id)}">지급·서명 / Trả &amp; ký</button><button class="quiet danger" data-staff-action="delete" data-staff-id="${esc(employee.id)}">직원 삭제 / Xóa khỏi danh sách</button>`}</div></article>`;
+      return `<article class="staff-card" data-staff-id="${esc(employee.id)}"><div class="staff-identity"><span class="staff-avatar" aria-hidden="true">${esc(employee.name.slice(0,1))}</span><div><h3>${esc(employee.name)}</h3><p class="muted">ID ${esc(employee.device_user_id)} · ${employee.employment_type==="part_time"?"파트타임 / Bán thời gian":"정규직 / Toàn thời gian"}${employee.hire_date?" · 입사 "+esc(employee.hire_date):""}</p></div><span class="badge ${employment==="active"?"":"neutral"}">${esc(statusText)}</span></div><div class="staff-salary">${term?`<span>${payType}</span><strong>${money(Number(term.rate))} <small>VND</small></strong><p class="muted">${esc(term.effective_from)}부터 적용 / Từ ngày</p>`:'<span class="badge warn">급여조건 미등록 / Chưa có điều kiện lương</span><p class="muted">월급이나 시급을 등록해 주세요.</p>'}</div><div class="staff-actions">${employee.archived_at?`<button data-staff-action="restore" data-staff-id="${esc(employee.id)}">직원 복원 / Khôi phục</button><button class="quiet" data-staff-action="attendance" data-staff-id="${esc(employee.id)}">근무 이력 / Lịch sử công</button><button class="quiet" data-staff-action="history" data-staff-id="${esc(employee.id)}">지급 이력 / Lịch sử trả</button>`:`<button class="quiet" data-staff-action="info" data-staff-id="${esc(employee.id)}">정보 수정 / Thông tin</button><button data-staff-action="salary" data-staff-id="${esc(employee.id)}">${salaryAction}</button><button class="quiet" data-staff-action="convert" data-staff-id="${esc(employee.id)}">${employee.employment_type==="part_time"?"정규직 전환 / Chuyển chính thức":"파트타임 전환 / Chuyển bán thời gian"}</button><button class="quiet" data-staff-action="attendance" data-staff-id="${esc(employee.id)}">근무 보기 / Chấm công</button><button class="quiet" data-staff-action="pay" data-staff-id="${esc(employee.id)}">지급·서명 / Trả &amp; ký</button><button class="quiet" data-staff-action="ledger" data-staff-id="${esc(employee.id)}">급여대장 / Bảng lương</button><button class="quiet danger" data-staff-action="delete" data-staff-id="${esc(employee.id)}">직원 삭제 / Xóa khỏi danh sách</button>`}</div></article>`;
     }).join("")||`<div class="empty"><strong>${state.employees.length?"검색한 직원이 없습니다. / Không tìm thấy nhân viên.":"등록된 직원이 없습니다. / Chưa có nhân viên."}</strong><p>위의 직원 등록 버튼으로 시작하세요. / Dùng nút Thêm nhân viên ở trên.</p></div>`;
   }
   const attendanceLabel=day=>({recognized:"자동 반영 / Đã ghi nhận",in_progress:"퇴근 대기 / Chờ giờ ra",missing:"기록 누락 / Thiếu giờ",ambiguous:"기록 확인 / Kiểm tra"}[day.attendanceStatus]||"기록됨 / Đã ghi");
@@ -182,7 +189,7 @@
     renderStaff();renderTeam();syncDetail();
   }
   function invalidate(){
-    archiveGeneration++;deleteDialog.close();
+    archiveGeneration++;deleteDialog.close();staffDialog.close();popupView="";
     for(const id of ["staffList","teamCalendar","teamDayRows"])$(id).replaceChildren();
     for(const id of ["staffCount","teamMonthSummary","teamDayTitle"])$(id).textContent="";
     $("paymentEmployee").replaceChildren();$("startPayment").disabled=true;teamDays.clear();
@@ -202,12 +209,15 @@
     if(button.dataset.openView)showView(button.dataset.openView,{historyMode:"push"});
     if(button.dataset.staffAction&&selectEmployee(button.dataset.staffId)){
       const action=button.dataset.staffAction;
-      showView(action==="pay"||action==="history"?"payments":action==="attendance"?"attendance":"employees",{historyMode:"push"});
-      if(action==="info")$("editEmployee").click();
+      if(["attendance","pay","history"].includes(action)){
+        popupView=action==="attendance"?"attendance":"payments";syncDetail();
+        $("staffDetailDialogTitle").textContent=state.employees.find(e=>e.id===state.selected).name+" · "+(popupView==="attendance"?"근무 보기 / Chấm công":"지급·서명 / Trả & ký");staffDialog.showModal();
+      }else if(action==="ledger"){
+        showView("ledger",{historyMode:"push"});$("employeeFilter").value=state.selected;app.render();$("employeeDetail").scrollIntoView({behavior:"smooth",block:"start"});
+      }else if(action==="info")$("editEmployee").click();
       else if(action==="salary")$("addTerms").click();
-      else if(action==="pay")$("addPayment")?.click();
+      else if(action==="convert")void window.DGV_PAYROLL_CONVERSIONS.open(state.selected);
       else if(action==="delete"||action==="restore")employeeArchiveDialog(action==="delete");
-      else $("employeeDetail").scrollIntoView({behavior:"smooth",block:"start"});
     }
     if(button.dataset.teamDate){
       teamDate=button.dataset.teamDate;
