@@ -131,7 +131,7 @@ assert.deepEqual(
   ],
   "reservation section must keep the requested original views and monthly KB settlement order",
 );
-assert.match(adminHome, /href="hana_admin_hidden\.html"[\s\S]*?<span class="name">매출 원본 조회 · Hidden<\/span>/);
+assert.match(adminHome, /href="hana_admin_hidden\.html"[\s\S]*?<span class="name">매출 원본 제외 복구 조회<\/span>/);
 assert.match(adminHome, /href="report\.html"[\s\S]*?<span class="name">월간 정산 · KB<\/span>/);
 assert.match(adminHome, /href="golf_reserv\.html"[\s\S]*?<span class="name">골프 예약 관리<\/span>/);
 assert.match(adminHome, /href="golf_reserv_list\.html"[\s\S]*?<span class="name">골프 예약 한 줄 목록<\/span>/);
