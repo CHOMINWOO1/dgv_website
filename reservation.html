@@ -220,7 +220,7 @@
 
         <div class="span2">
           <label>PRICE (VND)</label>
-          <input id="price" type="number" min="0" step="1000"/>
+          <input id="price" type="text" inputmode="numeric" autocomplete="off" />
         </div>
 
         <div class="span3">
@@ -320,6 +320,41 @@
     };
 
     const $ = (id) => document.getElementById(id);
+    // Group the display only; the reservation RPC still receives a number.
+    const priceInput = $("price");
+    function formatPriceInput(){
+      const raw = priceInput.value;
+      if(!/^[0-9,]*$/.test(raw) || (raw && !/[0-9]/.test(raw))) return;
+      const start = priceInput.selectionStart ?? raw.length;
+      const end = priceInput.selectionEnd ?? start;
+      const direction = priceInput.selectionDirection || "none";
+      const formatted = raw.replace(/,/g, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      if(formatted === raw) return;
+      const position = (offset) => {
+        const digits = raw.slice(0, offset).replace(/,/g, "").length;
+        let index = 0, count = 0;
+        while(index < formatted.length && count < digits){
+          if(formatted[index] !== ",") count++;
+          index++;
+        }
+        return index;
+      };
+      priceInput.value = formatted;
+      priceInput.setSelectionRange(position(start), position(end), direction);
+    }
+    priceInput.addEventListener("input", (event) => { if(!event.isComposing) formatPriceInput(); });
+    priceInput.addEventListener("compositionend", formatPriceInput);
+    priceInput.addEventListener("blur", formatPriceInput);
+    priceInput.addEventListener("beforeinput", (event) => {
+      const start = priceInput.selectionStart, end = priceInput.selectionEnd;
+      if(event.isComposing || start === null || start !== end || !/^[0-9,]*$/.test(priceInput.value)) return;
+      const backward = event.inputType === "deleteContentBackward" && start > 1 && priceInput.value[start - 1] === ",";
+      const forward = event.inputType === "deleteContentForward" && priceInput.value[start] === "," && start + 1 < priceInput.value.length;
+      if(!backward && !forward) return;
+      event.preventDefault();
+      priceInput.setRangeText("", backward ? start - 2 : start, backward ? start : start + 2, "start");
+      priceInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     function setMsg(type, text){
       const el = $("msg");
       if(!text){ el.innerHTML = ""; return; }
@@ -637,8 +672,8 @@
         const branch = getBranchValue();          // ✅ branch 커스텀/선택 반영
 
         const guests_count = Number($("guests_count").value);
-        const priceRaw = $("price").value;
-        const price = priceRaw === "" ? null : Number(priceRaw);
+        const priceRaw = $("price").value.trim();
+        const price = priceRaw === "" ? null : Number(priceRaw.replace(/,/g, ""));
 
         const menu_ko = ($("menu_ko").value || "").trim();
         const menu_vi = ($("menu_vi").value || "").trim();
@@ -657,8 +692,8 @@
           setMsg("bad","NUMBER OF GUESTS를 숫자로 입력해 주세요. 예: 13");
           return;
         }
-        if(price !== null && (!Number.isFinite(price) || price < 0)){
-          setMsg("bad","PRICE에는 0 이상의 숫자만 입력할 수 있습니다.");
+        if(price !== null && (!/^\d+$/.test(priceRaw.replace(/,/g, "")) || !Number.isSafeInteger(price) || price < 0 || price > 2147483647)){
+          setMsg("bad","PRICE에는 0~2,147,483,647 VND의 정수 금액을 입력해 주세요.");
           return;
         }
 
