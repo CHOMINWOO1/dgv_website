@@ -96,8 +96,7 @@
       orders, otherOrders,
       rangeText: text(source.rangeText), generatedAt: source.generatedAt || new Date(),
       orderCount: selected.length, bankOrderCount: orders.length,
-      sectionCount: orders.length + (otherOrders.some(order => order.paymentMethod === "cash") ? 1 : 0)
-        + (otherOrders.some(order => order.paymentMethod === "card") ? 1 : 0),
+      sectionCount: selected.length,
       grossAmount: sum(selected.map(order => order.grossAmount)),
       bankGrossAmount: sum(orders.map(order => order.grossAmount)),
       otherGrossAmount: sum(otherOrders.map(order => order.grossAmount))
@@ -129,8 +128,13 @@
       Đây không phải xác nhận tiền thực nhận vào ngân hàng hoặc hóa đơn điện tử gốc.</footer>`;
   }
 
-  function bankSection(order, model, index) {
-    return `<section class="reportSection bankOrder">${reportHeader(model, "은행 결제 주문 내역", "CHI TIẾT ĐƠN HÀNG CHUYỂN KHOẢN", index)}
+  function orderSection(order, model, index) {
+    const [methodKo, methodVi, className] = {
+      bank: ["은행", "chuyển khoản", "bankOrder"],
+      cash: ["현금", "tiền mặt", "cashOrders"],
+      card: ["카드", "thẻ", "cardOrders"]
+    }[order.paymentMethod];
+    return `<section class="reportSection ${className}">${reportHeader(model, `${methodKo} 결제 주문 내역`, `CHI TIẾT ĐƠN HÀNG ${methodVi.toUpperCase()}`, index)}
       <div class="orderMeta"><div><b>주문번호 / Mã đơn:</b> ${escape(order.id)}</div><div><b>주문 일시 / Thời điểm đặt:</b> ${escape(vietnamTime(order.createdAt))}</div>
       ${order.guideName ? `<div><b>고객·가이드 / Khách·Hướng dẫn viên:</b> ${escape(order.guideName)}</div>` : ""}
       ${order.teamNo ? `<div><b>팀·테이블 / Nhóm·Bàn:</b> ${escape(order.teamNo)}</div>` : ""}
@@ -138,7 +142,7 @@
       ${itemsTable(order.lines, false)}
       <div class="orderEnding"><div class="totals"><div><span>메뉴 합계 / Tổng chi tiết</span><b>${money(order.lineTotal)} VND</b></div>
       ${order.difference ? `<div class="difference"><span>주문-메뉴 차액 / Chênh lệch đơn hàng-chi tiết</span><b>${money(order.difference)} VND</b></div>` : ""}
-      <div class="grand"><span>은행 결제 총액 (VAT 포함)<br>Tổng thanh toán chuyển khoản (có VAT)</span><b>${money(order.grossAmount)} VND</b></div></div>
+      <div class="grand"><span>${methodKo} 결제 총액 (VAT 포함)<br>Tổng thanh toán ${methodVi} (có VAT)</span><b>${money(order.grossAmount)} VND</b></div></div>
       ${warningHtml(order.warnings)}${footer()}</div></section>`;
   }
 
@@ -153,26 +157,6 @@
       } else grouped.set(key, { ...line, paymentMethod: order.paymentMethod });
     }));
     return Array.from(grouped.values());
-  }
-
-  function otherSection(model, method, index) {
-    const orders = model.otherOrders.filter(order => order.paymentMethod === method);
-    const isCash = method === "cash";
-    const titleKo = isCash ? "현금 결제 합산 내역" : "카드 결제 합산 내역";
-    const titleVi = isCash ? "TỔNG HỢP THANH TOÁN TIỀN MẶT" : "TỔNG HỢP THANH TOÁN THẺ";
-    const grossAmount = sum(orders.map(order => order.grossAmount));
-    const lineTotal = sum(orders.map(order => order.lineTotal));
-    const difference = grossAmount !== null && lineTotal !== null ? grossAmount - lineTotal : null;
-    const warnings = orders.flatMap(order => order.warnings.map(warning => `${order.id}: ${warning}`));
-    return `<section class="reportSection otherOrders ${isCash ? "cashOrders" : "cardOrders"}">${reportHeader(model, titleKo, titleVi, index)}
-      <p class="sectionIntro">주문 ${orders.length}건 / ${orders.length} đơn hàng. 같은 결제수단·메뉴·단가별로 합산합니다. / Gộp theo phương thức thanh toán, món ăn và đơn giá.</p>
-      ${itemsTable(aggregateOtherLines(orders), true)}
-      <div class="totals"><div><span>메뉴 합계 / Tổng chi tiết</span><b>${money(lineTotal)} VND</b></div>
-      ${difference ? `<div class="difference"><span>주문-메뉴 차액 / Chênh lệch đơn hàng-chi tiết</span><b>${money(difference)} VND</b></div>` : ""}
-      <div class="grand"><span>${isCash ? "현금" : "카드"} 결제 총액 (VAT 포함)<br>Tổng thanh toán ${isCash ? "tiền mặt" : "thẻ"} (có VAT)</span><b>${money(grossAmount)} VND</b></div></div>
-      <h3>포함 주문 / Các đơn hàng được tổng hợp</h3><table class="orderIndex"><thead><tr><th>주문번호 / Mã đơn</th><th>주문 일시 / Thời điểm đặt</th><th>결제수단 / Thanh toán</th><th>VAT 포함 총액 / Tổng có VAT</th></tr></thead><tbody>
-      ${orders.map(order => `<tr><td>${escape(order.id)}</td><td>${escape(vietnamTime(order.createdAt))}</td><td>${escape(paymentLabel(order.paymentMethod))}</td><td class="number">${money(order.grossAmount)}</td></tr>`).join("")}</tbody></table>
-      ${warningHtml(warnings)}${footer()}</section>`;
   }
 
   /** Excel cells remain numbers or literal strings; the existing XLSX writer never creates formulas. */
@@ -285,10 +269,10 @@
   }
 
   function renderHtml(model) {
-    const sections = model.orders.map((order, index) => bankSection(order, model, index + 1));
-    for (const method of ["cash", "card"]) {
-      if (model.otherOrders.some(order => order.paymentMethod === method)) sections.push(otherSection(model, method, sections.length + 1));
-    }
+    const orders = [...model.orders,
+      ...model.otherOrders.filter(order => order.paymentMethod === "cash"),
+      ...model.otherOrders.filter(order => order.paymentMethod === "card")];
+    const sections = orders.map((order, index) => orderSection(order, model, index + 1));
     return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>HANA 결제 내역 / Chi tiết thanh toán</title><style>
       @page{size:A4 portrait;margin:13mm 12mm}
       *{box-sizing:border-box}body{margin:0;color:#1c1917;background:#fff;font-family:Arial,"Malgun Gothic",sans-serif;font-size:11px;line-height:1.45}

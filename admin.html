@@ -345,7 +345,7 @@
               <button class="btn btnPrimary" id="applyRange">적용</button>
               <button class="btn" id="printRangeBtn">전체 출력</button>
               <button class="btn" id="excelRangeBtn">엑셀 출력</button>
-              <button class="btn" id="bankPrintRangeBtn" title="은행은 주문별로, 현금과 카드는 결제수단별로 나누어 한 번에 인쇄합니다.">결제별 출력 (은행 개별)</button>
+              <button class="btn" id="bankPrintRangeBtn" title="은행·현금·카드를 결제 건별로 나누어 한 번에 인쇄합니다.">결제별 출력 (건별)</button>
               <button class="btn" id="bankExcelRangeBtn" title="은행은 주문별 시트로, 현금과 카드는 각각 합산 시트로 한 Excel 파일에 저장합니다.">결제별 엑셀</button>
             </div>
           </div>
@@ -452,7 +452,7 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
   <script src="assets/admin-tax-report.js"></script>
-<script src="assets/admin-bank-report.js?v=20261107-payment-xlsx-1"></script>
+<script src="assets/admin-bank-report.js?v=20261123-payment-print-each-1"></script>
   <script src="assets/supabase-client.js"></script>
   <script>
     /*************************************************
@@ -1375,7 +1375,7 @@
       }
     }
 
-    // 기존 주문을 읽기만 하며 은행 주문별 + 현금 묶음 + 카드 묶음을 한 문서로 인쇄합니다.
+    // 기존 주문을 읽기만 하며 은행·현금·카드의 각 결제 건을 한 문서로 인쇄합니다.
     async function printBankOrders(){
       const button = document.getElementById("bankPrintRangeBtn");
       if (button.disabled) return;
