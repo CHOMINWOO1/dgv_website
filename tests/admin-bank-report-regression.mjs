@@ -60,7 +60,7 @@ const model = api.buildReport(input);
 assert.equal(serialize(input), before, "building the print model must not mutate orders or item snapshots");
 assert.equal(model.orderCount, 7, "all paid, non-excluded bank/cash/card orders belong in the report");
 assert.equal(model.bankOrderCount, 5);
-assert.equal(model.sectionCount, 7, "five bank orders plus separate cash and card groups need seven sections");
+assert.equal(model.sectionCount, 7, "each paid bank, cash and card order needs its own print section");
 assert.deepEqual(Array.from(model.orders, item => item.id).sort(), ["order-bank-extra", "order-custom", "order-mixed", "order-no-lines", "order-zero"]);
 assert.deepEqual(Array.from(model.otherOrders, item => item.id).sort(), ["order-card", "order-cash"]);
 assert.equal(model.bankGrossAmount, 595_000);
@@ -95,21 +95,32 @@ assert.equal(serialize(model), modelBefore, "rendering must be read-only");
 const sectionCount = (html.match(/<section\b(?=[^>]*class="[^"]*\bbankOrder\b)/g) || []).length;
 assert.equal(sectionCount, 5, "each bank order needs an independent printable section");
 assert.equal(sections(html, "reportSection").length, 7);
-assert.equal(sections(html, "otherOrders").length, 2, "cash and card need separate printable aggregate groups");
 assert.equal(sections(html, "cashOrders").length, 1);
 assert.equal(sections(html, "cardOrders").length, 1);
 const cashSection = sections(html, "cashOrders")[0];
 const cardSection = sections(html, "cardOrders")[0];
 assert.match(cashSection, /order-cash/);
 assert.match(cashSection, /현금 메뉴/);
+assert.match(cashSection, /현금 결제 주문 내역/);
+assert.match(cashSection, /CHI TIẾT ĐƠN HÀNG TIỀN MẶT/);
+assert.match(cashSection, /현금 결제 총액 \(VAT 포함\)/);
 assert.match(cashSection, /240,000/);
 assert.doesNotMatch(cashSection, /order-card|카드 메뉴|480,000/);
 assert.match(cardSection, /order-card/);
 assert.match(cardSection, /카드 메뉴/);
+assert.match(cardSection, /카드 결제 주문 내역/);
+assert.match(cardSection, /CHI TIẾT ĐƠN HÀNG THẺ/);
+assert.match(cardSection, /카드 결제 총액 \(VAT 포함\)/);
 assert.match(cardSection, /240,000/);
 assert.doesNotMatch(cardSection, /order-cash|현금 메뉴|480,000/);
 assert.ok(html.indexOf(cashSection) > html.lastIndexOf('class="reportSection bankOrder"'));
-assert.ok(html.indexOf(cardSection) > html.indexOf(cashSection), "print order is bank orders, cash aggregate, then card aggregate");
+assert.ok(html.indexOf(cardSection) > html.indexOf(cashSection), "print order is bank orders, cash orders, then card orders");
+assert.doesNotMatch(html, /합산 내역|TỔNG HỢP THANH TOÁN|같은 결제수단·메뉴·단가별로 합산|class="orderIndex"/, "printing must not aggregate cash/card order details");
+for (const [index, section] of sections(html, "reportSection").entries()) {
+  assert.match(section, new RegExp(`출력 묶음 / Nhóm in: ${index + 1} / ${model.orderCount}`), "the print sequence counts actual orders, not payment groups");
+  assert.match(section, /class="orderMeta"/);
+  assert.match(section, /class="orderEnding"/);
+}
 assert.match(html, /break-before\s*:\s*page|page-break-before\s*:\s*always/, "orders must start on separate printed pages");
 assert.match(html, /A4/);
 assert.match(html, /VAT 포함|VAT\s*포함/);
@@ -137,7 +148,7 @@ assert.equal(emptyModel.bankGrossAmount, 0);
 assert.equal(emptyModel.otherGrossAmount, 0);
 assert.equal(emptyModel.sectionCount, 0);
 assert.equal((api.renderHtml(emptyModel).match(/<section\b(?=[^>]*class="[^"]*\bbankOrder\b)/g) || []).length, 0);
-assert.equal((api.renderHtml(emptyModel).match(/<section\b(?=[^>]*class="[^"]*\botherOrders\b)/g) || []).length, 0);
+assert.equal(sections(api.renderHtml(emptyModel), "reportSection").length, 0);
 
 const cashCardInput = fixture();
 cashCardInput.visibleOrders = cashCardInput.visibleOrders.filter(order => ["cash", "card"].includes(order.payment_method));
@@ -153,10 +164,10 @@ for (const method of ["cash", "card"]) {
   const singleMethod = api.buildReport(singleMethodInput);
   const singleMethodHtml = api.renderHtml(singleMethod);
   assert.equal(singleMethod.orderCount, 1);
-  assert.equal(singleMethod.sectionCount, 1, `${method}-only ranges need one aggregate section`);
+  assert.equal(singleMethod.sectionCount, 1, `${method}-only ranges need one section per paid order`);
   assert.equal(singleMethod.grossAmount, 240_000);
   assert.equal(sections(singleMethodHtml, "bankOrder").length, 0);
-  assert.equal(sections(singleMethodHtml, "otherOrders").length, 1);
+  assert.equal(sections(singleMethodHtml, "reportSection").length, 1);
   assert.equal(sections(singleMethodHtml, method + "Orders").length, 1);
   assert.equal(sections(singleMethodHtml, (method === "cash" ? "card" : "cash") + "Orders").length, 0);
 }
@@ -190,26 +201,38 @@ const aggregateHtml = api.renderHtml(aggregateModel);
 assert.equal(serialize(aggregateInput), aggregateBefore);
 assert.equal(aggregateModel.grossAmount, 360_000);
 assert.equal(aggregateModel.orderCount, 5);
-assert.equal(aggregateModel.sectionCount, 2, "multiple cash and card orders still produce only two aggregate sections");
-const aggregateCash = sections(aggregateHtml, "cashOrders")[0];
-const aggregateCard = sections(aggregateHtml, "cardOrders")[0];
+assert.equal(aggregateModel.sectionCount, 5, "multiple cash/card orders must print individually even when their menus match");
+assert.equal(sections(aggregateHtml, "reportSection").length, 5);
+const individualCash = sections(aggregateHtml, "cashOrders");
+const individualCard = sections(aggregateHtml, "cardOrders");
+assert.equal(individualCash.length, 3);
+assert.equal(individualCard.length, 2);
 const itemBody = section => section.match(/<table class="items">[\s\S]*?<tbody>([\s\S]*?)<\/tbody>/)?.[1];
-const aggregateCashBody = itemBody(aggregateCash);
-const aggregateCardBody = itemBody(aggregateCard);
-assert.ok(aggregateCashBody);
-assert.ok(aggregateCardBody);
-assert.equal((aggregateCashBody.match(/<tr>/g) || []).length, 2, "same-price cash lines merge but historical price differences remain distinct");
-assert.equal((aggregateCardBody.match(/<tr>/g) || []).length, 1, "same-price card lines aggregate independently from matching cash menus");
-for (const body of [aggregateCashBody, aggregateCardBody]) {
-  assert.match(body, /<td class="number">3<\/td>\s*<td class="number">50,000<\/td>\s*<td class="number">150,000<\/td>/);
-  assert.doesNotMatch(body, /<td class="number">6<\/td>/, "identical cash/card menus must never combine across payment methods");
+const individualSections = sections(aggregateHtml, "reportSection");
+const expectedIndividualOrders = [...aggregateModel.otherOrders.filter(order => order.paymentMethod === "cash"),
+  ...aggregateModel.otherOrders.filter(order => order.paymentMethod === "card")];
+for (const [index, order] of expectedIndividualOrders.entries()) {
+  const section = individualSections[index];
+  const body = itemBody(section);
+  assert.ok(body);
+  assert.match(section, new RegExp(order.id));
+  for (const other of aggregateModel.otherOrders.filter(other => other.id !== order.id)) {
+    assert.ok(!section.includes(other.id), `printed order ${order.id} must not include ${other.id}`);
+  }
+  assert.equal((body.match(/<tr>/g) || []).length, 1, "matching menus from other orders must not create or merge printed rows");
+  const line = order.lines[0];
+  const formatted = value => value.toLocaleString("en-US");
+  assert.match(body, new RegExp(`<td class="number">${line.qty}<\\/td>\\s*<td class="number">${formatted(line.unitAmount)}<\\/td>\\s*<td class="number">${formatted(line.grossAmount)}<\\/td>`));
+  assert.match(section, new RegExp(`${formatted(order.grossAmount)} VND`));
+  assert.doesNotMatch(section, /150,000|210,000|360,000/, "order sections must not inherit aggregate method or range totals");
+  assert.match(section, new RegExp(`출력 묶음 / Nhóm in: ${index + 1} / 5`));
 }
-assert.match(aggregateCash, /210,000 VND/);
-assert.match(aggregateCard, /150,000 VND/);
-assert.doesNotMatch(aggregateCash, /card-a|card-b/);
-assert.doesNotMatch(aggregateCard, /cash-a|cash-b|cash-c|210,000/);
-assert.equal(sections(aggregateHtml, "cashOrders").length, 1);
-assert.equal(sections(aggregateHtml, "cardOrders").length, 1);
+for (const method of ["cash", "card"]) {
+  const selected = api.buildReport({ ...aggregateInput, visibleOrders: aggregateInput.visibleOrders.filter(order => order.payment_method.trim().toLowerCase() === method) });
+  const selectedHtml = api.renderHtml(selected);
+  assert.equal(selected.sectionCount, method === "cash" ? 3 : 2);
+  assert.equal(sections(selectedHtml, "reportSection").length, selected.orderCount, "a single payment method must still print one section for every paid order");
+}
 
 const differenceInput = fixture();
 differenceInput.visibleOrders = [
@@ -261,7 +284,46 @@ assert.match(sections(partialHtml, "cashOrders")[0], /100,000 VND/);
 assert.match(sections(partialHtml, "cardOrders")[0], /확인 필요/);
 assert.doesNotMatch(sections(partialHtml, "cardOrders")[0], /100,000/, "unknown card totals must not inherit the cash aggregate amount");
 
+for (const method of ["cash", "card"]) {
+  const edgeInput = fixture();
+  const seed = input.visibleOrders[0];
+  edgeInput.visibleOrders = [
+    { ...seed, id: `${method}-zero`, payment_method: method, total_vnd: 0 },
+    { ...seed, id: `${method}-missing-details`, payment_method: method, total_vnd: 55_000 },
+    { ...seed, id: `${method}-unknown`, payment_method: method, total_vnd: null },
+    { ...seed, id: `${method}-pending`, payment_method: method, status: "pending" },
+    { ...seed, id: `${method}-cancelled`, payment_method: method, status: "cancelled" },
+    { ...seed, id: `${method}-excluded`, payment_method: method, sales_excluded: true },
+  ];
+  edgeInput.linesByOrder = new Map([[`${method}-zero`, [{ ko_name: '<img src=x onerror="alert(1)">', vi_name: "Món miễn phí & <script>", qty: 2, unit_vnd: 50_000, line_vnd: 0 }]]]);
+  const edgeBefore = serialize(edgeInput);
+  const edgeModel = api.buildReport(edgeInput);
+  const edgeModelBefore = serialize(edgeModel);
+  const edgeHtml = api.renderHtml(edgeModel);
+  assert.equal(serialize(edgeInput), edgeBefore, "cash/card edge cases must leave historical input snapshots unchanged");
+  assert.equal(serialize(edgeModel), edgeModelBefore);
+  assert.equal(edgeModel.orderCount, 3);
+  assert.equal(edgeModel.sectionCount, 3);
+  assert.equal(edgeModel.grossAmount, null, "one unknown order must not silently become a zero-value sale");
+  const edgeSections = sections(edgeHtml, method + "Orders");
+  assert.equal(edgeSections.length, 3);
+  const zeroSection = edgeSections.find(section => section.includes(`${method}-zero`));
+  const missingSection = edgeSections.find(section => section.includes(`${method}-missing-details`));
+  const unknownSection = edgeSections.find(section => section.includes(`${method}-unknown`));
+  assert.match(itemBody(zeroSection), /<td class="number">2<\/td>\s*<td class="number">50,000<\/td>\s*<td class="number">0<\/td>/);
+  assert.match(zeroSection, /0 VND/);
+  assert.match(zeroSection, /&lt;img|&lt;script&gt;/);
+  assert.doesNotMatch(edgeHtml, /<img\b|<script\b|onerror="alert\(1\)"/);
+  assert.match(missingSection, /55,000 VND/);
+  assert.match(missingSection, /상세 내역 없음|확인 필요/);
+  assert.match(unknownSection, /확인 필요/);
+  assert.match(unknownSection, /<b>- VND<\/b>/);
+  assert.doesNotMatch(unknownSection, /55,000|50,000/, "missing order values must not inherit another order's amounts");
+  assert.doesNotMatch(edgeHtml, /-pending|-cancelled|-excluded/);
+}
+
 assert.match(admin, /id="bankPrintRangeBtn"/);
+assert.match(admin, /id="bankPrintRangeBtn"[^>]*>결제별 출력 \(건별\)<\/button>/);
 assert.match(admin, /<script src="assets\/admin-bank-report\.js(?:\?[^\"]*)?"><\/script>/);
 assert.match(admin, /getElementById\("bankPrintRangeBtn"\)\.addEventListener\("click",\s*printBankOrders\)/);
 const handlerStart = admin.indexOf("async function printBankOrders(");
@@ -276,7 +338,7 @@ assert.match(handlerSource, /loadTaxRangeReportData\(/, "bank printing must reus
 function printContext({ result = model, blocked = false, readError = null, fromDate = "2026-11-06", toDate = "2026-11-06", disabled = false } = {}) {
   const events = [];
   const alerts = [];
-  const button = { disabled, textContent: "결제별 출력 (은행 개별)" };
+  const button = { disabled, textContent: "결제별 출력 (건별)" };
   const popup = {
     closed: false,
     document: { open: () => events.push("document.open"), write: value => events.push(["write", value]), close: () => events.push("document.close"), fonts: { ready: Promise.resolve() } },
@@ -286,8 +348,8 @@ function printContext({ result = model, blocked = false, readError = null, fromD
   };
   const context = {
     document: { getElementById: id => id === "bankPrintRangeBtn" ? button : { value: id === "fromDate" ? fromDate : toDate } },
-    window: { open: () => { events.push("open"); return blocked ? null : popup; }, DGV_BANK_REPORT: { buildReport: () => result, renderHtml: () => "<html>bank report fixture</html>" } },
-    DGV_BANK_REPORT: { buildReport: () => result, renderHtml: () => "<html>bank report fixture</html>" },
+    window: { open: () => { events.push("open"); return blocked ? null : popup; }, DGV_BANK_REPORT: { buildReport: () => result, renderHtml: value => api.renderHtml(value) } },
+    DGV_BANK_REPORT: { buildReport: () => result, renderHtml: value => api.renderHtml(value) },
     loadTaxRangeReportData: async () => { events.push("query"); if (readError) throw readError; return fixture(); },
     alert: message => alerts.push(message), console: { error: () => {} },
     Date, String, Number, Math, Promise,
@@ -302,17 +364,27 @@ const success = printContext();
 await success.context.run();
 assert.ok(success.events.indexOf("open") < success.events.indexOf("query"), "popup must open synchronously before awaiting data to avoid popup blockers");
 assert.equal(success.button.disabled, false);
-assert.equal(success.button.textContent, "결제별 출력 (은행 개별)");
-assert.ok(success.events.some(event => Array.isArray(event) && event[1].includes("bank report fixture")));
+assert.equal(success.button.textContent, "결제별 출력 (건별)");
+const writtenReport = success.events.find(event => Array.isArray(event) && event[1].includes("class=\"reportSection"))?.[1];
+assert.ok(writtenReport, "the print handler must write the generated report, not a separate aggregate template");
+assert.equal(sections(writtenReport, "reportSection").length, model.orderCount);
 await Promise.resolve();
-assert.equal(success.events.filter(event => event === "open").length, 1, "all payment groups must share one window");
-assert.equal(success.events.filter(event => event === "query").length, 1, "separating payment groups must not re-fetch the same range per group");
+assert.equal(success.events.filter(event => event === "open").length, 1, "all paid orders must share one window");
+assert.equal(success.events.filter(event => event === "query").length, 1, "separating orders must not re-fetch the same range per order");
 assert.equal(success.events.filter(event => event === "print").length, 1, "font readiness and fallback timers must not open duplicate print dialogs");
 const otherOnlyPrint = printContext({ result: cashCardOnly });
 await otherOnlyPrint.context.run();
 await Promise.resolve();
 assert.equal(otherOnlyPrint.events.filter(event => event === "print").length, 1, "cash/card-only periods must print both separate groups in one dialog");
 assert.equal(otherOnlyPrint.alerts.length, 0);
+const repeatedMenuPrint = printContext({ result: aggregateModel });
+await repeatedMenuPrint.context.run();
+await Promise.resolve();
+assert.equal(repeatedMenuPrint.events.filter(event => event === "open").length, 1);
+assert.equal(repeatedMenuPrint.events.filter(event => event === "query").length, 1);
+assert.equal(repeatedMenuPrint.events.filter(event => event === "print").length, 1, "five individual cash/card sections still need just one print dialog");
+const repeatedMenuHtml = repeatedMenuPrint.events.find(event => Array.isArray(event) && event[1].includes('class="reportSection'))?.[1];
+assert.equal(sections(repeatedMenuHtml, "reportSection").length, 5);
 
 for (const options of [{ result: emptyModel }, { readError: new Error("simulated read failure") }]) {
   const check = printContext(options);
@@ -320,7 +392,7 @@ for (const options of [{ result: emptyModel }, { readError: new Error("simulated
   assert.equal(check.popup.closed, true, "empty/error output must close the blank preparation popup");
   assert.ok(check.alerts.length > 0);
   assert.equal(check.button.disabled, false);
-  assert.equal(check.button.textContent, "결제별 출력 (은행 개별)");
+  assert.equal(check.button.textContent, "결제별 출력 (건별)");
 }
 const blocked = printContext({ blocked: true });
 await blocked.context.run();
@@ -394,6 +466,7 @@ const unknownWorkbook = api.workbookOptions(unknownModel);
 assert.equal(totalCell(unknownWorkbook.sheets[0], "결제 총액 (VAT 포함) / Tổng thanh toán (có VAT)").value, null, "unknown amounts must stay blank, not become zero");
 assert.match(sheetText(unknownWorkbook.sheets[0]), /확인 필요/);
 const aggregateWorkbook = api.workbookOptions(aggregateModel);
+assert.equal(serialize(aggregateWorkbook), serialize(api.workbookOptions({ ...aggregateModel, sectionCount: 2 })), "Excel must retain method aggregates independently of the new per-order print section count");
 assert.equal(aggregateWorkbook.sheets.length, 2);
 assert.equal(detailRows(aggregateWorkbook.sheets[0]).length, 2);
 assert.equal(detailRows(aggregateWorkbook.sheets[1]).length, 1);
@@ -501,5 +574,5 @@ for (const options of [{ fromDate: "" }, { fromDate: "2026-02-30" }, { fromDate:
 const alreadyExporting = exportContext({ disabled: true }); await alreadyExporting.context.run();
 assert.equal(alreadyExporting.events.length, 0);
 assert.equal(alreadyExporting.downloads.length, 0);
-console.log("Payment-group print/XLSX model, safe numeric workbook and single-download UI regression passed.");
+console.log("Individual payment print, unchanged aggregate XLSX, safe numeric workbook and single-job UI regression passed.");
 
