@@ -9,13 +9,14 @@ const source = await readFile(path.join(root, "assets/admin-bank-report.js"), "u
 const admin = (await readFile(path.join(root, "admin.html"), "utf8")).replace(/\r\n/g, "\n");
 new vm.Script(source, { filename: "assets/admin-bank-report.js" });
 assert.doesNotMatch(source, /\b(?:fetch|XMLHttpRequest)\s*\(|\.(?:insert|update|upsert|delete|rpc)\s*\(/, "bank report generation must not perform network calls or DB writes");
-const scope = { Date, Intl, Map, Set, Object, Array, Number, String, Boolean, Math, JSON, TextEncoder, Uint8Array, Uint32Array, DataView };
+const scope = { Date, Intl, Map, Set, Object, Array, Number, String, Boolean, Math, JSON, TextEncoder, Uint8Array, Uint32Array, DataView, setTimeout, clearTimeout };
 vm.runInNewContext(source, scope);
 vm.runInNewContext(await readFile(path.join(root, "assets/dgv-xlsx.js"), "utf8"), scope);
 const api = scope.DGV_BANK_REPORT;
 assert.equal(typeof api?.buildReport, "function");
 assert.equal(typeof api?.renderHtml, "function");
 assert.equal(typeof api?.workbookOptions, "function");
+assert.equal(typeof api?.waitForPrintAssets, "function");
 
 function fixture() {
   const order = (id, payment_method = "bank", status = "paid", total_vnd = 240_000) => ({
@@ -114,7 +115,7 @@ assert.match(cardSection, /카드 결제 총액 \(VAT 포함\)/);
 assert.match(cardSection, /240,000/);
 assert.doesNotMatch(cardSection, /order-cash|현금 메뉴|480,000/);
 assert.ok(html.indexOf(cashSection) > html.lastIndexOf('class="reportSection bankOrder"'));
-assert.ok(html.indexOf(cardSection) > html.indexOf(cashSection), "print order is bank orders, cash orders, then card orders");
+assert.ok(html.indexOf(cardSection) < html.indexOf('class="reportSection bankOrder"'), "card orders print first, then bank orders, then cash orders");
 assert.doesNotMatch(html, /합산 내역|TỔNG HỢP THANH TOÁN|같은 결제수단·메뉴·단가별로 합산|class="orderIndex"/, "printing must not aggregate cash/card order details");
 for (const [index, section] of sections(html, "reportSection").entries()) {
   assert.match(section, new RegExp(`출력 묶음 / Nhóm in: ${index + 1} / ${model.orderCount}`), "the print sequence counts actual orders, not payment groups");
@@ -209,8 +210,8 @@ assert.equal(individualCash.length, 3);
 assert.equal(individualCard.length, 2);
 const itemBody = section => section.match(/<table class="items">[\s\S]*?<tbody>([\s\S]*?)<\/tbody>/)?.[1];
 const individualSections = sections(aggregateHtml, "reportSection");
-const expectedIndividualOrders = [...aggregateModel.otherOrders.filter(order => order.paymentMethod === "cash"),
-  ...aggregateModel.otherOrders.filter(order => order.paymentMethod === "card")];
+const expectedIndividualOrders = [...aggregateModel.otherOrders.filter(order => order.paymentMethod === "card"),
+  ...aggregateModel.otherOrders.filter(order => order.paymentMethod === "cash")];
 for (const [index, order] of expectedIndividualOrders.entries()) {
   const section = individualSections[index];
   const body = itemBody(section);
@@ -284,6 +285,103 @@ assert.match(sections(partialHtml, "cashOrders")[0], /100,000 VND/);
 assert.match(sections(partialHtml, "cardOrders")[0], /확인 필요/);
 assert.doesNotMatch(sections(partialHtml, "cardOrders")[0], /100,000/, "unknown card totals must not inherit the cash aggregate amount");
 
+const receiptPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aJ1kAAAAASUVORK5CYII=";
+const receiptInput = fixture();
+receiptInput.cardReceiptsByOrder = {
+  "order-card": { dataUrl: receiptPng }, "order-mixed": { dataUrl: receiptPng },
+  "order-cash": { dataUrl: receiptPng }, "unrelated-order": { dataUrl: receiptPng },
+};
+const receiptBefore = serialize(receiptInput), receiptModel = api.buildReport(receiptInput);
+const receiptModelBefore = serialize(receiptModel), receiptHtml = api.renderHtml(receiptModel);
+assert.equal(serialize(receiptInput), receiptBefore, "attaching a receipt must not alter the query snapshots or receipt source");
+assert.equal(serialize(receiptModel), receiptModelBefore, "receipt rendering must not alter the print model");
+assert.equal(receiptModel.otherOrders.find(order => order.id === "order-card").receiptDataUrl, receiptPng);
+assert.ok([...receiptModel.orders, ...receiptModel.otherOrders.filter(order => order.paymentMethod !== "card")].every(order => !order.receiptDataUrl), "a valid receipt attached to a bank/cash id must never print");
+assert.equal(receiptModel.sectionCount, 7, "receipt pages do not change order numbering or counts");
+const receiptSections = sections(receiptHtml, "reportSection");
+assert.equal(receiptSections.length, 8);
+assert.match(receiptSections[0], /class="reportSection cardOrders"/);
+assert.match(receiptSections[1], /class="reportSection receiptPage"/);
+assert.match(receiptSections[2], /class="reportSection bankOrder"/);
+assert.equal(sections(receiptHtml, "receiptPage").length, 1, "one attached card receipt gets exactly one additional page");
+assert.match(receiptSections[1], /카드 매출전표 사진/);
+assert.match(receiptSections[1], /ẢNH BIÊN LAI THẺ/);
+assert.match(receiptSections[1], /카드 주문번호 \/ Mã đơn thanh toán thẻ/);
+assert.match(receiptSections[1], /order-card/);
+assert.match(receiptSections[1], /2026-11-06 00:05/);
+assert.match(receiptSections[1], /240,000 VND/);
+assert.match(receiptSections[1], /<img class="receiptImage" src="data:image\/png;base64,/);
+assert.match(receiptHtml, /object-fit:contain/);
+assert.match(receiptHtml, /\.receiptPage\{height:270mm/);
+assert.equal(serialize(api.workbookOptions(receiptModel)), serialize(api.workbookOptions(model)), "receipt association and print-only ordering must leave every Excel sheet/cell/group/order unchanged");
+
+for (const index of [new Map([["order-card", { dataUrl: receiptPng }]]), { "order-card": { dataUrl: receiptPng } }]) {
+  const modelWithIndex = api.buildReport({ ...fixture(), cardReceiptsByOrder: index });
+  assert.equal(sections(api.renderHtml(modelWithIndex), "receiptPage").length, 1, "both Map and own-property object indexes support receipts by order id");
+}
+for (const mime of ["jpeg", "png", "webp"]) {
+  assert.equal(sections(api.renderHtml(api.buildReport({ ...fixture(), cardReceiptsByOrder: { "order-card": { dataUrl: `data:image/${mime};base64,AAAA` } } })), "receiptPage").length, 1);
+}
+for (const invalid of [
+  "https://example.invalid/receipt.png", "javascript:alert(1)", "data:image/svg+xml;base64,PHN2Zz4=",
+  "data:text/html;base64,PHNjcmlwdD4=", "data:image/png;base64,AAAA\" onerror=\"alert(1)",
+  "data:image/png;base64,", "data:image/png;base64,A===", "data:image/png;base64,AAA\n",
+  "data:image/png;base64,AA-A", "data:image/png;name=x;base64,AAAA", null,
+]) {
+  const unsafe = api.buildReport({ ...fixture(), cardReceiptsByOrder: { "order-card": { dataUrl: invalid } } });
+  assert.equal(sections(api.renderHtml(unsafe), "receiptPage").length, 0, `unsafe or malformed receipt must not render: ${invalid}`);
+  const direct = { ...model, otherOrders: model.otherOrders.map(order => ({ ...order, receiptDataUrl: invalid })) };
+  assert.equal(sections(api.renderHtml(direct), "receiptPage").length, 0, "the renderer also validates a caller-supplied model");
+}
+for (const index of [{ "order-card": [{ dataUrl: receiptPng }] }, Object.create({ "order-card": { dataUrl: receiptPng } })]) {
+  assert.equal(sections(api.renderHtml(api.buildReport({ ...fixture(), cardReceiptsByOrder: index })), "receiptPage").length, 0, "arrays and inherited receipt associations are not valid order attachments");
+}
+const hostileId = '<img src=x onerror="alert(1)"> & card';
+const hostileReceipt = api.buildReport({ ...fixture(), visibleOrders: [{ ...input.visibleOrders[6], id: hostileId }],
+  cardReceiptsByOrder: new Map([[hostileId, { dataUrl: receiptPng }]]) });
+const hostileReceiptHtml = api.renderHtml(hostileReceipt);
+assert.match(sections(hostileReceiptHtml, "receiptPage")[0], /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt; &amp; card/);
+assert.equal((hostileReceiptHtml.match(/<img\b/g) || []).length, 1, "only the validated receipt image may become an image element");
+assert.doesNotMatch(hostileReceiptHtml, /<script\b|onerror="alert\(1\)"/);
+
+function printImage({ complete = false, naturalWidth = 100, naturalHeight = 200, decode = async () => {} } = {}) {
+  const listeners = new Map();
+  return { complete, naturalWidth, naturalHeight, decode,
+    addEventListener(name, callback) { listeners.set(name, callback); },
+    removeEventListener(name, callback) { if (listeners.get(name) === callback) listeners.delete(name); },
+    emit(name) { this.complete = true; listeners.get(name)?.(); },
+    get listenerCount() { return listeners.size; },
+  };
+}
+const printWindow = (images = [], fonts = Promise.resolve()) => ({ closed: false, document: { images, fonts: { ready: fonts } }, setTimeout, clearTimeout });
+await api.waitForPrintAssets(printWindow());
+let finishFonts, finishDecode, assetsReady = false;
+const delayedImage = printImage({ decode: () => new Promise(resolve => { finishDecode = resolve; }) });
+const waiting = api.waitForPrintAssets(printWindow([delayedImage], new Promise(resolve => { finishFonts = resolve; })), 1000).then(() => { assetsReady = true; });
+await Promise.resolve();
+assert.equal(assetsReady, false, "print readiness must not resolve while a receipt is still loading");
+delayedImage.emit("load");
+await Promise.resolve();
+finishFonts();
+await Promise.resolve();
+assert.equal(assetsReady, false, "loaded images must also finish decoding before printing");
+finishDecode();
+await waiting;
+assert.equal(delayedImage.listenerCount, 0);
+await api.waitForPrintAssets(printWindow([printImage({ complete: true })]));
+const failedImage = printImage();
+const imageFailure = api.waitForPrintAssets(printWindow([failedImage]), 1000);
+failedImage.emit("error");
+await assert.rejects(imageFailure, error => error.code === "PAYMENT_PRINT_IMAGE_ERROR");
+assert.equal(failedImage.listenerCount, 0);
+await assert.rejects(api.waitForPrintAssets(printWindow([printImage({ complete: true, naturalWidth: 0 })])), error => error.code === "PAYMENT_PRINT_IMAGE_ERROR");
+await assert.rejects(api.waitForPrintAssets(printWindow([printImage({ complete: true, decode: async () => { throw new Error("bad image decode"); } })])), /bad image decode/);
+const timeoutImage = printImage();
+await assert.rejects(api.waitForPrintAssets(printWindow([timeoutImage]), 5), error => error.code === "PAYMENT_PRINT_ASSET_TIMEOUT");
+assert.equal(timeoutImage.listenerCount, 0, "timeout must detach image event handlers");
+await assert.rejects(api.waitForPrintAssets(printWindow([], new Promise(() => {})), 5), error => error.code === "PAYMENT_PRINT_ASSET_TIMEOUT");
+await assert.rejects(api.waitForPrintAssets({ closed: true }), /not available/);
+
 for (const method of ["cash", "card"]) {
   const edgeInput = fixture();
   const seed = input.visibleOrders[0];
@@ -335,7 +433,7 @@ const handlerSource = handlerTail.slice(0, handlerEnd + 6);
 assert.doesNotMatch(handlerSource, /\.(?:insert|update|upsert|delete|rpc)\s*\(/);
 assert.match(handlerSource, /loadTaxRangeReportData\(/, "bank printing must reuse the fully paginated Vietnam-day report query");
 
-function printContext({ result = model, blocked = false, readError = null, fromDate = "2026-11-06", toDate = "2026-11-06", disabled = false } = {}) {
+function printContext({ result = model, blocked = false, readError = null, receiptError = null, assetError = null, fromDate = "2026-11-06", toDate = "2026-11-06", disabled = false } = {}) {
   const events = [];
   const alerts = [];
   const button = { disabled, textContent: "결제별 출력 (건별)" };
@@ -346,10 +444,14 @@ function printContext({ result = model, blocked = false, readError = null, fromD
     focus: () => events.push("focus"), print: () => events.push("print"),
     addEventListener: () => {},
   };
+  const reportApi = { buildReport: () => result, renderHtml: value => api.renderHtml(value), waitForPrintAssets: async value => {
+    assert.equal(value, popup); events.push("assets.ready"); if (assetError) throw assetError;
+  } };
   const context = {
     document: { getElementById: id => id === "bankPrintRangeBtn" ? button : { value: id === "fromDate" ? fromDate : toDate } },
-    window: { open: () => { events.push("open"); return blocked ? null : popup; }, DGV_BANK_REPORT: { buildReport: () => result, renderHtml: value => api.renderHtml(value) } },
-    DGV_BANK_REPORT: { buildReport: () => result, renderHtml: value => api.renderHtml(value) },
+    window: { open: () => { events.push("open"); return blocked ? null : popup; }, DGV_BANK_REPORT: reportApi },
+    DGV_BANK_REPORT: reportApi,
+    receiptManager: { loadForPrint: async () => { events.push("receipts.load"); if (receiptError) throw receiptError; return new Map(); } },
     loadTaxRangeReportData: async () => { events.push("query"); if (readError) throw readError; return fixture(); },
     alert: message => alerts.push(message), console: { error: () => {} },
     Date, String, Number, Math, Promise,
@@ -368,6 +470,7 @@ assert.equal(success.button.textContent, "결제별 출력 (건별)");
 const writtenReport = success.events.find(event => Array.isArray(event) && event[1].includes("class=\"reportSection"))?.[1];
 assert.ok(writtenReport, "the print handler must write the generated report, not a separate aggregate template");
 assert.equal(sections(writtenReport, "reportSection").length, model.orderCount);
+assert.ok(success.events.indexOf("assets.ready") < success.events.indexOf("print"), "one print call must wait for every receipt image and fonts");
 await Promise.resolve();
 assert.equal(success.events.filter(event => event === "open").length, 1, "all paid orders must share one window");
 assert.equal(success.events.filter(event => event === "query").length, 1, "separating orders must not re-fetch the same range per order");
@@ -386,13 +489,14 @@ assert.equal(repeatedMenuPrint.events.filter(event => event === "print").length,
 const repeatedMenuHtml = repeatedMenuPrint.events.find(event => Array.isArray(event) && event[1].includes('class="reportSection'))?.[1];
 assert.equal(sections(repeatedMenuHtml, "reportSection").length, 5);
 
-for (const options of [{ result: emptyModel }, { readError: new Error("simulated read failure") }]) {
+for (const options of [{ result: emptyModel }, { readError: new Error("simulated read failure") }, { receiptError: new Error("receipt load failed") }, { assetError: new Error("receipt readiness failed") }]) {
   const check = printContext(options);
   await check.context.run();
   assert.equal(check.popup.closed, true, "empty/error output must close the blank preparation popup");
   assert.ok(check.alerts.length > 0);
   assert.equal(check.button.disabled, false);
   assert.equal(check.button.textContent, "결제별 출력 (건별)");
+  assert.ok(!check.events.includes("print"), "a failed receipt must never open an incomplete print job");
 }
 const blocked = printContext({ blocked: true });
 await blocked.context.run();

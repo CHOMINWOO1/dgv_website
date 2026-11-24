@@ -44,6 +44,24 @@
       .filter(line => String(line.order_id) === key);
   }
 
+  // Only local raster data URLs belong in printable HTML. Never accept an arbitrary URL or markup.
+  function safeReceiptDataUrl(value) {
+    if (typeof value !== "string") return "";
+    const prefix = /^data:image\/(?:jpeg|png|webp);base64,/.exec(value);
+    if (!prefix) return "";
+    const encoded = value.slice(prefix[0].length);
+    return encoded.length && encoded.length % 4 === 0 && !/[^A-Za-z0-9+/=]/.test(encoded)
+      && /^[A-Za-z0-9+/]+={0,2}$/.test(encoded) ? value : "";
+  }
+
+  function sourceReceipt(source, id) {
+    const index = source.cardReceiptsByOrder;
+    const key = String(id == null ? "" : id);
+    const entry = index && typeof index.get === "function" ? index.get(key) || index.get(id)
+      : index && typeof index === "object" && Object.prototype.hasOwnProperty.call(index, key) ? index[key] : null;
+    return entry && !Array.isArray(entry) ? safeReceiptDataUrl(entry.dataUrl) : "";
+  }
+
   function buildOrder(order, source) {
     const warnings = [];
     const rawLines = sourceLines(source, order.id);
@@ -75,10 +93,13 @@
     if (difference !== null && difference !== 0) {
       warnings.push("주문 총액과 메뉴 합계에 차이가 있습니다. 할인·수수료 등 원인을 확인해 주세요. / Tổng tiền đơn hàng khác tổng chi tiết. Vui lòng kiểm tra giảm giá, phụ phí hoặc nguyên nhân khác.");
     }
+    const paymentMethod = normalize(order.payment_method);
+    const receiptDataUrl = paymentMethod === "card" ? sourceReceipt(source, order.id) : "";
     return {
       id: text(order.id), createdAt: order.created_at || null,
       guideName: text(order.guide_name), teamNo: text(order.team_no),
-      paymentMethod: normalize(order.payment_method),
+      paymentMethod,
+      ...(receiptDataUrl ? { receiptDataUrl } : {}),
       lines, lineTotal, grossAmount, difference, warnings
     };
   }
@@ -144,6 +165,70 @@
       ${order.difference ? `<div class="difference"><span>주문-메뉴 차액 / Chênh lệch đơn hàng-chi tiết</span><b>${money(order.difference)} VND</b></div>` : ""}
       <div class="grand"><span>${methodKo} 결제 총액 (VAT 포함)<br>Tổng thanh toán ${methodVi} (có VAT)</span><b>${money(order.grossAmount)} VND</b></div></div>
       ${warningHtml(order.warnings)}${footer()}</div></section>`;
+  }
+
+  function receiptSection(order, model, index) {
+    const dataUrl = order.paymentMethod === "card" ? safeReceiptDataUrl(order.receiptDataUrl) : "";
+    if (!dataUrl) return "";
+    return `<section class="reportSection receiptPage">${reportHeader(model, "카드 매출전표 사진", "ẢNH BIÊN LAI THẺ", index)}
+      <figure class="receiptFigure"><figcaption class="receiptCaption">
+      <div><b>카드 주문번호 / Mã đơn thanh toán thẻ:</b> ${escape(order.id)}</div>
+      <div><b>주문 일시 / Thời điểm đặt:</b> ${escape(vietnamTime(order.createdAt))}</div>
+      <div><b>카드 결제 총액 (VAT 포함) / Tổng thanh toán thẻ (có VAT):</b> ${money(order.grossAmount)} VND</div>
+      </figcaption><div class="receiptImageBox"><img class="receiptImage" src="${escape(dataUrl)}" alt="${escape(`카드 영수증 / Biên lai thẻ: ${order.id}`)}"></div></figure></section>`;
+  }
+
+  /** One print job must wait for every local receipt, including delayed decoding. */
+  async function waitForPrintAssets(printWindow, timeoutMs = 10000) {
+    if (!printWindow || printWindow.closed || !printWindow.document) throw new Error("Print window is not available");
+    const document = printWindow.document;
+    const cleanups = [];
+    const setTimer = typeof printWindow.setTimeout === "function" ? printWindow.setTimeout.bind(printWindow) : setTimeout;
+    const clearTimer = typeof printWindow.clearTimeout === "function" ? printWindow.clearTimeout.bind(printWindow) : clearTimeout;
+    let timer;
+    const timeout = new Promise((_resolve, reject) => {
+      timer = setTimer(() => {
+        const error = new Error("Print assets did not become ready in time");
+        error.code = "PAYMENT_PRINT_ASSET_TIMEOUT";
+        reject(error);
+      }, Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 10000);
+    });
+    const imageReady = image => new Promise((resolve, reject) => {
+      let settled = false;
+      const remove = () => {
+        image.removeEventListener("load", loaded);
+        image.removeEventListener("error", failed);
+      };
+      const failed = () => {
+        if (settled) return;
+        settled = true;
+        remove();
+        const error = new Error("A card receipt image could not be loaded");
+        error.code = "PAYMENT_PRINT_IMAGE_ERROR";
+        reject(error);
+      };
+      const loaded = () => {
+        if (settled) return;
+        if (!(image.naturalWidth > 0 && image.naturalHeight > 0)) return failed();
+        settled = true;
+        remove();
+        Promise.resolve().then(() => typeof image.decode === "function" ? image.decode() : undefined).then(resolve, reject);
+      };
+      cleanups.push(remove);
+      image.addEventListener("load", loaded);
+      image.addEventListener("error", failed);
+      if (image.complete) loaded();
+    });
+    try {
+      await Promise.race([Promise.all([
+        document.fonts && document.fonts.ready,
+        ...Array.from(document.images || [], imageReady)
+      ]), timeout]);
+      if (printWindow.closed) throw new Error("Print window was closed before its assets were ready");
+    } finally {
+      clearTimer(timer);
+      cleanups.forEach(cleanup => cleanup());
+    }
   }
 
   function aggregateOtherLines(orders) {
@@ -269,10 +354,9 @@
   }
 
   function renderHtml(model) {
-    const orders = [...model.orders,
-      ...model.otherOrders.filter(order => order.paymentMethod === "cash"),
-      ...model.otherOrders.filter(order => order.paymentMethod === "card")];
-    const sections = orders.map((order, index) => orderSection(order, model, index + 1));
+    const orders = [...model.otherOrders.filter(order => order.paymentMethod === "card"),
+      ...model.orders, ...model.otherOrders.filter(order => order.paymentMethod === "cash")];
+    const sections = orders.map((order, index) => orderSection(order, model, index + 1) + receiptSection(order, model, index + 1));
     return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>HANA 결제 내역 / Chi tiết thanh toán</title><style>
       @page{size:A4 portrait;margin:13mm 12mm}
       *{box-sizing:border-box}body{margin:0;color:#1c1917;background:#fff;font-family:Arial,"Malgun Gothic",sans-serif;font-size:11px;line-height:1.45}
@@ -285,6 +369,9 @@
       .number{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}.center{text-align:center}.payment{font-size:10px;overflow-wrap:anywhere}
       .totals{margin-top:10px;break-inside:avoid;page-break-inside:avoid;border:1px solid #aaa}.totals>div{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 10px}.totals b{white-space:nowrap}.totals .grand{border-top:2px solid #3e2b20;font-size:13px;background:#f8f3ed}.difference{color:#8b3f22}
       .orderEnding{break-inside:avoid;page-break-inside:avoid}
+      .receiptPage{height:270mm;display:flex;flex-direction:column;break-inside:avoid;page-break-inside:avoid}.receiptPage header{flex:none}
+      .receiptFigure{margin:0;flex:1;min-height:0;display:flex;flex-direction:column;gap:12px}.receiptCaption{flex:none;overflow-wrap:anywhere;font-size:11px;border-bottom:1px solid #aaa;padding-bottom:10px}
+      .receiptImageBox{flex:1;min-height:0}.receiptImage{display:block;width:100%;height:100%;object-fit:contain}
       .sectionIntro{margin:12px 0}.orderIndex{font-size:9px}.orderIndex td:first-child{overflow-wrap:anywhere}.warnings{border:1px solid #b9874c;background:#fffaf0;margin-top:12px;padding:8px 10px;font-size:10px}.warnings ul{padding-left:16px;margin:4px 0}.warnings li{overflow-wrap:anywhere;margin-top:4px}
       footer{margin-top:16px;border-top:1px dashed #999;padding-top:7px;font-size:9px;color:#555;break-inside:avoid;page-break-inside:avoid}
       @media screen{body{max-width:794px;margin:24px auto;padding:24px}.reportSection{margin-bottom:40px}}
@@ -292,5 +379,5 @@
       </style></head><body>${sections.join("")}</body></html>`;
   }
 
-  return Object.freeze({ buildReport, renderHtml, workbookOptions });
+  return Object.freeze({ buildReport, renderHtml, workbookOptions, waitForPrintAssets });
 });
