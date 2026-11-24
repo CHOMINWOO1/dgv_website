@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>HANA Admin</title>
+  <link rel="stylesheet" href="assets/admin-card-receipts.css?v=20261124-card-receipts-1">
   <style>
     :root{
       --bg:#faf6ee;
@@ -452,13 +453,15 @@
   <script src="assets/dgv-data.js"></script>
   <script src="assets/dgv-xlsx.js"></script>
   <script src="assets/admin-tax-report.js"></script>
-<script src="assets/admin-bank-report.js?v=20261123-payment-print-each-1"></script>
+<script src="assets/admin-bank-report.js?v=20261124-card-receipts-1"></script>
+  <script src="assets/admin-card-receipts.js?v=20261124-card-receipts-1"></script>
   <script src="assets/supabase-client.js"></script>
   <script>
     /*************************************************
      * ✅ Supabase 설정
      *************************************************/
     const sb = DGV.supabase;
+    const receiptManager = DGV_CARD_RECEIPTS.create({ supabase: sb });
 
     /*************************************************
      * 유틸
@@ -682,7 +685,7 @@
           () => applyRangeUpperBound(
             sb
               .from("orders")
-              .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method,source")
+              .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method,source,sales_excluded")
               .eq("sales_excluded", false)
               .gte("created_at", fromIso),
             "created_at"
@@ -1406,6 +1409,8 @@
         // 날짜 입력값을 즉시 캡처하는 기존 베트남 현지 날짜 조회를 재사용합니다.
         const report = await loadTaxRangeReportData();
         if (printWindow.closed) return;
+        report.cardReceiptsByOrder = await receiptManager.loadForPrint(report.visibleOrders);
+        if (printWindow.closed) return;
         if (!window.DGV_BANK_REPORT?.buildReport || !window.DGV_BANK_REPORT?.renderHtml){
           throw new Error("Payment report builder is unavailable");
         }
@@ -1425,15 +1430,16 @@
           printWindow.focus();
           printWindow.print();
         };
-        // 한 문서의 레이아웃 준비 후 정확히 한 번만 인쇄합니다.
-        if (printWindow.document.fonts?.ready){
-          printWindow.document.fonts.ready.then(()=>setTimeout(triggerPrint, 150));
+        // 모든 사진·글꼴이 준비된 뒤 정확히 한 번만 인쇄합니다.
+        if (!window.DGV_BANK_REPORT.waitForPrintAssets){
+          throw new Error("Payment print asset readiness helper is unavailable");
         }
-        setTimeout(triggerPrint, 800);
+        await window.DGV_BANK_REPORT.waitForPrintAssets(printWindow);
+        triggerPrint();
       }catch(error){
         console.error(error);
         if (!printWindow.closed) printWindow.close();
-        alert("결제별 출력 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        alert(error.code === "CARD_RECEIPT_PRINT_FAILED" ? error.message : "결제별 출력 생성에 실패했습니다. 사진·연결 상태를 확인하고 다시 시도해 주세요. / Không thể tạo bản in. Kiểm tra ảnh và kết nối rồi thử lại.");
       }finally{
         button.disabled = false;
         button.textContent = originalLabel;
@@ -1963,7 +1969,7 @@
         data = await DGV.collectSupabasePages(
           () => sb
             .from("orders")
-            .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method,source")
+            .select("id,created_at,total_usd,total_vnd,guide_name,team_no,status,payment_method,source,sales_excluded")
             .eq("sales_excluded", false)
             .gte("created_at", fromIso)
             .lte("created_at", toIso),
@@ -2065,7 +2071,16 @@
         });
 
         tbody.appendChild(tr);
+        if (DGV_CARD_RECEIPTS.isEligible(o)){
+          const receiptButton = document.createElement("button");
+          receiptButton.className = "btn";
+          tr.lastElementChild.appendChild(receiptButton);
+          receiptManager.attachButton(receiptButton, o);
+        }
+
       });
+      // Only metadata is loaded for list badges; photos are downloaded on demand.
+      receiptManager.loadStatuses(data).catch(error=>console.warn("Card receipt status unavailable", error));
     }
 
     /*************************************************
