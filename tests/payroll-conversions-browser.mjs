@@ -31,7 +31,7 @@ function seed(){
  };
 }
 const context=await browser.newContext({viewport:{width:1440,height:1000}});
-await context.route('**/*',route=>{const url=route.request().url();if(url.startsWith('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@'))return route.fulfill({contentType:'text/javascript',body:`(${installMock.toString()})('admin');(${seed.toString()})();`});return url.startsWith(origin)?route.continue():route.fulfill({body:''});});
+await context.route('**/*',async route=>{const url=route.request().url();if(url.startsWith('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@'))return route.fulfill({contentType:'text/javascript',body:`(${installMock.toString()})('admin');(${seed.toString()})();`});if(url.startsWith(origin)){try{const file=path.resolve(root,decodeURIComponent(new URL(url).pathname).replace(/^\/+/,'')||'payroll.html');if(!file.startsWith(root+path.sep))throw Error('path');return route.fulfill({contentType:({'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8'})[path.extname(file)]||'application/octet-stream',body:await readFile(file)});}catch{return route.fulfill({status:404,body:''});}}return route.fulfill({body:''});});
 const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
 const idle=()=>page.waitForFunction(()=>window.DGV_PAYROLL_APP?.state.loaded&&!DGV_PAYROLL_APP.state.busy);
 const action=(id,kind)=>page.locator(`#staffList [data-staff-action="${kind}"][data-staff-id="${id}"]`);
@@ -44,6 +44,8 @@ try{
  await action(a,'convert').click();await page.locator('#employmentConversionDialog').waitFor({state:'visible'});
  assert.match(await page.locator('#employmentConversionContext').innerText(),/2026-11-03.*2026-12-05/);
  assert.equal(await field('prior_salary_amount').inputValue(),'');
+ assert.equal(await field('break_start').inputValue(),'12:00');assert.equal(await field('break_end').inputValue(),'14:00');
+ assert.equal(await field('break_start').getAttribute('readonly'),null,'new full-time conversion offers editable standard lunch instead of inheriting part-time zero break');
  await field('effective_from').fill('2026-11-13');await field('rate').fill('7000000');await field('prior_salary_amount').fill('1700000');await field('reason').fill('DEMO agreed probation settlement');await field('confirmed').check();
  await page.locator('#employmentConversionForm button[type=submit]').click();await idle();
  assert.equal(await page.locator('#employmentConversionDialog').isVisible(),false);
@@ -52,10 +54,16 @@ try{
  assert.deepEqual(await page.evaluate(()=>__payrollTest.db.payroll_payments),before);
  assert.match(await action(a,'convert').innerText(),/파트타임 전환/);
  await action(a,'ledger').click();assert.equal(await page.locator('#ledgerBody tr').count(),1);assert.equal(await page.locator('#employeeFilter').inputValue(),a);
+ assert.match(await page.locator('[data-testid="ledger-current-employment-minutes"]').innerText(),/0h 0m/);
  assert.match(await page.locator('#employmentConversionSummary').innerText(),/1\.700\.000.*4\.200\.000/s);
  await page.locator('#staffDetailClose').click();await page.locator('[data-payroll-tab=employees]').click();await action(a,'attendance').click();
- assert.match(await page.locator('#staffDetailDialog [data-testid="auto-attendance-minutes"]').innerText(),/4h 0m/);
- assert.match(await page.locator('#autoAttendanceSummary').innerText(),/전환 전·후 근무시간/);await page.locator('#staffDetailClose').click();
+ assert.match(await page.locator('#staffDetailDialog [data-testid="auto-attendance-minutes"]').innerText(),/0h 0m/);
+ assert.match(await page.locator('#autoAttendanceSummary').innerText(),/전환 이후 근무시간만 표시/);
+ assert.match(await page.locator('#currentEmploymentAttendanceSummary').innerText(),/11\/13 이후 정규직/);
+ assert.match(await page.locator('#previousEmploymentAttendance').innerText(),/전환 전 근무기록/);
+ await page.locator('#previousEmploymentAttendance summary').click();assert.match(await page.locator('#previousEmploymentAttendance').innerText(),/4h 0m/);
+ assert.equal(await page.evaluate(id=>DGV_PAYROLL_APP.state.summaries.find(row=>row.employee_id===id).minutes,a),240,'the original month total remains unchanged');
+ await page.locator('#staffDetailClose').click();
  await action(b,'convert').click();await page.locator('#employmentConversionDialog').waitFor({state:'visible'});
  assert.match(await page.locator('#employmentConversionTitle').innerText(),/파트타임 전환/);
  assert.equal(await field('break_start').inputValue(),'00:00');assert.equal(await field('break_start').getAttribute('readonly'),'');
@@ -64,6 +72,9 @@ try{
  const call=await page.evaluate(()=>__payrollTest.rpcs.filter(r=>r.name==='payroll_convert_employment').at(-1));assert.equal(call.args.p_prior_salary_amount,null);assert.equal(call.args.p_employment_type,'part_time');
  await page.setViewportSize({width:390,height:844});await action(a,'convert').click();await page.locator('#employmentConversionDialog').waitFor({state:'visible'});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+ await page.locator('#employmentConversionForm [data-close]').click();
+ await page.evaluate(async id=>{const term=__payrollTest.db.payroll_terms.filter(term=>term.employee_id===id).sort((a,b)=>a.effective_from.localeCompare(b.effective_from)).at(-1);term.break_start='00:00';term.break_end='00:00';await DGV_PAYROLL_CONVERSIONS.open(id,true);},a);
+ assert.equal(await field('break_start').inputValue(),'00:00');assert.equal(await field('break_end').inputValue(),'00:00','repair preserves an explicit existing zero-break condition');
  await page.locator('#employmentConversionForm [data-close]').click();
  assert.deepEqual(errors,[]);console.log('Employment conversion browser passed: both buttons, agreed/automatic split, original hire/payment preservation, employee ledger filter, next-month fifth pay date, mobile dialog.');
 }finally{await context.close();await browser.close();await new Promise(r=>server.close(r));}
