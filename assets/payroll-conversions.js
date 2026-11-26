@@ -5,6 +5,28 @@
   const latest=(rows,value)=>rows.filter(row=>row.effective_from<=value).sort((a,b)=>a.effective_from.localeCompare(b.effective_from)).at(-1);
   function typeAt(employee,changes,value){return latest(changes,value)?.employment_type||changes.find(change=>change.effective_from>value)?.prior_employment_type||employee.employment_type;}
   function historicalEmployees(employees,changes,month){return employees.map(employee=>({...employee,employment_type:typeAt(employee,changes.filter(c=>c.employee_id===employee.id).sort((a,b)=>a.effective_from.localeCompare(b.effective_from)),month+'-01')}));}
+  // Display only: the original month totals remain the source for payroll,
+  // saved calculations and exports. Sum the already-rounded daily minutes so
+  // the displayed period agrees exactly with its attendance rows.
+  function summarizeCurrentAttendance({month,today,employee,changes,daily}){
+    const first=month+'-01',end=date(Date.UTC(+month.slice(0,4),+month.slice(5,7),1)),last=priorDay(end),asOf=today<last?today:last;
+    const current=latest(changes,asOf);
+    if(!current||current.effective_from<first||current.effective_from>=end)return null;
+    const start=employee.hire_date&&employee.hire_date>first?employee.hire_date:first;
+    const from=current.effective_from>start?current.effective_from:start,next=changes.find(change=>change.effective_from>asOf);
+    let to=employee.termination_date&&employee.termination_date<last?employee.termination_date:last;
+    if(next&&next.effective_from<=to)to=priorDay(next.effective_from);
+    if(from>to)return null;
+    const attendance=(periodFrom,periodTo,type)=>{
+      const days=daily.filter(day=>day.date>=periodFrom&&day.date<=periodTo);
+      return {from:periodFrom,to:periodTo,type,minutes:days.reduce((sum,day)=>sum+Number(day.minutes||0),0),workedDays:days.filter(day=>day.actualSeconds>0).length};
+    };
+    const boundaries=[...new Set([start,...changes.filter(change=>change.effective_from>start&&change.effective_from<from).map(change=>change.effective_from),from])].sort();
+    const previous=boundaries.slice(0,-1).map((value,index)=>attendance(value,priorDay(boundaries[index+1]),typeAt(employee,changes,value)));
+    return {...attendance(from,to,current.employment_type),previous,asOf};
+  }
+  const currentAttendance=row=>row?.currentEmploymentAttendance||null;
+  function attendanceLabel(period){const from=period.from.slice(5).replace('-','/');return from+' 이후 '+(period.type==='part_time'?'파트타임 / Bán thời gian từ ':'정규직 / Toàn thời gian từ ')+from;}
   function extendSummaries(input){
     const {month,employees,terms,records,conversions=[],baseSummaries}=input,core=root.DGV_PAYROLL_CORE,rules=root.DGV_PAYROLL_RULES;
     const first=month+'-01',end=date(Date.UTC(+month.slice(0,4),+month.slice(5,7),1)),today=input.today||date(Date.now()+7*3600000);
@@ -51,16 +73,18 @@
       const missing=issues.filter(text=>!text.includes('월 집계 중')&&!Array.from(issueDays).some(value=>text.startsWith(value))).length;
       const unresolved=issueDays.size+missing+(pending?1:0);
       const invalidAmount=missing>0;
+      const attendance=summarizeCurrentAttendance({month,today,employee,changes,daily});
       return {...base,settlementMode:'employment_segments',baseAmount:invalidAmount?null:baseAmount,statutoryAmount:0,monthlyExtraAmount,
         conversionSegments:segments,conversionHistory:changes,calculationVersion:4,daily,minutes:active.reduce((n,d)=>n+d.minutes,0),actualSeconds:active.reduce((n,d)=>n+(d.actualSeconds||0),0),workedDays:active.filter(d=>d.actualSeconds>0).length,
+        ...(attendance?{currentEmploymentAttendance:attendance}:{}),
         monthlyPendingDays:pending,monthlyPlannedMinutes:segments.reduce((n,s)=>n+(s.plannedMinutes||0),0),monthlyActualMinutes:segments.filter(s=>s.type==='full_time').reduce((n,s)=>n+s.minutes,0),
         unresolved,attendanceUnresolved:unresolved,compensationUnresolved:0,compensationIssues:[],issues:[...new Set(issues)],warnings,
         wageBreakdown:segments.flatMap(s=>[{code:'employment_segment',label:s.from+' ~ '+s.to+' · '+(s.kind==='agreed'?'전환 전 확정급여 / Lương trước chuyển đổi đã chốt':s.type==='part_time'?'시급 / Lương giờ':'전환기간 월급 / Lương tháng theo giai đoạn'),date:s.from,category:'base',amount:s.baseAmount,minutes:s.minutes,rate:s.rate||0,multiplier:1,rawAmount:s.baseAmount},...(s.extraAmount?[{code:'employment_segment_extra',label:'구간 추가급여 / Tiền giờ thêm',date:s.to,category:'monthly_extra',amount:s.extraAmount,minutes:Math.max(0,s.minutes-s.plannedMinutes),rate:0,multiplier:1,rawAmount:s.extraAmount}]:[])])};
     });
   }
-  function renderDetail(row){
-    const app=root.DGV_PAYROLL_APP,{state,$,esc,money}=app,employee=state.employees.find(e=>e.id===row.employee_id);
-    $('employmentConversionAction')?.remove();$('employmentConversionSummary')?.remove();
+  function renderDetail(row,run){
+    const app=root.DGV_PAYROLL_APP,{state,$,esc,money,hours}=app,employee=state.employees.find(e=>e.id===row.employee_id),shown=run?.snapshot||row,attendance=currentAttendance(shown);
+    $('employmentConversionAction')?.remove();$('employmentConversionSummary')?.remove();$('currentEmploymentAttendanceSummary')?.remove();
     if(employee&&!employee.archived_at&&employee.employment_status==='active'){
       const wrap=document.createElement('div');wrap.id='employmentConversionAction';wrap.className='actions';
       const button=document.createElement('button');button.type='button';button.className='quiet';button.dataset.convertEmployee=employee.id;
@@ -68,7 +92,13 @@
       const terms=state.terms.filter(t=>t.employee_id===employee.id);if(employee.employment_type==='full_time'&&!state.conversions?.some(c=>c.employee_id===employee.id)&&terms.some(t=>t.pay_type==='hourly'&&t.effective_from<employee.hire_date)&&terms.some(t=>t.pay_type==='monthly'&&t.effective_from===employee.hire_date)){const repair=document.createElement('button');repair.type='button';repair.className='quiet';repair.dataset.convertEmployee=employee.id;repair.dataset.repairConversion='true';repair.textContent='기존 전환 정산 보완 / Bổ sung quyết toán trước chuyển đổi';wrap.append(repair);}
       $('employeeActionBar').append(wrap);
     }
-    if(row.conversionSegments){const section=document.createElement('section');section.id='employmentConversionSummary';section.className='notice';section.innerHTML='<h3>근무형태 전환 정산 / Quyết toán chuyển loại lao động</h3>'+row.conversionSegments.map(s=>'<p>'+esc(s.from)+' ~ '+esc(s.to)+' · '+(s.type==='part_time'?'파트타임':'정규직')+' · '+money(s.baseAmount)+' VND'+(s.kind==='agreed'?' (확정금액 / Đã chốt)':'')+(s.extraAmount?' + '+money(s.extraAmount)+' VND':'')+'</p>').join('')+'<p>기지급 / Đã trả '+money(app.paidForEmployee(employee.id))+' VND · 월 총급여에서 한 번만 차감합니다. / Trừ một lần từ tổng lương tháng.</p>';$('detailSummary').after(section);}
+    if(shown.conversionSegments){const section=document.createElement('section');section.id='employmentConversionSummary';section.className='notice';section.innerHTML='<h3>근무형태 전환 정산 / Quyết toán chuyển loại lao động</h3>'+shown.conversionSegments.map(s=>'<p>'+esc(s.from)+' ~ '+esc(s.to)+' · '+(s.type==='part_time'?'파트타임':'정규직')+' · '+money(s.baseAmount)+' VND'+(s.kind==='agreed'?' (확정금액 / Đã chốt)':'')+(s.extraAmount?' + '+money(s.extraAmount)+' VND':'')+'</p>').join('')+'<p>기지급 / Đã trả '+money(app.paidForEmployee(row.employee_id))+' VND · 월 총급여에서 한 번만 차감합니다. / Trừ một lần từ tổng lương tháng.</p>';$('detailSummary').after(section);}
+    if(attendance){
+      const section=document.createElement('section');section.id='currentEmploymentAttendanceSummary';section.className='notice';
+      section.innerHTML='<h3>'+(run?'확정 당시 고용기간 근무 / Chấm công giai đoạn tại lúc chốt':'현재 고용기간 근무 / Chấm công giai đoạn hiện tại')+'</h3><p data-testid="current-employment-period">'+esc(attendanceLabel(attendance))+' · '+esc(attendance.from)+' ~ '+esc(attendance.to)+'</p><p><strong data-testid="current-employment-minutes">'+hours(attendance.minutes)+'</strong> · <strong data-testid="current-employment-days">'+attendance.workedDays+'일 / ngày</strong></p>'+(attendance.previous.length?'<details id="previousEmploymentAttendance"><summary>전환 전 근무기록 / Chấm công trước chuyển đổi</summary>'+attendance.previous.map(period=>'<p>'+esc(period.from)+' ~ '+esc(period.to)+' · '+(period.type==='part_time'?'파트타임 / Bán thời gian':'정규직 / Toàn thời gian')+' · '+hours(period.minutes)+' · '+period.workedDays+'일 / ngày</p>').join('')+'<p class="muted">이전 근무기록은 보존되며, 실제 지급 여부는 지급내역에서 확인합니다. / Giữ chấm công trước đây; xem thanh toán để kiểm tra số đã trả.</p></details>':'');
+      const attendanceMount=$('attendanceSummarySlot');
+      if(attendanceMount)attendanceMount.append(section);else $('detailSummary').after(section);
+    }
   }
   function bind(){
     const app=root.DGV_PAYROLL_APP;if(!app)return;
@@ -92,7 +122,7 @@
         const term=candidate.term||{};field(form,'effective_from').value=repair?term.effective_from:app.today();field(form,'effective_from').max=app.today();field(form,'effective_from').min=candidate.original_hire_date||'';
         field(form,'rate').value=repair?term.rate:'';if(repair)field(form,'reason').value='기존 정규직 전환 기간 정산 보완 / Bổ sung quyết toán khi chuyển chính thức';
         for(const key of ['shift_start','shift_end','break_start','break_end'])field(form,key).value=String(term[key]||({shift_start:'10:00',shift_end:'20:00',break_start:'12:00',break_end:'14:00'}[key])).slice(0,5);
-        field(form,'weekly_rest_day').value=term.weekly_rest_day??0;if(target==='part_time')for(const key of ['break_start','break_end']){field(form,key).value='00:00';field(form,key).readOnly=true;}else for(const key of ['break_start','break_end'])field(form,key).readOnly=false;
+        field(form,'weekly_rest_day').value=term.weekly_rest_day??0;if(target==='part_time')for(const key of ['break_start','break_end']){field(form,key).value='00:00';field(form,key).readOnly=true;}else{for(const key of ['break_start','break_end'])field(form,key).readOnly=false;if(!repair&&candidate.prior_employment_type==='part_time'){field(form,'break_start').value='12:00';field(form,'break_end').value='14:00';}}
       });
       if(!candidate||!requestId)form.querySelector('button[type="submit"]').disabled=true;
     }
@@ -105,6 +135,6 @@
     });});
     root.DGV_PAYROLL_CONVERSIONS.open=open;
   }
-  root.DGV_PAYROLL_CONVERSIONS={historicalEmployees,extendSummaries,renderDetail,bind};
+  root.DGV_PAYROLL_CONVERSIONS={historicalEmployees,extendSummaries,summarizeCurrentAttendance,currentAttendance,attendanceLabel,renderDetail,bind};
   if(root.DGV_PAYROLL_APP)bind();
 })(typeof window==='object'?window:globalThis);
