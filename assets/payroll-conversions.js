@@ -82,9 +82,31 @@
         wageBreakdown:segments.flatMap(s=>[{code:'employment_segment',label:s.from+' ~ '+s.to+' · '+(s.kind==='agreed'?'전환 전 확정급여 / Lương trước chuyển đổi đã chốt':s.type==='part_time'?'시급 / Lương giờ':'전환기간 월급 / Lương tháng theo giai đoạn'),date:s.from,category:'base',amount:s.baseAmount,minutes:s.minutes,rate:s.rate||0,multiplier:1,rawAmount:s.baseAmount},...(s.extraAmount?[{code:'employment_segment_extra',label:'구간 추가급여 / Tiền giờ thêm',date:s.to,category:'monthly_extra',amount:s.extraAmount,minutes:Math.max(0,s.minutes-s.plannedMinutes),rate:0,multiplier:1,rawAmount:s.extraAmount}]:[])])};
     });
   }
+  // Display saved segment results only. Never reuse whole-month fields here:
+  // a conversion can contain different contracts or a prior agreed settlement.
+  function monthlySegmentSummary(shown,run,app){
+    const {esc,money,hours}=app,segments=(shown.conversionSegments||[]).filter(s=>s.type==='full_time');
+    if(!segments.length)return '';
+    const hourlyMoney=value=>new Intl.NumberFormat('vi-VN',{maximumFractionDigits:2}).format(value);
+    const cards=segments.map(s=>{
+      const heading='<h4>'+esc(s.from)+' ~ '+esc(s.to)+' · 정규직 / Toàn thời gian</h4>';
+      if(s.kind==='agreed')return '<section>'+heading+'<p>합의한 확정급여 / Lương đã chốt theo thỏa thuận: <strong>'+money(s.baseAmount)+' VND</strong></p><p class="muted">일괄 확정금액으로 정산한 구간은 시간별 비교를 표시하지 않습니다. / Giai đoạn chốt theo số tiền thỏa thuận không đối chiếu theo giờ.</p></section>';
+      const valid=s.kind==='monthly'&&[s.minutes,s.plannedMinutes,s.fullMonthPlannedMinutes,s.rate,s.baseAmount,s.extraAmount].every(v=>typeof v==='number'&&Number.isFinite(v)&&v>=0)&&s.fullMonthPlannedMinutes>0;
+      if(!valid)return '<section>'+heading+'<p class="muted">이 구간의 저장된 시간 계산 내역이 없어 비교를 표시하지 않습니다. / Không có chi tiết giờ đã lưu cho giai đoạn này.</p></section>';
+      const balance=s.minutes-s.plannedMinutes,sign=balance<0?'−':balance>0?'+':'',extra=Math.max(0,balance),hourly=s.rate*60/s.fullMonthPlannedMinutes;
+      const days=(shown.daily||[]).filter(d=>d.date>=s.from&&d.date<=s.to),dailyMinutes=days.reduce((sum,d)=>sum+Number(d.minutes||0),0);
+      return '<section>'+heading+'<div class="monthly-time-grid"><div><small>기간 기준시간 / Giờ chuẩn giai đoạn</small><strong data-testid="conversion-period-plan">'+hours(s.plannedMinutes)+'</strong></div><div><small>실제 근무 / Giờ thực tế</small><strong data-testid="conversion-period-actual">'+hours(s.minutes)+'</strong></div><div><small>초과·부족 / Chênh lệch</small><strong data-testid="conversion-period-balance">'+sign+hours(Math.abs(balance))+'</strong></div><div><small>추가 지급 대상 / Phút được trả thêm</small><strong data-testid="conversion-period-extra">'+hours(extra)+'</strong></div></div><p>자동 계산 시급 / Đơn giá giờ tự tính <strong data-testid="conversion-period-hourly-rate">'+hourlyMoney(hourly)+' VND</strong> · 구간 초과수당 / Tiền vượt giai đoạn <strong data-testid="conversion-period-extra-amount">'+money(s.extraAmount)+' VND</strong></p><p class="muted">약정 월급 / Lương cả tháng '+money(s.rate)+' VND ÷ 월 전체 기준시간 / Giờ chuẩn cả tháng '+hours(s.fullMonthPlannedMinutes)+' · 기간 기본급 / Lương cơ bản giai đoạn '+money(s.baseAmount)+' VND<br>정규직 구간의 기준시간과 비교합니다. 부족해도 해당 구간 기본급은 유지하며, 순초과분만 추가 지급합니다. / Đối chiếu trong giai đoạn toàn thời gian; giữ lương cơ bản khi thiếu giờ, chỉ trả phần vượt.'+(days.length&&dailyMinutes!==s.minutes?'<br>일별 근무표 합계 / Tổng giờ theo từng ngày: '+hours(dailyMinutes)+' · 위 정산시간은 초 단위 근무를 합산한 값입니다. / Giờ đối chiếu ở trên được cộng từ số giây làm việc.':'')+'</p></section>';
+    }).join('');
+    const month=segments[0].from?.slice(0,7),payDate=/^\d{4}-\d{2}$/.test(month||'')?date(Date.UTC(+month.slice(0,4),+month.slice(5,7),5)):null;
+    return '<div id="conversionMonthlyTimeSummary">'+cards+(run?'<p class="muted">확정 당시 구간별 계산 내역입니다. / Chi tiết từng giai đoạn tại thời điểm chốt.</p>':'<p class="muted">현재까지 기록된 근무시간과 해당 구간 전체 기준시간을 비교한 예상값입니다. / Dự kiến theo giờ đã ghi và giờ chuẩn của cả giai đoạn.</p>')+(payDate?'<p class="notice" data-testid="conversion-pay-date">지급 예정일 / Ngày trả dự kiến: <strong>'+payDate+'</strong> · 해당 월 근무분을 다음 달 5일 지급 / Trả lương tháng vào ngày 5 tháng sau</p>':'')+'</div>';
+  }
   function renderDetail(row,run){
     const app=root.DGV_PAYROLL_APP,{state,$,esc,money,hours}=app,employee=state.employees.find(e=>e.id===row.employee_id),shown=run?.snapshot||row,attendance=currentAttendance(shown);
     $('employmentConversionAction')?.remove();$('employmentConversionSummary')?.remove();$('currentEmploymentAttendanceSummary')?.remove();
+    if(shown.settlementMode==='employment_segments'){
+      const summary=monthlySegmentSummary(shown,run,app);
+      if(summary)$('detailSummary').innerHTML=summary;
+    }
     if(employee&&!employee.archived_at&&employee.employment_status==='active'){
       const wrap=document.createElement('div');wrap.id='employmentConversionAction';wrap.className='actions';
       const button=document.createElement('button');button.type='button';button.className='quiet';button.dataset.convertEmployee=employee.id;
