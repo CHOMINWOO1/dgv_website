@@ -317,10 +317,13 @@ assert.match(page, /function typeBilingualLabel\(value\)[\s\S]*?labor[\s\S]*?인
 assert.match(page, /function beginEdit\(row\)[\s\S]*?normalizeExpenseType\(row\.expense_type\)/i);
 assert.match(
   page,
-  /function updateSummary\(rows\)[\s\S]*?normalizeExpenseType\(row\.expense_type\)[\s\S]*?\{\s*general\s*:\s*0\s*,\s*invoice\s*:\s*0\s*,\s*labor\s*:\s*0\s*\}[\s\S]*?laborSubtotal[\s\S]*?totals\.labor/i,
+  /function updateSummary\(rows\)[\s\S]*?expenseCategory\(row\)[\s\S]*?laborSubtotal[\s\S]*?totals\.labor/i,
 );
 assert.match(page, /function renderRows\(rows\)[\s\S]*?normalizeExpenseType\(row\.expense_type\)[\s\S]*?data-type="\$\{type\}"[\s\S]*?expenseKindLabel\(row,\s*true\)/i);
 assert.match(page, /id="laborSubtotal"/i);
+assert.match(page, /id="driverMealSubtotal"/i);
+assert.match(page, /id="agencyKbSubtotal"/i);
+assert.doesNotMatch(page, /id="entryCount"|getElementById\("entryCount"\)/i);
 assert.match(page, /인건비 지출 \/ Chi phí nhân công/i);
 assert.match(page, /const EXPENSE_COLUMNS\s*=\s*"[^"\n]*\bvendor\b[^"\n]*"/i);
 assert.match(page, /\.select\(EXPENSE_COLUMNS\)/i);
@@ -338,6 +341,11 @@ assert.match(
   page,
   /\.eq\("reservation_expense_kind",\s*category\)/i,
   "a reservation expense category must constrain the Supabase search query to its automatic kind",
+);
+assert.match(
+  page,
+  /\.is\("reservation_expense_kind",\s*null\)/i,
+  "manual expense categories must exclude automatic expenses in the Supabase query",
 );
 assert.match(
   page,
