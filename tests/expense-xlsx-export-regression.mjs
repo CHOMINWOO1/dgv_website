@@ -143,7 +143,7 @@ assert.match(
   /\.eq\("expense_type",\s*(?:category|searchType|selectedCategory)\)/,
   "a category search must be constrained on the server",
 );
-assert.match(page, /const EXPENSE_COLUMNS = "id,expense_date,expense_type,description,vendor,amount_vnd,note,created_at"/);
+assert.match(page, /const EXPENSE_COLUMNS = "id,expense_date,expense_type,description,vendor,amount_vnd,note,created_at,reservation_expense_kind"/);
 assert.doesNotMatch(
   `${printBlock}\n${exportBlock}\n${refreshBlock}\n${rangeBlock}\n${searchBlock}`,
   /\.(?:insert|update|upsert|delete|rpc)\s*\(/,
@@ -159,7 +159,7 @@ for (const label of [
 ]) {
   assert.ok(exportBlock.includes(label), `missing bilingual XLSX header: ${label}`);
 }
-for (const field of ["row.expense_date", "row.expense_type", "row.description", "row.vendor", "row.note", "row.amount_vnd"]) {
+for (const field of ["row.expense_date", "expenseKindLabel(row, true)", "row.description", "row.vendor", "row.note", "row.amount_vnd"]) {
   assert.ok(exportBlock.includes(field), `expense XLSX is missing ${field}`);
 }
 assert.match(exportBlock, /numberCell\(row\.amount_vnd\)/, "VND must be emitted through a numeric cell helper");
@@ -252,6 +252,34 @@ const latestRangeRows = [
     amount_vnd: 180000,
     created_at: "2026-10-20T02:00:00Z",
   },
+  {
+    id: "range-driver",
+    expense_date: "2026-10-20",
+    expense_type: "general",
+    reservation_expense_kind: "driver_meal",
+    description: "기사 식대",
+    amount_vnd: 50000,
+    created_at: "2026-10-20T03:00:00Z",
+  },
+  {
+    id: "range-agency",
+    expense_date: "2026-10-20",
+    expense_type: "general",
+    reservation_expense_kind: "agency_kb",
+    description: "여행사 KB",
+    vendor: "ANT",
+    amount_vnd: 100000,
+    created_at: "2026-10-20T04:00:00Z",
+  },
+  {
+    id: "range-manual-driver",
+    expense_date: "2026-10-20",
+    expense_type: "general",
+    reservation_expense_kind: null,
+    description: "기사 식대",
+    amount_vnd: 60000,
+    created_at: "2026-10-20T05:00:00Z",
+  },
 ];
 const firstSearchRows = [
   { ...latestRangeRows[0], id: "search-first-20", description: "베트남 20일 내역", note: "Việt Nam 20", amount_vnd: 220000 },
@@ -284,6 +312,8 @@ const resultQueue = [
   latestSearchRows,
   latestSearchRows,
   categoryOnlyRows,
+  latestRangeRows,
+  latestRangeRows,
 ];
 let queryCalls = 0;
 const queryOperations = [];
@@ -331,10 +361,12 @@ const pageContext = {
       const lowerBound = operations.find(([operation, column]) => operation === "gte" && column === "expense_date")?.[2];
       const upperBound = operations.find(([operation, column]) => operation === "lte" && column === "expense_date")?.[2];
       const expenseType = operations.find(([operation, column]) => operation === "eq" && column === "expense_type")?.[2];
+      const reservationKind = operations.find(([operation, column]) => operation === "eq" && column === "reservation_expense_kind")?.[2];
       const rows = sourceRows?.filter((row) =>
         (!lowerBound || row.expense_date >= lowerBound)
         && (!upperBound || row.expense_date <= upperBound)
-        && (!expenseType || row.expense_type === expenseType));
+        && (!expenseType || row.expense_type === expenseType)
+        && (!reservationKind || row.reservation_expense_kind === reservationKind));
       assert.ok(rows, `unexpected expense query ${queryCalls}`);
       return rows;
     },
@@ -405,7 +437,17 @@ assert.match(element("expenseRows").innerHTML, /Chợ Đà Lạt/);
 assert.match(element("expenseRows").innerHTML, /파트타임 급여/);
 assert.match(element("expenseRows").innerHTML, /인건비 지출/);
 assert.equal(element("laborSubtotal").textContent, "180,000 VND");
-assert.equal(element("totalAmount").textContent, "555,000 VND");
+assert.equal(element("generalSubtotal").textContent, "335,000 VND");
+assert.equal(element("totalAmount").textContent, "765,000 VND");
+const renderedCategories = Array.from(
+  element("expenseRows").innerHTML.matchAll(/<td data-label="구분">[\s\S]*?<span class="screen-only">([^<]+)<\/span><span class="print-only">([^<]+)<\/span>/g),
+  ([, screen, print]) => [screen, print],
+);
+assert.deepEqual(renderedCategories.slice(-3), [
+  ["기사 식대", "기사 식대 / Tiền ăn tài xế"],
+  ["여행사 KB", "여행사 KB / Hoa hồng công ty du lịch"],
+  ["일반 지출", "일반 지출 / Chi thường"],
+]);
 assert.doesNotMatch(element("expenseRows").innerHTML, /내보내면 안 되는 이전 값|이전 거래처/);
 
 const exportHandler = handlers.get("exportExpenseBtn:click");
@@ -424,7 +466,7 @@ assert.deepEqual(
   Array.from(rangeSheetRows[4], (cell) => cell.value),
   ["날짜 / Ngày", "구분 / Phân loại", "내역 / Nội dung", "거래처 / Đối tác", "비고 / Ghi chú", "금액(VND) / Số tiền (VND)"],
 );
-assert.equal(rangeSheetRows.length, 9, "only the three freshly displayed range rows plus fixed report rows should export");
+assert.equal(rangeSheetRows.length, 12, "only the six freshly displayed range rows plus fixed report rows should export");
 assert.equal(rangeSheetRows[5][2].value, '=HYPERLINK("https://example.com")');
 assert.equal(rangeSheetRows[5][3].value, "하나마트");
 assert.equal(rangeSheetRows[5][4].value, "베트남 매입 Việt Nam");
@@ -434,6 +476,11 @@ assert.match(rangeSheetRows[5][1].value, /^일반 지출 \/ .*[ăâđêôơư]/i
 assert.match(rangeSheetRows[6][1].value, /^계산서 지출 \/ .*[ăâđêôơư]/iu);
 assert.equal(rangeSheetRows[7][1].value, "인건비 지출 / Chi phí nhân công");
 assert.equal(rangeSheetRows[7][5].value, 180000);
+assert.deepEqual(Array.from(rangeSheetRows.slice(8, 11), (row) => [row[1].value, row[2].value]), [
+  ["기사 식대 / Tiền ăn tài xế", "기사 식대"],
+  ["여행사 KB / Hoa hồng công ty du lịch", "여행사 KB"],
+  ["일반 지출 / Chi thường", "기사 식대"],
+]);
 assert.equal(JSON.stringify(rangeWorkbook).includes("stale-row"), false);
 assert.equal(JSON.stringify(rangeWorkbook).includes("이전 거래처"), false);
 
@@ -536,6 +583,25 @@ assert.deepEqual(
 assert.match(element("expenseRows").innerHTML, /계산서 카테고리 전용/);
 assert.doesNotMatch(element("expenseRows").innerHTML, /일반 지출 전용|인건비 카테고리 전용/);
 
+for (const [index, kind, label, amount] of [
+  [7, "driver_meal", "기사 식대", "50,000 VND"],
+  [8, "agency_kb", "여행사 KB", "100,000 VND"],
+]) {
+  element("expenseCategoryFilter").value = kind;
+  await searchHandler({ preventDefault() {} });
+  await settle();
+  assert.equal(queryCalls, index + 1);
+  assert.deepEqual(
+    queryBatches[index].filter(([operation]) => operation === "eq"),
+    [["eq", "reservation_expense_kind", kind]],
+    "automatic categories must use their kind, independent of the base expense type",
+  );
+  assert.equal(element("entryCount").textContent, "1건");
+  assert.match(element("expenseRows").innerHTML, new RegExp(label));
+  assert.ok(element("expenseRows").innerHTML.includes(amount));
+  assert.match(element("loadStatus").textContent, new RegExp(label));
+}
+
 assert.equal(element("exportExpenseBtn").disabled, false, "Excel button must recover after export");
 assert.equal(element("exportExpenseBtn").textContent, "엑셀 생성");
 assert.equal(element("printExpenseBtn").disabled, false, "print button must recover after printing");
@@ -555,4 +621,3 @@ for (const [index, operations] of queryBatches.slice(3).entries()) {
 }
 
 console.log("Expense current-view print/XLSX refresh, mapping, UTF-8, numeric, filename, and read-only contracts passed.");
-
