@@ -101,8 +101,9 @@ for (const printLabel of [
   "일반 지출 / Chi thường",
   "계산서 지출 / Chi có hóa đơn",
   "인건비 지출 / Chi phí nhân công",
+  "기사 식대 / Tiền ăn tài xế",
+  "여행사 KB / Hoa hồng công ty du lịch",
   "전체 지출 / Tổng chi phí",
-  "입력 건수 / Số mục",
   "날짜 / Ngày",
   "구분 / Phân loại",
   "내역 / Nội dung",
@@ -314,6 +315,7 @@ const resultQueue = [
   categoryOnlyRows,
   latestRangeRows,
   latestRangeRows,
+  latestRangeRows,
 ];
 let queryCalls = 0;
 const queryOperations = [];
@@ -362,11 +364,15 @@ const pageContext = {
       const upperBound = operations.find(([operation, column]) => operation === "lte" && column === "expense_date")?.[2];
       const expenseType = operations.find(([operation, column]) => operation === "eq" && column === "expense_type")?.[2];
       const reservationKind = operations.find(([operation, column]) => operation === "eq" && column === "reservation_expense_kind")?.[2];
+      const excludesAutomaticExpenses = operations.some(([operation, column, value]) =>
+        operation === "is" && column === "reservation_expense_kind" && value === null
+      );
       const rows = sourceRows?.filter((row) =>
         (!lowerBound || row.expense_date >= lowerBound)
         && (!upperBound || row.expense_date <= upperBound)
         && (!expenseType || row.expense_type === expenseType)
-        && (!reservationKind || row.reservation_expense_kind === reservationKind));
+        && (!reservationKind || row.reservation_expense_kind === reservationKind)
+        && (!excludesAutomaticExpenses || row.reservation_expense_kind == null));
       assert.ok(rows, `unexpected expense query ${queryCalls}`);
       return rows;
     },
@@ -437,7 +443,9 @@ assert.match(element("expenseRows").innerHTML, /Chợ Đà Lạt/);
 assert.match(element("expenseRows").innerHTML, /파트타임 급여/);
 assert.match(element("expenseRows").innerHTML, /인건비 지출/);
 assert.equal(element("laborSubtotal").textContent, "180,000 VND");
-assert.equal(element("generalSubtotal").textContent, "335,000 VND");
+assert.equal(element("generalSubtotal").textContent, "185,000 VND");
+assert.equal(element("driverMealSubtotal").textContent, "50,000 VND");
+assert.equal(element("agencyKbSubtotal").textContent, "100,000 VND");
 assert.equal(element("totalAmount").textContent, "765,000 VND");
 const renderedCategories = Array.from(
   element("expenseRows").innerHTML.matchAll(/<td data-label="구분">[\s\S]*?<span class="screen-only">([^<]+)<\/span><span class="print-only">([^<]+)<\/span>/g),
@@ -481,6 +489,7 @@ assert.deepEqual(Array.from(rangeSheetRows.slice(8, 11), (row) => [row[1].value,
   ["여행사 KB / Hoa hồng công ty du lịch", "여행사 KB"],
   ["일반 지출 / Chi thường", "기사 식대"],
 ]);
+assert.equal(rangeSheetRows[11][5].value, 765000);
 assert.equal(JSON.stringify(rangeWorkbook).includes("stale-row"), false);
 assert.equal(JSON.stringify(rangeWorkbook).includes("이전 거래처"), false);
 
@@ -596,11 +605,28 @@ for (const [index, kind, label, amount] of [
     [["eq", "reservation_expense_kind", kind]],
     "automatic categories must use their kind, independent of the base expense type",
   );
-  assert.equal(element("entryCount").textContent, "1건");
+  assert.equal(Array.from(element("expenseRows").innerHTML.matchAll(/<tr\b/g)).length, 1);
   assert.match(element("expenseRows").innerHTML, new RegExp(label));
   assert.ok(element("expenseRows").innerHTML.includes(amount));
   assert.match(element("loadStatus").textContent, new RegExp(label));
 }
+
+element("expenseCategoryFilter").value = "general";
+await searchHandler({ preventDefault() {} });
+await settle();
+assert.equal(queryCalls, 10);
+assert.deepEqual(
+  queryBatches[9].filter(([operation]) => operation === "eq" || operation === "is"),
+  [["eq", "expense_type", "general"], ["is", "reservation_expense_kind", null]],
+  "general category searches must select general rows without a reservation expense kind",
+);
+assert.equal(Array.from(element("expenseRows").innerHTML.matchAll(/<tr\b/g)).length, 2);
+assert.equal(element("generalSubtotal").textContent, "185,000 VND");
+assert.equal(element("driverMealSubtotal").textContent, "0 VND");
+assert.equal(element("agencyKbSubtotal").textContent, "0 VND");
+assert.match(element("expenseRows").innerHTML, /기사 식대/, "keep a manual row with the same description");
+assert.match(element("expenseRows").innerHTML, /60,000 VND/);
+assert.doesNotMatch(element("expenseRows").innerHTML, /50,000 VND|100,000 VND|여행사 KB/);
 
 assert.equal(element("exportExpenseBtn").disabled, false, "Excel button must recover after export");
 assert.equal(element("exportExpenseBtn").textContent, "엑셀 생성");
