@@ -304,8 +304,10 @@ assert.doesNotMatch(page, /id="login(?:Modal|Form|Password|Role|Confirm)"/i);
 assert.doesNotMatch(page, /getElementById\("expenseHistory"\)\.hidden = true/i);
 assert.match(page, /id="expenseSearch"[^>]*type="search"[^>]*placeholder="내역·거래처·비고·날짜·금액 검색"/i);
 assert.match(page, /<select[^>]+id="expenseCategoryFilter"[^>]*>[\s\S]*?value="all"[\s\S]*?전체 카테고리[\s\S]*?value="general"[\s\S]*?일반 지출[\s\S]*?value="invoice"[\s\S]*?계산서 지출[\s\S]*?value="labor"[\s\S]*?인건비 지출[\s\S]*?<\/select>/i);
+assert.match(page, /<option value="driver_meal">기사 식대<\/option>/i);
+assert.match(page, /<option value="agency_kb">여행사 KB<\/option>/i);
 assert.match(page, /searchForm\.addEventListener\("submit", searchAllExpenses\)/i);
-assert.match(page, /function searchableExpenseText\(row\)[\s\S]*?row\.expense_date[\s\S]*?typeLabel\(row\.expense_type\)[\s\S]*?row\.description[\s\S]*?row\.vendor[\s\S]*?row\.note[\s\S]*?amount\.toLocaleString/i);
+assert.match(page, /function searchableExpenseText\(row\)[\s\S]*?row\.expense_date[\s\S]*?expenseKindLabel\(row\)[\s\S]*?row\.description[\s\S]*?row\.vendor[\s\S]*?row\.note[\s\S]*?amount\.toLocaleString/i);
 assert.match(page, /terms\.every\(\(term\) => haystack\.includes\(term\)\)/i);
 assert.match(page, /function selectedSearchType\(\)[\s\S]*?expenseCategoryFilter\.value[\s\S]*?(?:all|general|invoice|labor)/i);
 assert.match(page, /function normalizeExpenseType\(value\)[\s\S]*?\["general",\s*"invoice",\s*"labor"\]\.includes\(value\)/i);
@@ -317,7 +319,7 @@ assert.match(
   page,
   /function updateSummary\(rows\)[\s\S]*?normalizeExpenseType\(row\.expense_type\)[\s\S]*?\{\s*general\s*:\s*0\s*,\s*invoice\s*:\s*0\s*,\s*labor\s*:\s*0\s*\}[\s\S]*?laborSubtotal[\s\S]*?totals\.labor/i,
 );
-assert.match(page, /function renderRows\(rows\)[\s\S]*?normalizeExpenseType\(row\.expense_type\)[\s\S]*?data-type="\$\{type\}"[\s\S]*?typeBilingualLabel\(type\)/i);
+assert.match(page, /function renderRows\(rows\)[\s\S]*?normalizeExpenseType\(row\.expense_type\)[\s\S]*?data-type="\$\{type\}"[\s\S]*?expenseKindLabel\(row,\s*true\)/i);
 assert.match(page, /id="laborSubtotal"/i);
 assert.match(page, /인건비 지출 \/ Chi phí nhân công/i);
 assert.match(page, /const EXPENSE_COLUMNS\s*=\s*"[^"\n]*\bvendor\b[^"\n]*"/i);
@@ -331,6 +333,11 @@ assert.match(
   page,
   /\.eq\("expense_type",\s*(?:category|searchType|selectedCategory)\)/i,
   "a selected expense category must constrain the Supabase search query",
+);
+assert.match(
+  page,
+  /\.eq\("reservation_expense_kind",\s*category\)/i,
+  "a reservation expense category must constrain the Supabase search query to its automatic kind",
 );
 assert.match(
   page,
