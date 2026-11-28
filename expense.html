@@ -193,6 +193,8 @@
               <option value="general">일반 지출</option>
               <option value="invoice">계산서 지출</option>
               <option value="labor">인건비 지출</option>
+              <option value="driver_meal">기사 식대</option>
+              <option value="agency_kb">여행사 KB</option>
             </select>
           </div>
           <button class="qr-btn qr-btn-primary" id="searchBtn" type="submit">검색</button>
@@ -282,7 +284,8 @@
     const adminAuthPassword = document.getElementById("adminAuthPassword");
     const adminAuthConfirm = document.getElementById("adminAuthConfirm");
     const escapeHtml = DGV.escapeHTML;
-    const EXPENSE_COLUMNS = "id,expense_date,expense_type,description,vendor,amount_vnd,note,created_at";
+    const RESERVATION_EXPENSE_KINDS = ["driver_meal", "agency_kb"];
+    const EXPENSE_COLUMNS = "id,expense_date,expense_type,description,vendor,amount_vnd,note,created_at,reservation_expense_kind";
     let loadSequence = 0;
     let rangeRows = [];
     let allRows = [];
@@ -347,13 +350,27 @@
       return "일반 지출 / Chi thường";
     }
 
-    function selectedSearchType(){
-      const value = expenseCategoryFilter.value;
-      return ["general", "invoice", "labor"].includes(value) ? value : "all";
+    function expenseKindLabel(row, bilingual=false){
+      if (row.reservation_expense_kind === "driver_meal"){
+        return bilingual ? "기사 식대 / Tiền ăn tài xế" : "기사 식대";
+      }
+      if (row.reservation_expense_kind === "agency_kb"){
+        return bilingual ? "여행사 KB / Hoa hồng công ty du lịch" : "여행사 KB";
+      }
+      return bilingual ? typeBilingualLabel(row.expense_type) : typeLabel(row.expense_type);
     }
 
-    function searchCategoryLabel(value=selectedSearchType()){
-      return value === "all" ? "전체 카테고리 / Tất cả danh mục" : typeBilingualLabel(value);
+    function selectedSearchType(){
+      const value = expenseCategoryFilter.value;
+      return ["general", "invoice", "labor", ...RESERVATION_EXPENSE_KINDS].includes(value) ? value : "all";
+    }
+
+    function searchCategoryLabel(value=selectedSearchType(), bilingual=true){
+      if (value === "all") return bilingual ? "전체 카테고리 / Tất cả danh mục" : "전체 카테고리";
+      return expenseKindLabel({
+        expense_type:value,
+        reservation_expense_kind:value
+      }, bilingual);
     }
 
     function hasSearchCriteria(){
@@ -373,6 +390,7 @@
       return normalizeSearch([
         row.expense_date,
         typeLabel(row.expense_type),
+        expenseKindLabel(row),
         row.description,
         row.vendor,
         row.note,
@@ -449,7 +467,7 @@
         const rowId = escapeHtml(String(row.id || ""));
         return `<tr>
           <td data-label="날짜">${escapeHtml(String(row.expense_date || ""))}</td>
-          <td data-label="구분"><span class="expense-kind" data-type="${type}"><span class="screen-only">${typeLabel(type)}</span><span class="print-only">${typeBilingualLabel(type)}</span></span></td>
+          <td data-label="구분"><span class="expense-kind" data-type="${type}"><span class="screen-only">${expenseKindLabel(row)}</span><span class="print-only">${expenseKindLabel(row, true)}</span></span></td>
           <td data-label="내역">${escapeHtml(String(row.description || ""))}</td>
           <td class="note" data-label="거래처">${vendor ? escapeHtml(vendor) : "—"}</td>
           <td class="note" data-label="비고">${note ? escapeHtml(note) : "—"}</td>
@@ -471,8 +489,10 @@
     }
 
     function filteredExpenses(rows, terms, category=selectedSearchType()){
+      const reservationCategory = RESERVATION_EXPENSE_KINDS.includes(category);
       return rows.filter((row) => {
-        if (category !== "all" && normalizeExpenseType(row.expense_type) !== category) return false;
+        const rowCategory = reservationCategory ? row.reservation_expense_kind : normalizeExpenseType(row.expense_type);
+        if (category !== "all" && rowCategory !== category) return false;
         if (!terms.length) return true;
         const haystack = searchableExpenseText(row);
         return terms.every((term) => haystack.includes(term));
@@ -501,7 +521,7 @@
       emptyState.textContent = "선택한 기간에서 검색 조건과 일치하는 지출 내역이 없습니다.";
       renderRows(rows);
       loadStatus.dataset.tone = "";
-      loadStatus.textContent = `${start} ~ ${end} ${category === "all" ? "전체 카테고리" : typeLabel(category)} 검색 결과 ${rows.length.toLocaleString("ko-KR")}건입니다.`;
+      loadStatus.textContent = `${start} ~ ${end} ${searchCategoryLabel(category, false)} 검색 결과 ${rows.length.toLocaleString("ko-KR")}건입니다.`;
     }
 
     async function verifyAdminSession(){
@@ -605,6 +625,9 @@
               .select(EXPENSE_COLUMNS)
               .gte("expense_date", range.start)
               .lte("expense_date", range.end);
+            if (RESERVATION_EXPENSE_KINDS.includes(category)){
+              return query.eq("reservation_expense_kind", category);
+            }
             return category === "all" ? query : query.eq("expense_type", category);
           },
           { order:[
@@ -733,7 +756,7 @@
           : `${loadedRange.start || rangeStart.value} ~ ${loadedRange.end || rangeEnd.value}`;
         const dataRows = rows.map((row) => [
           textCell(row.expense_date),
-          textCell(typeBilingualLabel(row.expense_type)),
+          textCell(expenseKindLabel(row, true)),
           textCell(row.description, "wrapped"),
           textCell(row.vendor, "wrapped"),
           textCell(row.note, "wrapped"),
