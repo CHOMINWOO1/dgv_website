@@ -44,6 +44,8 @@
     .expense-kind{display:inline-flex;padding:4px 8px;border-radius:999px;background:#f3eee6;color:var(--qr-sub);font-size:11px;font-weight:1000;white-space:nowrap;}
     .expense-kind[data-type="invoice"]{background:#fff0c9;color:#75510c;}
     .expense-kind[data-type="labor"]{background:#e9f3ff;color:#235b91;}
+    .expense-kind[data-reservation-kind="driver_meal"]{background:#dcf5ef;color:#14594d;}
+    .expense-kind[data-reservation-kind="agency_kb"]{background:#f0e7ff;color:#573587;}
     .expense-status{min-height:20px;margin:10px 2px 0;color:var(--qr-sub);font-size:12px;font-weight:850;}
     .expense-status[data-tone="error"]{color:var(--qr-bad);}
     .expense-empty{padding:42px 16px;text-align:center;color:var(--qr-sub);font-weight:850;}
@@ -462,12 +464,14 @@
       currentRows = new Map(displayedRows.map((row) => [String(row.id), row]));
       rowsEl.innerHTML = displayedRows.map((row) => {
         const type = normalizeExpenseType(row.expense_type);
+        const reservationKind = RESERVATION_EXPENSE_KINDS.includes(row.reservation_expense_kind)
+          ? row.reservation_expense_kind : "";
         const vendor = String(row.vendor || "").trim();
         const note = String(row.note || "").trim();
         const rowId = escapeHtml(String(row.id || ""));
         return `<tr>
           <td data-label="날짜">${escapeHtml(String(row.expense_date || ""))}</td>
-          <td data-label="구분"><span class="expense-kind" data-type="${type}"><span class="screen-only">${expenseKindLabel(row)}</span><span class="print-only">${expenseKindLabel(row, true)}</span></span></td>
+          <td data-label="구분"><span class="expense-kind" data-type="${type}" data-reservation-kind="${reservationKind}"><span class="screen-only">${expenseKindLabel(row)}</span><span class="print-only">${expenseKindLabel(row, true)}</span></span></td>
           <td data-label="내역">${escapeHtml(String(row.description || ""))}</td>
           <td class="note" data-label="거래처">${vendor ? escapeHtml(vendor) : "—"}</td>
           <td class="note" data-label="비고">${note ? escapeHtml(note) : "—"}</td>
