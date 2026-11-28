@@ -29,6 +29,13 @@
     .expense-global-search .qr-field{flex:1 1 280px;min-width:220px;}
     .expense-global-search .expense-category-field{flex:0 1 220px;min-width:190px;}
     .expense-summary{grid-template-columns:repeat(5,minmax(0,1fr));}
+    .expense-reservation-totals{display:grid;gap:8px;}
+    .expense-reservation-total{display:grid;gap:2px;}
+    .expense-reservation-total + .expense-reservation-total{border-top:1px solid var(--qr-line);padding-top:8px;}
+    .expense-reservation-total .qr-summary-label{justify-self:start;padding:2px 6px;border-radius:999px;}
+    .expense-reservation-total[data-kind="driver_meal"] .qr-summary-label{background:#dcf5ef;color:#14594d;}
+    .expense-reservation-total[data-kind="agency_kb"] .qr-summary-label{background:#f0e7ff;color:#573587;}
+    .expense-summary .expense-reservation-total .qr-summary-value{font-size:clamp(15px,1.55vw,18px);}
     .expense-summary .qr-summary-value{font-size:clamp(17px,2.1vw,23px);overflow-wrap:anywhere;}
     .expense-table-wrap{overflow-x:auto;border:1px solid var(--qr-line);border-radius:14px;background:#fff;}
     .expense-table{width:100%;border-collapse:collapse;min-width:720px;}
@@ -60,6 +67,7 @@
       .expense-table td{display:grid;grid-template-columns:82px minmax(0,1fr);gap:10px;padding:7px 4px;border-bottom:1px dashed #eee4d3;text-align:left;}
       .expense-table td:last-child{border-bottom:0;}.expense-table td:before{content:attr(data-label);color:var(--qr-sub);font-size:11px;font-weight:1000;}.expense-table .amount{text-align:left;}.expense-table .note{max-width:none;}
     }
+    @media screen and (max-width:980px){.expense-summary-labor{grid-column:1/-1;}}
     @media(max-width:430px){.expense-summary{grid-template-columns:1fr 1fr;}.expense-type{grid-template-columns:1fr;}.expense-range-control .qr-field,.expense-global-search .expense-category-field{min-width:100%;}.expense-range-actions,.expense-range-control .qr-btn,.expense-global-search .qr-btn{width:100%;}}
     @page{size:A4 landscape;margin:10mm;}
     @media print{
@@ -206,9 +214,18 @@
         <div class="qr-summary expense-summary" aria-label="지출 내역 요약">
           <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">일반 지출</span><span class="print-only">일반 지출 / Chi thường</span></div><div class="qr-summary-value" id="generalSubtotal">0 VND</div></div>
           <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">계산서 지출</span><span class="print-only">계산서 지출 / Chi có hóa đơn</span></div><div class="qr-summary-value" id="invoiceSubtotal">0 VND</div></div>
-          <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">인건비 지출</span><span class="print-only">인건비 지출 / Chi phí nhân công</span></div><div class="qr-summary-value" id="laborSubtotal">0 VND</div></div>
+          <div class="qr-card qr-summary-card expense-summary-labor"><div class="qr-summary-label"><span class="screen-only">인건비 지출</span><span class="print-only">인건비 지출 / Chi phí nhân công</span></div><div class="qr-summary-value" id="laborSubtotal">0 VND</div></div>
+          <div class="qr-card qr-summary-card expense-reservation-totals" role="group" aria-label="기사 식대 및 여행사 KB 합계">
+            <div class="expense-reservation-total" data-kind="driver_meal">
+              <div class="qr-summary-label"><span class="screen-only">기사 식대</span><span class="print-only">기사 식대 / Tiền ăn tài xế</span></div>
+              <div class="qr-summary-value" id="driverMealSubtotal">0 VND</div>
+            </div>
+            <div class="expense-reservation-total" data-kind="agency_kb">
+              <div class="qr-summary-label"><span class="screen-only">여행사 KB</span><span class="print-only">여행사 KB / Hoa hồng công ty du lịch</span></div>
+              <div class="qr-summary-value" id="agencyKbSubtotal">0 VND</div>
+            </div>
+          </div>
           <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">전체 지출</span><span class="print-only">전체 지출 / Tổng chi phí</span></div><div class="qr-summary-value" id="totalAmount">0 VND</div></div>
-          <div class="qr-card qr-summary-card"><div class="qr-summary-label"><span class="screen-only">입력 건수</span><span class="print-only">입력 건수 / Số mục</span></div><div class="qr-summary-value" id="entryCount">0건</div></div>
         </div>
 
         <div class="expense-table-wrap" id="tableWrap" hidden>
@@ -391,7 +408,6 @@
       const amount = Math.max(0, Math.round(Number(row.amount_vnd) || 0));
       return normalizeSearch([
         row.expense_date,
-        typeLabel(row.expense_type),
         expenseKindLabel(row),
         row.description,
         row.vendor,
@@ -445,18 +461,23 @@
       descriptionInput.focus({ preventScroll:true });
     }
 
+    function expenseCategory(row){
+      const kind = row.reservation_expense_kind;
+      return RESERVATION_EXPENSE_KINDS.includes(kind) ? kind : normalizeExpenseType(row.expense_type);
+    }
+
     function updateSummary(rows){
       const totals = rows.reduce((sum, row) => {
         const amount = Math.max(0, Number(row.amount_vnd) || 0);
-        const type = normalizeExpenseType(row.expense_type);
-        sum[type] += amount;
+        sum[expenseCategory(row)] += amount;
         return sum;
-      }, { general:0, invoice:0, labor:0 });
+      }, { general:0, invoice:0, labor:0, driver_meal:0, agency_kb:0 });
       document.getElementById("generalSubtotal").textContent = formatVnd(totals.general);
       document.getElementById("invoiceSubtotal").textContent = formatVnd(totals.invoice);
       document.getElementById("laborSubtotal").textContent = formatVnd(totals.labor);
-      document.getElementById("totalAmount").textContent = formatVnd(totals.general + totals.invoice + totals.labor);
-      document.getElementById("entryCount").textContent = `${rows.length.toLocaleString("ko-KR")}건`;
+      document.getElementById("driverMealSubtotal").textContent = formatVnd(totals.driver_meal);
+      document.getElementById("agencyKbSubtotal").textContent = formatVnd(totals.agency_kb);
+      document.getElementById("totalAmount").textContent = formatVnd(Object.values(totals).reduce((sum, amount) => sum + amount, 0));
     }
 
     function renderRows(rows){
@@ -493,10 +514,8 @@
     }
 
     function filteredExpenses(rows, terms, category=selectedSearchType()){
-      const reservationCategory = RESERVATION_EXPENSE_KINDS.includes(category);
       return rows.filter((row) => {
-        const rowCategory = reservationCategory ? row.reservation_expense_kind : normalizeExpenseType(row.expense_type);
-        if (category !== "all" && rowCategory !== category) return false;
+        if (category !== "all" && expenseCategory(row) !== category) return false;
         if (!terms.length) return true;
         const haystack = searchableExpenseText(row);
         return terms.every((term) => haystack.includes(term));
@@ -632,7 +651,9 @@
             if (RESERVATION_EXPENSE_KINDS.includes(category)){
               return query.eq("reservation_expense_kind", category);
             }
-            return category === "all" ? query : query.eq("expense_type", category);
+            return category === "all"
+              ? query
+              : query.eq("expense_type", category).is("reservation_expense_kind", null);
           },
           { order:[
             { column:"expense_date", ascending:false },
